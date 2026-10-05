@@ -1,0 +1,160 @@
+# XcodeGen 工程定义（xcodegen generate）。.xcodeproj 不入库。
+name: Couli
+options:
+  bundleIdPrefix: com.couli
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+# 三套构建配置（03 §3.6）。
+# Staging 用 debug 类型（XcodeGen 按 debug 预设生成调试符号等设置）；App target 在 Debug、Staging 都定义
+# DEBUG，Staging 另外定义 STAGING（默认环境 staging、显示名），并开 -O 优化，让测试包的性能接近正式包。
+#
+# 本地 SPM 包看不到 Staging 的 DEBUG（Xcode 27 实测，见 notes）：Xcode 只给包准备 Debug / Release
+# 两套配置，工程配置名不含 "debug"（不区分大小写）时一律按包的 Release 编译（-O、不定义 DEBUG）；
+# 工程级 settings / configFiles 管不到包。配置名必须叫 Staging，所以约定：
+#   - 只在 Debug / Staging 存在的调试能力（环境列表与非 prod 地址、环境切换、DebugCapabilities、
+#     调试面板、debug_only 路由表 DebugOnlyRoutes）一律放在 App target 的源码里用 #if DEBUG 包住；
+#   - 包里（Core / DesignSystem / Features）不写 #if DEBUG（swiftlint 规则 no_debug_condition_in_packages）；
+#     Generated 包的 Routes.all 仍按契约在 #if DEBUG 里登记 debug_only 路由（Debug 构建与包测试用）。
+# 这样普通的 `xcodebuild -configuration Staging` 和 Xcode 里选 Staging 都得到带调试能力的测试包，
+# 不需要任何额外参数（verify.sh 有一步专门验证，并在 Staging 包里找调试面板标记）。
+configs:
+  Debug: debug
+  Staging: debug
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  Generated:
+    path: Packages/Generated
+  Core:
+    path: Packages/Core
+  DesignSystem:
+    path: Packages/DesignSystem
+  Features:
+    path: Packages/Features
+
+targets:
+  Couli:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    configFiles:
+      Debug: App/Config/Debug.xcconfig
+      Staging: App/Config/Staging.xcconfig
+      Release: App/Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: Couli
+        TARGETED_DEVICE_FAMILY: "1"  # 只做 iPhone；iPad 以 iPhone 兼容模式运行（01 §7.5）
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG STAGING
+          SWIFT_OPTIMIZATION_LEVEL: -O
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: $(COULI_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(COULI_BUNDLE_VERSION)
+        CouliBuildConfiguration: $(CONFIGURATION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # 只支持竖屏（03 §10.4）。
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # 强制浅色（TECH-22）。不设关闭 iOS 26 新系统外观的兼容键（03 §3.3）。
+        UIUserInterfaceStyle: Light
+    entitlements:
+      path: App/Couli.entitlements
+      properties: {}
+    dependencies:
+      # 先跑 Feature 隔离检查（每次构建都执行），失败则整个构建失败。
+      - target: FeatureIsolationCheck
+        link: false
+        embed: false
+      - package: Generated
+      - package: Core
+        product: Config
+      - package: DesignSystem
+      - package: Features
+        products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
+
+  CouliTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Couli
+
+  CouliUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Couli
+
+schemes:
+  Couli:
+    build:
+      targets:
+        Couli: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - CouliTests
+        - CouliUITests
+        - package: Generated/GeneratedTests
+        - package: Core/ConfigTests
+        - package: DesignSystem/DesignSystemTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+aggregateTargets:
+  # 每次构建 Couli 都运行：Feature 之间不能互相 import（理由见 tools/ci/check-feature-imports.py 头注释）。
+  # 与 verify.sh 走同一个脚本：导入列表由 swiftc -frontend -emit-imported-modules 解析得出，编译器出错即构建失败。
+  # 脚本要读整个 Packages/Features/Sources 目录树，构建脚本沙盒只放行逐个声明的输入文件
+  # （实测：声明目录本身时子目录读不到），所以只对这个只读检查的聚合 target 关闭沙盒；App target 保持开启。
+  FeatureIsolationCheck:
+    settings:
+      base:
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    buildScripts:
+      - name: Check Feature isolation
+        basedOnDependencyAnalysis: false
+        script: |
+          /usr/bin/python3 "${SRCROOT}/tools/ci/check-feature-imports.py" "${SRCROOT}/Packages/Features/Sources"

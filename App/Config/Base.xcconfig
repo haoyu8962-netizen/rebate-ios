@@ -1,0 +1,14 @@
+// App target 公共设置。关键编译条件（DEBUG / STAGING / 优化级别）写在 project.yml，
+// 因为 XcodeGen 的 target 级设置会覆盖 xcconfig；这里只放标识、版本与显示名。
+
+// 三套配置同一个 Bundle ID（02 §3.2，TECH-08）。
+PRODUCT_BUNDLE_IDENTIFIER = com.couli.app
+// Team ID 未给定，占位留空：见 ../couli-runs/NATIVE/needs.md N-04。
+// 现阶段只做模拟器构建与 CODE_SIGNING_ALLOWED=NO 的通用设备构建。
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
+MARKETING_VERSION = 0.1.0
+COULI_BUILD_NUMBER = 1
+CURRENT_PROJECT_VERSION = $(COULI_BUILD_NUMBER)
+COULI_BUNDLE_VERSION = $(COULI_BUILD_NUMBER)

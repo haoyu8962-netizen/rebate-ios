@@ -1,0 +1,6 @@
+#include "Base.xcconfig"
+
+// 团队内测试包（03 §3.6）：显示名带可见测试标识；构建号加 ".9" 后缀作为 Staging 标记
+// （保持纯数字，TestFlight 等内部渠道可接受，且与同号 Release 不冲突）。
+COULI_DISPLAY_NAME = 凑狸测试
+COULI_BUNDLE_VERSION = $(COULI_BUILD_NUMBER).9

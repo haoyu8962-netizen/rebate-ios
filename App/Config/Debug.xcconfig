@@ -1,0 +1,4 @@
+#include "Base.xcconfig"
+
+// 开发机本地构建（03 §3.6）。
+COULI_DISPLAY_NAME = 凑狸调试

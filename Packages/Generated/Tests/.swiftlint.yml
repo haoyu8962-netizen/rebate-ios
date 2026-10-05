@@ -1,0 +1,5 @@
+# GeneratedTests 是 Codex 按任务书先写的一致性测试（不改不删），放宽长度类规则。
+disabled_rules:
+  - file_length
+  - type_body_length
+  - cyclomatic_complexity

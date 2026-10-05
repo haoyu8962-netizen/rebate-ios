@@ -1,0 +1,66 @@
+# SwiftLint：tools/ci/verify.sh 用 --strict 运行（警告也算失败）。
+excluded:
+  - Packages/Generated/Sources   # 生成物
+  - App/Sources/Generated        # 生成物（gen.py 输出的 DebugOnlyRoutes）
+  - Packages/*/.build
+  - .build
+  - DerivedData
+  - Couli.xcodeproj
+  - tools/ci/lint-fixtures       # 违反样例，verify.sh 单独证明它们会被拦
+
+disabled_rules:
+  - todo            # 占位按任务书写 TODO(APP-0x)，指向后续任务
+  - trailing_comma  # 交给 SwiftFormat（Swift 6 风格：多行集合带尾逗号）
+
+identifier_name:
+  min_length: 2     # 令牌名如 CouliSpacing.s4、h5
+  excluded:
+    - id
+
+opt_in_rules:
+  - empty_count
+  - first_where
+  - contains_over_first_not_nil
+  - redundant_nil_coalescing
+
+custom_rules:
+  # BR-TEXT-12：业务页面不硬编码中文文案，一律经文案字典取键。
+  no_hardcoded_chinese_in_features:
+    name: "No hardcoded Chinese in Features"
+    included: ".*/Packages/Features/.*\\.swift$"
+    regex: "[\\p{Script=Han}\\x{3000}-\\x{303F}\\x{FF00}-\\x{FFEF}]+"
+    match_kinds:
+      - string
+    message: "Features 里的字符串字面量不能含中文，文案经文案字典取键（BR-TEXT-12）"
+    severity: error
+
+  # 03 §4.1：第三方 SDK 只在 PrivacyGate.onConsented() 里初始化。规则框架先登记，SDK 接入时补全匹配。
+  sdk_init_only_in_privacy_gate:
+    name: "Third-party SDK init only in PrivacyGate"
+    excluded: ".*/PrivacyGate\\.swift$"
+    regex: "\\b(MobPush\\s*\\.\\s*(setup|register|init|start)\\w*|SentrySDK\\s*\\.\\s*start|WXApi\\s*\\.\\s*register\\w*|AlibcTradeSDK\\s*\\.\\s*sharedInstance\\s*\\(\\s*\\)\\s*\\.\\s*(asyncInit|setEnv|init)\\w*|KeplerApiManager\\s*\\.\\s*(sharedKPService|asyncInit)\\w*)"
+    match_kinds:
+      - identifier
+      - keyword
+    message: "第三方 SDK 只能在 PrivacyGate.swift 的 onConsented() 里初始化（03 §4.1）"
+    severity: error
+
+  # 03 §3.3：iOS 16 起步，状态用 ObservableObject + @StateObject，不用 @Observable。
+  no_observable_macro:
+    name: "No @Observable"
+    regex: "@Observable\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "不用 @Observable，状态用 ObservableObject + @StateObject（03 §3.3）"
+    severity: error
+
+  # Xcode 对自定义配置名 Staging 按本地包的 Release 编译包，包里看不到 DEBUG（project.yml 注释）。
+  # 只在 Debug / Staging 存在的调试能力放 App target 的 #if DEBUG 里，包源码不写 DEBUG 条件。
+  no_debug_condition_in_packages:
+    name: "No DEBUG condition in local packages"
+    included: ".*/Packages/(Core|DesignSystem|Features)/Sources/.*\\.swift$"
+    regex: "#(if|elseif)\\b[^\\n]*\\bDEBUG\\b"
+    message: "包在 Staging 下按 Release 编译、看不到 DEBUG；调试能力放 App target 的 #if DEBUG 里（project.yml）"
+    severity: error

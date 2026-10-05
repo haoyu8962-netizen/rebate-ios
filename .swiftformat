@@ -1,0 +1,10 @@
+# SwiftFormat：tools/ci/verify.sh 运行 swiftformat --lint .
+--swiftversion 6.0
+--languagemode 6
+--indent 4
+--ifdef no-indent
+--ranges no-space
+--maxwidth 120
+--exclude Packages/Generated/Sources,App/Sources/Generated,Packages/*/.build,.build,DerivedData,Couli.xcodeproj,tools/ci/lint-fixtures
+# 与 Codex 先写的 ContractConformanceTests 风格一致所需的放宽。
+--disable hoistTry,docComments,wrapMultilineStatementBraces,numberFormatting

@@ -1,0 +1,19 @@
+# 远端仓库建好后启用。内容只调用本机 CI 入口，保证本机与远端同一套检查。
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      # TODO(APP-01 后续): 托管机的 Xcode 版本与 xcodegen / swiftlint / swiftformat 安装方式待远端建好后核定。
+      - name: Verify
+        run: tools/ci/verify.sh
+        env:
+          COULI_DERIVED_DATA: ${{ runner.temp }}/DerivedData

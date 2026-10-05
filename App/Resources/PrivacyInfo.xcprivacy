@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  隐私清单。只登记本任务实际用到的 required-reason API：
+  UserDefaults（Config 记住调试环境选择、切换环境时清理本 App 命名空间的键）。
+  理由码 CA92.1：只读写本 App 自己的数据，不与其他 App / 扩展共享
+  （Apple「Describing use of required reason API」当期文档，NSPrivacyAccessedAPICategoryUserDefaults）。
+  后续任务引入新 API 或第三方 SDK 时在此补登记。
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,6 @@
+#include "Base.xcconfig"
+
+// 发给团队以外的一律是 Release（03 §3.6）。
+COULI_DISPLAY_NAME = 凑狸
+// 不注入 get-task-allow 等基础调试授权项（release-scan.sh 会查）。
+CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO
