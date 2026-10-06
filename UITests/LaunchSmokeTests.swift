@@ -1,6 +1,6 @@
 import XCTest
 
-/// 冒烟：冷启动后看到首屏。
+/// 冒烟：已同意隐私政策的冷启动直接进 Tab 外壳（首启弹窗流程见 PrivacyGateSmokeTests）。
 @MainActor
 final class LaunchSmokeTests: XCTestCase {
     override func setUp() async throws {
@@ -9,10 +9,12 @@ final class LaunchSmokeTests: XCTestCase {
 
     func testColdLaunchShowsRootScreen() {
         let app = XCUIApplication()
+        app.launchArguments += ["-CouliPrivacyPreset", "consented"]
         app.launch()
 
-        let brandMark = app.descendants(matching: .any)["root.brandMark"]
-        XCTAssertTrue(brandMark.waitForExistence(timeout: 30), "root screen did not appear")
+        let tabBar = app.descendants(matching: .any)["shell.tabBar"]
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 30), "tab shell did not appear")
+        XCTAssertFalse(app.descendants(matching: .any)["launch.backdrop"].exists)
         // 测试动作跑 Debug：调试信息与面板入口可见。
         XCTAssertTrue(app.descendants(matching: .any)["root.buildConfiguration"].exists)
         let debugButton = app.buttons["root.debugPanelButton"]

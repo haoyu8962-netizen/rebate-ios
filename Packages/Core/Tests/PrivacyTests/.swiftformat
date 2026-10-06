@@ -1,0 +1,3 @@
+# PrivacyGateVectorTests 是 Codex 按任务书先写的向量测试（不改不删）：@testable import 放在最后，单行属性体保留。
+--importgrouping testable-last
+--disable wrapPropertyBodies

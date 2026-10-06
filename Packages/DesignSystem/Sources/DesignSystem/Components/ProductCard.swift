@@ -187,9 +187,8 @@ public struct ProductCard<ImageContent: View>: View {
                 if !data.hidesPrice {
                     PriceTag(data.price, size: layout == .list ? .list : .compact)
                 }
-                if !data.amountHidden {
-                    RebateTag(data.rebate, placement: .list)
-                }
+                // 金额隐藏时显示「预估返 ****」，不整个隐藏（F-IOS-06）。
+                RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .list)
             }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(data.subLines.enumerated()), id: \.offset) { _, line in

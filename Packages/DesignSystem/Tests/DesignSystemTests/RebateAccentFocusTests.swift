@@ -77,11 +77,12 @@ final class RebateAccentFocusTests: XCTestCase {
         typealias Grid = ProductGridCard<EmptyView>
         // 有返利标签：i 在返利行内。
         XCTAssertEqual(Grid.disclaimerPlacement(card(basis: "normal", minFen: 45, maxFen: 45)), .inRebateRow)
-        // 暂无返利（kind none）、异常降级、金额隐藏：返利区不显示，i 仍在（价格行右侧）。
+        // 暂无返利（kind none）、异常降级：返利区不显示，i 仍在（价格行右侧）。
         XCTAssertEqual(Grid.disclaimerPlacement(card(basis: "no_rebate", minFen: nil, maxFen: nil)), .besidePrice)
         XCTAssertEqual(Grid.disclaimerPlacement(card(basis: "normal", minFen: 0, maxFen: 0)), .besidePrice)
+        // 金额隐藏：返利区显示「预估返 ****」（F-IOS-06），i 在返利行内。
         XCTAssertEqual(
-            Grid.disclaimerPlacement(card(basis: "normal", minFen: 45, maxFen: 45, hidden: true)), .besidePrice
+            Grid.disclaimerPlacement(card(basis: "normal", minFen: 45, maxFen: 45, hidden: true)), .inRebateRow
         )
         // 卡上没有价格（金额未知）：不显示；没有说明全文：不显示。
         XCTAssertEqual(Grid.disclaimerPlacement(card(basis: "amount_unknown", minFen: nil, maxFen: nil)), .hidden)

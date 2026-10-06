@@ -88,6 +88,7 @@ public struct PushLanding: Sendable {
 
     /// 守卫把回查到的路由改落 Messages 时（未声明 push、强更未知），Messages 本身也要再过一次守卫：
     /// 守卫拦下 Messages 就按 Messages 的结论处理；放行时保留兜底原因码，任一方只读则只读。
+    /// F-IOS-07 起 `EntryGuard` 自己已做同样的兜底再判定；这里保留为幂等的第二道（结果相同）。
     static func guardedFallback(
         _ decision: GuardDecision,
         for request: RouteRequest,

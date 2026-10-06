@@ -4,7 +4,8 @@ import SwiftUI
 
 /// 首页网格卡（GUIDE §6「窄卡返利标签」：钟表 + 预估返 + 信息按钮一行，完整金额另起一行，只在破折号处折行）。
 /// 价格口径 i 按钮只跟着价格走（BR-PRICE-03「单卡 i 图标」）：有返利标签时放在返利标签那一行；
-/// 返利不显示（暂无返利、金额隐藏）时放在价格行右侧；卡上没有价格（金额未知）时才不显示。
+/// 返利不显示（暂无返利）时放在价格行右侧；卡上没有价格（金额未知）时才不显示。
+/// 金额隐藏时返利标签照常显示为「预估返 ****」（F-IOS-06），i 按钮仍在返利标签行。
 public struct ProductGridCard<ImageContent: View>: View {
     private let data: ProductCardData
     private let image: ImageContent
@@ -26,7 +27,12 @@ public struct ProductGridCard<ImageContent: View>: View {
     }
 
     static func showsNarrowRebate(_ data: ProductCardData) -> Bool {
-        data.rebate.kind != .none && !data.amountHidden
+        data.rebate.kind != .none
+    }
+
+    /// 卡上实际显示的返利标签内容（金额隐藏时为「预估返 ****」）。
+    private var shownRebate: RebateTagContent {
+        data.rebate.hidingAmount(data.amountHidden)
     }
 
     static func disclaimerPlacement(_ data: ProductCardData) -> DisclaimerPlacement {
@@ -85,13 +91,14 @@ public struct ProductGridCard<ImageContent: View>: View {
     }
 
     private func narrowRebate(withInfo: Bool) -> some View {
-        let accent = data.rebate.usesRebateAccent
+        let rebate = shownRebate
+        let accent = rebate.usesRebateAccent
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CouliSpacing.s1) {
                 if accent {
                     CouliIconView(.clock, size: CouliGuideMetric.iconSmall, relativeTo: .caption)
                 }
-                Text(verbatim: data.rebate.label ?? data.rebate.text)
+                Text(verbatim: rebate.label ?? rebate.text)
                     .couliFont(.caption)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -103,14 +110,14 @@ public struct ProductGridCard<ImageContent: View>: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            if !data.rebate.amountParts.isEmpty {
+            if !rebate.amountParts.isEmpty {
                 CouliFlowLayout(horizontalSpacing: 0, verticalSpacing: 0) {
-                    ForEach(Array(data.rebate.amountParts.enumerated()), id: \.offset) { _, part in
+                    ForEach(Array(rebate.amountParts.enumerated()), id: \.offset) { _, part in
                         BreakableText(part, style: .footnote, weight: .couliSemibold)
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(verbatim: data.rebate.accessibilityText))
+                .accessibilityLabel(Text(verbatim: rebate.accessibilityText))
             }
         }
         .foregroundColor(accent ? CouliColor.rebateText : CouliColor.textSecondary)
@@ -191,15 +198,14 @@ public struct ProductDetailHeader: View {
                     PriceSubLine(data.price, style: .footnote)
                 }
             }
-            if !data.amountHidden {
-                CouliFlowLayout(horizontalSpacing: CouliSpacing.s4, verticalSpacing: CouliSpacing.s1) {
-                    RebateTag(data.rebate, placement: .detail, isLarge: true)
-                    if let note = data.settlementNote, data.rebate.kind == .range {
-                        Text(verbatim: note)
-                            .couliFont(.footnote)
-                            .foregroundColor(CouliColor.textSecondary)
-                            .fixedSize()
-                    }
+            // 金额隐藏时返利标签显示「预估返 ****」（F-IOS-06），「以结算为准」随金额一起不显示。
+            CouliFlowLayout(horizontalSpacing: CouliSpacing.s4, verticalSpacing: CouliSpacing.s1) {
+                RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .detail, isLarge: true)
+                if let note = data.settlementNote, data.rebate.kind == .range, !data.amountHidden {
+                    Text(verbatim: note)
+                        .couliFont(.footnote)
+                        .foregroundColor(CouliColor.textSecondary)
+                        .fixedSize()
                 }
             }
             metaRow

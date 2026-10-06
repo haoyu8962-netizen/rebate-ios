@@ -11,10 +11,19 @@ public enum RoutePolicy {
     public static let externalPage = "ExternalPage"
     public static let webPage = "WebPage"
 
+    /// 一级 Tab 的根路由（首页 / AI 助手 / 订单 / 我的，APP-02b 外壳）。Router 打开它们时切 Tab、清空导航栈，不入栈（R1-05）。
+    public static let tabRootRoutes: [String] = ["Home", "AgentChat", "OrderList", "Me"]
+
     /// 基本模式可达的路由：首页、搜索、商品详情与五个无需登录的页面（03 §4.4「无需登录的页面」，BR-ID-02）。
     public static let basicModeRoutes: Set<String> = [
         "Home", "Search", "ProductDetail", "Settings", "PrivacyCenter", "Agreement", "About", "Help",
     ]
+
+    /// 「未决时可读路由」：隐私闸门未决时（首启弹窗、二次说明打开期间）只认 App 内来源、只读放行
+    /// （原因码 privacy_undecided_readonly）；深链、推送、pending_action 仍等待。目前只有协议页（BR-ID-11：
+    /// 同意前只允许请求协议文本与配置；BR-ID-11 细则「包内协议副本」）。
+    /// TODO(N-14): 名单的唯一维护处应在规划 / 契约（三端统一裁定，暂只有 Agreement）。
+    public static let privacyUndecidedReadableRoutes: Set<String> = ["Agreement"]
 
     /// 强更检查结果未知时可打开的只读页面（BR-ID-10 细则「路由入口矩阵」）。
     public static let updateUnknownReadonlyRoutes: Set<String> = [

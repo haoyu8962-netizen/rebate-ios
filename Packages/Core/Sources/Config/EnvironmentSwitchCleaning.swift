@@ -52,7 +52,7 @@ public final class EnvironmentSwitchCleanerRegistry {
 }
 
 /// 清除 UserDefaults 里本 App 命名空间（`AppNamespace.userDefaultsPrefix`）下的键，
-/// 环境记录键（`AppNamespace.environmentRecordKeys`）除外。
+/// 环境记录键与本机隐私决定键（`AppNamespace.preservedOnEnvironmentSwitchKeys`）除外。
 @MainActor
 public final class UserDefaultsNamespaceCleaner: EnvironmentSwitchCleaning {
     public let cleanerName = "UserDefaults"
@@ -63,7 +63,7 @@ public final class UserDefaultsNamespaceCleaner: EnvironmentSwitchCleaning {
     public init(
         defaults: UserDefaults = .standard,
         prefix: String = AppNamespace.userDefaultsPrefix,
-        preservedKeys: Set<String> = AppNamespace.environmentRecordKeys
+        preservedKeys: Set<String> = AppNamespace.preservedOnEnvironmentSwitchKeys
     ) {
         self.defaults = defaults
         self.prefix = prefix

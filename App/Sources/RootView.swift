@@ -1,14 +1,20 @@
 import Config
 import DesignSystem
 import Generated
+import Privacy
 import Router
 import SwiftUI
 
-/// 最小首屏：令牌背景 + App 名称图形占位，外面包一层 NavigationStack（Router 按路由名推入占位页）。
-/// DEBUG 下另显示令牌版本、构建配置、最近一次路由结论与调试面板入口（英文开发字样）。
+/// 根视图：环境闸门 → 隐私闸门 → Tab 外壳（03 §4.4 冷启动顺序，APP-02b）。
+/// - 未决（首次启动、政策版本升级后的冷启动）：启动底 + 首启弹窗 / 二次说明，Tab 外壳尚未出现；
+/// - 基本模式：Tab 外壳，首页 Tab 是基本模式页；点【开启完整功能】或需要同意的 Tab 时弹首启弹窗；
+/// - 已同意：Tab 外壳。Router 推入的页面盖在外壳之上（NavigationStack）。
+/// DEBUG 下首页占位下方另显示令牌版本、构建配置、最近一次路由结论与调试面板入口（英文开发字样）。
 struct RootView: View {
+    let routing: AppRouting
     @EnvironmentObject private var environment: EnvironmentStore
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var privacy: PrivacyController
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -21,43 +27,93 @@ struct RootView: View {
                 // 截图用：启动参数直达组件目录的某一页（DS-01）。
                 CatalogLaunchView(page: page, section: CatalogLaunch.section)
             } else {
-                navigation
+                gated
             }
             #else
-            navigation
+            gated
             #endif
         case .blocked:
             EnvironmentBlockedView(retry: environment.retryLaunchCleanup)
         }
     }
 
-    /// Home 是栈底；其余路由由 Router 推入。
+    /// 弹窗盖在整个导航栈上；从弹窗里的协议链接经 Router 推入 Agreement 时先让出（读完返回，弹窗回来）——
+    /// 弹窗本身仍不能被关闭，只能点按钮（BR-ID-11）。
+    private var gated: some View {
+        navigation
+            .couliDialog(isPresented: privacy.isPrompting && router.path.isEmpty) {
+                privacyDialog()
+            }
+    }
+
+    private func privacyDialog() -> CouliDialog {
+        let open: (AgreementLink) -> Void = { link in
+            var params: [String: JSONValue] = [:]
+            if let type = link.agreementType {
+                params["type"] = .string(type)
+            }
+            router.open(RouteRequest(route: "Agreement", values: params, from: .inApp))
+        }
+        if privacy.state.promptStage == .second {
+            return SecondNoticeDialog(
+                onAgree: privacy.agree,
+                onStillDisagree: privacy.stillDisagree,
+                onOpen: open
+            ).dialog
+        }
+        return LaunchPrivacyDialog(onAgree: privacy.agree, onDisagree: privacy.disagree, onOpen: open).dialog
+    }
+
+    /// 栈底：隐私未决时是启动底（首启弹窗背后），有结论后是 Tab 外壳；其余路由由 Router 推入。
     private var navigation: some View {
         NavigationStack(path: $router.path) {
-            content
+            stackRoot
+                .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: RouteDestination.self) { destination in
                     RouteViewRegistry.view(for: destination)
                 }
-        }
-    }
-
-    private var content: some View {
-        ZStack {
-            CouliColor.backgroundCanvas
-                .ignoresSafeArea()
-            VStack(spacing: CouliSpacing.s4) {
-                BrandMark()
-                #if DEBUG
-                debugInfo
-                #endif
-            }
-            .padding(CouliSpacing.s6)
         }
         #if DEBUG
         .sheet(isPresented: $showsDebugPanel) {
             DebugPanelView(store: environment)
         }
         #endif
+    }
+
+    @ViewBuilder private var stackRoot: some View {
+        if privacy.state.decision == .notDecided {
+            LaunchBackdropView()
+        } else {
+            TabShellView(
+                root: router.tabRoot,
+                onSelect: { _ = routing.selectTab($0) },
+                home: { root in homeTab(root) }
+            )
+            .onAppear {
+                routing.shellAppeared()
+            }
+        }
+    }
+
+    /// 首页 Tab：已同意时按 Router 的实际目的地渲染（保留只读标记，R1-05）。
+    @ViewBuilder private func homeTab(_ root: RouteDestination) -> some View {
+        if privacy.state.decision == .basicMode {
+            BasicModeHomeView(
+                onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },
+                onSettings: { router.open(RouteRequest(route: "Settings", from: .inApp)) },
+                onEnableFull: privacy.requestFullFunction
+            )
+        } else {
+            VStack(spacing: 0) {
+                RouteViewRegistry.view(for: root)
+                #if DEBUG
+                if !DebugPrivacyPreset.hidesDebugInfo {
+                    debugInfo
+                        .padding(CouliSpacing.s4)
+                }
+                #endif
+            }
+        }
     }
 
     #if DEBUG
@@ -109,21 +165,5 @@ private struct EnvironmentBlockedView: View {
             }
             .padding(CouliSpacing.s6)
         }
-    }
-}
-
-/// App 名称图形占位（正式图形由设计稿提供后替换）。
-private struct BrandMark: View {
-    private var displayName: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? ""
-    }
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-            .fill(CouliColor.brandPrimary)
-            .frame(width: CouliSpacing.s16 * 2, height: CouliSpacing.s16)
-            .accessibilityElement()
-            .accessibilityLabel(Text(verbatim: displayName))
-            .accessibilityIdentifier("root.brandMark")
     }
 }

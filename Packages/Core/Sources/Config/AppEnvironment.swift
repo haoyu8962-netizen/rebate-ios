@@ -28,4 +28,26 @@ public enum AppNamespace {
 
     /// 环境记录键：命名空间清理器不删，清理期间也会先保存、清理后恢复。
     public static let environmentRecordKeys: Set<String> = [environmentSelectionKey, appliedEnvironmentKey]
+
+    // MARK: 本机隐私决定（APP-02b，BR-ID-11、BR-ID-12、BR-ID-13）
+
+    /// 本机隐私决定的唯一记录（字典：decision、consented_version、consented_at_ms、basic_mode、
+    /// withdrawal_cleanup_pending）。几项合在一个值里，每次改写都是对这一个键的一次写入：
+    /// 撤回同意时「基本模式 + 清除同意记录 + 待清理标记」同时落盘，进程在任何时刻中断都不会只写了一半
+    /// （APP-02b 第 2 轮评审，三端统一）。待清理标记存在期间不得读取任何会话凭据，下次启动重试清理，清干净才删除。
+    public static let privacyRecordKey = userDefaultsPrefix + "privacy.record"
+
+    /// 「本机隐私决定」键：用户对本机安装包里的协议做的选择，与服务器环境无关。
+    ///
+    /// 切换环境时保留（03 §3.6「切换环境」要清的是会话、令牌、device_id 与 install_secret、LKG、页面缓存、
+    /// pending_action，不含隐私决定；清掉会让已同意的用户在测试包里重新走首启弹窗，已进基本模式的用户
+    /// 被当成未决，都不是用户的意思）。新环境里重新注册设备后，按保存的版本与点击时间补报同意记录（BR-ID-12）。
+    ///
+    /// 撤回同意（BR-ID-13）走的是另一条路：清令牌、device_id、install_secret（撤回清理器注册表），
+    /// 并把这条记录改写为基本模式——记录不在撤回清理里删除，否则撤回后下次冷启动会变回「未决」再弹首启弹窗。
+    /// 「撤回清理未完成」标记同样保留：切换环境不能把它清掉而让未清干净的凭据重新可读。
+    public static let privacyDecisionKeys: Set<String> = [privacyRecordKey]
+
+    /// 切换环境时不删的全部键：环境记录 + 本机隐私决定。
+    public static let preservedOnEnvironmentSwitchKeys: Set<String> = environmentRecordKeys.union(privacyDecisionKeys)
 }

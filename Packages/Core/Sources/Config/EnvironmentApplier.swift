@@ -7,8 +7,8 @@ import Foundation
 /// 全部成功才记录新环境；有失败不记录，下次启动重试。首次安装（没有记录）只记录、不清理。
 /// 调试面板手动切换也走这里（`apply(environmentID:)`）。
 ///
-/// 环境记录键（`AppNamespace.environmentRecordKeys`）在清理期间先保存、清理后恢复，
-/// 任何清理器误删都不会丢失选择。
+/// 环境记录键与本机隐私决定键（`AppNamespace.preservedOnEnvironmentSwitchKeys`）在清理期间先保存、清理后恢复，
+/// 任何清理器误删都不会丢失选择（隐私决定为什么保留见 `AppNamespace.privacyDecisionKeys`）。
 @MainActor
 public final class EnvironmentApplier {
     public enum LaunchOutcome: Equatable, Sendable {
@@ -66,7 +66,7 @@ public final class EnvironmentApplier {
     }
 
     private func cleanPreservingRecords() -> [EnvironmentCleanupFailure] {
-        let saved = AppNamespace.environmentRecordKeys.map { ($0, defaults.object(forKey: $0)) }
+        let saved = AppNamespace.preservedOnEnvironmentSwitchKeys.map { ($0, defaults.object(forKey: $0)) }
         let failures = registry.cleanAll()
         for (key, value) in saved {
             if let value {

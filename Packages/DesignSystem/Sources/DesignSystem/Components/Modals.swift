@@ -20,6 +20,8 @@ public struct CouliDialogAction {
 public struct CouliDialog: View {
     private let title: String
     private let message: String?
+    private let content: AnyView?
+    private let centeredTitle: Bool
     private let primary: CouliDialogAction
     private let secondary: CouliDialogAction?
     @AccessibilityFocusState private var titleFocused: Bool
@@ -28,6 +30,25 @@ public struct CouliDialog: View {
                 secondary: CouliDialogAction? = nil) {
         self.title = title
         self.message = message
+        content = nil
+        centeredTitle = false
+        self.primary = primary
+        self.secondary = secondary
+    }
+
+    /// 自定义正文（如首启隐私弹窗的要点列表与协议链接，APP-02b）。正文同样放不下时滚动，标题与按钮行固定。
+    /// - Parameter centeredTitle: 标题居中（设计稿 LaunchPrivacy、LaunchSecondNotice 等）。
+    public init(
+        title: String,
+        centeredTitle: Bool = false,
+        primary: CouliDialogAction,
+        secondary: CouliDialogAction? = nil,
+        @ViewBuilder content: () -> some View
+    ) {
+        self.title = title
+        message = nil
+        self.content = AnyView(content())
+        self.centeredTitle = centeredTitle
         self.primary = primary
         self.secondary = secondary
     }
@@ -37,9 +58,17 @@ public struct CouliDialog: View {
             Text(verbatim: title)
                 .couliFont(.body, weight: .couliSemibold)
                 .foregroundColor(CouliColor.textPrimary)
+                .multilineTextAlignment(centeredTitle ? .center : .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: centeredTitle ? .infinity : nil)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityFocused($titleFocused)
+            if let content {
+                ScrollingBody {
+                    content
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
             if let message {
                 ScrollingBody {
                     Text(verbatim: message)

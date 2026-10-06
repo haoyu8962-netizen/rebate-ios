@@ -158,7 +158,10 @@ final class RouterUnifiedRequirementTests: XCTestCase {
 
     // MARK: 五个敏感动作不登记
 
-    func testSensitiveRoutesNeverRegisterPendingAction() {
+    /// 敏感原目标本身从不登记。APP-02b 第 2 轮评审 R2-02 修正了这条断言：推送（source=push）因入口限制兜底改落
+    /// Messages 时，登记的是兜底的 Messages（不带参数），登录后落到 Messages（BR-ID-10 推送兜底与登录后落点）；
+    /// 其余来源一律不登记。
+    func testSensitiveRoutesNeverRegisterPendingAction() throws {
         let routes = ["Withdraw", "PayoutAccount", "LaborAgreement", "RealName", "DeleteAccount"]
         let states: [(SessionState, PrivacyState)] = [
             (.guest, .consented), (.restricted, .consented), (.loggedIn, .consented),
@@ -173,7 +176,13 @@ final class RouterUnifiedRequirementTests: XCTestCase {
                     guardState.realnameVerified = false
                     let router = makeRouter(backend: backend)
                     router.open(RouteRequest(route: route, values: ["amount": .integer(1)], from: source))
-                    XCTAssertNil(backend.read(), "\(route) \(session) \(privacy) \(source)")
+                    let label = "\(route) \(session) \(privacy) \(source)"
+                    guard let text = backend.read() else { continue }
+                    XCTAssertEqual(source, .push, "只有推送兜底会登记：\(label)")
+                    let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+                    let params = try XCTUnwrap(object["params"] as? [String: Any], label)
+                    XCTAssertEqual(params["route"] as? String, RoutePolicy.messages, "登记兜底 Messages：\(label)")
+                    XCTAssertNil(params["params"], label)
                 }
             }
         }

@@ -58,6 +58,8 @@ targets:
         PRODUCT_NAME: Couli
         TARGETED_DEVICE_FAMILY: "1"  # 只做 iPhone；iPad 以 iPhone 兼容模式运行（01 §7.5）
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
+        # 资源目录只有系统启动屏底色 LaunchBackground（APP-02b，= 令牌 background.canvas）；App 图标未给定，不指定图标集。
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
         # Info.plist 手写并经 C 预处理（APP-02a）：测试用深链 scheme 只在 Debug / Staging 声明，
         # Release 的 Info.plist 里没有 CFBundleURLTypes（占位 scheme 不进正式包，needs N-05）。
         # XcodeGen 的 info.properties 不能按配置增删键，所以不再由它生成 App/Info.plist。
@@ -83,7 +85,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router]
+        products: [Config, Router, Privacy]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
@@ -128,6 +130,7 @@ schemes:
         - package: Generated/GeneratedTests
         - package: Core/ConfigTests
         - package: Core/RouterTests
+        - package: Core/PrivacyTests
         - package: DesignSystem/DesignSystemTests
     profile:
       config: Release

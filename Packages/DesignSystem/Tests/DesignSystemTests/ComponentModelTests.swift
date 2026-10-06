@@ -254,3 +254,36 @@ final class ComponentModelTests: XCTestCase {
         XCTAssertNil(ToastAnnouncement.text(previous: copied, current: nil))
     }
 }
+
+/// F-IOS-06：商品卡金额隐藏时返利标签显示「预估返 ****」，读屏「预估返，金额已隐藏」；不显示预估返后；按钮只留动词。
+final class RebateAmountHiddenTests: XCTestCase {
+    func testAmountAndRangeAreMaskedNotRemoved() {
+        for rebate in [
+            RebateTagModel.make(basis: "normal", minFen: 269, maxFen: 269, loginRequired: false),
+            RebateTagModel.make(basis: "normal", minFen: 135, maxFen: 269, loginRequired: false),
+            RebateTagModel.make(basis: "normal", minFen: 0, maxFen: 0, loginRequired: false),
+        ] where rebate.showsAmount {
+            let masked = rebate.hidingAmount(true)
+            XCTAssertEqual(masked.text, "预估返 ****")
+            XCTAssertEqual(masked.label, "预估返")
+            XCTAssertEqual(masked.amountParts, ["****"])
+            XCTAssertNil(masked.singleAmount)
+            XCTAssertEqual(masked.accessibilityText, "预估返，金额已隐藏")
+            XCTAssertTrue(masked.usesRebateAccent, "按类别配色，不泄露是不是 0")
+            XCTAssertEqual(rebate.hidingAmount(false), rebate)
+            XCTAssertEqual(BuyButtonModel.text(base: "去购买", rebate: rebate, amountHidden: true, context: "list"),
+                           "去购买")
+            XCTAssertNil(EstNetLine.visibleText("预估返后 ¥27.21", rebate: rebate, amountHidden: true))
+        }
+    }
+
+    func testTextOnlyKindsUnchanged() {
+        for rebate in [
+            RebateTagModel.make(basis: "no_rebate", minFen: nil, maxFen: nil, loginRequired: false),
+            RebateTagModel.make(basis: "amount_unknown", minFen: nil, maxFen: nil, loginRequired: false),
+            RebateTagModel.make(basis: "normal", minFen: 1, maxFen: 2, loginRequired: true),
+        ] {
+            XCTAssertEqual(rebate.hidingAmount(true), rebate)
+        }
+    }
+}

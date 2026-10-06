@@ -1,0 +1,5 @@
+# PrivacyGateVectorTests 是 Codex 按任务书先写的向量测试（不改不删），放宽它触发的规则。
+disabled_rules:
+  - cyclomatic_complexity
+  - function_body_length
+  - file_length

@@ -143,6 +143,24 @@ public struct RebateTagContent: Sendable, Equatable {
         }
     }
 
+    /// 金额隐藏开关打开时的标签（F-IOS-06，DS-01 三端统一裁定）：有金额的（amount、range）显示「预估返 ****」、
+    /// 读屏「预估返，金额已隐藏」，不再整个隐藏；不带金额的种类原样返回。
+    /// 配色按类别（返利强调色），不按真实金额——否则「****」的颜色会泄露返利是不是 0（与钱包金额隐藏同一做法）。
+    public func hidingAmount(_ hidden: Bool) -> RebateTagContent {
+        guard hidden, showsAmount else {
+            return self
+        }
+        let tagLabel = label ?? PriceTerms.rebate
+        return RebateTagContent(
+            kind: kind,
+            text: tagLabel + " " + PriceTerms.amountMask,
+            label: tagLabel,
+            amountParts: [PriceTerms.amountMask],
+            singleAmount: nil,
+            accessibilityText: tagLabel + "，" + PriceTerms.spokenAmountHidden
+        )
+    }
+
     public init(
         kind: RebateTagKind,
         text: String,

@@ -124,6 +124,21 @@ public struct TabBar: View {
                     Rectangle().fill(CouliColor.borderSubtle).frame(height: CouliComponentMetric.controlBorderWidth)
                 }
         )
+        // 读屏按标签栏朗读「首页，标签，第 1 个，共 4 个，已选中」（adaptation-a11y-spec；iOS 17 起有标签栏特征，
+        // iOS 16 只读名称与「已选中」）。
+        .accessibilityElement(children: .contain)
+        .modifier(TabBarAccessibilityTrait())
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+    }
+}
+
+/// 容器的标签栏特征（iOS 17+）：VoiceOver 据此给每个按钮读「标签，第 n 个，共 m 个」。
+private struct TabBarAccessibilityTrait: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.accessibilityAddTraits(.isTabBar)
+        } else {
+            content
+        }
     }
 }

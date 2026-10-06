@@ -23,22 +23,30 @@ public struct RouteDestination: Hashable, Sendable, Identifiable {
 }
 
 /// Router：`EntryGuard.decide` → 按结论推入页面 / 登记 pending_action / 进前置页 / 排队（03 §4.4）。
-/// 原生页面、首页卡片、JSBridge nav.open、推送点击、深链都走 `open`。Home 是栈底（根视图），不入栈。
+/// 原生页面、首页卡片、JSBridge nav.open、推送点击、深链都走 `open`。Tab 根路由（含 Home）是栈底，不入栈，改切 `tabRoot`。
 @MainActor
 public final class Router: ObservableObject {
     /// pending_action 里「打开路由」动作的标签（rule-gaps G13：动作编码表未定）。
     public static let openRouteAction = "open_route"
 
     @Published public var path: [RouteDestination] = []
+    /// 当前一级 Tab 的根页面（R1-05）：Router → 外壳的 Tab 选择接口。打开 Tab 根路由（Home、AgentChat、OrderList、Me）时
+    /// 清空导航栈并切到该 Tab，保留只读标记；外壳按它决定选中哪个 Tab、以什么目的地渲染 Tab 根页面。
+    @Published public internal(set) var tabRoot = RouteDestination(route: RoutePolicy.home)
     /// 守卫要求先补隐私同意（02b 接隐私弹窗）。
-    @Published public private(set) var consentRequested = false
+    @Published public internal(set) var consentRequested = false
+    /// 用户在 App 内发起、正等待隐私弹窗结论的动作（R1-01）：只在内存，进程重启即无。
+    /// 置位期间启动协调不自动恢复 pending_action（那条待办归弹窗结论处理）。
+    /// 不用 `consentRequested` 本身判断：@Published 在 willSet 时就通知订阅方，订阅方（弹出弹窗 → 启动协调）
+    /// 读到的还是旧值。所以这里先置位、再发布 `consentRequested`。
+    public internal(set) var awaitingConsentResult = false
     /// 最近一次结论（调试显示、埋点用）。
-    @Published public private(set) var lastDecision: GuardDecision?
+    @Published public internal(set) var lastDecision: GuardDecision?
 
     public let routes: [String: RouteSpec]
-    private let pendingStore: PendingActionStore
-    private let state: @MainActor () -> GuardState
-    private var launchQueue = LaunchQueue()
+    let pendingStore: PendingActionStore
+    let state: @MainActor () -> GuardState
+    var launchQueue = LaunchQueue()
     /// 会话 / 环境代次：退出登录、切换账号、切换环境时递增，进行中的推送回查结果据此作废。
     private var generation: UInt64 = 0
 
@@ -61,9 +69,13 @@ public final class Router: ObservableObject {
 
     @discardableResult
     func open(_ request: RouteRequest, state: GuardState) -> GuardDecision {
-        let decision = EntryGuard.decide(request: request, state: state, routes: routes)
+        // 推送兜底改落 Messages 时，登记与执行都针对实际目标 Messages（清空参数），不登记被拒绝的原始目标（R1-02）。
+        // 原始目标是敏感动作（BR-ID-10「不适用的动作」）时同样如此（第 2 轮评审 R2-02）：敏感原目标本身从不登记，
+        // 但兜底的 Messages 要登记，登录后落到 Messages（BR-ID-10 推送兜底与登录后落点）。
+        // 是否禁止登记由 `remember` 按实际目标判断。
+        let (decision, target) = EntryGuard.decideWithTarget(request: request, state: state, routes: routes)
         purgeAgentPendingIfPrivacyBlocked(state)
-        apply(decision, for: request)
+        apply(decision, for: target)
         return decision
     }
 
@@ -86,6 +98,7 @@ public final class Router: ObservableObject {
             if request.sourceKind != .agentCard {
                 remember(request)
             }
+            awaitingConsentResult = true
             consentRequested = true
         case .upgrade:
             show(RouteDestination(route: nil))
@@ -110,15 +123,17 @@ public final class Router: ObservableObject {
         ))
     }
 
-    private func show(_ destination: RouteDestination) {
-        if destination.route == RoutePolicy.home {
+    func show(_ destination: RouteDestination) {
+        if let route = destination.route, RoutePolicy.tabRootRoutes.contains(route) {
             path = []
+            tabRoot = destination
         } else {
             path.append(destination)
         }
     }
 
-    /// 登记 pending_action（`RoutePolicy.noPendingActionRoutes` 除外）：动作为打开该路由，params 为路由名与经校验、清洗后的路由参数（不含令牌，BR-ID-10），
+    /// 登记 pending_action（实际目标属于 `RoutePolicy.noPendingActionRoutes` 的除外）：动作为打开该路由，
+    /// params 为路由名与经校验、清洗后的路由参数（不含令牌，BR-ID-10），
     /// 并记下原始来源（origin）。参数不符合 routes.json schema 的不登记。
     private func remember(_ request: RouteRequest) {
         // 需二次验证的操作及其前置步骤不登记（BR-ID-10 细则「不适用的动作」）。
@@ -156,6 +171,13 @@ public final class Router: ObservableObject {
     /// 恢复 pending_action：再过一次守卫（source=pending_action）。还缺前置时保留记录并进前置页；其余情况执行 1 次后删除。
     /// Agent 卡片登记的动作遇隐私阻断直接删除，不自动执行（BR-ID-10，R1-05）。
     public func resumePending() {
+        resumePending(state: state(), entersPrerequisite: true)
+    }
+
+    /// 恢复 pending_action 的公共实现。
+    /// - `entersPrerequisite`：还缺前置时是否进前置页。用户刚完成一个前置步骤时为 true（继续下一个前置）；
+    ///   冷启动与条件变化时为 false——前置未满足（登录、绑手机、实名、隐私同意）一律保留记录、不自动拉起前置页（F-IOS-08）。
+    func resumePending(state current: GuardState, entersPrerequisite: Bool) {
         guard let pending = pendingStore.load(now: pendingStore.now) else { return }
         guard pending.action == Self.openRouteAction,
               let route = pending.paramValues["route"]?.stringValue
@@ -168,12 +190,18 @@ public final class Router: ObservableObject {
             values: pending.paramValues["params"]?.objectValue ?? [:],
             from: .pendingAction
         )
-        let current = state()
         let decision = EntryGuard.decide(request: request, state: current, routes: routes)
         if pending.origin == RouteSource.agentCard.rawValue,
            decision.isPrivacyBlock || !privacyAllowsAgentRecord(current) {
             lastDecision = decision
             pendingStore.clear()
+            return
+        }
+        if !entersPrerequisite, decision.isPrerequisite || decision.kind == .requireConsent {
+            // 前置未满足：保留记录（计时不重置，过期后由读取时删除），不弹前置页、不弹隐私弹窗。
+            // 等待类（defer）在下面的 switch 里同样保留；reject（含 basic_mode_blocked、entry_not_allowed、
+            // params_invalid）一律删除、不补执行（F-ALL-04）。
+            lastDecision = decision
             return
         }
         if decision.isPrerequisite {
@@ -189,6 +217,7 @@ public final class Router: ObservableObject {
         case .requireConsent:
             // 恢复来源不会得到 require_consent（基本模式下按外部请求丢弃）；保守起见保留记录、请求同意。
             lastDecision = decision
+            awaitingConsentResult = true
             consentRequested = true
         default:
             pendingStore.clear()
@@ -209,55 +238,7 @@ public final class Router: ObservableObject {
         generation &+= 1
     }
 
-    /// 隐私弹窗已处理（02b 调用）。`granted` = 用户同意。
-    /// - Agent 卡片登记的动作：一律删除，要用户重新点击（BR-ID-10，R1-05）。
-    /// - 其余动作：同意后计为完成一个前置步骤，按前置继续（登录、绑手机、实名）并恢复原路由（R1-06）；不同意则删除。
-    public func consentHandled(granted: Bool = true) {
-        consentRequested = false
-        guard let pending = pendingStore.load(now: pendingStore.now) else { return }
-        guard granted, pending.origin != RouteSource.agentCard.rawValue else {
-            pendingStore.clear()
-            return
-        }
-        prerequisiteCompleted()
-    }
-
-    /// 隐私状态变化（02b 在弹窗结论、撤回同意、进入基本模式时调用）：Agent 卡片登记的动作遇隐私阻断即删除。
-    public func privacyChanged() {
-        purgeAgentPendingIfPrivacyBlocked(state())
-    }
-
-    /// 只有隐私已同意时才保留 Agent 卡片来源的 pending_action；未决、基本模式都算隐私阻断（BR-ID-10 Agent 卡片 ②，R1-05）。
-    private func privacyAllowsAgentRecord(_ state: GuardState) -> Bool {
-        state.privacy == .consented
-    }
-
-    /// 任何时刻观察到隐私阻断，都删除 origin=agent_card 的记录（读记录不重置计时）。
-    private func purgeAgentPendingIfPrivacyBlocked(_ state: GuardState) {
-        guard !privacyAllowsAgentRecord(state),
-              let pending = pendingStore.load(now: pendingStore.now),
-              pending.origin == RouteSource.agentCard.rawValue
-        else {
-            return
-        }
-        pendingStore.clear()
-    }
-
     // MARK: - 启动意图
-
-    public func enqueueLaunch(_ intent: LaunchIntent) {
-        launchQueue.enqueue(intent)
-    }
-
-    public var hasPendingLaunchIntent: Bool {
-        launchQueue.pending != nil
-    }
-
-    /// 下一次该重试放行启动意图的时刻（毫秒）：闸门已通过、强更仍在检查时为「闸门通过 + 5 秒」；
-    /// 闸门未就绪或没有排队的意图时为 nil（调用方不必空转计时，等状态变化再 drain）。
-    public func launchRetryAt(readiness: LaunchReadiness) -> Int64? {
-        launchQueue.nextRetryAt(readiness: readiness)
-    }
 
     /// 条件满足时放行排队的启动意图；推送意图经 `PushLanding` 回查后再打开。
     /// 返回推送回查的任务（测试可等待它结束）；没有回查时为 nil。
@@ -291,31 +272,41 @@ public final class Router: ObservableObject {
     public func handlePush(messageId: String, using pushLanding: PushLanding) -> Task<Void, Never>? {
         let current = state()
         purgeAgentPendingIfPrivacyBlocked(current)
-        return startPush(messageId: messageId, state: current, using: pushLanding)
+        // 运行中隐私未决 = 正停在首启弹窗 / 二次说明：热推送直接丢弃，不入启动队列（03 §4.4 末句，R1-04）。
+        // 只有冷启动捕获的推送（`enqueueLaunch(.push)`）才等待隐私结论。
+        if current.privacy == .notDecided {
+            lastDecision = GuardDecision(kind: .deferred, route: nil, reason: GuardReason.privacyUndecided)
+            return nil
+        }
+        return startPush(messageId: messageId, state: current, using: pushLanding, hot: true)
     }
 
     private func startPush(messageId: String, state guardState: GuardState,
-                           using pushLanding: PushLanding) -> Task<Void, Never>? {
+                           using pushLanding: PushLanding, hot: Bool = false) -> Task<Void, Never>? {
         let issued = generation
         if let blocked = PushLanding.probe(state: guardState, routes: routes) {
-            finishPush(blocked, messageId: messageId, issuedAt: issued)
+            finishPush(blocked, messageId: messageId, issuedAt: issued, hot: hot)
             return nil
         }
         let routes = routes
         return Task { @MainActor [weak self] in
             let result = await pushLanding.land(messageId: messageId, state: guardState, routes: routes)
-            self?.finishPush(result, messageId: messageId, issuedAt: issued)
+            self?.finishPush(result, messageId: messageId, issuedAt: issued, hot: hot)
         }
     }
 
     /// 推送回查返回：会话或环境已变（退出登录、切换账号、切换环境）则丢弃旧结果；
     /// 否则用当时最新的状态重新判定后执行（R1-01）。还要等待时把这条推送重新排队，条件满足后再回查。
     /// 代次只在 Router 内部发放与校验：没有公开的「直接执行回查结果」入口（R2-01）。
-    func finishPush(_ result: PushLandingResult, messageId: String, issuedAt: UInt64) {
+    /// `hot`：运行中点击的推送。等待隐私结论（首启弹窗期间）时丢弃，不排队（R1-04）；其余等待照常排队。
+    func finishPush(_ result: PushLandingResult, messageId: String, issuedAt: UInt64, hot: Bool = false) {
         guard issuedAt == generation else { return }
         let current = redecide(result)
         if current.decision.kind == .deferred {
             lastDecision = current.decision
+            if hot, current.decision.reason == GuardReason.privacyUndecided {
+                return
+            }
             launchQueue.enqueue(.push(messageId: messageId))
             return
         }
@@ -347,6 +338,9 @@ public final class Router: ObservableObject {
             }
             return
         }
-        apply(result.decision, for: result.request ?? RouteRequest(route: RoutePolicy.messages, from: .push))
+        let request = result.request ?? RouteRequest(route: RoutePolicy.messages, from: .push)
+        // 兜底 Messages 时按实际目标登记 / 打开（R1-02）；敏感原目标兜底时同样登记 Messages（R2-02）。
+        let target = EntryGuard.decideWithTarget(request: request, state: state(), routes: routes).target
+        apply(result.decision, for: target)
     }
 }

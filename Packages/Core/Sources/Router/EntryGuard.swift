@@ -17,6 +17,14 @@ public enum EntryGuard {
         state: GuardState,
         routes: [String: RouteSpec]
     ) -> GuardDecision {
+        decideWithTarget(request: request, state: state, routes: routes).decision
+    }
+
+    private static func decideRaw(
+        request: RouteRequest,
+        state: GuardState,
+        routes: [String: RouteSpec]
+    ) -> GuardDecision {
         // 环境未 settled：一律不放行业务路由，等待（EnvironmentGate）。
         guard state.environmentSettled else {
             return wait(GuardReason.environmentUnsettled)
@@ -36,13 +44,13 @@ public enum EntryGuard {
             return GuardDecision(kind: .upgrade, route: nil, reason: GuardReason.unknownRoute)
         }
         if let blocked = entryCheck(request: request, spec: spec, state: state) {
-            return blocked
+            return messagesFallback(blocked, for: request, state: state, routes: routes)
         }
         if let blocked = paramsCheck(request: request, spec: spec, state: state) {
             return blocked
         }
         if let blocked = readonlyCheck(request: request, state: state) {
-            return blocked
+            return messagesFallback(blocked, for: request, state: state, routes: routes)
         }
         if let prerequisite = authPrerequisite(auth: spec.auth, state: state) {
             return prerequisite
@@ -63,6 +71,11 @@ public enum EntryGuard {
         let source = request.sourceKind
         switch state.privacy {
         case .notDecided:
+            // 「未决时可读路由」（首启弹窗、二次说明里的协议链接，APP-02b）：同意前只允许看协议文本（BR-ID-11），
+            // 只认 App 内来源，只读放行；深链、推送、pending_action 仍按下面等待。TODO(N-14): 名单待规划定稿。
+            if source == .inApp, RoutePolicy.privacyUndecidedReadableRoutes.contains(request.route) {
+                return nil
+            }
             if source == .agentCard {
                 // Agent 卡片：先补同意，同意后不自动补打开（BR-ID-10 Agent 卡片 ②）。
                 return GuardDecision(kind: .requireConsent, route: nil, reason: GuardReason.agentConsentNoReplay)
@@ -143,11 +156,43 @@ public enum EntryGuard {
         return nil
     }
 
+    /// 推送兜底改落 Messages 时（目标未声明 push、强更未知），Messages 本身也要完整过一次守卫（F-IOS-07）：
+    /// 守卫拦下 Messages（游客要登录、受限会话等）就按 Messages 的结论处理；放行时保留兜底原因码，任一方只读则只读。
+    /// 这样直接 `Router.open(source=push)` 也不会把 Messages 开给游客，不依赖 `PushLanding` 的二次守卫。
+    /// Messages 自己声明了 push 且在只读清单里，这里的递归最多一层。
+    private static func messagesFallback(
+        _ decision: GuardDecision,
+        for request: RouteRequest,
+        state: GuardState,
+        routes: [String: RouteSpec]
+    ) -> GuardDecision {
+        guard decision.route == RoutePolicy.messages, request.route != RoutePolicy.messages else {
+            return decision
+        }
+        let messages = decide(
+            request: RouteRequest(route: RoutePolicy.messages, from: .push),
+            state: state,
+            routes: routes
+        )
+        guard messages.opensPage, messages.route == RoutePolicy.messages else {
+            return messages
+        }
+        let readonly = decision.kind == .openReadonly || messages.kind == .openReadonly
+        return GuardDecision(
+            kind: readonly ? .openReadonly : .open,
+            route: RoutePolicy.messages,
+            reason: decision.reason
+        )
+    }
+
     /// 前置条件都满足后的打开方式。
     private static func openDecision(request: RouteRequest, state: GuardState) -> GuardDecision {
         let route = request.route
         if state.privacy == .basicMode {
             return GuardDecision(kind: .openReadonly, route: route, reason: GuardReason.basicReadonly)
+        }
+        if state.privacy == .notDecided {
+            return GuardDecision(kind: .openReadonly, route: route, reason: GuardReason.privacyUndecidedReadonly)
         }
         if readonlyByUpdate(request, state) {
             return GuardDecision(kind: .openReadonly, route: route, reason: GuardReason.updateUnknownReadonly)
@@ -244,5 +289,47 @@ public enum EntryGuard {
 
     private static func reject(_ reason: String) -> GuardDecision {
         GuardDecision(kind: .reject, route: nil, reason: reason)
+    }
+}
+
+/// 推送兜底的实际目标（R1-02）：放在扩展里，与判定主体分开。
+public extension EntryGuard {
+    /// 同 `decide`，另给出结论实际针对的请求（R1-02）：推送兜底改落 Messages 时为清空参数的 Messages（source=push），
+    /// 否则为原请求。Router 登记 pending_action、恢复待办都用这个实际目标，不用被入口限制拒绝的原始目标。
+    static func decideWithTarget(
+        request: RouteRequest,
+        state: GuardState,
+        routes: [String: RouteSpec]
+    ) -> (decision: GuardDecision, target: RouteRequest) {
+        let decision = decideRaw(request: request, state: state, routes: routes)
+        guard isMessagesFallback(request, state: state, routes: routes) else {
+            return (decision, request)
+        }
+        return (decision, RouteRequest(route: RoutePolicy.messages, from: .push))
+    }
+
+    /// 本次判定是否走了推送兜底 Messages（入口未声明 push，或强更未知时不在只读清单）。
+    /// 与 `decideRaw` 的分步一致：只有隐私、强更、可用性、入口这几步都走到时才可能兜底。
+    private static func isMessagesFallback(
+        _ request: RouteRequest,
+        state: GuardState,
+        routes: [String: RouteSpec]
+    ) -> Bool {
+        guard request.sourceKind == .push, request.route != RoutePolicy.messages,
+              state.environmentSettled,
+              privacyGate(request: request, state: state) == nil,
+              state.update != .belowMin,
+              availability(route: request.route, state: state, routes: routes) == nil,
+              let spec = routes[request.route]
+        else {
+            return false
+        }
+        if entryCheck(request: request, spec: spec, state: state) != nil {
+            return true
+        }
+        if paramsCheck(request: request, spec: spec, state: state) != nil {
+            return false
+        }
+        return readonlyCheck(request: request, state: state) != nil
     }
 }

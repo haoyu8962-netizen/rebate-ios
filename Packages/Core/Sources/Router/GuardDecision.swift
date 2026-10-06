@@ -43,6 +43,9 @@ public enum GuardReason {
     /// ExternalPage / WebPage 的目标地址不在 external_hosts / bridge_origins 白名单。
     public static let targetNotAllowed = "target_not_allowed"
     public static let realnameRequired = "realname_required"
+    /// 隐私闸门未决时 App 内只读打开「未决时可读路由」（首启弹窗 / 二次说明里的协议链接；APP-02b，
+    /// BR-ID-11「同意前只允许请求协议文本」；原因码三端统一）。
+    public static let privacyUndecidedReadonly = "privacy_undecided_readonly"
 }
 
 /// 守卫结论。
