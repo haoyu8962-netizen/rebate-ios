@@ -206,17 +206,38 @@ feature_import_build_probe() {
     grep -m 1 "不能 import 另一个 Feature" "$log"
 }
 
-# Staging 包带调试能力：调试面板标记、组件目录页标记（DS-01）、debug_only 路由表标记与 staging 地址都在（Staging 是 -O 优化构建，
-# 同时证明长标记在优化后仍能被 strings 看到）。
+# Staging 包带调试能力：调试面板标记、组件目录页标记（DS-01）、debug_only 路由表标记、测试深链 scheme（APP-02a）
+# 与 staging 地址都在（Staging 是 -O 优化构建，同时证明长标记在优化后仍能被 strings 看到）。
 staging_has_debug_capabilities() {
     local app="$PRODUCTS/Staging-iphonesimulator/Couli.app"
     tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
-        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect staging.couli.invalid "$app" || return 1
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect couli-debug --expect staging.couli.invalid "$app" || return 1
     [ "$(/usr/libexec/PlistBuddy -c "Print :CouliBuildConfiguration" "$app/Info.plist")" = "Staging" ] || {
         echo "Staging 包的 CouliBuildConfiguration 不是 Staging"
         return 1
     }
+    [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "$app/Info.plist")" = "couli-debug" ] || {
+        echo "Staging 包没有声明测试深链 scheme couli-debug"
+        return 1
+    }
+}
+
+# Release 包的 Info.plist 不声明任何 URL scheme（占位 scheme 不进正式包，needs N-05；APP-02a）。
+release_has_no_url_types() {
+    local plist="$PRODUCTS/Release-iphonesimulator/Couli.app/Info.plist" out status
+    [ -f "$plist" ] || { echo "找不到 $plist"; return 1; }
+    out="$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" "$plist" 2>&1)"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "Release 包声明了 CFBundleURLTypes：$out"
+        return 1
+    fi
+    grep_status -qF "Does Not Exist" <<<"$out"
+    case $? in
+        0) echo "ok：Release 包没有 CFBundleURLTypes" ;;
+        *) echo "读取 Release Info.plist 失败：$out"; return 1 ;;
+    esac
 }
 
 # Generated 包按 Release 配置（-O、不定义 DEBUG）跑一致性测试，走 ContractConformanceTests 的 #else 分支：
@@ -341,14 +362,15 @@ if [ "$FAST" -eq 0 ]; then
     step "Staging 包带调试面板与 debug_only 路由表" staging_has_debug_capabilities
     step "build Release（模拟器）" xcb -configuration Release -destination "$SIM_BUILD_DEST" build
     step "release-scan Release 包" tools/ci/release-scan.sh "$PRODUCTS/Release-iphonesimulator/Couli.app"
+    step "Release 包不声明 URL scheme" release_has_no_url_types
     step "release-scan 工具失败时必须失败（假 strings 返回 127）" release_scan_tool_failure
     step "release-scan 授权检查 grep 出错时必须失败（假 grep 返回 2）" release_scan_grep_failure
     DEST="$(pick_simulator)" || { RESULTS+=("FAIL  选择模拟器"); echo "$DEST"; summary; exit 1; }
     echo "    模拟器：$DEST"
-    step "test Debug（包测试含格式向量与组件快照 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
+    step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
-        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect test.couli.invalid \
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect couli-debug --expect test.couli.invalid \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

@@ -37,5 +37,18 @@
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
+#if COULI_DEBUG_DEEPLINK
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.couli.app.debug-deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>couli-debug</string>
+			</array>
+		</dict>
+	</array>
+#endif
 </dict>
 </plist>

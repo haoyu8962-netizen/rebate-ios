@@ -58,30 +58,21 @@ targets:
         PRODUCT_NAME: Couli
         TARGETED_DEVICE_FAMILY: "1"  # 只做 iPhone；iPad 以 iPhone 兼容模式运行（01 §7.5）
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
+        # Info.plist 手写并经 C 预处理（APP-02a）：测试用深链 scheme 只在 Debug / Staging 声明，
+        # Release 的 Info.plist 里没有 CFBundleURLTypes（占位 scheme 不进正式包，needs N-05）。
+        # XcodeGen 的 info.properties 不能按配置增删键，所以不再由它生成 App/Info.plist。
+        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_PREPROCESS: YES
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          INFOPLIST_PREPROCESSOR_DEFINITIONS: COULI_DEBUG_DEEPLINK=1
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG STAGING
           SWIFT_OPTIMIZATION_LEVEL: -O
+          INFOPLIST_PREPROCESSOR_DEFINITIONS: COULI_DEBUG_DEEPLINK=1
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: ""
-    info:
-      path: App/Info.plist
-      properties:
-        CFBundleDisplayName: $(COULI_DISPLAY_NAME)
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(COULI_BUNDLE_VERSION)
-        CouliBuildConfiguration: $(CONFIGURATION)
-        LSRequiresIPhoneOS: true
-        UILaunchScreen: {}
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-        # 只支持竖屏（03 §10.4）。
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        # 强制浅色（TECH-22）。不设关闭 iOS 26 新系统外观的兼容键（03 §3.3）。
-        UIUserInterfaceStyle: Light
     entitlements:
       path: App/Couli.entitlements
       properties: {}
@@ -92,7 +83,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        product: Config
+        products: [Config, Router]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
@@ -136,6 +127,7 @@ schemes:
         - CouliUITests
         - package: Generated/GeneratedTests
         - package: Core/ConfigTests
+        - package: Core/RouterTests
         - package: DesignSystem/DesignSystemTests
     profile:
       config: Release

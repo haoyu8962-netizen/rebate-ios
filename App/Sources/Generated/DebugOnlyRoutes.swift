@@ -15,7 +15,15 @@ enum DebugOnlyRoutes {
             name: "HomePreview", kind: .native, auth: "none",
             sinceIOS: "1.0.0",
             entries: [.inApp, .deeplink],
-            h5Path: nil, debugOnly: true
+            h5Path: nil, debugOnly: true,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+                RouteParamSpec(name: "page_key", type: .string, minLength: 1),
+                RouteParamSpec(name: "token", type: .string, minLength: 1),
+            ],
+            requiredParams: ["page_key", "token"],
+            additionalParams: false
         )
         if table.count != 1 {
             Swift.fatalError("COULI_DEBUG_ONLY_ROUTE_TABLE: debug-only route table incomplete")

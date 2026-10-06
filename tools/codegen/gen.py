@@ -120,6 +120,7 @@ TYPE_NAME_CONFLICTS = SWIFT_KEYWORDS | {
 # 生成物里手写的类型，枚举类型名不能与之重名。
 RESERVED_TYPE_NAMES = {
     "ContractEnums", "RetryKind", "ErrorCodeInfo", "ErrorCodes", "RouteKind", "RouteSpec", "Routes",
+    "RouteParamType", "RouteParamSpec",
     "BridgeMethodSpec", "BridgeMethods", "BridgeErrors", "DefaultTexts", "DesignTokens", "DebugOnlyRoutes",
     # SwiftPM 为带资源的包生成的 resource_bundle_accessor.swift 里的私有类型。
     "BundleFinder",
@@ -415,6 +416,63 @@ def gen_error_codes(out: dict[str, str]):
     put(out, "ErrorCodes.swift", "\n".join(lines))
 
 
+# routes.json 参数 schema 只允许这些关键字；出现别的就报错，不静默丢弃约束。
+PARAM_SCHEMA_KEYS = {"type", "additionalProperties", "properties", "required"}
+PARAM_PROPERTY_KEYS = {"type", "enum", "minLength", "maxLength", "pattern", "description", "additionalProperties"}
+PARAM_TYPES = {"string", "integer", "number", "boolean", "object", "array"}
+
+
+def route_params(schema, ctx: str, indent: str):
+    """返回 (RouteParamSpec 字面量行, required 列表, additionalProperties)。"""
+    if not isinstance(schema, dict):
+        raise GenError(f"{ctx} 应为对象")
+    extra = set(schema) - PARAM_SCHEMA_KEYS
+    if extra:
+        raise GenError(f"{ctx} 含生成器不支持的关键字 {sorted(extra)}")
+    if schema.get("type") != "object":
+        raise GenError(f"{ctx}.type 应为 object")
+    additional = schema.get("additionalProperties", False)
+    if not isinstance(additional, bool):
+        raise GenError(f"{ctx}.additionalProperties 应为布尔")
+    props = schema.get("properties", {})
+    if not isinstance(props, dict):
+        raise GenError(f"{ctx}.properties 应为对象")
+    required = schema.get("required", [])
+    if not isinstance(required, list) or not all(isinstance(r, str) for r in required):
+        raise GenError(f"{ctx}.required 应为字符串数组")
+    for r in required:
+        if r not in props:
+            raise GenError(f"{ctx}.required 含未声明的参数 {r!r}")
+    lines = []
+    for pname in sorted(props):
+        pctx = f"{ctx}.properties.{pname}"
+        prop = props[pname]
+        if not isinstance(prop, dict):
+            raise GenError(f"{pctx} 应为对象")
+        extra = set(prop) - PARAM_PROPERTY_KEYS
+        if extra:
+            raise GenError(f"{pctx} 含生成器不支持的关键字 {sorted(extra)}")
+        ptype = prop.get("type")
+        if ptype not in PARAM_TYPES:
+            raise GenError(f"{pctx}.type 未知取值 {ptype!r}")
+        args = [f"name: {swift_string(pname)}", f"type: .{ptype}"]
+        if "enum" in prop:
+            values = prop["enum"]
+            if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+                raise GenError(f"{pctx}.enum 应为字符串数组")
+            args.append("enumValues: [" + ", ".join(swift_string(v) for v in values) + "]")
+        for key, label in (("minLength", "minLength"), ("maxLength", "maxLength")):
+            if key in prop:
+                value = prop[key]
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                    raise GenError(f"{pctx}.{key} 应为非负整数")
+                args.append(f"{label}: {value}")
+        if "pattern" in prop:
+            args.append(f"pattern: {swift_string(as_str(prop['pattern'], pctx + '.pattern'))}")
+        lines.append(f"{indent}RouteParamSpec({', '.join(args)}),")
+    return lines, required, additional
+
+
 # ---------- 路由 ----------
 
 
@@ -442,12 +500,28 @@ def gen_routes(out: dict[str, str], route_entry_cases):
         debug_only = row.get("debug_only", False)
         if not isinstance(debug_only, bool):
             raise GenError(f"{ctx}.debug_only 应为布尔")
+        agent_guide = row.get("agent_guide", False)
+        if not isinstance(agent_guide, bool):
+            raise GenError(f"{ctx}.agent_guide 应为布尔")
+        agent_guide_account = row.get("agent_guide_account")
+        if agent_guide_account is not None and not isinstance(agent_guide_account, str):
+            raise GenError(f"{ctx}.agent_guide_account 应为字符串或缺省")
+        if agent_guide and agent_guide_account is not None:
+            raise GenError(f"{ctx}：agent_guide_account 路由不得同时 agent_guide=true")
+        param_lines, required, additional = route_params(row.get("params"), f"{ctx}.params", indent + "        ")
         return [
             f"{indent}RouteSpec(",
             f"{indent}    name: {swift_string(name)}, kind: .{kind}, auth: {swift_string(auth)},",
             f"{indent}    sinceIOS: {swift_optional_string(since_ios(row, ctx))},",
             f"{indent}    entries: [{', '.join(entry_names)}],",
-            f"{indent}    h5Path: {swift_optional_string(row.get('h5_path'))}, debugOnly: {'true' if debug_only else 'false'}",
+            f"{indent}    h5Path: {swift_optional_string(row.get('h5_path'))}, debugOnly: {'true' if debug_only else 'false'},",
+            f"{indent}    agentGuide: {'true' if agent_guide else 'false'},",
+            f"{indent}    agentGuideAccount: {swift_optional_string(agent_guide_account)},",
+            f"{indent}    params: [",
+            *param_lines,
+            f"{indent}    ],",
+            f"{indent}    requiredParams: [{', '.join(swift_string(r) for r in required)}],",
+            f"{indent}    additionalParams: {'true' if additional else 'false'}",
             f"{indent})",
         ]
 
@@ -471,10 +545,22 @@ def gen_routes(out: dict[str, str], route_entry_cases):
         "    public let entries: [RouteEntry]",
         "    public let h5Path: Swift.String?",
         "    public let debugOnly: Swift.Bool",
+        "    /// routes.json 的 agent_guide（缺省 false）：Agent 页面引导卡与收益卡按钮能否打开该路由。",
+        "    public let agentGuide: Swift.Bool",
+        "    /// routes.json 的 agent_guide_account（phone / delete / fund，缺省 nil）：Agent 从不引导的账号安全路由。",
+        "    public let agentGuideAccount: Swift.String?",
+        "    /// routes.json params.properties（按参数名排序）。",
+        "    public let params: [RouteParamSpec]",
+        "    /// routes.json params.required。",
+        "    public let requiredParams: [Swift.String]",
+        "    /// routes.json params.additionalProperties（缺省 false）。",
+        "    public let additionalParams: Swift.Bool",
         "",
         "    public init(",
         "        name: Swift.String, kind: RouteKind, auth: Swift.String, sinceIOS: Swift.String?,",
-        "        entries: [RouteEntry], h5Path: Swift.String?, debugOnly: Swift.Bool",
+        "        entries: [RouteEntry], h5Path: Swift.String?, debugOnly: Swift.Bool,",
+        "        agentGuide: Swift.Bool = false, agentGuideAccount: Swift.String? = nil,",
+        "        params: [RouteParamSpec] = [], requiredParams: [Swift.String] = [], additionalParams: Swift.Bool = false",
         "    ) {",
         "        self.name = name",
         "        self.kind = kind",
@@ -483,6 +569,42 @@ def gen_routes(out: dict[str, str], route_entry_cases):
         "        self.entries = entries",
         "        self.h5Path = h5Path",
         "        self.debugOnly = debugOnly",
+        "        self.agentGuide = agentGuide",
+        "        self.agentGuideAccount = agentGuideAccount",
+        "        self.params = params",
+        "        self.requiredParams = requiredParams",
+        "        self.additionalParams = additionalParams",
+        "    }",
+        "",
+        "    public func param(_ name: Swift.String) -> RouteParamSpec? {",
+        "        params.first { $0.name == name }",
+        "    }",
+        "}",
+        "",
+        "/// 路由参数的 JSON 类型（routes.json params.properties.*.type）。",
+        "public enum RouteParamType: Swift.String, Swift.Sendable {",
+        "    case string, integer, number, boolean, object, array",
+        "}",
+        "",
+        "/// 一个路由参数的 JSON Schema 约束（只转写 routes.json 用到的关键字）。",
+        "public struct RouteParamSpec: Swift.Sendable, Swift.Equatable {",
+        "    public let name: Swift.String",
+        "    public let type: RouteParamType",
+        "    public let enumValues: [Swift.String]?",
+        "    public let minLength: Swift.Int?",
+        "    public let maxLength: Swift.Int?",
+        "    public let pattern: Swift.String?",
+        "",
+        "    public init(",
+        "        name: Swift.String, type: RouteParamType, enumValues: [Swift.String]? = nil,",
+        "        minLength: Swift.Int? = nil, maxLength: Swift.Int? = nil, pattern: Swift.String? = nil",
+        "    ) {",
+        "        self.name = name",
+        "        self.type = type",
+        "        self.enumValues = enumValues",
+        "        self.minLength = minLength",
+        "        self.maxLength = maxLength",
+        "        self.pattern = pattern",
         "    }",
         "}",
         "",

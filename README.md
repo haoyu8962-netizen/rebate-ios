@@ -15,9 +15,9 @@ tools/ci/verify.sh                     # 全量本机 CI（三套配置构建、
 
 | 路径 | 内容 |
 | --- | --- |
-| `App/` | AppShell 入口、`Info.plist`（xcodegen 生成）、Entitlements、隐私清单、`Config/*.xcconfig`；环境与地址（`Sources/Environment`）、调试源码集（`Sources/Debug`，只在 Debug / Staging 编译）、生成的 debug_only 路由表（`Sources/Generated`） |
+| `App/` | AppShell 入口、`Info.plist`（手写、经预处理：测试深链 scheme 只在 Debug / Staging 声明）、路由接线与页面注册表（`Sources/Routing`）、Entitlements、隐私清单、`Config/*.xcconfig`；环境与地址（`Sources/Environment`）、调试源码集（`Sources/Debug`，只在 Debug / Staging 编译）、生成的 debug_only 路由表（`Sources/Generated`） |
 | `Packages/Generated` | 契约生成物（`tools/codegen/gen.py` 生成，禁止手改）+ 一致性测试 |
-| `Packages/Core` | Core 层：`Config`（环境类型、生效记录与切换清理）与各模块占位 |
+| `Packages/Core` | Core 层：`Config`（环境类型、生效记录与切换清理）、`Router`（入口守卫、深链解析、pending_action、推送落点、启动意图排队；向量 `specs/router-vectors.json`）与各模块占位 |
 | `Packages/DesignSystem` | 令牌 → SwiftUI 映射（颜色、文字样式、间距、圆角、命中区） |
 | `Packages/Features` | 9 个功能 target，互不依赖 |
 | `contracts/snapshot/` | 按 `contract.lock` 锁定的契约快照（`tools/contracts/sync.sh` 生成） |

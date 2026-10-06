@@ -1,11 +1,14 @@
 import Config
 import DesignSystem
 import Generated
+import Router
 import SwiftUI
 
-/// 最小首屏：令牌背景 + App 名称图形占位。DEBUG 下另显示令牌版本、构建配置与调试面板入口（英文开发字样）。
+/// 最小首屏：令牌背景 + App 名称图形占位，外面包一层 NavigationStack（Router 按路由名推入占位页）。
+/// DEBUG 下另显示令牌版本、构建配置、最近一次路由结论与调试面板入口（英文开发字样）。
 struct RootView: View {
     @EnvironmentObject private var environment: EnvironmentStore
+    @EnvironmentObject private var router: Router
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -18,13 +21,23 @@ struct RootView: View {
                 // 截图用：启动参数直达组件目录的某一页（DS-01）。
                 CatalogLaunchView(page: page, section: CatalogLaunch.section)
             } else {
-                content
+                navigation
             }
             #else
-            content
+            navigation
             #endif
         case .blocked:
             EnvironmentBlockedView(retry: environment.retryLaunchCleanup)
+        }
+    }
+
+    /// Home 是栈底；其余路由由 Router 推入。
+    private var navigation: some View {
+        NavigationStack(path: $router.path) {
+            content
+                .navigationDestination(for: RouteDestination.self) { destination in
+                    RouteViewRegistry.view(for: destination)
+                }
         }
     }
 
@@ -54,6 +67,10 @@ struct RootView: View {
                 .accessibilityIdentifier("root.tokensVersion")
             Text(verbatim: "config \(BuildInfo.configurationName) · env \(environment.current.id)")
                 .accessibilityIdentifier("root.buildConfiguration")
+            if let decision = router.lastDecision {
+                Text(verbatim: "route \(decision.kindRaw) \(decision.route ?? "-") · \(decision.reason)")
+                    .accessibilityIdentifier("root.lastRouteDecision")
+            }
             Button {
                 showsDebugPanel = true
             } label: {

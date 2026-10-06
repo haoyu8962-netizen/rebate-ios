@@ -19,6 +19,7 @@
 #   - 快照 routes.json 里 debug_only 为 true 的路由名（长名字直接可见；不超过 15 字节的短名字会被 Swift
 #     内联进指令、strings 看不到，所以靠上一条标记兜底，verify.sh 用优化过的 Staging 包证明标记命中）
 #   - 调试授权项 get-task-allow（也查代码签名里的授权）
+#   - 测试深链 scheme couli-debug（APP-02a：Info.plist 只在 Debug / Staging 声明，App 的深链配置也只在 #if DEBUG 里）
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -86,6 +87,7 @@ HITS_LOG="$WORK/hits"
     echo "COULI_DS_COMPONENT_CATALOG_7Q4XK2"
     echo "COULI_DEBUG_ONLY_ROUTE_TABLE"
     echo "get-task-allow"
+    echo "couli-debug"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

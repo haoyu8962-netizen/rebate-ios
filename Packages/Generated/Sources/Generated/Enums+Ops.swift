@@ -94,6 +94,8 @@ public enum AgentIntent: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift
     case handoff
     case clarify
     case outOfScope = "out_of_scope"
+    case pageGuide = "page_guide"
+    case earningsQuery = "earnings_query"
     case unknown = "__unknown__"
 
     public static let allCases: [AgentIntent] = [
@@ -105,6 +107,8 @@ public enum AgentIntent: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift
         .handoff,
         .clarify,
         .outOfScope,
+        .pageGuide,
+        .earningsQuery,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {
@@ -123,6 +127,8 @@ public enum AgentCardType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
     case authRequired = "auth_required"
     case notice
     case ruleRef = "rule_ref"
+    case pageGuide = "page_guide"
+    case earningsSummary = "earnings_summary"
     case unknown = "__unknown__"
 
     public static let allCases: [AgentCardType] = [
@@ -134,11 +140,36 @@ public enum AgentCardType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
         .authRequired,
         .notice,
         .ruleRef,
+        .pageGuide,
+        .earningsSummary,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
         self = AgentCardType(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `page_guide_reject_reason`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum PageGuideRejectReason: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case notAllowed = "not_allowed"
+    case extraFields = "extra_fields"
+    case disabled
+    case untrustedInput = "untrusted_input"
+    case paramsRequested = "params_requested"
+    case unknown = "__unknown__"
+
+    public static let allCases: [PageGuideRejectReason] = [
+        .notAllowed,
+        .extraFields,
+        .disabled,
+        .untrustedInput,
+        .paramsRequested,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = PageGuideRejectReason(rawValue: rawValue) ?? .unknown
     }
 }
 
