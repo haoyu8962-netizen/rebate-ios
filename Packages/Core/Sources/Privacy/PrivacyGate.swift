@@ -63,6 +63,9 @@ public protocol PrivacyStore: AnyObject {
     func commitWithdrawal()
     /// 清理成功：只删待清理标记。
     func clearWithdrawalPending()
+    /// 撤回同意的合并写入，并确认已落盘（读回核对）。返回 false = 写入失败：调用方不得吞掉，须在内存里立即按基本模式
+    /// 处理、不放行，并持续重试写入（F-ALL-05）。
+    func commitWithdrawalVerified() -> Bool
 }
 
 /// 默认实现（只有四个字段的简单存储，如向量测试的内存存储）：逐字段写，不支持待清理标记。
@@ -91,6 +94,11 @@ public extension PrivacyStore {
     }
 
     func clearWithdrawalPending() {}
+
+    func commitWithdrawalVerified() -> Bool {
+        commitWithdrawal()
+        return true
+    }
 }
 
 /// 设备注册退避重试的调度器（可注入，单测用假调度器推进虚拟时间）。
@@ -123,6 +131,8 @@ public final class PrivacyGate {
     /// 撤回同意时的本地清理入口（令牌、device_id、install_secret）。
     /// 生产接 `PrivacyWithdrawalCleanup.registry`（APP-01 清理器注册表的形式，见 PrivacyWithdrawal.swift）。
     public var withdrawalCleanup: () -> Void
+    /// 撤回记录未落盘的内存标记（与 `WithdrawalCleanupRunner.writeGuard` 共用同一个实例）。
+    public var withdrawalWriteGuard = WithdrawalWriteGuard()
 
     private let store: any PrivacyStore
     private let clock: () -> Int64
@@ -170,6 +180,13 @@ public final class PrivacyGate {
     /// 标记在期间不放行完整功能、不初始化、不读凭据）。TODO(rule-gaps): 此时给用户的提示文案未定义，由 APP-12 补。
     public func agree(now: Int64) {
         guard stage != .none else { return }
+        // 撤回记录还没落盘（F-ALL-05）：先补写；仍写不进去就不记同意、留在基本模式。
+        if withdrawalWriteGuard.isUnpersisted {
+            guard persistWithdrawal() else {
+                stage = .none
+                return
+            }
+        }
         if store.withdrawalCleanupPending {
             withdrawalCleanup()
             guard !store.withdrawalCleanupPending else {
@@ -206,12 +223,20 @@ public final class PrivacyGate {
     /// SDK 无法在进程内反初始化，再次同意时各步骤须自行保证重复调用安全（各 SDK 接入任务）。
     /// 中断安全（第 2 轮评审）：先在一次持久化写入里落「基本模式 + 清除同意记录 + 待清理标记」，再清凭据；
     /// 清理成功只删标记（`WithdrawalCleanupRunner`）。任何时刻中断，下次冷启动都是基本模式且会重试清理。
+    /// 撤回记录写入失败不吞掉（F-ALL-05）：内存里立即按基本模式、不放行，凭据不可读，并按 1s、2s、4s…上限 60s 持续重试写入，
+    /// 落盘成功后再跑一次清理（清干净才删待清理标记）。
     public func withdraw(now _: Int64) {
-        store.commitWithdrawal()
+        let persisted = store.commitWithdrawalVerified()
+        if !persisted {
+            withdrawalWriteGuard.markUnpersisted()
+        }
         withdrawalCleanup()
         stage = .none
         initStarted = false
         cycle &+= 1
+        if withdrawalWriteGuard.isUnpersisted {
+            scheduleWithdrawalWriteRetry(attempt: 1)
+        }
     }
 
     // MARK: - 初始化（SDK 唯一入口）
@@ -243,8 +268,8 @@ public final class PrivacyGate {
     // MARK: - 内部
 
     private var effectiveDecision: PrivacyDecision {
-        // 撤回清理未完成：无论记录里写着什么，一律按基本模式（不初始化、不放行完整功能，R2-01）。
-        if store.withdrawalCleanupPending || isBasicModeStored {
+        // 撤回清理未完成，或撤回记录还没落盘：无论记录里写着什么，一律按基本模式（不初始化、不放行完整功能，R2-01、F-ALL-05）。
+        if withdrawalWriteGuard.isUnpersisted || store.withdrawalCleanupPending || isBasicModeStored {
             return .basicMode
         }
         if store.decisionRaw == PrivacyDecision.consented.rawValue, consentIsCurrent {
@@ -288,6 +313,29 @@ public final class PrivacyGate {
 
     private func enterBasicMode() {
         store.commitBasicMode()
+    }
+
+    /// 补写撤回记录；成功清内存标记。
+    private func persistWithdrawal() -> Bool {
+        guard store.commitWithdrawalVerified() else {
+            return false
+        }
+        withdrawalWriteGuard.markPersisted()
+        return true
+    }
+
+    private func scheduleWithdrawalWriteRetry(attempt: Int) {
+        retryScheduler.schedule(delayMillis: Self.retryDelayMillis(afterFailure: attempt)) { [weak self] in
+            guard let self, withdrawalWriteGuard.isUnpersisted else {
+                return
+            }
+            if persistWithdrawal() {
+                // 落盘后待清理标记在：再清一次，清干净才删标记。
+                withdrawalCleanup()
+            } else {
+                scheduleWithdrawalWriteRetry(attempt: attempt + 1)
+            }
+        }
     }
 
     private func forceBasicModeIfCleanupPending() {

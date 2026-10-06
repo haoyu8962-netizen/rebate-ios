@@ -13,6 +13,8 @@ enum DebugPrivacyPreset {
             defaults.removeObject(forKey: key)
         }
         let store = UserDefaultsPrivacyStore(defaults: defaults)
+        // 撤回同意的持久标记（文件）也是本机隐私决定的一部分，一并丢掉。
+        store.discardWithdrawalMarker()
         switch preset {
         case "consented":
             store.commitConsent(version: BundledLegal.privacyPolicyVersion, atMillis: 0)

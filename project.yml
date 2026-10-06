@@ -85,7 +85,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router, Privacy, Update]
+        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
@@ -132,6 +132,7 @@ schemes:
         - package: Core/RouterTests
         - package: Core/PrivacyTests
         - package: Core/UpdateTests
+        - package: Core/NetworkTests
         - package: DesignSystem/DesignSystemTests
     profile:
       config: Release

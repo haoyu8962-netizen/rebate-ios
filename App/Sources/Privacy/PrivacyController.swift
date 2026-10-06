@@ -44,6 +44,8 @@ final class PrivacyController: ObservableObject {
     ) {
         self.clock = clock
         gate = PrivacyGate(store: store, clock: clock, bundledPolicyVersion: bundledPolicyVersion)
+        // 撤回记录写不进去时（F-ALL-05）闸门与清理执行器共用同一个内存标记：立即按基本模式、凭据不可读，持续重试写入。
+        gate.withdrawalWriteGuard = withdrawalRunner.writeGuard
         gate.withdrawalCleanup = {
             MainActor.assumeIsolated {
                 // 清理失败时保留「待清理」标记，下次启动重试（WithdrawalCleanupRunner）。

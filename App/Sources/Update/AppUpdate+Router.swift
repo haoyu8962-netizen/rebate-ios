@@ -42,4 +42,10 @@ extension AppUpdate {
         case .unknown: return .finished(.unknown)
         }
     }
+
+    /// 登记状态观察者（AppNetwork，APP-03a）：立即收到一次当前状态，之后每次状态发布都收到。
+    func observeRouterStatus(_ observer: @escaping (UpdateCheckStatus) -> Void) {
+        statusObservers.append(observer)
+        observer(routerStatus)
+    }
 }

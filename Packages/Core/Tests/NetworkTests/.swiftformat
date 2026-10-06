@@ -1,0 +1,2 @@
+# NetworkVectorTests.swift 是 Codex 按任务书先写的向量测试（APP-03a 任务书 §4，不改不删）：不参与格式化。
+--exclude NetworkVectorTests.swift

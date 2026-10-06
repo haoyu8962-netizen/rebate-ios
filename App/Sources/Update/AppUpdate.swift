@@ -39,6 +39,8 @@ final class AppUpdate: ObservableObject {
 
     /// 强更结论变化（状态、检查开始或结束）后调用（AppRouting：Router 状态源、ForceUpdate 进出、启动协调）。
     var onChange: (() -> Void)?
+    /// 每次状态发布后收到当时的 `routerStatus`（AppNetwork 把它接到 ApiClient.updateStateChanged，APP-03a）。
+    var statusObservers: [(UpdateCheckStatus) -> Void] = []
 
     let gate: UpdateGate
     private let checker: any UpdateChecker
@@ -312,6 +314,12 @@ final class AppUpdate: ObservableObject {
             ui = next
         }
         onChange?()
+        if !statusObservers.isEmpty {
+            let status = routerStatus
+            for observer in statusObservers {
+                observer(status)
+            }
+        }
     }
 
     private static func makeUI(gate: UpdateGate, now: Int64, storeChoiceFailed: Bool, working: Bool) -> ViewState {

@@ -13,10 +13,14 @@ struct CouliApp: App {
     @StateObject private var update: AppUpdate
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
+    private let network: AppNetwork
 
     init() {
         // 撤回同意要清的凭证，切换环境时同样要清（两边共用占位清理器）；须在启动对账之前登记。
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
+        // 网络核心（APP-03a）：创建即把「作废并取消在途请求」登记到撤回同意、切换环境两个注册表的第一位；
+        // 在 attach 之前它不发任何请求。
+        let network = AppNetwork()
         // 上次撤回同意没清干净的，先重试；清干净之前任何模块不得读取会话凭据（credentialsReadable）。
         PrivacyWithdrawalCleanup.runner.retryIfPending()
         #if DEBUG
@@ -26,11 +30,13 @@ struct CouliApp: App {
         let privacy = PrivacyController()
         let update = Self.makeUpdate()
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
+        network.attach(environment: environment, privacy: privacy, update: update)
         _environment = StateObject(wrappedValue: environment)
         _router = StateObject(wrappedValue: routing.router)
         _privacy = StateObject(wrappedValue: privacy)
         _update = StateObject(wrappedValue: update)
         self.routing = routing
+        self.network = network
     }
 
     private static func makeUpdate() -> AppUpdate {

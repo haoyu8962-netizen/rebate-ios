@@ -34,6 +34,11 @@ public final class EnvironmentSwitchCleanerRegistry {
         cleaners.append(cleaner)
     }
 
+    /// 登记到最前面（要先于其他清理项执行的，如网络层作废在途请求先于清令牌）。
+    public func registerFirst(_ cleaner: any EnvironmentSwitchCleaning) {
+        cleaners.insert(cleaner, at: 0)
+    }
+
     public var registeredNames: [String] {
         cleaners.map(\.cleanerName)
     }

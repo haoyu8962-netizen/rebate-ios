@@ -1,5 +1,6 @@
 import Config
 import Foundation
+import Session
 import XCTest
 @testable import Privacy
 
@@ -81,12 +82,14 @@ final class PrivacyGateBehaviorTests: XCTestCase {
         XCTAssertEqual(store.consentedAtMillis, 99)
     }
 
-    func testWithdrawalRegistryHasCredentialPlaceholders() {
-        XCTAssertEqual(PrivacyWithdrawalCleanup.registry.registeredNames, ["SessionTokens", "DeviceIdentity"])
+    /// APP-03a：会话令牌的占位清理器换成 Session 模块自己的清理器（同时登记在撤回同意与切换环境两个注册表里）。
+    func testWithdrawalRegistryHasCredentialCleaners() {
+        let expected = [SessionTokensCleaner.name, "H5Token", "DeviceIdentity"]
+        XCTAssertEqual(PrivacyWithdrawalCleanup.registry.registeredNames, expected)
         let target = EnvironmentSwitchCleanerRegistry(cleaners: [])
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(target)
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(target)
-        XCTAssertEqual(target.registeredNames, ["SessionTokens", "DeviceIdentity"], "只登记一次")
+        XCTAssertEqual(target.registeredNames, expected, "只登记一次")
     }
 
     func testWithdrawCancelsPendingRetriesAndReconsentRestartsInitialization() {

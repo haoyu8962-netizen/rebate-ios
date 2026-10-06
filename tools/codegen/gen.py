@@ -7,8 +7,9 @@
 
 本任务生成：枚举、错误码表、路由表、桥方法表与桥错误码、包内默认文案（资源）、设计令牌原始常量、
 商店对照表 AppStores（specs/app-stores.yaml，APP-02c）、GET /v1/app-versions/check 响应示例（App target，#if DEBUG，
-调试面板的版本检查假数据，APP-02c）。
-不生成：OpenAPI 客户端、事件（specs/events.yaml）、apps.json 片段（分别归 APP-03、APP-03、APP-04/06）。
+调试面板的版本检查假数据，APP-02c）、openapi 操作登记表 ApiOperations（APP-03a：每个 operationId 的方法、路径与
+x-auth / x-signed / x-idempotent / x-step-up / x-error-codes / x-session-scopes / x-min-version-gate / x-implementation）。
+不生成：请求 / 响应模型（另立任务）、事件（specs/events.yaml）、apps.json 片段（分别归 APP-03、APP-03、APP-04/06）。
 输出不含时间戳，同一快照重复生成逐字一致。只用 Python 3 标准库。
 
 输出目录（两个目录都整个归生成器所有，--check 一起比较）：
@@ -127,6 +128,7 @@ RESERVED_TYPE_NAMES = {
     "RouteParamType", "RouteParamSpec",
     "BridgeMethodSpec", "BridgeMethods", "BridgeErrors", "DefaultTexts", "DesignTokens", "DebugOnlyRoutes",
     "AppStoreSpec", "AppStores", "AppVersionCheckExample",
+    "ApiOperation", "ApiOperations", "ApiMinVersionGate",
     # SwiftPM 为带资源的包生成的 resource_bundle_accessor.swift 里的私有类型。
     "BundleFinder",
 }
@@ -1023,6 +1025,142 @@ def gen_update_check_example(out: dict[str, str]):
     put(out, APP_PREFIX + "AppVersionCheckExample.swift", "\n".join(lines))
 
 
+# ---------- openapi 操作登记表（APP-03a） ----------
+
+HTTP_METHODS = ["get", "post", "put", "patch", "delete"]
+# x-min-version-gate：true（受闸门约束）/ false（例外）/ "conditional"（按请求体条件）/ 未标注。
+MIN_VERSION_GATES = {"true": "gated", "false": "exempt", "conditional": "conditional", "none": "unspecified"}
+OPERATION_EXTENSIONS = {
+    "x-auth", "x-signed", "x-idempotent", "x-step-up", "x-error-codes", "x-session-scopes",
+    "x-min-version-gate", "x-implementation",
+}
+
+
+def gen_api_operations(out: dict[str, str]):
+    doc = load("contracts/openapi.json")
+    paths = doc.get("paths")
+    if not isinstance(paths, dict) or not paths:
+        raise GenError("openapi.json 没有 paths")
+    entries: list[str] = []
+    seen: set[str] = set()
+    for path, item in paths.items():
+        if not isinstance(item, dict):
+            raise GenError(f"openapi.json paths[{path!r}] 应为对象")
+        for method in HTTP_METHODS:
+            op = item.get(method)
+            if op is None:
+                continue
+            where = f"openapi.json {method.upper()} {path}"
+            if not isinstance(op, dict):
+                raise GenError(f"{where} 应为对象")
+            op_id = op.get("operationId")
+            if not isinstance(op_id, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", op_id):
+                raise GenError(f"{where} 的 operationId 不合法：{op_id!r}")
+            if op_id in seen:
+                raise GenError(f"operationId 重复：{op_id}")
+            seen.add(op_id)
+            unknown = sorted(k for k in op if k.startswith("x-") and k not in OPERATION_EXTENSIONS)
+            if unknown:
+                raise GenError(f"{where} 有不认识的扩展字段：{unknown}")
+            auth = op.get("x-auth")
+            if auth not in ("none", "optional", "login", "realname"):
+                raise GenError(f"{where} 的 x-auth 不认识：{auth!r}")
+            flags = {}
+            for key in ("x-signed", "x-idempotent"):
+                value = op.get(key, False)
+                if not isinstance(value, bool):
+                    raise GenError(f"{where} 的 {key} 应为布尔：{value!r}")
+                flags[key] = value
+            step_up = op.get("x-step-up")
+            if step_up is not None and not isinstance(step_up, str):
+                raise GenError(f"{where} 的 x-step-up 应为字符串：{step_up!r}")
+            codes = op.get("x-error-codes", [])
+            if not isinstance(codes, list):
+                raise GenError(f"{where} 的 x-error-codes 应为整数列表")
+            codes = [as_int(c, where + " x-error-codes") for c in codes]
+            # BR-ID-01 细则「受限会话」：未标注时只接受 full。
+            scopes = op.get("x-session-scopes", ["full"])
+            if not isinstance(scopes, list) or not scopes:
+                raise GenError(f"{where} 的 x-session-scopes 应为非空字符串列表")
+            scopes = [as_str(v, where + " x-session-scopes") for v in scopes]
+            gate = op.get("x-min-version-gate")
+            gate_key = "none" if gate is None else (("true" if gate else "false") if isinstance(gate, bool) else str(gate))
+            if gate_key not in MIN_VERSION_GATES:
+                raise GenError(f"{where} 的 x-min-version-gate 不认识：{gate!r}")
+            implementation = op.get("x-implementation")
+            if implementation not in (None, "planned"):
+                raise GenError(f"{where} 的 x-implementation 不认识：{implementation!r}")
+            entries += [
+                f"        {swift_string(op_id)}: ApiOperation(",
+                f"            operationId: {swift_string(op_id)},",
+                f"            method: {swift_string(method.upper())},",
+                f"            pathTemplate: {swift_string(path)},",
+                f"            auth: {swift_string(auth)},",
+                f"            signed: {'true' if flags['x-signed'] else 'false'},",
+                f"            idempotent: {'true' if flags['x-idempotent'] else 'false'},",
+                f"            stepUp: {swift_optional_string(step_up)},",
+                "            errorCodes: [" + ", ".join(str(c) for c in codes) + "],",
+                "            sessionScopes: [" + ", ".join(swift_string(v) for v in scopes) + "],",
+                f"            minVersionGate: .{MIN_VERSION_GATES[gate_key]},",
+                f"            planned: {'true' if implementation == 'planned' else 'false'}",
+                "        ),",
+            ]
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：contracts/openapi.yaml（只登记方法、路径与扩展字段，不含请求 / 响应模型）",
+        "",
+        "/// openapi 的 x-min-version-gate（BR-ID-01 细则「最低支持版本的接口层拦截」）。",
+        "public enum ApiMinVersionGate: Swift.String, Swift.Sendable, Swift.Equatable {",
+        "    /// true：受闸门约束。",
+        "    case gated",
+        "    /// false：不受约束（例外）。",
+        "    case exempt",
+        "    /// conditional：按请求体条件（operation 说明里写条件）。",
+        "    case conditional",
+        "    /// 未标注。",
+        "    case unspecified",
+        "}",
+        "",
+        "/// openapi 的一个 operation。sessionScopes 未标注时为 [\"full\"]（BR-ID-01 细则「受限会话」）；",
+        "/// planned = x-implementation: planned；stepUp = x-step-up 的 action（不需要二次验证为 nil）。",
+        "public struct ApiOperation: Swift.Sendable, Swift.Equatable {",
+        "    public let operationId: Swift.String",
+        "    /// 大写 HTTP 方法。",
+        "    public let method: Swift.String",
+        "    public let pathTemplate: Swift.String",
+        "    /// x-auth：none / optional / login / realname。",
+        "    public let auth: Swift.String",
+        "    public let signed: Swift.Bool",
+        "    public let idempotent: Swift.Bool",
+        "    public let stepUp: Swift.String?",
+        "    public let errorCodes: [Swift.Int]",
+        "    public let sessionScopes: [Swift.String]",
+        "    public let minVersionGate: ApiMinVersionGate",
+        "    public let planned: Swift.Bool",
+        "",
+        "    /// 只读接口（GET）。",
+        "    public var isRead: Swift.Bool {",
+        "        method == \"GET\"",
+        "    }",
+        "}",
+        "",
+        "/// 全部 operation（contracts/openapi.yaml）。",
+        "public enum ApiOperations {",
+        "    public static let all: [Swift.String: ApiOperation] = [",
+    ]
+    lines += entries
+    lines += [
+        "    ]",
+        "",
+        "    public static func byId(_ operationId: Swift.String) -> ApiOperation? {",
+        "        all[operationId]",
+        "    }",
+        "}",
+        "",
+    ]
+    put(out, "ApiOperations.swift", "\n".join(lines))
+
+
 # ---------- 主流程 ----------
 
 
@@ -1040,6 +1178,7 @@ def generate() -> dict[str, str]:
     gen_tokens(out)
     gen_app_stores(out)
     gen_update_check_example(out)
+    gen_api_operations(out)
     return out
 
 
