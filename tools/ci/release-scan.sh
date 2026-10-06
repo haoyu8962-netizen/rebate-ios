@@ -13,6 +13,7 @@
 # 用 strings 扫 .app 里的每个文件（二进制与资源），查：
 #   - 非 prod 环境地址：local / test / staging 的 .couli.invalid 域名
 #   - 调试面板标记 COULI_DEBUG_PANEL（App/Sources/Debug/DebugPanelView.swift）
+#   - 组件目录页标记 COULI_DS_COMPONENT_CATALOG_7Q4XK2（App/Sources/Debug/Catalog/ComponentCatalogView.swift，DS-01）
 #   - debug_only 路由表标记 COULI_DEBUG_ONLY_ROUTE_TABLE（tools/codegen/gen.py 生成在 debug_only 表所在的
 #     #if DEBUG 块里，被表的初始化引用，-O 下保留）
 #   - 快照 routes.json 里 debug_only 为 true 的路由名（长名字直接可见；不超过 15 字节的短名字会被 Swift
@@ -82,6 +83,7 @@ HITS_LOG="$WORK/hits"
     echo "test.couli.invalid"
     echo "staging.couli.invalid"
     echo "COULI_DEBUG_PANEL"
+    echo "COULI_DS_COMPONENT_CATALOG_7Q4XK2"
     echo "COULI_DEBUG_ONLY_ROUTE_TABLE"
     echo "get-task-allow"
 } >"$PATTERNS" || fail_scan "无法写检查项"

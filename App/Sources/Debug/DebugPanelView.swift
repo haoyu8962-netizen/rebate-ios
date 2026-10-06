@@ -44,6 +44,16 @@ struct DebugPanelView: View {
                     Text(verbatim: "Endpoints")
                 }
                 Section {
+                    NavigationLink {
+                        ComponentCatalogView()
+                    } label: {
+                        Text(verbatim: "Component catalog")
+                    }
+                    .accessibilityIdentifier("debug.componentCatalog")
+                } header: {
+                    Text(verbatim: "Design system")
+                }
+                Section {
                     ForEach(DebugOnlyRoutes.all.keys.sorted(), id: \.self) { name in
                         Text(verbatim: name)
                     }

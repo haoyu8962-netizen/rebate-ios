@@ -10,3 +10,5 @@ build/
 fastlane/report.xml
 .swiftpm/
 .env*
+__pycache__/
+*.pyc

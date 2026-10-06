@@ -220,6 +220,12 @@ def as_int(value, context: str) -> int:
     return value
 
 
+def as_number(value, context: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise GenError(f"{context} 应为数值：{value!r}")
+    return float(value)
+
+
 def as_str(value, context: str) -> str:
     if not isinstance(value, str):
         raise GenError(f"{context} 应为字符串：{value!r}")
@@ -679,11 +685,42 @@ def token_leaves(node, kind, ctx: str, prefix: str = "") -> list[tuple[str, obje
         value = node["value"]
         if kind is int:
             return [(prefix, as_int(value, f"{ctx}.value"))]
+        if kind is float:
+            return [(prefix, as_number(value, f"{ctx}.value"))]
         return [(prefix, as_str(value, f"{ctx}.value"))]
     result = []
     for key in sorted(node):
         path = f"{prefix}.{key}" if prefix else key
         result += token_leaves(node[key], kind, f"{ctx}.{key}", path)
+    return result
+
+
+def shadow_layers(node) -> list[tuple[str, list[dict]]]:
+    if not isinstance(node, dict):
+        raise GenError("tokens.shadow 应为对象")
+    result = []
+    for key in sorted(node):
+        ctx = f"tokens.shadow.{key}"
+        value = (node[key] or {}).get("value") if isinstance(node[key], dict) else None
+        if not isinstance(value, list):
+            raise GenError(f"{ctx}.value 应为数组")
+        layers = []
+        for index, layer in enumerate(value):
+            lctx = f"{ctx}.value[{index}]"
+            if not isinstance(layer, dict):
+                raise GenError(f"{lctx} 应为对象")
+            color = as_str(layer.get("color"), f"{lctx}.color")
+            if not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+                raise GenError(f"{lctx}.color 不是 #RRGGBB：{color!r}")
+            layers.append({
+                "x": as_int(layer.get("x"), f"{lctx}.x"),
+                "y": as_int(layer.get("y"), f"{lctx}.y"),
+                "blur": as_int(layer.get("blur"), f"{lctx}.blur"),
+                "spread": as_int(layer.get("spread"), f"{lctx}.spread"),
+                "color": color,
+                "opacity": as_number(layer.get("opacity"), f"{lctx}.opacity"),
+            })
+        result.append((key, layers))
     return result
 
 
@@ -703,7 +740,16 @@ def gen_tokens(out: dict[str, str]):
              token_leaves(tokens["font"]["size"], int, "tokens.font.size")),
             ("interactionTarget", "Int", "命中区（pt）：tokens.interaction.target。",
              token_leaves(tokens["interaction"]["target"], int, "tokens.interaction.target")),
+            ("lineHeight", "Double", "行高倍数：caption … display（tokens.font.line-height）。",
+             token_leaves(tokens["font"]["line-height"], float, "tokens.font.line-height")),
+            ("fontWeight", "Int", "字重：regular … bold（tokens.font.weight）。",
+             token_leaves(tokens["font"]["weight"], int, "tokens.font.weight")),
+            ("focus", "Int", "焦点环（pt）：width、offset（tokens.focus）。",
+             token_leaves(tokens["focus"], int, "tokens.focus")),
+            ("component", "Int", "组件尺寸（pt）：点分路径，如 \"button.min-height\"（tokens.component）。",
+             token_leaves(tokens["component"], int, "tokens.component")),
         ]
+        shadows = shadow_layers(tokens["shadow"])
     except KeyError as exc:
         raise GenError(f"design.tokens 缺少分组 {exc}") from exc
     for prefix, value in groups[0][3]:
@@ -720,10 +766,36 @@ def gen_tokens(out: dict[str, str]):
     for name, swift_type, doc_line, leaves in groups:
         lines += ["", f"    /// {doc_line}", f"    public static let {name}: [Swift.String: Swift.{swift_type}] = ["]
         for key, value in leaves:
-            literal = swift_string(value) if swift_type == "String" else str(value)
+            literal = swift_string(value) if swift_type == "String" else repr(value) if swift_type == "Double" else str(value)
             lines.append(f"        {swift_string(key)}: {literal},")
         lines.append("    ]")
-    lines += ["}", ""]
+    lines += [
+        "",
+        "    /// 阴影的一层（tokens.shadow.* 的 value 数组元素）。color 为 \"#RRGGBB\"，opacity 0…1。",
+        "    public struct ShadowLayer: Swift.Sendable, Swift.Equatable {",
+        "        public let x: Swift.Int",
+        "        public let y: Swift.Int",
+        "        public let blur: Swift.Int",
+        "        public let spread: Swift.Int",
+        "        public let color: Swift.String",
+        "        public let opacity: Swift.Double",
+        "    }",
+        "",
+        "    /// 阴影：none / card / floating …（tokens.shadow）。",
+        "    public static let shadows: [Swift.String: [ShadowLayer]] = [",
+    ]
+    for key, layers in shadows:
+        if not layers:
+            lines.append(f"        {swift_string(key)}: [],")
+            continue
+        lines.append(f"        {swift_string(key)}: [")
+        for layer in layers:
+            lines.append(
+                f"            ShadowLayer(x: {layer['x']}, y: {layer['y']}, blur: {layer['blur']}, "
+                f"spread: {layer['spread']}, color: {swift_string(layer['color'])}, opacity: {layer['opacity']!r}),"
+            )
+        lines.append("        ],")
+    lines += ["    ]", "}", ""]
     put(out, "DesignTokens.swift", "\n".join(lines))
 
 

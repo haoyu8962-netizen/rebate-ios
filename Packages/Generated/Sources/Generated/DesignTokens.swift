@@ -88,4 +88,60 @@ public enum DesignTokens {
         "ios": 44,
         "minimum": 44,
     ]
+
+    /// 行高倍数：caption … display（tokens.font.line-height）。
+    public static let lineHeight: [Swift.String: Swift.Double] = [
+        "body": 1.5,
+        "caption": 1.5,
+        "display": 1.2,
+        "footnote": 1.5,
+        "heading": 1.25,
+        "title": 1.3,
+    ]
+
+    /// 字重：regular … bold（tokens.font.weight）。
+    public static let fontWeight: [Swift.String: Swift.Int] = [
+        "bold": 700,
+        "medium": 500,
+        "regular": 400,
+        "semibold": 600,
+    ]
+
+    /// 焦点环（pt）：width、offset（tokens.focus）。
+    public static let focus: [Swift.String: Swift.Int] = [
+        "offset": 2,
+        "width": 2,
+    ]
+
+    /// 组件尺寸（pt）：点分路径，如 "button.min-height"（tokens.component）。
+    public static let component: [Swift.String: Swift.Int] = [
+        "button.gap": 8,
+        "button.min-height": 48,
+        "button.padding-block": 12,
+        "button.padding-inline": 20,
+        "control.border-width": 1,
+        "control.min-height": 44,
+        "icon.default": 24,
+    ]
+
+    /// 阴影的一层（tokens.shadow.* 的 value 数组元素）。color 为 "#RRGGBB"，opacity 0…1。
+    public struct ShadowLayer: Swift.Sendable, Swift.Equatable {
+        public let x: Swift.Int
+        public let y: Swift.Int
+        public let blur: Swift.Int
+        public let spread: Swift.Int
+        public let color: Swift.String
+        public let opacity: Swift.Double
+    }
+
+    /// 阴影：none / card / floating …（tokens.shadow）。
+    public static let shadows: [Swift.String: [ShadowLayer]] = [
+        "card": [
+            ShadowLayer(x: 0, y: 2, blur: 8, spread: 0, color: "#28251F", opacity: 0.06),
+        ],
+        "floating": [
+            ShadowLayer(x: 0, y: 8, blur: 24, spread: 0, color: "#28251F", opacity: 0.12),
+        ],
+        "none": [],
+    ]
 }

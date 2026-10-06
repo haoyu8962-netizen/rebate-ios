@@ -13,6 +13,9 @@
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
+# 不在工作区生成 __pycache__ / *.pyc（.gitignore 也已忽略）。
+export PYTHONDONTWRITEBYTECODE=1
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT" || exit 1
 
@@ -203,12 +206,13 @@ feature_import_build_probe() {
     grep -m 1 "不能 import 另一个 Feature" "$log"
 }
 
-# Staging 包带调试能力：调试面板标记、debug_only 路由表标记与 staging 地址都在（Staging 是 -O 优化构建，
+# Staging 包带调试能力：调试面板标记、组件目录页标记（DS-01）、debug_only 路由表标记与 staging 地址都在（Staging 是 -O 优化构建，
 # 同时证明长标记在优化后仍能被 strings 看到）。
 staging_has_debug_capabilities() {
     local app="$PRODUCTS/Staging-iphonesimulator/Couli.app"
     tools/ci/release-scan.sh --self-test \
-        --expect COULI_DEBUG_PANEL --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect staging.couli.invalid "$app" || return 1
+        --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect staging.couli.invalid "$app" || return 1
     [ "$(/usr/libexec/PlistBuddy -c "Print :CouliBuildConfiguration" "$app/Info.plist")" = "Staging" ] || {
         echo "Staging 包的 CouliBuildConfiguration 不是 Staging"
         return 1
@@ -341,9 +345,10 @@ if [ "$FAST" -eq 0 ]; then
     step "release-scan 授权检查 grep 出错时必须失败（假 grep 返回 2）" release_scan_grep_failure
     DEST="$(pick_simulator)" || { RESULTS+=("FAIL  选择模拟器"); echo "$DEST"; summary; exit 1; }
     echo "    模拟器：$DEST"
-    step "test Debug（包测试 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
+    step "test Debug（包测试含格式向量与组件快照 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
-        --expect COULI_DEBUG_PANEL --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect test.couli.invalid \
+        --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect test.couli.invalid \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

@@ -13,7 +13,16 @@ struct RootView: View {
     var body: some View {
         switch environment.gate {
         case .settled:
+            #if DEBUG
+            if let page = CatalogLaunch.page {
+                // 截图用：启动参数直达组件目录的某一页（DS-01）。
+                CatalogLaunchView(page: page, section: CatalogLaunch.section)
+            } else {
+                content
+            }
+            #else
             content
+            #endif
         case .blocked:
             EnvironmentBlockedView(retry: environment.retryLaunchCleanup)
         }
