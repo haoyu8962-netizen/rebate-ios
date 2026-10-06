@@ -5,13 +5,15 @@
     python3 tools/codegen/gen.py          # 重新生成
     python3 tools/codegen/gen.py --check  # 在临时目录生成后逐字比较，不一致退出 1
 
-本任务生成：枚举、错误码表、路由表、桥方法表与桥错误码、包内默认文案（资源）、设计令牌原始常量。
+本任务生成：枚举、错误码表、路由表、桥方法表与桥错误码、包内默认文案（资源）、设计令牌原始常量、
+商店对照表 AppStores（specs/app-stores.yaml，APP-02c）、GET /v1/app-versions/check 响应示例（App target，#if DEBUG，
+调试面板的版本检查假数据，APP-02c）。
 不生成：OpenAPI 客户端、事件（specs/events.yaml）、apps.json 片段（分别归 APP-03、APP-03、APP-04/06）。
 输出不含时间戳，同一快照重复生成逐字一致。只用 Python 3 标准库。
 
 输出目录（两个目录都整个归生成器所有，--check 一起比较）：
   Packages/Generated/Sources/Generated/   契约生成物包
-  App/Sources/Generated/                  debug_only 路由表 DebugOnlyRoutes（#if DEBUG）。放在 App target 是因为
+  App/Sources/Generated/                  debug_only 路由表 DebugOnlyRoutes 与版本检查示例 AppVersionCheckExample（#if DEBUG）。放在 App target 是因为
                                           Xcode 对自定义配置名 Staging 按本地包的 Release 编译包、包里看不到 DEBUG，
                                           而 Staging 需要调试路由；App target 在 Debug、Staging 都定义 DEBUG。
                                           包内 Routes.all 仍按 #if DEBUG 登记（Debug 构建与包测试用）。
@@ -52,6 +54,8 @@ OUTPUT_ROOTS = {"": OUTPUT, "@app/": APP_OUTPUT}
 APP_PREFIX = "@app/"
 # debug_only 路由表所在 #if DEBUG 块里的长标记（> 15 字节，不会被内联进指令）。release-scan.sh 查它。
 DEBUG_ONLY_ROUTE_MARKER = "COULI_DEBUG_ONLY_ROUTE_TABLE"
+# 版本检查假数据（openapi 示例）所在 #if DEBUG 块里的长标记（APP-02c）。release-scan.sh 查它。
+UPDATE_EXAMPLE_MARKER = "COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91"
 HEADER = "// 生成物，禁止手改；来源 contract.lock\n"
 
 # Swift 关键字：作 case 名时加反引号。
@@ -122,6 +126,7 @@ RESERVED_TYPE_NAMES = {
     "ContractEnums", "RetryKind", "ErrorCodeInfo", "ErrorCodes", "RouteKind", "RouteSpec", "Routes",
     "RouteParamType", "RouteParamSpec",
     "BridgeMethodSpec", "BridgeMethods", "BridgeErrors", "DefaultTexts", "DesignTokens", "DebugOnlyRoutes",
+    "AppStoreSpec", "AppStores", "AppVersionCheckExample",
     # SwiftPM 为带资源的包生成的 resource_bundle_accessor.swift 里的私有类型。
     "BundleFinder",
 }
@@ -921,6 +926,103 @@ def gen_tokens(out: dict[str, str]):
     put(out, "DesignTokens.swift", "\n".join(lines))
 
 
+# ---------- 商店对照表与版本检查示例（APP-02c） ----------
+
+
+def gen_app_stores(out: dict[str, str]):
+    doc = load("specs/app-stores.json")
+    version = as_str(doc.get("version"), "app-stores.version")
+    rows = doc.get("stores")
+    if not isinstance(rows, list):
+        raise GenError("app-stores.stores 应为列表")
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：specs/app-stores.yaml",
+        "",
+        "/// 商店对照表的一行（specs/app-stores.yaml）。key、openMethod、target 为 nil 的商店一律视为「本机打不开」",
+        "/// （APP-02c；needs N-17）。installSourcePackages 只有 Android 会填。",
+        "public struct AppStoreSpec: Swift.Sendable, Swift.Equatable {",
+        "    public let key: Swift.String?",
+        "    public let name: Swift.String",
+        "    public let platform: Swift.String",
+        "    public let channels: [Swift.String]",
+        "    public let installSourcePackages: [Swift.String]",
+        "    public let openMethod: Swift.String?",
+        "    public let target: Swift.String?",
+        "}",
+        "",
+        "/// 商店对照表（规划/03 §4.1、BR-ID-01）。代码里不写死商店键与打开方式，一律查这张表。",
+        "public enum AppStores {",
+        f"    public static let version = {swift_string(version)}",
+        "",
+        "    public static let all: [AppStoreSpec] = [",
+    ]
+    for index, row in enumerate(rows):
+        ctx = f"app-stores.stores[{index}]"
+        if not isinstance(row, dict):
+            raise GenError(f"{ctx} 应为对象")
+        detail = row.get("detail_page")
+        if not isinstance(detail, dict):
+            raise GenError(f"{ctx}.detail_page 应为对象")
+        channels = row.get("channels")
+        packages = row.get("install_source_packages")
+        if not isinstance(channels, list) or not isinstance(packages, list):
+            raise GenError(f"{ctx}.channels / install_source_packages 应为列表")
+        channel_list = ", ".join(swift_string(as_str(c, ctx + ".channels")) for c in channels)
+        package_list = ", ".join(swift_string(as_str(c, ctx + ".install_source_packages")) for c in packages)
+        lines += [
+            "        AppStoreSpec(",
+            f"            key: {swift_optional_string(row.get('key'))},",
+            f"            name: {swift_string(as_str(row.get('name'), ctx + '.name'))},",
+            f"            platform: {swift_string(as_str(row.get('platform'), ctx + '.platform'))},",
+            f"            channels: [{channel_list}],",
+            f"            installSourcePackages: [{package_list}],",
+            f"            openMethod: {swift_optional_string(detail.get('open_method'))},",
+            f"            target: {swift_optional_string(detail.get('target'))}",
+            "        ),",
+        ]
+    lines += [
+        "    ]",
+        "",
+        "    /// 某一端（client_platform：ios / android / harmony）的商店。",
+        "    public static func forPlatform(_ platform: Swift.String) -> [AppStoreSpec] {",
+        "        all.filter { $0.platform == platform }",
+        "    }",
+        "}",
+        "",
+    ]
+    put(out, "AppStores.swift", "\n".join(lines))
+
+
+def gen_update_check_example(out: dict[str, str]):
+    doc = load("contracts/openapi.json")
+    try:
+        response = doc["paths"]["/v1/app-versions/check"]["get"]["responses"]["200"]
+        example = response["content"]["application/json"]["example"]
+    except (KeyError, TypeError) as exc:
+        raise GenError(f"openapi 里找不到 GET /v1/app-versions/check 的 200 响应示例：{exc}") from exc
+    data = example.get("data") if isinstance(example, dict) else None
+    if not isinstance(data, dict):
+        raise GenError("GET /v1/app-versions/check 的响应示例没有 data 对象")
+    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：contracts/openapi.yaml GET /v1/app-versions/check 200 响应示例的 data（AppVersionCheck），原样转写",
+        "",
+        "#if DEBUG",
+        "/// 调试面板的版本检查假数据（APP-02c）：只在 Debug / Staging 编译（App target 定义 DEBUG），",
+        "/// Release 制品里没有，release-scan.sh 查 `marker`。",
+        "enum AppVersionCheckExample {",
+        f"    static let marker = {swift_string(UPDATE_EXAMPLE_MARKER)}",
+        "",
+        f"    static let dataJSON = {swift_string(text)}",
+        "}",
+        "#endif",
+        "",
+    ]
+    put(out, APP_PREFIX + "AppVersionCheckExample.swift", "\n".join(lines))
+
+
 # ---------- 主流程 ----------
 
 
@@ -936,6 +1038,8 @@ def generate() -> dict[str, str]:
     gen_bridge(out)
     gen_texts(out)
     gen_tokens(out)
+    gen_app_stores(out)
+    gen_update_check_example(out)
     return out
 
 

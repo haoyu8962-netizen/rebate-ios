@@ -1,6 +1,7 @@
 // swift-tools-version: 6.0
-// Core 层（无 UI）。已实现 Config（环境）、Router（入口守卫、深链、pending_action，APP-02a）
-// 与 Privacy（隐私首启闸门、基本模式、撤回同意、onConsented 初始化顺序，APP-02b）；
+// Core 层（无 UI）。已实现 Config（环境）、Router（入口守卫、深链、pending_action，APP-02a）、
+// Privacy（隐私首启闸门、基本模式、撤回同意、onConsented 初始化顺序，APP-02b）
+// 与 Update（强更检查、可关闭提示、选店，APP-02c）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
@@ -16,6 +17,7 @@ let package = Package(
         .library(name: "Config", targets: ["Config"]),
         .library(name: "Router", targets: ["Router"]),
         .library(name: "Privacy", targets: ["Privacy"]),
+        .library(name: "Update", targets: ["Update"]),
     ] + placeholderModules.map { .library(name: $0, targets: [$0]) },
     dependencies: [
         .package(path: "../Generated"),
@@ -30,6 +32,8 @@ let package = Package(
         .testTarget(name: "RouterTests", dependencies: ["Router"]),
         .target(name: "Privacy", dependencies: ["Config"]),
         .testTarget(name: "PrivacyTests", dependencies: ["Privacy", "Config"]),
+        .target(name: "Update", dependencies: ["Config"]),
+        .testTarget(name: "UpdateTests", dependencies: ["Update", "Config"]),
     ] + placeholderModules.map {
         .target(name: $0, dependencies: [.product(name: "Generated", package: "Generated")])
     },

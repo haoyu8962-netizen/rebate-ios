@@ -206,13 +206,13 @@ feature_import_build_probe() {
     grep -m 1 "不能 import 另一个 Feature" "$log"
 }
 
-# Staging 包带调试能力：调试面板标记、组件目录页标记（DS-01）、debug_only 路由表标记、测试深链 scheme（APP-02a）
+# Staging 包带调试能力：调试面板标记、组件目录页标记（DS-01）、debug_only 路由表标记、版本检查假数据标记（APP-02c）、测试深链 scheme（APP-02a）
 # 与 staging 地址都在（Staging 是 -O 优化构建，同时证明长标记在优化后仍能被 strings 看到）。
 staging_has_debug_capabilities() {
     local app="$PRODUCTS/Staging-iphonesimulator/Couli.app"
     tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
-        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect couli-debug --expect staging.couli.invalid "$app" || return 1
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect staging.couli.invalid "$app" || return 1
     [ "$(/usr/libexec/PlistBuddy -c "Print :CouliBuildConfiguration" "$app/Info.plist")" = "Staging" ] || {
         echo "Staging 包的 CouliBuildConfiguration 不是 Staging"
         return 1
@@ -370,7 +370,7 @@ if [ "$FAST" -eq 0 ]; then
     step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
-        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect couli-debug --expect test.couli.invalid \
+        --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

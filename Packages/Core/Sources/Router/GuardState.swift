@@ -7,12 +7,16 @@ public enum PrivacyState: String, Sendable, CaseIterable {
     case notDecided = "not_decided"
 }
 
-/// 强更检查结果（03 §4.1、§4.4）。unknown = 等待超时或检查失败；「检查中」由 `LaunchQueue` 处理，不进守卫。
+/// 强更检查结果（03 §4.1、§4.4）。unknown = 等待超时或检查失败。
+/// checking = 检查进行中且还没等满 5 秒（APP-02c，F-ALL-03 三端对齐）：外部来源（deeplink / bridge / agent_card / push）
+/// 与 pending_action 恢复得到 defer（`update_checking`），由启动队列排队等结果、最长 5 秒；App 内用户自己的操作不等。
+/// 冷启动的排队与 5 秒计时仍在 `LaunchQueue`，它交给守卫的只会是有结果的状态（等满按 unknown）。
 public enum UpdateState: String, Sendable, CaseIterable {
     case ok
     case unknown
     case belowMin = "below_min"
     case belowRecommended = "below_recommended"
+    case checking
 }
 
 /// 会话状态（BR-ID-02；restricted 见 BR-ID-01 细则「受限会话」）。

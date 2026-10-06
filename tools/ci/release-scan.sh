@@ -16,6 +16,8 @@
 #   - 组件目录页标记 COULI_DS_COMPONENT_CATALOG_7Q4XK2（App/Sources/Debug/Catalog/ComponentCatalogView.swift，DS-01）
 #   - debug_only 路由表标记 COULI_DEBUG_ONLY_ROUTE_TABLE（tools/codegen/gen.py 生成在 debug_only 表所在的
 #     #if DEBUG 块里，被表的初始化引用，-O 下保留）
+#   - 调试版本检查假数据标记 COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91（App/Sources/Generated/AppVersionCheckExample.swift，
+#     APP-02c：契约 openapi 的 check 响应示例只在 Debug / Staging 编译，调试面板引用它）
 #   - 快照 routes.json 里 debug_only 为 true 的路由名（长名字直接可见；不超过 15 字节的短名字会被 Swift
 #     内联进指令、strings 看不到，所以靠上一条标记兜底，verify.sh 用优化过的 Staging 包证明标记命中）
 #   - 调试授权项 get-task-allow（也查代码签名里的授权）
@@ -86,6 +88,7 @@ HITS_LOG="$WORK/hits"
     echo "COULI_DEBUG_PANEL"
     echo "COULI_DS_COMPONENT_CATALOG_7Q4XK2"
     echo "COULI_DEBUG_ONLY_ROUTE_TABLE"
+    echo "COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91"
     echo "get-task-allow"
     echo "couli-debug"
 } >"$PATTERNS" || fail_scan "无法写检查项"

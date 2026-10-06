@@ -85,7 +85,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router, Privacy]
+        products: [Config, Router, Privacy, Update]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
@@ -131,6 +131,7 @@ schemes:
         - package: Core/ConfigTests
         - package: Core/RouterTests
         - package: Core/PrivacyTests
+        - package: Core/UpdateTests
         - package: DesignSystem/DesignSystemTests
     profile:
       config: Release

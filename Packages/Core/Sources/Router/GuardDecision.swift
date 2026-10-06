@@ -30,6 +30,8 @@ public enum GuardReason {
     public static let updateUnknownReadonly = "update_unknown_readonly"
     public static let updateUnknownBlocked = "update_unknown_blocked"
     public static let updateUnknownPushFallback = "update_unknown_push_fallback"
+    /// 强更检查进行中：外部来源与 pending_action 恢复等结果（最长 5 秒），App 内操作不等（F-ALL-03，三端同名）。
+    public static let updateChecking = "update_checking"
     public static let forceUpdateRequired = "force_update_required"
     public static let forceUpdateException = "force_update_exception"
     public static let unknownRoute = "unknown_route"

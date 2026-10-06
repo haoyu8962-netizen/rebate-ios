@@ -48,6 +48,12 @@ public enum AppNamespace {
     /// 「撤回清理未完成」标记同样保留：切换环境不能把它清掉而让未清干净的凭据重新可读。
     public static let privacyDecisionKeys: Set<String> = [privacyRecordKey]
 
+    // MARK: 强更检查（APP-02c）
+
+    /// 强更检查的本机记录（最近一次成功检查、成功时刻、「暂不更新」记下的版本、10405 带来的最低版本）。
+    /// 切换环境时随命名空间一起清掉（版本配置按环境不同）。
+    public static let updateRecordKey = userDefaultsPrefix + "update.record"
+
     /// 切换环境时不删的全部键：环境记录 + 本机隐私决定。
     public static let preservedOnEnvironmentSwitchKeys: Set<String> = environmentRecordKeys.union(privacyDecisionKeys)
 }

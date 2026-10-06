@@ -175,7 +175,7 @@ struct BasicModeHomeView: View {
 /// 系统启动屏（Info.plist UILaunchScreen）用同一底色，过渡时不闪。
 struct LaunchBackdropView: View {
     /// 品牌图形占位上的字（设计稿画法）。TODO: 正式品牌图形由设计提供后换成图片资源。
-    private static let brandTileText = "凑狸"
+    static let brandTileText = "凑狸"
 
     var body: some View {
         ZStack {

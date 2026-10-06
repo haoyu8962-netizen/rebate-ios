@@ -1,0 +1,5 @@
+# Codex 先写的 UpdateGateVectorTests.swift 按任务书不改（APP-02c 任务书 §4）：向量字段名 a / b 照 specs/update-vectors.json，
+# 两个向量驱动的测试函数较长。只在本目录放宽这两条，其余规则照仓库根配置。
+disabled_rules:
+  - identifier_name
+  - function_body_length

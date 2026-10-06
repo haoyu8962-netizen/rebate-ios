@@ -1,6 +1,7 @@
 #if DEBUG
 import Config
 import SwiftUI
+import Update
 
 /// 调试面板标记。Release 制品扫描（tools/ci/release-scan.sh）查这个字符串，命中即阻断发布。
 enum DebugPanelMarker {
@@ -11,7 +12,9 @@ enum DebugPanelMarker {
 /// 最小调试面板：显示当前环境、切换环境（只在 Debug / Staging 编译）。
 struct DebugPanelView: View {
     @ObservedObject var store: EnvironmentStore
+    @ObservedObject var update: AppUpdate
     @State private var lastError: String?
+    @State private var updateScenario = DebugUpdateScenario.current
 
     var body: some View {
         NavigationStack {
@@ -42,6 +45,31 @@ struct DebugPanelView: View {
                     Text(verbatim: store.current.endpoints.h5BaseURL.absoluteString)
                 } header: {
                     Text(verbatim: "Endpoints")
+                }
+                Section {
+                    ForEach(DebugUpdateScenario.allCases) { scenario in
+                        Button {
+                            DebugUpdateScenario.current = scenario
+                            updateScenario = scenario
+                            update.debugRecheck()
+                        } label: {
+                            HStack {
+                                Text(verbatim: scenario.label)
+                                Spacer()
+                                if scenario == updateScenario {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        .disabled(!store.debugCapabilities.isAvailable(.mockData))
+                        .accessibilityIdentifier("debug.update.\(scenario.rawValue)")
+                    }
+                    Text(verbatim: "status \(update.ui.status.rawValue)")
+                        .accessibilityIdentifier("debug.update.status")
+                } header: {
+                    Text(verbatim: "App update check (fake data)")
+                } footer: {
+                    Text(verbatim: AppVersionCheckExample.marker)
                 }
                 Section {
                     NavigationLink {

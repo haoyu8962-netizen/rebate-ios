@@ -95,7 +95,8 @@ final class AppRoutingPrivacyTests: XCTestCase {
     private func makeRouting(_ store: MemoryPrivacyStore) -> AppRouting {
         let environment = EnvironmentStore(defaultEnvironment: .test, defaults: defaults, registry: .init(cleaners: []))
         let privacy = PrivacyController(store: store, clock: { 1 }, bundledPolicyVersion: "1")
-        return AppRouting(environment: environment, privacy: privacy)
+        // 强更检查立即返回「不低于」（同步替身），不影响这里的隐私接线断言。
+        return AppRouting(environment: environment, privacy: privacy, update: UpdateFixtures.makeUpdate())
     }
 
     private func basicStore() -> MemoryPrivacyStore {
@@ -146,6 +147,8 @@ final class AppRoutingPrivacyTests: XCTestCase {
         let routing = makeRouting(basicStore())
         XCTAssertNil(routing.selectTab(.orders))
         routing.privacy.agree()
+        XCTAssertTrue(routing.router.path.isEmpty, "Tab 外壳还没就绪：先不恢复（F-IOS-09）")
+        routing.shellAppeared()
         XCTAssertEqual(routing.router.path.map(\.route), ["Login"], "同意 = 完成前置，游客继续去登录")
     }
 

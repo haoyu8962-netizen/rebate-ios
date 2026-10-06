@@ -4,7 +4,7 @@ import Generated
 /// 统一入口守卫（03 §4.4「统一入口守卫」「入口限制」，BR-ID-10、BR-ID-02、BR-ID-11、BR-ID-01）。
 /// 纯函数：同样的请求与状态得到同样的结论，不读写任何存储、不导航。
 ///
-/// 判定顺序：环境 → 隐私闸门（未决 / 基本模式）→ 低于最低版本 → 路由是否存在与 since →
+/// 判定顺序：环境 → 隐私闸门（未决 / 基本模式）→ 低于最低版本 → 强更检查中（外部与自动的等待）→ 路由是否存在与 since →
 /// 入口 → Agent 卡片 → 参数 schema 与外部网页白名单 → 强更结果未知时的只读清单 → 登录、绑手机与实名 → 打开。
 public enum EntryGuard {
     public static func decide(request: RouteRequest, state: GuardState) -> GuardDecision {
@@ -35,6 +35,10 @@ public enum EntryGuard {
         // 低于最低支持版本：只放行从强更页主动进入的次要入口（03 §4.1）。
         if state.update == .belowMin {
             return decideBelowMinimum(request: request, state: state, routes: routes)
+        }
+        // 强更检查进行中（还没等满 5 秒）：外部来源与自动执行的动作等结果，App 内操作不等（03 §4.4 表「检查中」，F-ALL-03）。
+        if state.update == .checking, request.sourceKind != .inApp {
+            return wait(GuardReason.updateChecking)
         }
         // 未知路由、Release 里的 debug_only 名称、since 未发布或高于本端版本：升级提示。
         if let upgrade = availability(route: request.route, state: state, routes: routes) {
@@ -319,6 +323,7 @@ public extension EntryGuard {
               state.environmentSettled,
               privacyGate(request: request, state: state) == nil,
               state.update != .belowMin,
+              state.update != .checking,
               availability(route: request.route, state: state, routes: routes) == nil,
               let spec = routes[request.route]
         else {

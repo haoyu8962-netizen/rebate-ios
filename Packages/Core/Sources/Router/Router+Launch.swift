@@ -33,8 +33,11 @@ public extension Router {
         purgeAgentPendingIfPrivacyBlocked(current)
         // 用户在 App 内发起、正等待隐私弹窗结论的动作（`awaitingConsentResult`，只在内存）：本次登记的待办归弹窗结论处理
         // （同意 → 按前置继续；拒绝 → 删除），自动恢复不碰它（R1-01）。进程重启后标记不在，照常按 reject 删除（F-ALL-04）。
+        // 刚完成一个前置步骤（`recordPrerequisiteCompleted`，F-IOS-09）时按「完成前置」恢复：还缺前置就进下一个前置页。
+        // 强更 below_min 时同样走这里：守卫给出 force_update，待办删除、进入强更页（F-AND-07 在 iOS 的对应）。
         if !awaitingConsentResult {
-            resumePending(state: current, entersPrerequisite: false)
+            resumePending(state: current, entersPrerequisite: resumeAfterPrerequisite)
+            resumeAfterPrerequisite = false
         }
         return drainLaunchQueue(readiness: readiness, now: now, pushLanding: pushLanding)
     }
@@ -44,6 +47,8 @@ public extension Router {
     /// 截止时间已到（`now` 不早于它）时也为 nil：超时那一次已按 unknown 协调过，之后还留着的待办（如游客的
     /// OrderList 要登录）只等强更结果或前置状态变化再协调，不再安排计时，避免零延迟循环（R1-06）。
     func launchConditionsRetryAt(readiness: LaunchReadiness, now: Int64) -> Int64? {
+        // 入队时也会来问（R1-03）：先记下闸门，闸门早已通过而还没协调过时同样有起算点。
+        launchQueue.observeGates(readiness, now: now)
         guard readiness.environmentSettled, readiness.privacy != .notDecided,
               let opened = launchQueue.gatesOpenedAt,
               case let .checking(startedAt) = readiness.update,
@@ -64,12 +69,25 @@ public extension Router {
     /// 不入队即可，不要调用这里——那会连同冷启动带来的原意图一起删掉（R1-03）。
     func discardLaunchIntent() {
         launchQueue.discard()
+        queuedPushLanding = nil
     }
 
     // MARK: - 启动意图队列
 
-    func enqueueLaunch(_ intent: LaunchIntent) {
+    /// 排进启动队列（只留最新一条）：推送意图连同回查器一起保存（R1-02），并通知启动协调安排 5 秒超时（R1-03）。
+    internal func queueLaunch(_ intent: LaunchIntent, pushLanding: PushLanding?) {
         launchQueue.enqueue(intent)
+        if case .push = intent {
+            queuedPushLanding = pushLanding
+        } else {
+            queuedPushLanding = nil
+        }
+        onLaunchQueueChanged?()
+    }
+
+    /// `pushLanding`：推送意图的回查器，随意图保存，放行时使用（R1-02）。
+    func enqueueLaunch(_ intent: LaunchIntent, pushLanding: PushLanding? = nil) {
+        queueLaunch(intent, pushLanding: pushLanding)
     }
 
     var hasPendingLaunchIntent: Bool {
@@ -106,8 +124,14 @@ public extension Router {
     }
 
     /// 进入基本模式（仍不同意、撤回同意）：清空导航栈，受限页面不得继续显示（APP-02b 评审，三端统一）。
+    /// 正停在强更页时只清掉强更页之上的页面、强更页留在最上层（APP-02c 编排者裁定：基本模式不发检查，
+    /// 已知 below_min 仍强更；强更解除由 App 的强更接线调 `leaveForceUpdate`）。
     func enteredBasicMode() {
-        path = []
+        if let first = path.first, first.route == RoutePolicy.forceUpdate {
+            path = [first]
+        } else {
+            path = []
+        }
         tabRoot = RouteDestination(route: RoutePolicy.home)
         privacyChanged()
     }

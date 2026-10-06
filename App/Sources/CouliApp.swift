@@ -2,14 +2,15 @@ import Config
 import Privacy
 import Router
 import SwiftUI
+import Update
 
-/// 启动：系统启动屏（Info.plist UILaunchScreen，页面底色）→ 环境闸门 → 隐私闸门 → Tab 外壳（APP-02b）。
-/// TODO(APP-02c): 强更。
+/// 启动：系统启动屏（Info.plist UILaunchScreen，页面底色）→ 环境闸门 → 隐私闸门 → 强更检查（APP-02c）→ Tab 外壳（APP-02b）。
 @main
 struct CouliApp: App {
     @StateObject private var environment: EnvironmentStore
     @StateObject private var router: Router
     @StateObject private var privacy: PrivacyController
+    @StateObject private var update: AppUpdate
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
 
@@ -23,11 +24,20 @@ struct CouliApp: App {
         #endif
         let environment = BuildInfo.makeEnvironmentStore()
         let privacy = PrivacyController()
-        let routing = AppRouting(environment: environment, privacy: privacy)
+        let update = Self.makeUpdate()
+        let routing = AppRouting(environment: environment, privacy: privacy, update: update)
         _environment = StateObject(wrappedValue: environment)
         _router = StateObject(wrappedValue: routing.router)
         _privacy = StateObject(wrappedValue: privacy)
+        _update = StateObject(wrappedValue: update)
         self.routing = routing
+    }
+
+    private static func makeUpdate() -> AppUpdate {
+        #if DEBUG
+        DebugUpdateScenario.applyResetArgument()
+        #endif
+        return AppUpdate.makeForBuild()
     }
 
     var body: some Scene {
@@ -36,15 +46,18 @@ struct CouliApp: App {
                 .environmentObject(environment)
                 .environmentObject(router)
                 .environmentObject(privacy)
+                .environmentObject(update)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
                 .onChange(of: environment.gate) { _ in
-                    routing.launchConditionsChanged()
+                    routing.environmentGateChanged()
                 }
                 .onChange(of: scenePhase) { phase in
-                    if phase == .background {
-                        routing.sceneEnteredBackground()
+                    switch phase {
+                    case .background: routing.sceneEnteredBackground()
+                    case .active: routing.sceneBecameActive()
+                    default: break
                     }
                 }
         }

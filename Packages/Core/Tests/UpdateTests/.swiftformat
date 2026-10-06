@@ -1,0 +1,3 @@
+# Codex 先写的 UpdateGateVectorTests.swift 按任务书不改（APP-02c 任务书 §4）；它的 import 次序与仓库默认的 sortImports 不同。
+# 只在本目录关掉这一条，本目录其余文件仍按字母序手工排好 import。
+--disable sortImports

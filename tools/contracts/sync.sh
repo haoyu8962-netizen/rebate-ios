@@ -129,6 +129,8 @@ for f in $ENUM_FILES; do
 done
 IFS="$OLDIFS"
 
+# APP-02c 加入 openapi.yaml（只用 GET /v1/app-versions/check 的响应示例作调试假数据；OpenAPI 客户端仍归 APP-03）
+# 与 specs/app-stores.yaml（商店对照表，生成 AppStores 常量）。
 for f in \
     contracts/error-codes.yaml \
     contracts/routes.json \
@@ -139,7 +141,9 @@ for f in \
     specs/events.yaml \
     specs/client-public-ids.yaml \
     specs/client-security-baseline.yaml \
-    specs/system-permissions.yaml; do
+    specs/system-permissions.yaml \
+    contracts/openapi.yaml \
+    specs/app-stores.yaml; do
     take "$RP_REPO" "$RP_COMMIT" "$f" "$(json_name "$f")"
 done
 

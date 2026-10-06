@@ -15,6 +15,7 @@ struct RootView: View {
     @EnvironmentObject private var environment: EnvironmentStore
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var privacy: PrivacyController
+    @EnvironmentObject private var update: AppUpdate
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -37,22 +38,41 @@ struct RootView: View {
         }
     }
 
-    /// 弹窗盖在整个导航栈上；从弹窗里的协议链接经 Router 推入 Agreement 时先让出（读完返回，弹窗回来）——
+    /// 弹窗盖在整个导航栈上（Tab 外壳或强更页之上）；从弹窗里的协议链接经 Router 推入 Agreement 时先让出（读完返回，弹窗回来）——
     /// 弹窗本身仍不能被关闭，只能点按钮（BR-ID-11）。
     private var gated: some View {
         navigation
-            .couliDialog(isPresented: privacy.isPrompting && router.path.isEmpty) {
+            .couliDialog(isPresented: privacyDialogShown) {
                 privacyDialog()
             }
+            .couliDialog(isPresented: showsUpdatePrompt) {
+                UpdatePromptDialog(
+                    result: UpdateCheckResultView(
+                        title: update.ui.result?.updateTitle,
+                        notes: update.ui.result?.updateNotes,
+                        latest: update.ui.targetVersion
+                    ),
+                    onLater: update.dismissPrompt,
+                    onGo: update.promptGoStore
+                ).dialog
+            }
+            .couliToast($update.toast)
+    }
+
+    /// 隐私弹窗显示条件（R1-01，判定见 `AppRouting.privacyDialogVisible`）；读发布值，界面随之刷新。
+    private var privacyDialogShown: Bool {
+        AppRouting.privacyDialogVisible(isPrompting: privacy.isPrompting, path: router.path)
+    }
+
+    /// 可关闭更新提示（MainUpdatePrompt）：已同意隐私政策、停在 Tab 外壳（导航栈为空）、没有首启弹窗时才弹。
+    private var showsUpdatePrompt: Bool {
+        update.showsPrompt && privacy.state.decision == .consented && !privacy.isPrompting && router.path.isEmpty
     }
 
     private func privacyDialog() -> CouliDialog {
         let open: (AgreementLink) -> Void = { link in
-            var params: [String: JSONValue] = [:]
-            if let type = link.agreementType {
-                params["type"] = .string(type)
-            }
-            router.open(RouteRequest(route: "Agreement", values: params, from: .inApp))
+            // 强更状态下带强更来源打开（F-ALL-06）。
+            routing.openAgreementFromPrivacyDialog(type: link.agreementType)
         }
         if privacy.state.promptStage == .second {
             return SecondNoticeDialog(
@@ -75,7 +95,7 @@ struct RootView: View {
         }
         #if DEBUG
         .sheet(isPresented: $showsDebugPanel) {
-            DebugPanelView(store: environment)
+            DebugPanelView(store: environment, update: update)
         }
         #endif
     }

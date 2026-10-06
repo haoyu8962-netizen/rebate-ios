@@ -15,7 +15,10 @@ enum RouteViewRegistry {
     @ViewBuilder
     static func view(for destination: RouteDestination) -> some View {
         if let route = destination.route {
-            if let builder = builders[route] {
+            if route == RoutePolicy.forceUpdate {
+                // 强更页是 App 外壳的一部分（APP-02c），不属于任何 Feature。
+                ForceUpdateScreen()
+            } else if let builder = builders[route] {
                 builder(destination)
             } else {
                 RoutePlaceholderView(destination: destination)
@@ -40,6 +43,14 @@ private struct RoutePlaceholderView: View {
                 Text(verbatim: "read-only")
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.textSecondary)
+            }
+            if destination.fromForceUpdatePage {
+                // 从强更页进入（APP-02c）：登录页按受限登录显示——不显示【设置】、「登录遇到问题」与邀请码等业务输入，
+                // 只登录已有账号（BR-ID-01 细则「受限会话」）。TODO(APP-05): 真实登录页读这个标记。
+                Text(verbatim: destination.route == RoutePolicy.login ? "restricted login" : "from force update")
+                    .couliFont(.footnote)
+                    .foregroundColor(CouliColor.textSecondary)
+                    .accessibilityIdentifier("route.placeholder.restricted")
             }
             ForEach(destination.params.keys.sorted(), id: \.self) { key in
                 Text(verbatim: "\(key) = \(describe(destination.params[key]))")

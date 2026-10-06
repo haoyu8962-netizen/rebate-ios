@@ -9,12 +9,22 @@ public struct RouteDestination: Hashable, Sendable, Identifiable {
     public let params: [String: JSONValue]
     /// 只读打开（基本模式、强更检查结果未知）：页面不得自动发起写请求或授权（03 §4.4）。
     public let readonly: Bool
+    /// 从强更页的次要入口进入（APP-02c，03 §4.1）：登录页据此按「受限登录」显示——不显示【设置】、「登录遇到问题」
+    /// 与邀请码等业务输入（BR-ID-01 细则「受限会话」）。路由参数不能带它（Login 的 params schema 不允许多余字段）。
+    public let fromForceUpdatePage: Bool
 
-    public init(id: UUID = UUID(), route: String?, params: [String: JSONValue] = [:], readonly: Bool = false) {
+    public init(
+        id: UUID = UUID(),
+        route: String?,
+        params: [String: JSONValue] = [:],
+        readonly: Bool = false,
+        fromForceUpdatePage: Bool = false
+    ) {
         self.id = id
         self.route = route
         self.params = params
         self.readonly = readonly
+        self.fromForceUpdatePage = fromForceUpdatePage
     }
 
     public var isUpgradePrompt: Bool {
@@ -40,6 +50,9 @@ public final class Router: ObservableObject {
     /// 不用 `consentRequested` 本身判断：@Published 在 willSet 时就通知订阅方，订阅方（弹出弹窗 → 启动协调）
     /// 读到的还是旧值。所以这里先置位、再发布 `consentRequested`。
     public internal(set) var awaitingConsentResult = false
+    /// 刚完成一个前置步骤（同意隐私政策等）、待办等启动协调恢复（F-IOS-09）：下一次条件都满足的协调按「完成前置」
+    /// 恢复（还缺前置时进下一个前置页），而不是在回调里直接恢复——那会绕过强更等待与 Tab 就绪。
+    var resumeAfterPrerequisite = false
     /// 最近一次结论（调试显示、埋点用）。
     @Published public internal(set) var lastDecision: GuardDecision?
 
@@ -47,6 +60,14 @@ public final class Router: ObservableObject {
     let pendingStore: PendingActionStore
     let state: @MainActor () -> GuardState
     var launchQueue = LaunchQueue()
+    /// 排队的推送意图对应的回查器（APP-02c R1-02）：随消息编号一起保存，放行时用它回查；放行、丢弃或被新意图覆盖时清掉。
+    var queuedPushLanding: PushLanding?
+    /// 启动队列新增或重新排队一条意图时调用（APP-02c R1-03）：App 的启动协调据此按检查起点安排 5 秒超时，
+    /// 检查开始后才排进来的外部请求同样会在第 5 秒按 unknown 放行。
+    public var onLaunchQueueChanged: (@MainActor () -> Void)?
+    /// 从强更页次要入口发起、正在等隐私补同意的请求（APP-02c R1-01）：只在内存，不登记 pending_action；
+    /// 同意后仍是强更状态时按强更来源继续（受限登录等），拒绝或强更已解除时丢弃。
+    var forceUpdateConsentRequest: RouteRequest?
     /// 会话 / 环境代次：退出登录、切换账号、切换环境时递增，进行中的推送回查结果据此作废。
     private var generation: UInt64 = 0
 
@@ -86,7 +107,7 @@ public final class Router: ObservableObject {
         case .open, .openReadonly:
             showOpened(decision, for: request)
         case .forceUpdate:
-            path = [RouteDestination(route: RoutePolicy.forceUpdate)]
+            enterForceUpdate()
         case .requireLogin, .requireBindPhone, .requireRealname:
             remember(request)
             if let route = decision.route {
@@ -105,7 +126,7 @@ public final class Router: ObservableObject {
         case .deferred:
             // 外部带进来的请求排队，等条件满足后再交给 Router；App 内的操作不排队。
             if request.sourceKind != .inApp {
-                launchQueue.enqueue(.route(request))
+                queueLaunch(.route(request), pushLanding: nil)
             }
         case .reject:
             // 不打开：停在当前页（冷启动时即首页）。TODO(APP-03): 记埋点 route_entry_blocked（只带路由名与入口类别）。
@@ -235,6 +256,7 @@ public final class Router: ObservableObject {
     public func environmentChanged() {
         pendingStore.clear()
         launchQueue = LaunchQueue()
+        queuedPushLanding = nil
         generation &+= 1
     }
 
@@ -249,6 +271,9 @@ public final class Router: ObservableObject {
         pushLanding: PushLanding? = nil
     ) -> Task<Void, Never>? {
         guard let released = launchQueue.release(readiness: readiness, now: now) else { return nil }
+        // 排队时保存的回查器优先（热推送在检查期间排队，R1-02）；冷启动推送没有保存时用调用方给的。
+        let landing = queuedPushLanding ?? pushLanding
+        queuedPushLanding = nil
         var guardState = state()
         guardState.environmentSettled = readiness.environmentSettled
         guardState.privacy = readiness.privacy
@@ -259,8 +284,8 @@ public final class Router: ObservableObject {
             open(request, state: guardState)
             return nil
         case let .push(messageId):
-            guard let pushLanding else { return nil }
-            return startPush(messageId: messageId, state: guardState, using: pushLanding)
+            guard let landing else { return nil }
+            return startPush(messageId: messageId, state: guardState, using: landing)
         }
     }
 
@@ -285,13 +310,13 @@ public final class Router: ObservableObject {
                            using pushLanding: PushLanding, hot: Bool = false) -> Task<Void, Never>? {
         let issued = generation
         if let blocked = PushLanding.probe(state: guardState, routes: routes) {
-            finishPush(blocked, messageId: messageId, issuedAt: issued, hot: hot)
+            finishPush(blocked, messageId: messageId, issuedAt: issued, hot: hot, landing: pushLanding)
             return nil
         }
         let routes = routes
         return Task { @MainActor [weak self] in
             let result = await pushLanding.land(messageId: messageId, state: guardState, routes: routes)
-            self?.finishPush(result, messageId: messageId, issuedAt: issued, hot: hot)
+            self?.finishPush(result, messageId: messageId, issuedAt: issued, hot: hot, landing: pushLanding)
         }
     }
 
@@ -299,7 +324,9 @@ public final class Router: ObservableObject {
     /// 否则用当时最新的状态重新判定后执行（R1-01）。还要等待时把这条推送重新排队，条件满足后再回查。
     /// 代次只在 Router 内部发放与校验：没有公开的「直接执行回查结果」入口（R2-01）。
     /// `hot`：运行中点击的推送。等待隐私结论（首启弹窗期间）时丢弃，不排队（R1-04）；其余等待照常排队。
-    func finishPush(_ result: PushLandingResult, messageId: String, issuedAt: UInt64, hot: Bool = false) {
+    /// `landing`：这条推送的回查器，重新排队时一起保存，放行时照常回查（R1-02）。
+    func finishPush(_ result: PushLandingResult, messageId: String, issuedAt: UInt64, hot: Bool = false,
+                    landing: PushLanding? = nil) {
         guard issuedAt == generation else { return }
         let current = redecide(result)
         if current.decision.kind == .deferred {
@@ -307,7 +334,7 @@ public final class Router: ObservableObject {
             if hot, current.decision.reason == GuardReason.privacyUndecided {
                 return
             }
-            launchQueue.enqueue(.push(messageId: messageId))
+            queueLaunch(.push(messageId: messageId), pushLanding: landing)
             return
         }
         execute(current)

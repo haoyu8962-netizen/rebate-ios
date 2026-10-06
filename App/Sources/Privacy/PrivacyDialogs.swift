@@ -95,7 +95,7 @@ struct SecondNoticeDialog {
 }
 
 /// 要点圆点：4×4、距行顶 9（14/21 行高时与首行文字居中），随字号放大。
-private struct BulletDot: View {
+struct BulletDot: View {
     @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 4
     @ScaledMetric(relativeTo: .footnote) private var top: CGFloat = 9
 

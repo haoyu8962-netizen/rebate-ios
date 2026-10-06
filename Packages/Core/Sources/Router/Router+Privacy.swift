@@ -8,6 +8,7 @@ extension Router {
     public func consentHandled(granted: Bool = true) {
         awaitingConsentResult = false
         consentRequested = false
+        forceUpdateConsentRequest = nil
         guard let pending = pendingStore.load(now: pendingStore.now) else { return }
         guard granted, pending.origin != RouteSource.agentCard.rawValue else {
             pendingStore.clear()

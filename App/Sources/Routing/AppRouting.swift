@@ -6,15 +6,14 @@ import Router
 
 /// App 侧的 Router 接线：本构建的路由表、守卫状态源、深链入站配置，以及冷启动协调（03 §4.4）。
 ///
-/// 冷启动顺序：环境闸门 → 隐私闸门有结论（APP-02b，`PrivacyController`）→ 强更检查有结果或等满 5 秒（02c）
-/// → Tab 外壳就绪 → 恢复 pending_action、放行启动意图（`Router.launchConditionsChanged`，F-IOS-08）。
-/// 强更、会话由 02c、APP-05 接入；这里先用可注入的占位状态源。
+/// 冷启动顺序：环境闸门 → 隐私闸门有结论（APP-02b，`PrivacyController`）→ 强更检查有结果或等满 5 秒（APP-02c，
+/// `AppUpdate`）→ Tab 外壳就绪 → 恢复 pending_action、放行启动意图（`Router.launchConditionsChanged`，F-IOS-08）。
+/// 会话由 APP-05 接入；这里先用可注入的占位状态源。
+/// 强更（APP-02c）：below_min 时无论在哪个页面都进入 ForceUpdate（隐私闸门有结论之后）；解除后回到外壳。
 @MainActor
 final class AppRouting {
     /// 守卫状态里由其他任务提供的几项（占位，可在调试时替换）。
     struct Placeholders {
-        // TODO(APP-02c): 接强更检查（检查中 / 结果 / 超时按 unknown）。
-        var update: UpdateCheckStatus = .finished(.ok)
         // TODO(APP-05): 接 Session（游客 / 已登录 / 已绑手机 / 受限会话）；会话变化时调 `launchConditionsChanged()`。
         var session: SessionState = .guest
         // TODO(APP-05): 接实名结论；未知按未实名（auth=realname 进实名前置）。
@@ -25,19 +24,25 @@ final class AppRouting {
 
     let environment: EnvironmentStore
     let privacy: PrivacyController
+    let update: AppUpdate
     var placeholders = Placeholders()
     /// Tab 外壳（或基本模式页）已经显示。
     private(set) var shellReady = false
     private var consentObservation: AnyCancellable?
+    private var pathObservation: AnyCancellable?
     private(set) lazy var router: Router = .init(
         routes: Self.routeTable,
         pendingStore: PendingActionStore(backend: UserDefaultsPendingBackend()),
         state: { [unowned self] in guardState }
     )
 
-    init(environment: EnvironmentStore, privacy: PrivacyController) {
+    init(environment: EnvironmentStore, privacy: PrivacyController, update: AppUpdate) {
         self.environment = environment
         self.privacy = privacy
+        self.update = update
+        update.onChange = { [weak self] in
+            self?.updateChanged()
+        }
         privacy.onChange = { [weak self] in
             self?.privacyChanged()
         }
@@ -53,6 +58,28 @@ final class AppRouting {
                     privacy?.requestFullFunction()
                 }
             }
+        // 启动队列新增或重新排队（含检查开始后才进来的外部请求、检查期间排队的热推送）：按检查起点安排 5 秒超时（R1-03）。
+        router.onLaunchQueueChanged = { [weak self] in
+            self?.scheduleLaunchRetry()
+        }
+        // 强更状态下不能离开强更页（侧滑等任何方式把强更页弹出栈时拉回来，03 §4.1）。
+        pathObservation = router.$path
+            .sink { [weak self] path in
+                MainActor.assumeIsolated {
+                    guard let self, path.first?.route != RoutePolicy.forceUpdate,
+                          self.mustShowForceUpdate else { return }
+                    // 在本次发布之后再改（不在 willSet 里改写正在发布的值）。
+                    Task { @MainActor [weak self] in
+                        self?.syncForceUpdate()
+                    }
+                }
+            }
+        // 冷启动时环境与隐私已就绪（已同意的老用户）：立即发冷启动检查。
+        update.conditionsChanged(
+            environmentSettled: environment.gate == .settled,
+            consented: privacy.routerPrivacy == .consented,
+            basicMode: privacy.routerPrivacy == .basicMode
+        )
     }
 
     /// 本构建可用的路由表：Release 只有 Routes.all；Debug / Staging 并入 debug_only 路由（Staging 下包里看不到 DEBUG）。
@@ -91,19 +118,21 @@ final class AppRouting {
         LaunchReadiness(
             environmentSettled: environment.gate == .settled,
             privacy: privacy.routerPrivacy,
-            update: placeholders.update
+            update: update.routerStatus
         )
     }
 
     var guardState: GuardState {
-        let update = LaunchQueue.effectiveUpdate(
-            placeholders.update,
+        // 还在等强更检查（没等满 5 秒）：checking——外部来源与 pending 恢复得到 defer（update_checking），
+        // App 内操作不等（F-ALL-03）；等满按 unknown。
+        let effective = LaunchQueue.effectiveUpdate(
+            update.routerStatus,
             now: PendingActionStore.wallClockMillis(),
             waitFrom: router.launchGatesOpenedAt
         )
         return GuardState(
             privacyState: privacy.routerPrivacy,
-            updateState: update ?? .unknown,
+            updateState: effective ?? .checking,
             sessionState: placeholders.session,
             environmentSettled: environment.gate == .settled,
             appVersion: Self.appVersion,
@@ -137,8 +166,8 @@ final class AppRouting {
     @discardableResult
     func handlePush(messageId: String, coldStart: Bool, using pushLanding: PushLanding) -> Task<Void, Never>? {
         if coldStart, !isRunningOnPrivacyPrompt {
-            router.enqueueLaunch(.push(messageId: messageId))
-            pendingPushLanding = pushLanding
+            // 回查器随消息编号一起交给 Router 保存，放行时用它回查（R1-02）。
+            router.enqueueLaunch(.push(messageId: messageId), pushLanding: pushLanding)
             launchConditionsChanged()
             return nil
         }
@@ -147,9 +176,6 @@ final class AppRouting {
         }
         return router.handlePush(messageId: messageId, using: pushLanding)
     }
-
-    /// 冷启动推送放行时用的回查函数（推送任务接入前为 nil）。
-    private var pendingPushLanding: PushLanding?
 
     /// App 已在运行（外壳已显示过或进过后台）且正停在首启弹窗 / 二次说明。
     private var isRunningOnPrivacyPrompt: Bool {
@@ -170,6 +196,54 @@ final class AppRouting {
         wasBackgrounded = true
     }
 
+    /// 回到前台（进过后台之后）：强更按间隔复查（03 §4.1）。
+    func sceneBecameActive() {
+        guard wasBackgrounded else { return }
+        update.enteredForeground()
+    }
+
+    /// 环境闸门变化（就绪、阻断）：先告诉强更检查（能不能发 check），再协调启动。
+    func environmentGateChanged() {
+        updateConditions()
+        launchConditionsChanged()
+    }
+
+    /// 网络层收到 10405（APP-03 调用）：直接进 below_min → 强更页（03 §4.2）。
+    func on10405(minSupported: String?) {
+        update.on10405(minSupported: minSupported)
+    }
+
+    // MARK: - 强更
+
+    private func updateConditions() {
+        update.conditionsChanged(
+            environmentSettled: environment.gate == .settled,
+            consented: privacy.routerPrivacy == .consented,
+            basicMode: privacy.routerPrivacy == .basicMode
+        )
+    }
+
+    /// 此刻应当停在强更页：环境就绪、隐私闸门有结论（首启弹窗先于强更，03 §4.4 冷启动顺序）、强更 below_min。
+    var mustShowForceUpdate: Bool {
+        environment.gate == .settled && privacy.routerPrivacy != .notDecided && update
+            .routerStatus == .finished(.belowMin)
+    }
+
+    /// 强更结论变化（`AppUpdate.onChange`）：进出强更页，再协调启动（恢复待办——below_min 时守卫删除待办，F-AND-07 对应；
+    /// 放行排队的启动意图——below_min 时丢弃并停在强更页）。
+    private func updateChanged() {
+        syncForceUpdate()
+        launchConditionsChanged()
+    }
+
+    private func syncForceUpdate() {
+        if mustShowForceUpdate {
+            router.enterForceUpdate()
+        } else if update.routerStatus != .finished(.belowMin) {
+            router.leaveForceUpdate()
+        }
+    }
+
     /// 一级 Tab 点击：经 Router 过守卫（需要登录 → 登记 pending_action 并去登录；基本模式 → 补同意）。
     /// 放行时 Router 自己切 Tab（更新 `Router.tabRoot`，外壳跟随，R1-05）。
     /// 返回 nil 表示不切换；否则返回 Tab 根页面是否只读打开（保留守卫的只读标记）。
@@ -181,29 +255,39 @@ final class AppRouting {
 
     /// 隐私结论或弹窗阶段变化（`PrivacyController.onChange`）。
     private func privacyChanged() {
+        // 先让强更检查知道能不能发 check（同意后补发冷启动检查），Router 读到的才是「检查中」而不是「还没开始」。
+        updateConditions()
         router.privacyChanged()
+        syncForceUpdate()
         launchConditionsChanged()
     }
 
     /// 用户在隐私弹窗 / 隐私中心的操作（APP-02b 评审，三端统一）：
-    /// - 同意 = 完成一个前置步骤：守卫发起的补同意走 `consentHandled(granted: true)`，否则走 `prerequisiteCompleted`
-    ///   （重置计时，按前置继续，如进登录页）；
+    /// - 同意 = 完成一个前置步骤：守卫发起的补同意走 `consentResolved(granted: true)`，否则走 `recordPrerequisiteCompleted`
+    ///   （重置计时）；待办的恢复（按前置继续，如进登录页）交给启动协调，等强更检查有结果或等满 5 秒、Tab 就绪（F-IOS-09）；
+    /// - 同意没生效（撤回清理重试仍失败，弹窗关闭、仍是基本模式）：结束这次补同意，复位 Router 的两个标记并丢弃本次待办，
+    ///   受限 Tab 之后还能再弹隐私提示（F-IOS-10）；
     /// - 基本模式里再次不同意 / 仍不同意（或守卫发起的补同意被拒）：丢弃本次登记的待办，之后同意也不自动打开被拒的目标；
     /// - 进入基本模式（仍不同意、撤回同意）：清空导航栈，回到基本模式页。
     private func privacyAction(_ action: PrivacyController.Action) {
         switch action {
         case .agree:
-            guard privacy.state.decision == .consented else { return }
-            if router.awaitingConsentResult || router.consentRequested {
-                router.consentHandled(granted: true)
-            } else {
-                router.prerequisiteCompleted()
+            guard privacy.state.decision == .consented else {
+                if router.awaitingConsentResult || router.consentRequested {
+                    router.consentResolved(granted: false)
+                }
+                return
             }
-            // 先处理本次前置结果，再协调启动恢复（R1-01）。
+            if router.awaitingConsentResult || router.consentRequested {
+                router.consentResolved(granted: true)
+            } else {
+                router.recordPrerequisiteCompleted()
+            }
+            // 先处理本次前置结果，再协调启动恢复（R1-01）；条件不满足时等下一次协调（F-IOS-09）。
             launchConditionsChanged()
         case .disagree, .stillDisagree:
             if router.awaitingConsentResult || router.consentRequested || privacy.state.decision == .basicMode {
-                router.consentHandled(granted: false)
+                router.consentResolved(granted: false)
             }
             if action == .stillDisagree {
                 router.enteredBasicMode()
@@ -211,6 +295,8 @@ final class AppRouting {
             launchConditionsChanged()
         case .withdraw:
             router.enteredBasicMode()
+            // 基本模式不发检查：本机记着 below_min 的仍停在强更页（BR-ID-11 细则「基本模式与强更检查」）。
+            syncForceUpdate()
         case .requestFullFunction:
             break
         }
@@ -218,27 +304,59 @@ final class AppRouting {
 
     /// 强更仍在检查时，到「闸门通过 + 5 秒」再协调一次的唯一计时（闸门未就绪或无事可做时不计时）。
     private var retryTask: Task<Void, Never>?
+    /// 已安排的那次超时协调的时刻（毫秒，测试与调试用）；没有安排时为 nil。
+    private(set) var scheduledLaunchRetryAt: Int64?
 
     /// 状态变化（环境就绪、隐私结论、强更结果、外壳就绪、会话变化）后调用：
     /// 恢复 pending_action、放行排队的启动意图（Router.launchConditionsChanged，F-IOS-08）。
     func launchConditionsChanged() {
         let readiness = readiness
         let now = PendingActionStore.wallClockMillis()
-        router.launchConditionsChanged(
-            readiness: readiness,
-            shellReady: shellReady,
-            now: now,
-            pushLanding: pendingPushLanding
-        )
+        router.launchConditionsChanged(readiness: readiness, shellReady: shellReady, now: now)
+        scheduleLaunchRetry(readiness: readiness, now: now)
+    }
+
+    /// 按此刻的启动队列与待办重新安排（或取消）超时协调。入队时也调用（R1-03）：检查开始后才排进来的入口同样在
+    /// 「检查起点（不早于闸门通过）+ 5 秒」按 unknown 处理。
+    func scheduleLaunchRetry() {
+        scheduleLaunchRetry(readiness: readiness, now: PendingActionStore.wallClockMillis())
+    }
+
+    private func scheduleLaunchRetry(readiness: LaunchReadiness, now: Int64) {
         retryTask?.cancel()
         retryTask = nil
+        scheduledLaunchRetryAt = nil
         // 截止时间已过（超时那次已协调）时为 nil：只等状态变化再协调（R1-06）。
         guard let retryAt = router.launchConditionsRetryAt(readiness: readiness, now: now) else { return }
+        scheduledLaunchRetryAt = retryAt
         let delay = max(retryAt - now, 0)
         retryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(delay))
             guard !Task.isCancelled else { return }
             self?.launchConditionsChanged()
         }
+    }
+}
+
+extension AppRouting {
+    // MARK: - 隐私弹窗与强更页的叠放
+
+    /// 隐私弹窗（首启弹窗、二次说明、补同意）此刻显示：在 Tab 外壳上（导航栈为空），或叠在强更页上（栈顶是 ForceUpdate，
+    /// R1-01：基本模式下从强更页进需要同意的入口时弹补同意）。从弹窗里的协议链接推入的 Agreement 盖住时先让出，读完返回再出现。
+    var showsPrivacyDialog: Bool {
+        Self.privacyDialogVisible(isPrompting: privacy.isPrompting, path: router.path)
+    }
+
+    static func privacyDialogVisible(isPrompting: Bool, path: [RouteDestination]) -> Bool {
+        isPrompting && (path.isEmpty || path.last?.route == RoutePolicy.forceUpdate)
+    }
+
+    /// 隐私弹窗里的协议链接（F-ALL-06）：强更状态下按强更来源打开 Agreement，否则照常 App 内打开。
+    func openAgreementFromPrivacyDialog(type: String?) {
+        var params: [String: JSONValue] = [:]
+        if let type {
+            params["type"] = .string(type)
+        }
+        router.openFromPrivacyDialog(RouteRequest(route: "Agreement", values: params, from: .inApp))
     }
 }

@@ -39,14 +39,15 @@ final class PrivacyController: ObservableObject {
     init(
         store: any PrivacyStore = UserDefaultsPrivacyStore(),
         clock: @escaping () -> Int64 = PendingActionStore.wallClockMillis,
-        bundledPolicyVersion: String = BundledLegal.privacyPolicyVersion
+        bundledPolicyVersion: String = BundledLegal.privacyPolicyVersion,
+        withdrawalRunner: WithdrawalCleanupRunner = PrivacyWithdrawalCleanup.runner
     ) {
         self.clock = clock
         gate = PrivacyGate(store: store, clock: clock, bundledPolicyVersion: bundledPolicyVersion)
         gate.withdrawalCleanup = {
             MainActor.assumeIsolated {
                 // 清理失败时保留「待清理」标记，下次启动重试（WithdrawalCleanupRunner）。
-                _ = PrivacyWithdrawalCleanup.runner.run()
+                _ = withdrawalRunner.run()
             }
         }
         Self.registerInitSteps(on: gate)
