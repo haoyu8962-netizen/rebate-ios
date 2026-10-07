@@ -111,7 +111,9 @@ public enum EntryGuard {
         guard RouteParamValidator.isValid(params, spec: spec) else {
             return reject(GuardReason.paramsInvalid)
         }
-        guard RouteTargetCheck.isAllowed(route: request.route, params: params, allowlist: state.targets) else {
+        guard RouteTargetCheck.isAllowed(
+            route: request.route, params: params, allowlist: state.targets, source: request.sourceKind
+        ) else {
             return reject(GuardReason.targetNotAllowed)
         }
         return nil

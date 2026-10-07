@@ -22,6 +22,10 @@
 #     内联进指令、strings 看不到，所以靠上一条标记兜底，verify.sh 用优化过的 Staging 包证明标记命中）
 #   - 调试授权项 get-task-allow（也查代码签名里的授权）
 #   - 测试深链 scheme couli-debug（APP-02a：Info.plist 只在 Debug / Staging 声明，App 的深链配置也只在 #if DEBUG 里）
+#   - 桥一致性页（APP-04，03 §5.5；APP-04 三端共性第 2 条）：标记 COULI_BRIDGE_CONFORMANCE_APP04_7d41c2
+#     （App/Sources/Debug/DebugBridgeConformance.swift）、类名 DebugBridgeConformance、启动参数 CouliBridgeConformance、
+#     「假定已登录」的调试归属键 conformance-assumed-login、回环地址 127.0.0.1 / localhost（本机一致性源与 Info.plist 的
+#     ATS 例外只在 Debug）、包内 WebView 测试页名 bridge-frames（只在测试 bundle）
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -91,6 +95,13 @@ HITS_LOG="$WORK/hits"
     echo "COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91"
     echo "get-task-allow"
     echo "couli-debug"
+    echo "COULI_BRIDGE_CONFORMANCE_APP04_7d41c2"
+    echo "DebugBridgeConformance"
+    echo "CouliBridgeConformance"
+    echo "conformance-assumed-login"
+    echo "127.0.0.1"
+    echo "localhost"
+    echo "bridge-frames"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

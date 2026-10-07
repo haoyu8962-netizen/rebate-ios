@@ -61,9 +61,12 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     }
 
     /// isCurrent 在登记任务的同一把锁里检查：请求已被作废（撤回同意等）就立即取消，不会漏过 `cancelAll`。
+    /// `cancelWithTask` 为真时（桥调用，APP-04 三端共性第 45 条）：调用方的 Task 被取消（桥调用到截止时间、页面关闭）
+    /// 就取消对应的网络任务，不等它自己超时；登记前已取消的直接不发。
     func send(
         _ prepared: PreparedRequest,
         timeoutMillis: Int64,
+        cancelWithTask: Bool = false,
         isCurrent: @escaping @Sendable () -> Bool
     ) async -> TransportOutcome {
         var request = URLRequest(url: prepared.url)
@@ -82,19 +85,24 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
             nextId += 1
             return nextId
         }
-        let result = await withCheckedContinuation { continuation in
-            let task = urlSession.dataTask(with: request) { data, response, error in
-                continuation.resume(returning: Self.outcome(data: data, response: response, error: error))
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let task = urlSession.dataTask(with: request) { data, response, error in
+                    continuation.resume(returning: Self.outcome(data: data, response: response, error: error))
+                }
+                let current = lock.withLock {
+                    tasks[id] = task
+                    return isCurrent() && !(cancelWithTask && Task.isCancelled)
+                }
+                if !current {
+                    // 先取消再启动：任务直接以 cancelled 结束，请求不会发出。
+                    task.cancel()
+                }
+                task.resume()
             }
-            let current = lock.withLock {
-                tasks[id] = task
-                return isCurrent()
-            }
-            if !current {
-                // 先取消再启动：任务直接以 cancelled 结束，请求不会发出。
-                task.cancel()
-            }
-            task.resume()
+        } onCancel: {
+            guard cancelWithTask else { return }
+            lock.withLock { tasks[id] }?.cancel()
         }
         lock.withLock { tasks[id] = nil }
         return result

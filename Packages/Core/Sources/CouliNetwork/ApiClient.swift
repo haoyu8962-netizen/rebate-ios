@@ -133,11 +133,26 @@ public final class ApiClient: @unchecked Sendable {
 
     /// 带原始票据发送：票据已失效（之后撤回过同意或切换过环境）时在实际发送前的守卫里本地结束（call_cancelled），
     /// 不把这次请求重新绑定到当前环境（APP-03b 共性 13）。
-    public func send(_ call: ApiCall, ticket: UInt64) async -> ApiResult {
+    /// `isValid`（可选）：调用方的有效性，与 `send(_:isValid:)` 同样在等待结束、重试与实际发送前检查。
+    public func send(_ call: ApiCall, ticket: UInt64, isValid: (@Sendable () -> Bool)? = nil) async -> ApiResult {
         guard let operation = ApiOperations.byId(call.operationId) else {
             return .localReject(reason: LocalRejectReason.invalidCall)
         }
-        return await run(call, operation, isReplay: false, options: RunOptions(epoch: ticket))
+        var options = RunOptions(epoch: ticket)
+        options.callValid = isValid
+        return await run(call, operation, isReplay: false, options: options)
+    }
+
+    /// 带调用有效性发送（桥调用用；APP-04 三端共性第 22 条）：`isValid` 在每次等待结束后、每次重试前、真正发出前
+    /// （与作废世代同一处守卫）都要为真，否则本地结束（call_cancelled），不再发出。页面关闭或导航后桥把它置为假。
+    /// `isValid` 可能在任意线程调用，须线程安全。
+    public func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool) async -> ApiResult {
+        guard let operation = ApiOperations.byId(call.operationId) else {
+            return .localReject(reason: LocalRejectReason.invalidCall)
+        }
+        var options = RunOptions(epoch: currentEpoch)
+        options.callValid = isValid
+        return await run(call, operation, isReplay: false, options: options)
     }
 
     /// 实际发起的刷新次数（`POST /v1/auth/refresh`）。
@@ -214,6 +229,8 @@ public final class ApiClient: @unchecked Sendable {
         var guideOnlyPrerequisites = false
         /// 本次逻辑调用已用掉 10401 校时重签（至多 1 次；与前置动作重放的预算 isReplay 分开计，R2-05）。
         var resigned = false
+        /// 调用方给的有效性（桥调用：页面关闭、导航后为假）；nil = 只看作废世代。
+        var callValid: (@Sendable () -> Bool)?
     }
 
     struct Ready {
@@ -244,6 +261,24 @@ public final class ApiClient: @unchecked Sendable {
 
     func isCurrent(_ value: UInt64) -> Bool {
         lock.withLock { epoch == value }
+    }
+
+    /// 作废世代未变，且调用方的有效性仍为真。
+    func stillValid(_ options: RunOptions) -> Bool {
+        isCurrent(options.epoch) && (options.callValid?() ?? true)
+    }
+
+    /// 调用方给的有效性（没给的按有效）。
+    func callStillValid(_ options: RunOptions) -> Bool {
+        options.callValid?() ?? true
+    }
+
+    /// 桥调用的迟到响应（APP-04 三端共性第 30 条）：调用已失效（页面关闭、换文档、撤回同意、切换环境）时不进入恢复分支——
+    /// 不刷新（10002 刷新后重放、10405 refresh_only）、不重新注册（10402），本地按 call_cancelled 结束；10401 校时重签在
+    /// `run` 里同样拦下。重放预算用完的 10402 不在此列：照常隔离凭据并交给唯一的退避链（凭据事实，不是这次调用的恢复）。
+    func abandonsRecovery(_ effect: ErrorEffect, _ options: RunOptions) -> Bool {
+        let recovery: Set<ErrorEffectKind> = [.refreshReplay, .refreshOnly, .registerDeviceReplay]
+        return recovery.contains(effect.kind) && !callStillValid(options)
     }
 
     /// 调用结束时会话已不是它绑定的那一代：作废导致的按 call_cancelled，其余按 session_changed。

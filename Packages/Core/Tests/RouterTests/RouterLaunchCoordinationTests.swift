@@ -142,10 +142,10 @@ final class RouterLaunchCoordinationTests: XCTestCase {
         XCTAssertNil(store.load(now: now))
         XCTAssertTrue(router.path.isEmpty)
 
-        // 外部网页目标不在白名单：target_not_allowed（reject）→ 删除。
+        // 可信网页目标不在白名单：target_not_allowed（reject）→ 删除。（ExternalPage 的 external_hosts 只约束深链，APP-04 共性 10。）
         XCTAssertTrue(store.save(
             action: Router.openRouteAction,
-            values: ["route": .string("ExternalPage"), "params": .object(["url": .string("https://evil.example/")])],
+            values: ["route": .string("WebPage"), "params": .object(["url": .string("https://evil.example/")])],
             now: now,
             origin: RouteSource.inApp.rawValue
         ))

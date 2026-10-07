@@ -7,14 +7,19 @@ public struct NavBar<Trailing: View>: View {
     private let backLabel: String?
     private let onBack: () -> Void
     private let trailing: Trailing
+    private let foreground: Color
 
-    /// - Parameter backLabel: 返回按钮读屏名称（字典文案）；nil 时不显示返回（一级页）。
+    /// - Parameters:
+    ///   - backLabel: 返回按钮读屏名称（字典文案）；nil 时不显示返回（一级页）。
+    ///   - foreground: 返回图标与标题的颜色；缺省主文字色（H5 容器按页面设置的标题栏配色传入）。
     public init(
         title: String,
         backLabel: String?,
+        foreground: Color = CouliColor.textPrimary,
         onBack: @escaping () -> Void = {},
         @ViewBuilder trailing: () -> Trailing
     ) {
+        self.foreground = foreground
         self.title = title
         self.backLabel = backLabel
         self.onBack = onBack
@@ -27,7 +32,7 @@ public struct NavBar<Trailing: View>: View {
                 if let backLabel {
                     Button(action: onBack) {
                         CouliIconView(.back)
-                            .foregroundColor(CouliColor.textPrimary)
+                            .foregroundColor(foreground)
                             .couliHitTarget()
                     }
                     .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
@@ -38,7 +43,7 @@ public struct NavBar<Trailing: View>: View {
             }
             Text(verbatim: title)
                 .couliFont(.body, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textPrimary)
+                .foregroundColor(foreground)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .accessibilityAddTraits(.isHeader)

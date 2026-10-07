@@ -70,7 +70,9 @@ final class AppNetwork {
             pendingKeys: PendingKeyStore(backend: pendingBackend, clock: PendingActionStore.wallClockMillis),
             hooks: NetworkHooks(
                 onForceUpdate: { minimum in await source.forceUpdate(minimum) },
-                reRegisterDevice: { rejected in await registry.reRegister(rejectedDeviceId: rejected) },
+                reRegisterDevice: { rejected, isValid in
+                    await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
+                },
                 deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) }
             ),
             configuration: configuration

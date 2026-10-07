@@ -29,12 +29,12 @@ extension ApiClient {
                 sentDeviceId = deviceId
             }
             guard case let .response(_, headers, data) = outcome, let envelope = Envelope.parse(data) else {
-                if case let .failure(kind) = outcome, kind == HttpTransport.kindCancelled {
-                    return .superseded
-                }
-                return .transient(Self.transportKind(outcome))
+                return Self.unanswered(outcome)
             }
-            if envelope.code == Self.invalidSignatureCode, !resigned, operation.signed, correctClock(headers) {
+            if envelope.code == Self.invalidSignatureCode, !resigned, operation.signed {
+                if let ended = resignRefresh(window, headers) {
+                    return ended
+                }
                 resigned = true
                 continue
             }
@@ -50,6 +50,23 @@ extension ApiClient {
             }
             return Self.refreshTokens(envelope)
         }
+    }
+
+    /// 刷新请求没有拿到响应信封：被取消的按 superseded，其余按暂时失败。
+    static func unanswered(_ outcome: TransportOutcome) -> RefreshAttempt {
+        if case let .failure(kind) = outcome, kind == HttpTransport.kindCancelled {
+            return .superseded
+        }
+        return .transient(transportKind(outcome))
+    }
+
+    /// 刷新收到 10401：校时重发之前先确认窗口里仍有有效调用方，一个都没有就不校时、不重发（APP-04 三端共性第 41 条），
+    /// 返回结束结果；能校时返回 nil（调用方重签再发一次）；不能校时按刷新被拒处理。
+    private func resignRefresh(_ window: RefreshWindow, _ headers: [String: String]) -> RefreshAttempt? {
+        guard refreshHasLiveCaller(window) else {
+            return Self.abandonedRefresh
+        }
+        return correctClock(headers) ? nil : .rejected
     }
 
     /// 刷新接口的令牌在 data（TokenPairResponse）；缺项或非 0 码按被拒。
@@ -70,17 +87,24 @@ extension ApiClient {
         case sent(TransportOutcome, String?)
     }
 
+    /// 窗口里的调用方全部失效（页面关闭、换文档等）：停止续发，按暂时失败结算（不清会话、不动令牌）。
+    static let abandonedRefresh = RefreshAttempt.transient(LocalRejectReason.callCancelled)
+
     /// X-Device-Id 无效（BR-ID-09）。
     static let deviceInvalidCode = 10402
     /// 刷新遇到 10402 且重新注册没能完成：按暂时失败结束（不清会话）。
     static let deviceNotRegisteredKind = "device_not_registered"
 
-    /// 刷新请求发一次：每次（含校时重签）都重新取状态、核对作废世代与会话世代、重新组头签名。
+    /// 刷新请求发一次：每次（含校时重签、重新注册后的重放）都重新取状态、核对作废世代、会话世代与窗口里是否还有有效的
+    /// 调用方（APP-04 三端共性第 41 条），再重新组头签名。
     func sendRefreshOnce(_ window: RefreshWindow, _ operation: ApiOperation,
                          _ body: String) async -> RefreshSend {
         let state = await readContext()
         guard isCurrent(window.epoch), state.privacy == PrivacyRaw.full, state.credentialsReadable else {
             return .finished(.superseded)
+        }
+        guard refreshHasLiveCaller(window) else {
+            return .finished(Self.abandonedRefresh)
         }
         let ready: Ready
         switch prepare(ApiCall(operationId: Self.refreshOperation, body: body), operation, state) {
@@ -93,13 +117,17 @@ extension ApiClient {
         guard ready.generation == window.generation else {
             return .finished(.superseded)
         }
+        // 窗口任务被取消（最后一个有效调用方到期，共性第 54 条）时，在途的刷新请求随之取消。
         let outcome = await transport.send(
-            ready.request, timeoutMillis: RetryPolicy.forOperation(operation).timeoutMillis
+            ready.request, timeoutMillis: RetryPolicy.forOperation(operation).timeoutMillis, cancelWithTask: true
         ) { [weak self] in
             guard let self else {
                 return false
             }
-            return isCurrent(window.epoch) && currentGeneration == window.generation
+            return isCurrent(window.epoch) && currentGeneration == window.generation && refreshHasLiveCaller(window)
+        }
+        if case let .failure(kind) = outcome, kind == HttpTransport.kindCancelled, !refreshHasLiveCaller(window) {
+            return .finished(Self.abandonedRefresh)
         }
         return .sent(outcome, ready.request.headers[HeaderNames.deviceId])
     }
@@ -116,7 +144,18 @@ extension ApiClient {
             hooks.deviceRejected(sentDeviceId)
             return .transient(Self.deviceNotRegisteredKind)
         }
-        guard await hooks.reRegisterDevice(sentDeviceId) else {
+        // 重新注册之前确认窗口里仍有有效调用方（APP-04 三端共性第 41 条）：没有就不发起注册、不重放。
+        guard refreshHasLiveCaller(window) else {
+            return Self.abandonedRefresh
+        }
+        // 有效调用方约束一并交给重新注册窗口（共性第 22、46 条）：注册在内部等待后、读标识前、实际发送前都要查它。
+        let registered = await hooks.reRegisterDevice(sentDeviceId) { [weak self] in
+            self?.refreshHasLiveCaller(window) ?? false
+        }
+        guard refreshHasLiveCaller(window) else {
+            return Self.abandonedRefresh
+        }
+        guard registered else {
             return .transient(Self.deviceNotRegisteredKind)
         }
         return nil

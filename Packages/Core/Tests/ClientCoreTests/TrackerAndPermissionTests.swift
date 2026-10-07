@@ -315,4 +315,34 @@ final class TrackerAndPermissionTests: XCTestCase {
         XCTAssertEqual(result.resultRaw, PermissionResultRaw.granted)
         XCTAssertEqual(rationales, 0, "入口已经展示了用途（待跟单卡）")
     }
+
+    /// APP-04 三端共性第 14 条：调用有效性传进权限申请链路；开始前、查完状态后、用途说明结束后各查一次，失效即 cancelled，
+    /// 不弹说明、不调系统接口。
+    func testInvalidatedCallStopsBeforeRationaleAndSystemRequest() async {
+        var rationales = 0
+        var systemCalls = 0
+        var valid = true
+        let requester = PermissionRequester(
+            readFile: { nil }, writeFile: { _ in }, clock: { 0 }, platform: "ios",
+            status: { _ in PermissionStatusRaw.notAsked },
+            showRationale: { _, _ in
+                rationales += 1
+                valid = false
+            },
+            systemRequest: { _ in
+                systemCalls += 1
+                return PermissionStatusRaw.granted
+            },
+            showSettingsGuide: { _, _ in }
+        )
+        let afterRationale = await requester.request(permission: "push", isValid: { valid })
+        XCTAssertEqual(afterRationale.resultRaw, PermissionResultRaw.cancelled, "说明结束时已失效：不调系统接口")
+        XCTAssertEqual(rationales, 1)
+        XCTAssertEqual(systemCalls, 0)
+
+        let before = await requester.request(permission: "push", isValid: { false })
+        XCTAssertEqual(before.resultRaw, PermissionResultRaw.cancelled)
+        XCTAssertEqual(rationales, 1, "一开始就失效：不弹说明")
+        XCTAssertEqual(systemCalls, 0)
+    }
 }

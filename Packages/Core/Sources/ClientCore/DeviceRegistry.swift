@@ -77,6 +77,9 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
     final class Flight: @unchecked Sendable {
         let epoch: UInt64
         var waiters: [CheckedContinuation<DeviceRegistrationOutcome, Never>] = []
+        /// 各等待者的有效性约束（与 waiters 同在 `lock` 里登记，APP-04 三端共性第 22、46 条）。nil = 独立的原生调用方
+        /// （初次注册、退避注册），始终算有效。一个有效调用方都没有时，注册在内部等待后、读标识前、实际发送前停止。
+        var callers: [(@Sendable () -> Bool)?] = []
 
         init(epoch: UInt64) {
             self.epoch = epoch
@@ -86,6 +89,8 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
     /// 一个被拒 device_id 的 10402 重新注册窗口：复用结果、入队、结算都在 `lock` 里（APP-03b 共性 22）。
     final class ReRegisterWindow: @unchecked Sendable {
         var waiters: [CheckedContinuation<Bool, Never>] = []
+        /// 各等待者的有效性约束（在 `lock` 里登记）：桥调用触发的刷新 / 请求遇到 10402 时带上调用有效性；nil = 原生调用方。
+        var callers: [(@Sendable () -> Bool)?] = []
     }
 
     /// 当前任务正在执行注册请求（注册单飞的任务里为 true）：注册请求自身的 10402 不再递归进入它所在的注册窗口
@@ -274,7 +279,11 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
     }
 
     /// 并入或发起单飞注册，只在调用方的清理世代仍是当前世代时：世代已变按「已取消」；只并入同一世代的 flight。
-    func joinOrStart(epoch expected: UInt64) async -> DeviceRegistrationOutcome {
+    /// `caller` 是这个等待者的有效性约束（nil = 独立的原生调用方）。
+    func joinOrStart(
+        epoch expected: UInt64,
+        caller: (@Sendable () -> Bool)? = nil
+    ) async -> DeviceRegistrationOutcome {
         var started: (Flight, RegistrationTicket)?
         var reused = false
         return await withCheckedContinuation { continuation in
@@ -284,6 +293,7 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
                 }
                 if let running = flight, running.epoch == expected {
                     running.waiters.append(continuation)
+                    running.callers.append(caller)
                     return false
                 }
                 // 新建 flight 前在同一把锁里复核：被拒的凭据已被别的注册（退避注册或窗口）替换为可用凭据时直接复用，
@@ -294,6 +304,7 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
                 }
                 let created = Flight(epoch: expected)
                 created.waiters.append(continuation)
+                created.callers.append(caller)
                 flight = created
                 started = (created, RegistrationTicket(epoch: expected, clientEpoch: client?.invalidationTicket))
                 return false
@@ -311,8 +322,11 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
     /// 结算前再核对一次原始票据（清理世代、ApiClient 作废世代）与放行状态：凭据保存成功之后、结算之前发生清理时，
     /// 结果按「已取消」交付（被摘掉的旧 flight 此时已没有等待者）。
     func runFlight(_ running: Flight, ticket: RegistrationTicket) async {
+        let live: @Sendable () -> Bool = { [weak self] in
+            self?.hasLiveCaller(running) ?? false
+        }
         var outcome = await Self.$registering.withValue(true) {
-            await performRegistration(ticket: ticket, rereadAllowed: true)
+            await performRegistration(ticket: ticket, rereadAllowed: true, live: live)
         }
         if outcome != .cancelled, await !allowed() {
             outcome = .cancelled
@@ -331,6 +345,21 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
         for waiter in waiters {
             waiter.resume(returning: outcome)
         }
+    }
+
+    /// 单飞注册里是否还有有效的等待者（APP-04 三端共性第 22、46 条）：原生等待者（没有约束）始终算有效。
+    /// 登记表在 `lock` 里取快照，有效性在锁外求值。
+    func hasLiveCaller(_ running: Flight) -> Bool {
+        Self.anyLive(lock.withLock { running.callers })
+    }
+
+    /// 重新注册窗口里是否还有有效的等待者。
+    func hasLiveCaller(_ window: ReRegisterWindow) -> Bool {
+        Self.anyLive(lock.withLock { window.callers })
+    }
+
+    static func anyLive(_ callers: [(@Sendable () -> Bool)?]) -> Bool {
+        callers.isEmpty || callers.contains { $0?() ?? true }
     }
 
     /// 调用方持有 `lock`：票据的清理世代与 ApiClient 作废世代都仍是当前的。

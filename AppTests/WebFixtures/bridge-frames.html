@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>bridge frames fixture</title></head>
+<body>
+<script>
+// APP-04 WebView 测试页（包内）：主框架经 __REBATE_BRIDGE__ 调用；三种子框架直接调用传输通道（攻击写法）。
+window.__T = { results: {}, info: {} };
+function envelope(id, method, params) {
+  return JSON.stringify({ v: 1, id: id, method: method, params: params || {} });
+}
+window.addEventListener('message', function (event) {
+  var data = event.data || {};
+  if (data.kind === 'frame-result') { window.__T.results[data.label] = data.reply; }
+  if (data.kind === 'frame-info') { window.__T.info[data.label] = data.value; }
+});
+window.__T.bridgeInMain = typeof window.__REBATE_BRIDGE__ === 'object';
+window.__callMain = function (label, method, params) {
+  window.__REBATE_BRIDGE__.postMessage({ v: 1, id: label, method: method, params: params || {} })
+    .then(function (reply) { window.__T.results[label] = JSON.stringify(reply); },
+          function (error) { window.__T.results[label] = 'rejected:' + error; });
+};
+var childScript = function (label) {
+  return "<script>" +
+    "parent.postMessage({kind:'frame-info',label:'" + label + "',value:{href:location.href,bridge:typeof window.__REBATE_BRIDGE__}},'*');" +
+    "window.webkit.messageHandlers.rebate.postMessage(" + JSON.stringify(envelope(label, 'app.getEnv')) + ")" +
+    ".then(function(r){parent.postMessage({kind:'frame-result',label:'" + label + "',reply:r},'*');}," +
+    "function(e){parent.postMessage({kind:'frame-result',label:'" + label + "',reply:'rejected:'+e},'*');});" +
+    "<\/script>";
+};
+window.__startFrames = function () {
+  // 同地址子框架：document.open 让子框架文档地址等于主框架地址（按 URL 相等判主框架会被骗过）。
+  var same = document.createElement('iframe');
+  document.body.appendChild(same);
+  var doc = same.contentDocument;
+  doc.open(); doc.write(childScript('same_url_frame')); doc.close();
+  // 同源 srcdoc 子框架。
+  var srcdoc = document.createElement('iframe');
+  srcdoc.srcdoc = childScript('srcdoc_frame');
+  document.body.appendChild(srcdoc);
+  // sandbox 子框架（不透明 origin）。
+  var sandboxed = document.createElement('iframe');
+  sandboxed.setAttribute('sandbox', 'allow-scripts');
+  sandboxed.srcdoc = childScript('sandbox_frame');
+  document.body.appendChild(sandboxed);
+};
+// 按地址加一个子框架（导航判定测试）；sandbox 为真时加 sandbox 属性。
+window.__addFrame = function (label, src, sandbox) {
+  var frame = document.createElement('iframe');
+  frame.id = label;
+  if (sandbox) { frame.setAttribute('sandbox', 'allow-scripts'); }
+  frame.src = src;
+  document.body.appendChild(frame);
+};
+// 子框架是否仍停在空白文档（导航被取消时 about:blank 与父页面同源，可读；载入了别的文档则读不到或不是 about:blank）。
+window.__frameHref = function (label) {
+  try { return document.getElementById(label).contentWindow.location.href; } catch (error) { return 'unreadable'; }
+};
+</script>
+</body>
+</html>

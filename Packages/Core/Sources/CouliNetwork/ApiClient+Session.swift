@@ -174,4 +174,9 @@ public extension ApiClient {
     var isolatedAccount: String? {
         lock.withLock { readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 } }
     }
+
+    /// 会话世代（登录、退出、清会话都会加一）。同一账号退出后重新登录也是新世代（APP-04 三端共性第 15 条：桥调用按世代绑定）。
+    var sessionGeneration: UInt64 {
+        lock.withLock { generation }
+    }
 }

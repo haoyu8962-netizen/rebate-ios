@@ -62,12 +62,22 @@ public enum RouteParamValidator {
 }
 
 /// ExternalPage / WebPage 的目标地址白名单（03 §4.4「入口限制」，BR-ID-10 细则）。
+/// - ExternalPage：**只有从深链进入时**，url 的主机须在 external_hosts 里（完整主机名、不分大小写）。可信页内的跨域跳转、推送等
+///   App 内来源不受这张表限制，进容器后走 ExternalWebView 自己的导航判定（03 §4.4、§5.1；APP-04 三端共性第 10 条）。
+///   url 必须是 https、有主机、不带用户信息（所有来源）。
+/// - WebPage：url 的 origin 须在 bridge_origins 里（所有来源）。
 public enum RouteTargetCheck {
     /// 该路由的目标地址是否在白名单内；不是这两个路由时恒为 true。
-    public static func isAllowed(route: String, params: [String: JSONValue], allowlist: RouteTargetAllowlist) -> Bool {
+    public static func isAllowed(
+        route: String,
+        params: [String: JSONValue],
+        allowlist: RouteTargetAllowlist,
+        source: RouteSource = .deeplink
+    ) -> Bool {
         switch route {
         case RoutePolicy.externalPage:
             guard let url = params["url"]?.stringValue, let target = parse(url) else { return false }
+            guard source == .deeplink else { return true }
             let hosts = Set(allowlist.externalHosts.map { $0.lowercased() })
             // 完整主机名匹配；带端口的地址不按主机名放行。
             return target.port == nil && hosts.contains(target.host)

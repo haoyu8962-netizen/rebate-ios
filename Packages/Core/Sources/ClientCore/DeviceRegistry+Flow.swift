@@ -10,7 +10,9 @@ extension DeviceRegistry {
     /// - 注册请求自身遇到 10402（`registering`）直接返回 false：不递归进入它正在执行的注册窗口（共性 21）。
     /// - 世代校验、结果复用、入队或开窗在同一把锁里；窗口结束时先存结果、再移除窗口、再唤醒等待者，退避通知只发
     ///   一次（共性 4、18、22）。
-    public func reRegister(rejectedDeviceId: String?) async -> Bool {
+    /// - `isValid`：调用方的有效性约束（桥调用触发的恢复带上，APP-04 三端共性第 22、46 条；nil = 独立的原生调用方）。
+    ///   内部等待结束后先查自己的；窗口与单飞注册在读标识前、实际发送前查全部等待者，一个有效的都没有就停止这次恢复。
+    public func reRegister(rejectedDeviceId: String?, isValid: (@Sendable () -> Bool)? = nil) async -> Bool {
         if Self.registering {
             return false
         }
@@ -38,7 +40,12 @@ extension DeviceRegistry {
         guard await allowed() else {
             return false
         }
-        return await joinWindow(key: key, rejectedDeviceId: rejectedDeviceId, startEpoch: early.epoch)
+        guard isValid?() ?? true else {
+            // 入口等待期间调用失效（页面关闭、到期）：不开窗、不重放这次调用，但设备恢复不能丢（R4-02）。
+            requestRecoveryAfterAbandonedEntry(key: key, startEpoch: early.epoch)
+            return false
+        }
+        return await joinWindow(key: key, rejectedDeviceId: rejectedDeviceId, startEpoch: early.epoch, caller: isValid)
     }
 
     /// 重放（或刷新重放）再次收到 10402，重注册与重放的预算已用完（`NetworkHooks.deviceRejected`，共性 25）：
@@ -62,8 +69,24 @@ extension DeviceRegistry {
         notify?()
     }
 
+    /// 重新注册入口因调用失效结束（还没开窗）：仍在原清理世代、被拒凭据还没被替换（没有复用结果、也没有可用凭据）、
+    /// 且没有其他恢复窗口时，按被拒 device_id 去重通知唯一的设备退避链（与窗口失败、预算用尽共用去重，共性 25）。
+    func requestRecoveryAfterAbandonedEntry(key: String, startEpoch: UInt64) {
+        let notify: (@Sendable () -> Void)? = lock.withLock {
+            guard epoch == startEpoch, reRegisterResults[key] == nil, usableLocked() == nil,
+                  reRegisterWindows[key] == nil, recoveryRequested.insert(key).inserted
+            else {
+                return nil
+            }
+            return needsRegistration
+        }
+        notify?()
+    }
+
     /// 在同一把锁里：世代不符按失败（不复用、不开窗）；已有结果直接复用；有进行中的窗口就入队；否则开窗。
-    func joinWindow(key: String, rejectedDeviceId: String?, startEpoch: UInt64) async -> Bool {
+    func joinWindow(
+        key: String, rejectedDeviceId: String?, startEpoch: UInt64, caller: (@Sendable () -> Bool)? = nil
+    ) async -> Bool {
         await withCheckedContinuation { continuation in
             var opened: ReRegisterWindow?
             let immediate: Bool? = lock.withLock {
@@ -79,10 +102,12 @@ extension DeviceRegistry {
                 }
                 if let running = reRegisterWindows[key] {
                     running.waiters.append(continuation)
+                    running.callers.append(caller)
                     return nil
                 }
                 let window = ReRegisterWindow()
                 window.waiters.append(continuation)
+                window.callers.append(caller)
                 reRegisterWindows[key] = window
                 opened = window
                 return nil
@@ -99,14 +124,18 @@ extension DeviceRegistry {
 
     /// 窗口：并入（或发起）单飞注册；结束时先保存不可变结果、再移除窗口、再唤醒等待者；失败只通知一次退避。
     func runWindow(_ window: ReRegisterWindow, key: String, rejectedDeviceId: String?, startEpoch: UInt64) async {
-        let outcome = await joinOrStart(epoch: startEpoch)
+        let outcome = await joinOrStart(epoch: startEpoch) { [weak self] in
+            self?.hasLiveCaller(window) ?? false
+        }
+        // 窗口里已没有有效等待者（桥调用都已失效）而停下：这次恢复没有结论，不记结果（之后原生调用方的 10402 重新开窗）。
+        let abandoned = !outcome.hasCredentials && !hasLiveCaller(window)
         let settled: WindowSettlement = lock.withLock {
             let current = epoch == startEpoch
             var ok = false
             if current, outcome.hasCredentials, case let .identity(identity) = readLocked() {
                 ok = identity.deviceId != rejectedDeviceId && !rejectedDeviceIds.contains(identity.deviceId)
             }
-            if current {
+            if current, !abandoned {
                 reRegisterResults[key] = ok
             }
             if reRegisterWindows[key] === window {
@@ -131,15 +160,28 @@ extension DeviceRegistry {
         let notify: (@Sendable () -> Void)?
     }
 
-    func performRegistration(ticket: RegistrationTicket, rereadAllowed: Bool) async -> DeviceRegistrationOutcome {
+    /// `live`：单飞注册里是否还有有效等待者（APP-04 三端共性第 22、46 条）。内部等待结束后、读标识前、实际发送前
+    /// （并交给 ApiClient 的发送守卫）都要为真，否则按「已取消」停止，不读标识、不发请求。
+    func performRegistration(
+        ticket: RegistrationTicket,
+        rereadAllowed: Bool,
+        live: @escaping @Sendable () -> Bool = { true }
+    ) async -> DeviceRegistrationOutcome {
         let startEpoch = ticket.epoch
         guard await allowed(), isCurrent(startEpoch) else {
             return .notAllowed
         }
+        guard live() else {
+            return .cancelled
+        }
         // 最后一次放行检查与读取本身在同一个同步区（主线程 + 注册表的锁），与清理（invalidateAndClear）共用：
-        // 撤回同意完成之后，旧任务不会再开始读取 identifierForVendor（APP-03b 共性 12）。
+        // 撤回同意完成之后，旧任务不会再开始读取 identifierForVendor（APP-03b 共性 12）。桥在主线程上撤销调用，
+        // 读取前在主线程上查有效等待者。
         let read: String?? = await MainActor.run {
-            lock.withLock { () -> String?? in
+            guard live() else {
+                return .none
+            }
+            return lock.withLock { () -> String?? in
                 guard epoch == startEpoch, admitRead() else {
                     return .none
                 }
@@ -147,7 +189,7 @@ extension DeviceRegistry {
             }
         }
         guard case let .some(raw) = read else {
-            return .notAllowed
+            return live() ? .notAllowed : .cancelled
         }
         let decision = DeviceIdPolicy.evaluate(platform: platform, rawId: raw, privacy: DeviceIdPolicy.consented)
         guard decision.register, let hash = decision.deviceHash, let source = decision.idSource else {
@@ -162,17 +204,22 @@ extension DeviceRegistry {
         else {
             return .requestFailed
         }
-        guard isCurrent(startEpoch) else {
+        guard isCurrent(startEpoch), live() else {
             return .cancelled
         }
         lock.withLock { requestCount += 1 }
-        // 带原始票据发送：ApiClient 在实际发送前的守卫里按它校验，不把这次请求重新绑定到当前环境（共性 13）。
-        let result = await sender.send(ApiCall(operationId: Self.registerOperation, body: body), ticket: clientEpoch)
+        // 带原始票据发送：ApiClient 在实际发送前的守卫里按它校验，不把这次请求重新绑定到当前环境（共性 13）；
+        // 有效等待者的约束同样交给实际发送前的守卫。
+        let result = await sender.send(
+            ApiCall(operationId: Self.registerOperation, body: body), ticket: clientEpoch, isValid: live
+        )
         // 结果（成功、失败、20001）处理前先核对清理世代与隐私：已失效的结果不改写被拒哈希、不重读、不继续注册。
         guard isCurrent(startEpoch), await allowed(), isCurrent(startEpoch) else {
             return .cancelled
         }
-        return await handle(result, hash: hash, idSource: source, ticket: ticket, rereadAllowed: rereadAllowed)
+        return await handle(
+            result, hash: hash, idSource: source, ticket: ticket, rereadAllowed: rereadAllowed, live: live
+        )
     }
 
     /// 已核对世代的注册结果：成功先落盘；20001 记下被拒哈希并至多重读一次；其余按失败。
@@ -181,7 +228,8 @@ extension DeviceRegistry {
         hash: String,
         idSource source: String,
         ticket: RegistrationTicket,
-        rereadAllowed: Bool
+        rereadAllowed: Bool,
+        live: @escaping @Sendable () -> Bool = { true }
     ) async -> DeviceRegistrationOutcome {
         let startEpoch = ticket.epoch
         switch result {
@@ -202,7 +250,7 @@ extension DeviceRegistry {
             guard rereadAllowed else {
                 return .rejectedHash
             }
-            return await performRegistration(ticket: ticket, rereadAllowed: false)
+            return await performRegistration(ticket: ticket, rereadAllowed: false, live: live)
         case let .localReject(reason) where reason == LocalRejectReason.callCancelled:
             return .cancelled
         default:

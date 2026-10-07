@@ -53,5 +53,18 @@
 		</dict>
 	</array>
 #endif
+#if COULI_DEBUG_LOOPBACK
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>127.0.0.1</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+#endif
 </dict>
 </plist>

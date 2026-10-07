@@ -7,6 +7,8 @@ public enum PermissionResultRaw {
     public static let permanentlyDenied = "permanently_denied"
     public static let throttled = "throttled"
     public static let unavailable = "unavailable"
+    /// 调用在途中失效（撤回同意、切换环境、会话换代、页面换文档或关闭；APP-04 三端共性第 14 条）：不再往下走，也不调系统接口。
+    public static let cancelled = "cancelled"
 }
 
 /// 系统权限状态（`status` 注入接口的取值）。
@@ -106,14 +108,23 @@ public final class PermissionRequester {
     /// - Parameters:
     ///   - fromSettingsEntry: 用户从设置类入口主动点击（不受 48 小时节流，BR-ID-13）。
     ///   - purposeShown: 入口本身已经展示了用途（如待跟单卡里的通知说明行），跳过单独的说明步骤（03 §4.9）。
+    ///   - isValid: 调用是否仍然有效（桥调用传入：隐私、环境、会话世代、页面世代）。开始时、查完状态后、用途说明结束后、
+    ///     调系统接口前各查一次；失效即以 cancelled 结束，不弹说明、不调系统接口（APP-04 三端共性第 14 条）。
     /// 在调用方的执行上下文里运行（`nonisolated(nonsending)`）：App 在主线程调用时说明页与系统框都在主线程，
     /// 不把本对象送到别的执行上下文。
     public nonisolated(nonsending) func request(
         permission: String,
         fromSettingsEntry: Bool = false,
-        purposeShown: Bool = false
+        purposeShown: Bool = false,
+        isValid: () -> Bool = { true }
     ) async -> PermissionResult {
+        guard isValid() else {
+            return result(permission, PermissionResultRaw.cancelled)
+        }
         let current = await status(permission)
+        guard isValid() else {
+            return result(permission, PermissionResultRaw.cancelled)
+        }
         guard let keys = PermissionTextKeys.table[permission] else {
             return result(permission, PermissionResultRaw.unavailable)
         }
@@ -134,6 +145,9 @@ public final class PermissionRequester {
         }
         if !purposeShown {
             await showRationale(keys.purpose, PermissionTextKeys.continueButton)
+        }
+        guard isValid() else {
+            return result(permission, PermissionResultRaw.cancelled)
         }
         return await settle(permission, answer: systemRequest(permission))
     }

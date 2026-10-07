@@ -171,7 +171,11 @@ public struct NetworkHooks: Sendable {
     public var onEffect: @Sendable (ErrorEffect) async -> Void
     /// 10402：重新注册设备（APP-03b，ClientCore 的 DeviceRegistry.reRegister）；参数是被拒请求带的 X-Device-Id
     /// （单飞：同一个被拒的 device_id 只重新注册 1 次；已被换掉时直接返回 true）。返回 true 后沿用原键重放 1 次。
-    public var reRegisterDevice: @Sendable (_ rejectedDeviceId: String?) async -> Bool
+    /// `isValid`：触发这次重新注册的调用方有效性（桥调用或含桥调用的刷新窗口带上，APP-04 三端共性第 22、46 条；
+    /// nil = 独立的原生调用方）。注册在内部等待后、读标识前、实际发送前检查，一个有效调用方都没有就停止这次恢复。
+    public var reRegisterDevice: @Sendable (
+        _ rejectedDeviceId: String?, _ isValid: (@Sendable () -> Bool)?
+    ) async -> Bool
     /// 10402 且重新注册 / 重放预算已用完（重放、刷新重放再次收到 10402）：隔离这次请求所用的凭据，并把后续恢复交给
     /// 唯一一条注册退避链（APP-03b 共性 25）。原调用随即结束。只在调用仍属有效世代时调用。
     public var deviceRejected: @Sendable (_ rejectedDeviceId: String?) -> Void
@@ -179,7 +183,9 @@ public struct NetworkHooks: Sendable {
     public init(
         onForceUpdate: @escaping @Sendable (String?) async -> Void = { _ in },
         onEffect: @escaping @Sendable (ErrorEffect) async -> Void = { _ in },
-        reRegisterDevice: @escaping @Sendable (_ rejectedDeviceId: String?) async -> Bool = { _ in false },
+        reRegisterDevice: @escaping @Sendable (
+            _ rejectedDeviceId: String?, _ isValid: (@Sendable () -> Bool)?
+        ) async -> Bool = { _, _ in false },
         deviceRejected: @escaping @Sendable (_ rejectedDeviceId: String?) -> Void = { _ in }
     ) {
         self.onForceUpdate = onForceUpdate

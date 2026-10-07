@@ -164,11 +164,36 @@ final class RouterPushGuardReviewFixTests: XCTestCase {
             TargetCase(route: "WebPage", url: "https://shop.example.com/page", opens: false),
         ]
         for item in cases {
+            // external_hosts 只约束深链进入 ExternalPage（APP-04 三端共性第 10 条）；WebPage 的 bridge_origins 对所有来源生效。
+            let source: RouteSource = item.route == "ExternalPage" ? .deeplink : .inApp
             let decision = EntryGuard.decide(
-                request: RouteRequest(route: item.route, values: ["url": .string(item.url)], from: .inApp),
+                request: RouteRequest(route: item.route, values: ["url": .string(item.url)], from: source),
                 state: allowed
             )
             XCTAssertEqual(decision.kind == .open, item.opens, "\(item.route) \(item.url) → \(decision)")
+        }
+    }
+
+    // APP-04 三端共性第 10 条：App 内来源（可信页跨域跳转、推送回查、桥）打开 ExternalPage 不受 external_hosts 限制，
+    // 进容器后由 ExternalWebView 的导航判定把关；url 仍须是 https、不带用户信息。
+    func testExternalHostsOnlyRestrictDeepLinks() {
+        for source in [RouteSource.inApp, .bridge, .push] {
+            let open = EntryGuard.decide(
+                request: RouteRequest(
+                    route: "ExternalPage",
+                    values: ["url": .string("https://evil.example/x")],
+                    from: source
+                ),
+                state: guardState
+            )
+            XCTAssertEqual(open.kind, .open, "\(source) → \(open)")
+            for bad in ["http://evil.example/x", "https://user@evil.example/x"] {
+                let decision = EntryGuard.decide(
+                    request: RouteRequest(route: "ExternalPage", values: ["url": .string(bad)], from: source),
+                    state: guardState
+                )
+                XCTAssertEqual(decision.kind, .reject, "\(source) \(bad) → \(decision)")
+            }
         }
     }
 

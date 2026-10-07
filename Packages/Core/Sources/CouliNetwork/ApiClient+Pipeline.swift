@@ -40,6 +40,11 @@ extension ApiClient {
                 data: JSONFields.encode(envelope.data), traceId: envelope.traceId, idempotencyKey: ready.idempotencyKey
             )
         }
+        // 失效桥调用的迟到 10401：不校时、不重签（APP-04 三端共性第 30 条，其余恢复分支见 `abandonsRecovery`）。
+        if envelope.code == Self.invalidSignatureCode, !callStillValid(options) {
+            settleHeld(options, kind: PendingKeyStore.envelopeKind(envelope.code))
+            return .localReject(reason: LocalRejectReason.callCancelled)
+        }
         // 10401 且时钟偏差超过 300 秒：校时、重签后沿用原键与原请求体再发 1 次（BR-ID-09）。校时重签不是重放原请求：
         // 用独立的一次性预算，不动 isReplay（之后的 10002 等仍可按前置动作重放一次，R2-05）。
         if envelope.code == Self.invalidSignatureCode, !options.resigned, operation.signed, correctClock(headers) {
@@ -86,7 +91,7 @@ extension ApiClient {
         var retried = 0
         var admitted = false
         while true {
-            guard isCurrent(options.epoch) else {
+            guard stillValid(options) else {
                 return .finished(rejected(LocalRejectReason.callCancelled, options))
             }
             let state = await readContext()
@@ -98,7 +103,7 @@ extension ApiClient {
                 releaseHeld(options)
                 return .finished(failure)
             }
-            guard isCurrent(options.epoch) else {
+            guard stillValid(options) else {
                 return .finished(rejected(LocalRejectReason.callCancelled, options))
             }
             let ready: Ready
@@ -109,12 +114,15 @@ extension ApiClient {
                 ready = value
             }
             // 真正发出（task.resume）前在登记任务的同一把锁里再核对作废世代与会话世代（lessons 22）。
-            let (epochValue, bound) = (options.epoch, options.boundGeneration)
-            let outcome = await transport.send(ready.request, timeoutMillis: retry.timeoutMillis) { [weak self] in
+            // 桥调用另核对调用有效性（APP-04 三端共性第 22 条）。
+            let (epochValue, bound, callValid) = (options.epoch, options.boundGeneration, options.callValid)
+            let outcome = await transport.send(
+                ready.request, timeoutMillis: retry.timeoutMillis, cancelWithTask: callValid != nil
+            ) { [weak self] in
                 guard let self else {
                     return false
                 }
-                return isCurrent(epochValue) && (bound == nil || currentGeneration == bound)
+                return isCurrent(epochValue) && (bound == nil || currentGeneration == bound) && (callValid?() ?? true)
             }
             if case let .failure(kind) = outcome,
                kind == HttpTransport.kindTimeout || kind == HttpTransport.kindDisconnect,
@@ -349,13 +357,14 @@ extension ApiClient {
         if let ended = screenDeviceRejection(effect, exchange) {
             return ended
         }
+        if abandonsRecovery(effect, exchange.options) {
+            return .end(LocalRejectReason.callCancelled)
+        }
         switch effect.kind {
         case .refreshReplay, .refreshOnly:
             return await refreshAction(effect, exchange)
         case .registerDeviceReplay:
-            // 首次 10402：重新注册（注册表在入口里先隔离被拒凭据），成功后沿用原键重放 1 次。
-            return await hooks.reRegisterDevice(ready.request.headers[HeaderNames.deviceId])
-                ? .replay : .effect(ErrorEffect(code: effect.code, kind: .genericError, includeTrace6: true))
+            return await reRegisterAction(effect, exchange)
         case .forceUpdate:
             await hooks.onForceUpdate(JSONFields.string(data, "min_supported_version"))
         case .clearSessionLogin:
@@ -366,19 +375,17 @@ extension ApiClient {
         return .effect(effect)
     }
 
-    /// 10002（刷新后重放）与 10405 refresh_only（只刷新）：按本世代窗口的完整结果结算。
-    private func refreshAction(_ effect: ErrorEffect, _ exchange: Exchange) async -> PipelineAction {
-        let ready = exchange.ready
-        switch await joinRefresh(generation: ready.generation, usedToken: ready.accessToken) {
-        case .refreshed:
-            return effect.kind == .refreshReplay ? .replay : .effect(effect)
-        case let .transient(kind):
-            return .transient(kind)
-        case let .cleared(lost):
-            return .cleared(lost)
-        case .superseded:
-            return .end(supersededReason(exchange.options))
+    /// 首次 10402：重新注册（注册表在入口里先隔离被拒凭据），成功后沿用原键重放 1 次。调用有效性一并交给注册窗口；
+    /// 重新注册期间调用失效（APP-04 三端共性第 22、46 条）时本地结束，不重放。
+    private func reRegisterAction(_ effect: ErrorEffect, _ exchange: Exchange) async -> PipelineAction {
+        let registered = await hooks.reRegisterDevice(
+            exchange.ready.request.headers[HeaderNames.deviceId], exchange.options.callValid
+        )
+        if !callStillValid(exchange.options) {
+            return .end(LocalRejectReason.callCancelled)
         }
+        return registered
+            ? .replay : .effect(ErrorEffect(code: effect.code, kind: .genericError, includeTrace6: true))
     }
 
     func withKey(_ call: ApiCall, _ key: String?) -> ApiCall {

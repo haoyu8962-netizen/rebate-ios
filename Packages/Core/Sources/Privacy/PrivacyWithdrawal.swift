@@ -49,6 +49,18 @@ public enum PrivacyWithdrawalCleanup {
         }
     }
 
+    /// 把一个清理项同时登记进两个注册表、排在名为 `name` 的清理项之后（没有这一项时排在最前面）。
+    public static func register(
+        _ cleaner: any EnvironmentSwitchCleaning,
+        after name: String,
+        withdrawal: EnvironmentSwitchCleanerRegistry = registry,
+        environmentSwitch target: EnvironmentSwitchCleanerRegistry
+    ) {
+        for each in [withdrawal, target] where !each.registeredNames.contains(cleaner.cleanerName) {
+            each.register(cleaner, after: name)
+        }
+    }
+
     /// 用同名清理项替换两个注册表里的凭证清理器（没有同名项时追加）；App 把各模块自己的清理器（如设备凭据）换进来。
     public static func replaceCredentialCleaner(
         _ cleaner: any EnvironmentSwitchCleaning,

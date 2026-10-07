@@ -49,13 +49,18 @@ final class AppPermissions: ObservableObject {
     }
 
     /// 申请一项权限（push / photos）。
-    func request(_ permission: String, fromSettingsEntry: Bool = false, purposeShown: Bool = false) async
-        -> PermissionResult {
+    func request(
+        _ permission: String,
+        fromSettingsEntry: Bool = false,
+        purposeShown: Bool = false,
+        isValid: () -> Bool = { true }
+    ) async -> PermissionResult {
         guard let requester else {
             return PermissionResult.unavailable(permission)
         }
         return await requester.request(
-            permission: permission, fromSettingsEntry: fromSettingsEntry, purposeShown: purposeShown
+            permission: permission, fromSettingsEntry: fromSettingsEntry, purposeShown: purposeShown,
+            isValid: isValid
         )
     }
 

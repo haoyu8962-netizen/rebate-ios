@@ -14,6 +14,7 @@ struct CouliApp: App {
     @StateObject private var update: AppUpdate
     @StateObject private var config: AppConfig
     @StateObject private var permissions: AppPermissions
+    @StateObject private var web: AppWeb
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -60,7 +61,13 @@ struct CouliApp: App {
         _privacy = StateObject(wrappedValue: privacy)
         _update = StateObject(wrappedValue: update)
         _config = StateObject(wrappedValue: config)
-        _permissions = StateObject(wrappedValue: AppPermissions())
+        let permissions = AppPermissions()
+        _permissions = StateObject(wrappedValue: permissions)
+        // 两类 WebView 容器与 JSBridge（APP-04）：创建即把「作废在途桥调用」登记进撤回同意、切换环境两个注册表的第一位。
+        _web = StateObject(wrappedValue: AppWeb(
+            config: config, network: network, routing: routing, privacy: privacy, update: update,
+            tracker: tracker, permissions: permissions
+        ))
         self.tracker = tracker
         self.routing = routing
         self.network = network
@@ -82,6 +89,7 @@ struct CouliApp: App {
                 .environmentObject(update)
                 .environmentObject(config)
                 .environmentObject(permissions)
+                .environmentObject(web)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }

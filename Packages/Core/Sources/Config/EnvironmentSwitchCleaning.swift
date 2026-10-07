@@ -39,6 +39,15 @@ public final class EnvironmentSwitchCleanerRegistry {
         cleaners.insert(cleaner, at: 0)
     }
 
+    /// 登记到名为 `name` 的清理项之后（没有这一项时登记到最前面）：如桥的在途调用作废排在网络层作废之后、清令牌之前。
+    public func register(_ cleaner: any EnvironmentSwitchCleaning, after name: String) {
+        if let index = cleaners.firstIndex(where: { $0.cleanerName == name }) {
+            cleaners.insert(cleaner, at: index + 1)
+        } else {
+            cleaners.insert(cleaner, at: 0)
+        }
+    }
+
     /// 替换同名清理项（位置不变）；没有同名项时追加。
     public func replace(_ cleaner: any EnvironmentSwitchCleaning) {
         if let index = cleaners.firstIndex(where: { $0.cleanerName == cleaner.cleanerName }) {

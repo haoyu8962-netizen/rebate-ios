@@ -11,7 +11,8 @@
 x-auth / x-signed / x-idempotent / x-step-up / x-error-codes / x-session-scopes / x-min-version-gate / x-implementation）。
 APP-03b 加：埋点事件构造函数 TrackerEvents（specs/events.yaml；字段名命中禁用规则即报错退出 2，构建失败）、
 无效设备哈希种子 DeviceHashSeeds（specs/device-hash.vectors.json）、包内默认配置 DefaultConfig（GET /v1/config 响应示例）。
-不生成：请求 / 响应模型（另立任务）、apps.json 片段（APP-04/06）。
+APP-04 加：桥契约全文 BridgeSchema（contracts/bridge.schema.json）与外跳目标 BridgeAppTargets（contracts/apps.json 的 trade_only）。
+不生成：请求 / 响应模型（另立任务）、apps.json 的查询声明与入站片段（APP-06）。
 输出不含时间戳，同一快照重复生成逐字一致。只用 Python 3 标准库。
 
 输出目录（两个目录都整个归生成器所有，--check 一起比较）：
@@ -132,6 +133,7 @@ RESERVED_TYPE_NAMES = {
     "AppStoreSpec", "AppStores", "AppVersionCheckExample",
     "ApiOperation", "ApiOperations", "ApiMinVersionGate",
     "TrackValue", "TrackEvent", "TrackerEvents", "DeviceHashSeeds", "DefaultConfig",
+    "BridgeSchema", "BridgeAppTargets",
     # SwiftPM 为带资源的包生成的 resource_bundle_accessor.swift 里的私有类型。
     "BundleFinder",
 }
@@ -749,6 +751,39 @@ def gen_bridge(out: dict[str, str]):
         lines.append(f"        {code}: {swift_string(as_str(errors[key], f'bridge.errors[{key}]'))},")
     lines += ["    ]", "}", ""]
     put(out, "Bridge.swift", "\n".join(lines))
+    gen_bridge_schema(out, doc)
+
+
+def gen_bridge_schema(out: dict[str, str], doc: dict):
+    """APP-04：桥契约全文（BridgeHost 的信封、参数 schema、signed_paths、not_exposed、events 只从这里取）与
+    apps.json 的 trade_only 目标（ext.openApp 的白名单拒绝）。紧凑 JSON、保持契约键顺序，原样嵌成字符串常量。"""
+    for key in ("envelope", "levels", "errors", "signed_paths", "not_exposed", "events", "methods"):
+        if key not in doc:
+            raise GenError(f"bridge.schema.json 缺少 {key}")
+    text = json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+    apps = load("contracts/apps.json").get("apps")
+    if not isinstance(apps, dict) or not apps:
+        raise GenError("apps.json 的 apps 缺失或为空")
+    trade_only = sorted(name for name, app in apps.items() if isinstance(app, dict) and app.get("trade_only") is True)
+    targets = sorted(apps)
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：contracts/bridge.schema.json（全文）与 contracts/apps.json（外跳目标、trade_only）。",
+        "",
+        "/// 桥契约全文（JSON 文本）。BridgeHost 只从这里取方法表、参数 schema、错误码、signed_paths、not_exposed 与事件白名单。",
+        "public enum BridgeSchema {",
+        f"    public static let json: Swift.String = {swift_string(text)}",
+        "}",
+        "",
+        "/// apps.json 的外跳目标（ext.openApp 的 target）。",
+        "public enum BridgeAppTargets {",
+        "    public static let all: Swift.Set<Swift.String> = [" + ", ".join(swift_string(t) for t in targets) + "]",
+        "    /// trade_only 的目标：ext.openApp 一律 90403（BR-ATTR-29 细则）。",
+        "    public static let tradeOnly: Swift.Set<Swift.String> = [" + ", ".join(swift_string(t) for t in trade_only) + "]",
+        "}",
+        "",
+    ]
+    put(out, "BridgeSchema.swift", "\n".join(lines))
 
 
 # ---------- 文案 ----------

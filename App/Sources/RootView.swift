@@ -104,12 +104,26 @@ struct RootView: View {
         .sheet(isPresented: $showsDebugPanel) {
             DebugPanelView(store: environment, update: update)
         }
+        .overlay(alignment: .bottomTrailing) {
+            // 一致性页的逐项结果与路由状态（UI 测试读取；被其他路由盖住时仍在）。
+            if showsConformance {
+                DebugConformanceResultsOverlay()
+            }
+        }
         #endif
     }
 
     @ViewBuilder private var stackRoot: some View {
         if privacy.state.decision == .notDecided {
             LaunchBackdropView()
+        } else if showsConformance {
+            #if DEBUG
+            // 桥一致性页（APP-04，启动参数 -CouliBridgeConformance）：作为栈底，nav.open / auth.login 照常压到它上面。
+            if let mode = DebugBridgeConformance.launchMode {
+                DebugBridgeConformanceView(mode: mode)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+            #endif
         } else {
             TabShellView(
                 root: router.tabRoot,
@@ -120,6 +134,14 @@ struct RootView: View {
                 routing.shellAppeared()
             }
         }
+    }
+
+    private var showsConformance: Bool {
+        #if DEBUG
+        DebugBridgeConformance.launchMode != nil
+        #else
+        false
+        #endif
     }
 
     /// 首页 Tab：已同意时按 Router 的实际目的地渲染（保留只读标记，R1-05）。

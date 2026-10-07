@@ -9,6 +9,12 @@ let features: [(name: String, task: String)] = [
     ("Me", "APP-12"), ("Auth", "APP-05"), ("Web", "APP-04"),
 ]
 
+/// 个别 Feature 额外依赖的 Core 模块（仍只依赖 Core，不依赖其他 Feature）。
+/// Web（APP-04）：两类 WebView 容器用 BridgeHost 的协议判定、BridgeHost 分派与第三方页导航判定。
+let extraDependencies: [String: [Target.Dependency]] = [
+    "Web": [.product(name: "BridgeHost", package: "Core")],
+]
+
 let package = Package(
     name: "Features",
     platforms: [.iOS(.v16)],
@@ -25,7 +31,7 @@ let package = Package(
                 .product(name: "Router", package: "Core"),
                 .product(name: "DesignSystem", package: "DesignSystem"),
                 .product(name: "Generated", package: "Generated"),
-            ]
+            ] + (extraDependencies[$0.name] ?? [])
         )
     },
     swiftLanguageModes: [.v6]

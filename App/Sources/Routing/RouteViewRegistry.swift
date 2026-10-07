@@ -9,8 +9,12 @@ import SwiftUI
 enum RouteViewRegistry {
     typealias Builder = @MainActor (RouteDestination) -> AnyView
 
-    /// TODO(APP-04…APP-12): 各 Feature 实现页面后在这里登记（如 "Search": { AnyView(SearchScreen(...)) }）。
-    static let builders: [String: Builder] = [:]
+    /// TODO(APP-05…APP-12): 各 Feature 实现页面后在这里登记（如 "Search": { AnyView(SearchScreen(...)) }）。
+    /// APP-04：两类 WebView 容器（Features/Web，App 侧接线在 App/Sources/Web）。
+    static let builders: [String: Builder] = [
+        RoutePolicy.webPage: { AnyView(WebPageRouteView(destination: $0)) },
+        RoutePolicy.externalPage: { AnyView(ExternalPageRouteView(destination: $0)) },
+    ]
 
     @ViewBuilder
     static func view(for destination: RouteDestination) -> some View {

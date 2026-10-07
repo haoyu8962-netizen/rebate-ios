@@ -68,7 +68,8 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
-          INFOPLIST_PREPROCESSOR_DEFINITIONS: COULI_DEBUG_DEEPLINK=1
+          # COULI_DEBUG_LOOPBACK：本机桥一致性页（http://127.0.0.1）的 ATS 例外，只在 Debug（APP-04；Staging、Release 没有）。
+          INFOPLIST_PREPROCESSOR_DEFINITIONS: COULI_DEBUG_DEEPLINK=1 COULI_DEBUG_LOOPBACK=1
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG STAGING
           SWIFT_OPTIMIZATION_LEVEL: -O
@@ -85,7 +86,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore]
+        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
@@ -134,6 +135,7 @@ schemes:
         - package: Core/UpdateTests
         - package: Core/NetworkTests
         - package: Core/ClientCoreTests
+        - package: Core/BridgeHostTests
         - package: DesignSystem/DesignSystemTests
     profile:
       config: Release

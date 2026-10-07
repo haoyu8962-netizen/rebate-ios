@@ -15,15 +15,25 @@ enum RefreshOutcome: Equatable, Sendable {
 }
 
 /// 一个刷新窗口：只属于一个会话世代。账号、作废世代与 refresh_token 在入队的那把锁里固定（lessons 24），
-/// 执行与结算都以它为准。等待者只在 `ApiClient.lock` 里增删。
+/// 执行与结算都以它为准。等待者（`callers` 各自的 continuation）只在 `ApiClient.lock` 里增删。
 final class RefreshWindow: @unchecked Sendable {
     let generation: UInt64
     let epoch: UInt64
     let refreshToken: String
     let account: String?
-    var waiters: [CheckedContinuation<RefreshOutcome, Never>] = []
     /// 受限会话屏障在本窗口上等待时的屏障编号（在 `ApiClient.lock` 里写入）：窗口刷新成功即结算该屏障（R3-01）。
     var barrierSerial: UInt64?
+    /// 登记在本窗口上的调用方（在 `ApiClient.lock` 里增加，APP-04 三端共性第 41 条）。没有有效性约束的调用方（原生请求、
+    /// 受限会话屏障、主动刷新）始终算有效。窗口每次发送、校时重发与重新注册之前都要确认仍有至少一个有效调用方；
+    /// 一个都没有就停止续发。
+    var callers: [RefreshCaller] = []
+    /// 执行本窗口的任务（在 `ApiClient.lock` 里写入）。最后一个有效调用方结束时取消它，在途的刷新请求随之取消
+    /// （APP-04 三端共性第 54 条）。
+    var task: Task<Void, Never>?
+    /// 已因没有有效调用方而作废（在 `ApiClient.lock` 里写入，与入队互斥）：之后并入的调用方结算后重新入队（R4-01）。
+    var abandoned = false
+    /// 调用方登记版本（在 `ApiClient.lock` 里每次入队加一）：作废前用它复核判空之后没有新调用方入队（R4-01）。
+    var callerVersion: UInt64 = 0
 
     init(generation: UInt64, epoch: UInt64, refreshToken: String, account: String?) {
         self.generation = generation
@@ -64,47 +74,75 @@ extension ApiClient {
     ///   Effect）；否则 superseded（用户换了会话，或作废）。
     /// - 本次用的令牌已被同一世代的刷新换掉 → 直接用当前令牌。
     /// - 同一世代已有进行中的窗口 → 并入；否则以此刻的会话快照开一个新窗口。
-    func joinRefresh(generation bound: UInt64, usedToken: String?) async -> RefreshOutcome {
-        await awaitRefresh { admitLocked(bound, usedToken, $0) } ?? .superseded
+    func joinRefresh(
+        generation bound: UInt64,
+        usedToken: String?,
+        caller: (@Sendable () -> Bool)? = nil
+    ) async -> RefreshOutcome {
+        let entry = RefreshCaller(caller)
+        return await awaitRefresh(entry) { admitLocked(bound, usedToken, entry, $0) } ?? .superseded
     }
 
     /// 在一把锁里调用 `admit`（判定、取快照、入队）并等结果；`admit` 返回 nil 表示不需要刷新，此时返回 nil。
+    /// 调用方的 Task 被取消（桥调用到截止时间、页面关闭）时，该调用方在窗口上记为已结束；它是最后一个有效调用方时
+    /// 取消窗口在途的刷新请求（APP-04 三端共性第 54 条）。没有有效性约束的调用方不受 Task 取消影响。
     private func awaitRefresh(
+        _ caller: RefreshCaller,
         _ admit: (CheckedContinuation<RefreshOutcome, Never>) -> Admission?
     ) async -> RefreshOutcome? {
-        var emit: ErrorEffect?
-        var retry = false
-        var skipped = false
-        let outcome: RefreshOutcome = await withCheckedContinuation { continuation in
-            guard let admission = lock.withLock({ admit(continuation) }) else {
-                skipped = true
-                continuation.resume(returning: .superseded)
-                return
+        while true {
+            var emit: ErrorEffect?
+            var retry = false
+            var skipped = false
+            let outcome: RefreshOutcome = await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    guard let admission = lock.withLock({ admit(continuation) }) else {
+                        skipped = true
+                        continuation.resume(returning: .superseded)
+                        return
+                    }
+                    switch admission {
+                    case let .now(result, effect, needsRetry):
+                        emit = effect
+                        retry = needsRetry
+                        continuation.resume(returning: result)
+                    case .joined:
+                        break
+                    case let .start(window):
+                        let task = Task { await self.runRefreshWindow(window) }
+                        lock.withLock { window.task = task }
+                        // 登记任务之前已结束的调用方在这里补一次判定（之后结束的由 onCancel 在同一把锁里看到任务）。
+                        cancelRefreshIfAbandoned(window)
+                    }
+                    if Task.isCancelled {
+                        refreshCallerEnded(caller)
+                    }
+                }
+            } onCancel: {
+                refreshCallerEnded(caller)
             }
-            switch admission {
-            case let .now(result, effect, needsRetry):
-                emit = effect
-                retry = needsRetry
-                continuation.resume(returning: result)
-            case .joined:
-                break
-            case let .start(window):
-                Task { await self.runRefreshWindow(window) }
+            if retry {
+                scheduleRevokedRetry()
+            }
+            if let emit {
+                await hooks.onEffect(emit)
+            }
+            // 并入时窗口已作废：等它结算后重新入队（另开窗口，或本世代令牌已换掉时直接用新令牌，R4-01）。
+            let again: Bool = lock.withLock {
+                defer { caller.readmit = false }
+                return caller.readmit
+            }
+            if !again {
+                return skipped ? nil : outcome
             }
         }
-        if retry {
-            scheduleRevokedRetry()
-        }
-        if let emit {
-            await hooks.onEffect(emit)
-        }
-        return skipped ? nil : outcome
     }
 
     /// 调用方持有 `lock`。
     private func admitLocked(
         _ bound: UInt64,
         _ usedToken: String?,
+        _ caller: RefreshCaller,
         _ continuation: CheckedContinuation<RefreshOutcome, Never>
     ) -> Admission {
         guard bound == generation else {
@@ -120,7 +158,11 @@ extension ApiClient {
             return .now(.refreshed(current), emit: nil, retry: false)
         }
         if let window = refreshWindows[bound] {
-            window.waiters.append(continuation)
+            caller.continuation = continuation
+            caller.deferred = window.abandoned
+            window.callers.append(caller)
+            window.callerVersion &+= 1
+            caller.window = window
             return .joined
         }
         guard let refresh = live?.refresh, !refresh.isEmpty else {
@@ -131,7 +173,11 @@ extension ApiClient {
             return .now(.cleared(effect), emit: effect, retry: needsRetry)
         }
         let window = RefreshWindow(generation: bound, epoch: epoch, refreshToken: refresh, account: live?.account)
-        window.waiters.append(continuation)
+        caller.continuation = continuation
+        caller.deferred = false
+        window.callers.append(caller)
+        window.callerVersion &+= 1
+        caller.window = window
         refreshWindows[bound] = window
         refreshCount += 1
         return .start(window)
@@ -148,6 +194,9 @@ extension ApiClient {
         for waiter in settled.waiters {
             waiter.resume(returning: settled.outcome)
         }
+        for waiter in settled.readmits {
+            waiter.resume(returning: .superseded)
+        }
         if settled.retry {
             scheduleRevokedRetry()
         }
@@ -163,6 +212,7 @@ extension ApiClient {
     private struct WindowSettlement {
         var outcome = RefreshOutcome.superseded
         var waiters: [CheckedContinuation<RefreshOutcome, Never>] = []
+        var readmits: [CheckedContinuation<RefreshOutcome, Never>] = []
         var emit: ErrorEffect?
         var retry = false
         var enterForceUpdate = false
@@ -174,8 +224,17 @@ extension ApiClient {
         if refreshWindows[window.generation] === window {
             refreshWindows[window.generation] = nil
         }
-        settled.waiters = window.waiters
-        window.waiters.removeAll()
+        settled.waiters = window.callers.compactMap { caller in
+            defer { caller.continuation = nil }
+            guard !caller.deferred else {
+                if let continuation = caller.continuation {
+                    caller.readmit = true
+                    settled.readmits.append(continuation)
+                }
+                return nil
+            }
+            return caller.continuation
+        }
         guard epoch == window.epoch, generation == window.generation else {
             // 刷新期间会话已换代：结果丢弃，不恢复、不清新会话。
             settled.outcome = refreshFailures[window.generation].map { .cleared($0) } ?? .superseded
@@ -260,7 +319,8 @@ extension ApiClient {
             return nil
         }
         // 屏障判定、会话快照与刷新入队在同一把锁里（R3-01）：屏障一旦在某个窗口结算，之后的调用读到的就是已通过。
-        let outcome = await awaitRefresh { barrierAdmitLocked(state, bound, $0) }
+        let entry = RefreshCaller(options.callValid)
+        let outcome = await awaitRefresh(entry) { barrierAdmitLocked(state, bound, entry, $0) }
         switch outcome {
         case nil, .refreshed:
             return nil
@@ -278,6 +338,7 @@ extension ApiClient {
     private func barrierAdmitLocked(
         _ state: NetworkContext,
         _ bound: UInt64,
+        _ caller: RefreshCaller,
         _ continuation: CheckedContinuation<RefreshOutcome, Never>
     ) -> Admission? {
         // 冷启动的屏障不看强更状态（below 也先刷新）；恢复触发的只在不低于时执行（R2-03）。本世代已通过的编号直接复用。
@@ -293,7 +354,7 @@ extension ApiClient {
             passRestrictedBarrierLocked()
             return nil
         }
-        let admission = admitLocked(bound, access, continuation)
+        let admission = admitLocked(bound, access, caller, continuation)
         if case .now = admission {} else {
             refreshWindows[bound]?.barrierSerial = serial
         }
@@ -311,5 +372,28 @@ extension ApiClient {
         restrictedBarrierPassed = RestrictedBarrierMark(generation: generation, serial: restrictedBarrierSerial)
         coldStartRefreshDue = false
         recoveryRefreshDue = false
+    }
+
+    /// 10002（刷新后重放）与 10405 refresh_only（只刷新）：按本世代窗口的完整结果结算。
+    func refreshAction(_ effect: ErrorEffect, _ exchange: Exchange) async -> PipelineAction {
+        let ready = exchange.ready
+        let outcome = await joinRefresh(
+            generation: ready.generation, usedToken: ready.accessToken, caller: exchange.options.callValid
+        )
+        // 共享刷新窗口：等待期间失效的调用方不再重放、不交付 Effect；同窗口里仍有效的调用方照常继续。
+        // 窗口因为没有有效调用方而停止续发时，结果对失效的调用方同样按 call_cancelled 结束。
+        if !callStillValid(exchange.options) {
+            return .end(LocalRejectReason.callCancelled)
+        }
+        switch outcome {
+        case .refreshed:
+            return effect.kind == .refreshReplay ? .replay : .effect(effect)
+        case let .transient(kind):
+            return .transient(kind)
+        case let .cleared(lost):
+            return .cleared(lost)
+        case .superseded:
+            return .end(supersededReason(exchange.options))
+        }
     }
 }

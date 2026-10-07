@@ -1,4 +1,5 @@
 import Foundation
+import Generated
 
 /// 配置取值顺序（03 §4.3）。三层都是 `/v1/config` 的 data（JSON 对象）：当前响应 → LKG（上一次成功的响应）→ 包内默认。
 /// 纯函数：入参是 JSON 文本（nil = 这一层没有），结果是选中值的 JSON 文本。
@@ -47,15 +48,43 @@ public enum ConfigResolver {
         return nil
     }
 
-    /// 完整的 link_patterns：version 为非空字符串、rules 为数组。
+    /// 完整的 link_patterns：version 为非空字符串、rules 为数组，且每条规则都有效（见 validRule：类别属于契约枚举、主机为合法
+    /// 主机名、正则能编译）。有任何坏条目整张表都算坏表，回落到下一层（LKG → 包内），
+    /// 不逐条跳过（APP-04 三端共性第 18 条）。
     static func completePatterns(_ value: Any) -> [String: Any]? {
         guard let object = value as? [String: Any],
               let version = object["version"] as? String, !version.isEmpty,
-              object["rules"] is [Any]
+              let rules = object["rules"] as? [Any],
+              rules.allSatisfy(validRule)
         else {
             return nil
         }
         return object
+    }
+
+    /// 一条规则有效：platform 为非空字符串；category 是契约枚举 `link_pattern_category` 里的值（拼错的类别不能悄悄变成
+    /// 「不拦」）；hosts 每项都是合法主机名（不带协议、路径、端口、用户信息）；path_patterns 为能编译的正则（三端共性第 40 条）。
+    private static func validRule(_ value: Any) -> Bool {
+        guard let rule = value as? [String: Any], let platform = rule["platform"] as? String, !platform.isEmpty,
+              let category = rule["category"] as? String,
+              LinkPatternCategory.allCases.contains(where: { $0.rawValue == category }),
+              let hosts = rule["hosts"] as? [Any], !hosts.isEmpty,
+              hosts.allSatisfy({ ($0 as? String).map(isHostName) ?? false }),
+              let paths = rule["path_patterns"] as? [Any]
+        else { return false }
+        return paths.allSatisfy { pattern in
+            (pattern as? String).map { (try? NSRegularExpression(pattern: $0)) != nil } ?? false
+        }
+    }
+
+    /// 合法主机名（RFC 1123 标签，不分大小写）：点分标签，每个标签 1–63 个字母、数字或连字符，不以连字符开头或结尾，
+    /// 总长不超过 253。带协议（`https://`）、路径、端口、用户信息、空白或末尾点的一律不合法。
+    static func isHostName(_ host: String) -> Bool {
+        guard !host.isEmpty, host.utf8.count <= 253 else { return false }
+        return host.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { label in
+            !label.isEmpty && label.utf8.count <= 63 && label.first != "-" && label.last != "-"
+                && label.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+        }
     }
 }
 

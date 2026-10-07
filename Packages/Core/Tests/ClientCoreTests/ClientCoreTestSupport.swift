@@ -274,7 +274,9 @@ func makeDeviceFixture(
         tokens: tokens,
         pendingKeys: PendingKeyStore(backend: MemoryPendingKeyBackend(), clock: { 0 }),
         hooks: NetworkHooks(
-            reRegisterDevice: { rejected in await registry.reRegister(rejectedDeviceId: rejected) },
+            reRegisterDevice: { rejected, isValid in
+                await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
+            },
             deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) }
         ),
         configuration: CoreStubProtocol.configuration(),

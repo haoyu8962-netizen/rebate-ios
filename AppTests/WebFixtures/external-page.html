@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>external fixture</title></head>
+<body>
+<p>third party page fixture</p>
+<script>
+// APP-04 ExternalWebView 测试页（包内）：检查页面里没有任何桥对象，然后自动跳去平台域名与非 https 地址。
+window.__E = {
+  bridge: typeof window.__REBATE_BRIDGE__,
+  handler: typeof (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.rebate),
+  receive: typeof window.__couliBridgeReceive,
+  ua: navigator.userAgent
+};
+window.__go = function (url) { window.location.href = url; };
+// 点击一个链接（navigationType = linkActivated；target 为 _blank 时是新窗口请求）。
+window.__click = function (url, target) {
+  var link = document.createElement('a');
+  link.href = url;
+  if (target) { link.target = target; }
+  link.textContent = 'link';
+  document.body.appendChild(link);
+  link.click();
+};
+// 提交一个 POST 表单（主框架表单提交）。
+window.__post = function (url) {
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = url;
+  var field = document.createElement('input');
+  field.name = 'q';
+  field.value = '1';
+  form.appendChild(field);
+  document.body.appendChild(form);
+  form.submit();
+};
+// 按地址加一个子框架（导航判定测试）；sandbox 为真时加 sandbox 属性。
+window.__addFrame = function (label, src, sandbox) {
+  var frame = document.createElement('iframe');
+  frame.id = label;
+  if (sandbox) { frame.setAttribute('sandbox', 'allow-scripts'); }
+  frame.src = src;
+  document.body.appendChild(frame);
+};
+// 子框架是否仍停在空白文档（导航被取消时 about:blank 与父页面同源，可读；载入了别的文档则读不到或不是 about:blank）。
+window.__frameHref = function (label) {
+  try { return document.getElementById(label).contentWindow.location.href; } catch (error) { return 'unreadable'; }
+};
+</script>
+</body>
+</html>
