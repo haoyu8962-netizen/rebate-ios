@@ -12,6 +12,10 @@ final class EnvironmentStore: ObservableObject {
     @Published private(set) var current: AppEnvironment
     /// 启动对账闸门（只读）。
     @Published private(set) var gate: EnvironmentGate
+    /// 正在切换环境（清理与提交期间）：网络状态源按「环境未就绪」处理，禁止设备注册与一切请求（APP-03b 共性 10）。
+    private(set) var switching = false
+    /// 每次切换尝试结束（成功或失败）后 +1：AppNetwork 据此在当前环境恢复设备注册与配置拉取（APP-03b 共性 5、14）。
+    @Published private(set) var switchAttempts = 0
     /// 最近一次对账结果。
     private(set) var launchOutcome: EnvironmentApplier.LaunchOutcome
 
@@ -45,6 +49,12 @@ final class EnvironmentStore: ObservableObject {
         }
         guard environment != current else {
             return
+        }
+        // 一开始就同步关闭环境闸门：清理与提交期间不放行任何请求（含设备注册）。
+        switching = true
+        defer {
+            switching = false
+            switchAttempts += 1
         }
         try applier.apply(environmentID: environment.id)
         defaults.set(environment.id, forKey: AppNamespace.environmentSelectionKey)

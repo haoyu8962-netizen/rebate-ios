@@ -126,6 +126,20 @@ public final class ApiClient: @unchecked Sendable {
         return await run(call, operation, isReplay: false, options: RunOptions(epoch: currentEpoch))
     }
 
+    /// 当前的作废世代（撤回同意、切换环境时 +1）。长流程（如设备注册）在开始时取下，发送时用 `send(_:ticket:)` 交回。
+    public var invalidationTicket: UInt64 {
+        currentEpoch
+    }
+
+    /// 带原始票据发送：票据已失效（之后撤回过同意或切换过环境）时在实际发送前的守卫里本地结束（call_cancelled），
+    /// 不把这次请求重新绑定到当前环境（APP-03b 共性 13）。
+    public func send(_ call: ApiCall, ticket: UInt64) async -> ApiResult {
+        guard let operation = ApiOperations.byId(call.operationId) else {
+            return .localReject(reason: LocalRejectReason.invalidCall)
+        }
+        return await run(call, operation, isReplay: false, options: RunOptions(epoch: ticket))
+    }
+
     /// 实际发起的刷新次数（`POST /v1/auth/refresh`）。
     public var refreshCalls: Int {
         lock.withLock { refreshCount }

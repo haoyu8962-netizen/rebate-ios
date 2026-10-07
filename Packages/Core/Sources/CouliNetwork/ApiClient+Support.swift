@@ -149,3 +149,56 @@ struct Envelope {
         return Envelope(code: code, msg: msg, data: data, traceId: JSONFields.string(root, "trace_id"))
     }
 }
+
+// MARK: - 响应头（条件请求）
+
+/// 一次逻辑调用最后收到的 HTTP 状态与响应头（`ApiClient.sendWithResponseHeaders`）。
+final class ResponseHeaderSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var status: Int?
+    private var headers: [String: String] = [:]
+
+    func record(status: Int, headers: [String: String]) {
+        lock.withLock {
+            self.status = status
+            self.headers = headers
+        }
+    }
+
+    var last: (status: Int?, headers: [String: String]) {
+        lock.withLock { (status, headers) }
+    }
+}
+
+/// 条件请求的结果：调用结果 + 最后一次 HTTP 响应的状态与头（没有收到响应时为 nil / 空）。
+public struct ApiResponseMeta: Sendable, Equatable {
+    public let httpStatus: Int?
+    public let headers: [String: String]
+
+    public init(httpStatus: Int?, headers: [String: String]) {
+        self.httpStatus = httpStatus
+        self.headers = headers
+    }
+
+    /// 响应头（名字不区分大小写）。
+    public func header(_ name: String) -> String? {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+}
+
+public extension ApiClient {
+    /// 发一次调用，并带回最后一次 HTTP 响应的状态与头（ConfigStore 读 ETag、判 304 用）。管线与 `send` 完全相同。
+    func sendWithResponseHeaders(_ call: ApiCall) async -> (ApiResult, ApiResponseMeta) {
+        let sink = ResponseHeaderSink()
+        let result = await Self.$responseSink.withValue(sink) {
+            await send(call)
+        }
+        let last = sink.last
+        return (result, ApiResponseMeta(httpStatus: last.status, headers: last.headers))
+    }
+}
+
+extension ApiClient {
+    /// 当前逻辑调用的响应头收集器（任务局部，只有 `sendWithResponseHeaders` 设置）。
+    @TaskLocal static var responseSink: ResponseHeaderSink?
+}

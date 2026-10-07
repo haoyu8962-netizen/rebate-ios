@@ -101,11 +101,6 @@ public extension PrivacyStore {
     }
 }
 
-/// 设备注册退避重试的调度器（可注入，单测用假调度器推进虚拟时间）。
-public protocol RetryScheduler {
-    func schedule(delayMillis: Int64, action: @escaping () -> Void)
-}
-
 /// 初始化步骤名（03 §4.1、BR-ID-11 的固定顺序）。
 public enum PrivacyInitStep {
     public static let deviceRegister = "device_register"
@@ -140,6 +135,9 @@ public final class PrivacyGate {
     /// 当前弹窗（只在内存；冷启动时由 `coldStart` 按存储重新算出）。
     private var stage: PrivacyPromptStage
     private var steps: [String: () throws -> Void] = [:]
+    /// 异步设备注册步骤（取代同名同步步骤）与尝试链代次（重新发起时 +1，旧链的重试作废）。
+    private var deviceRegistration: ((@escaping (Bool) -> Void) -> Void)?
+    private var deviceChain: UInt64 = 0
     /// 本次同意周期是否已发起过初始化。
     private var initStarted = false
     /// 同意周期代次：撤回同意时递增，旧周期排着的设备注册重试据此作废。
@@ -246,6 +244,19 @@ public final class PrivacyGate {
     /// TODO(rule-gaps): 步骤重复登记、缺失的处理规则未定义；这里替换、缺失的跳过。
     public func registerInitStep(name: String, action: @escaping () throws -> Void) {
         steps[name] = action
+    }
+
+    /// 异步设备注册步骤（APP-03b）：完成时主线程调 `done(成功与否)`，失败按退避重试；撤回后旧周期的结果作废。
+    public func registerDeviceRegistration(_ action: @escaping (_ done: @escaping (Bool) -> Void) -> Void) {
+        deviceRegistration = action
+        steps[PrivacyInitStep.deviceRegister] = {}
+    }
+
+    /// 切换环境清掉设备凭据后重新注册（03 §3.6）：只在本同意周期已初始化时生效，旧退避链作废、从第 1 次开始。
+    public func restartDeviceRegistration() {
+        guard initStarted, effectiveDecision == .consented else { return }
+        deviceChain &+= 1
+        attemptDeviceRegister(attempt: 1, cycle: cycle)
     }
 
     /// 同意后的初始化，唯一入口（03 §3.5、§4.1）。只有当前生效的结论是「已同意当前版本」时才执行；
@@ -357,9 +368,21 @@ public final class PrivacyGate {
     }
 
     private func attemptDeviceRegister(attempt: Int, cycle attemptCycle: UInt64) {
-        guard attemptCycle == cycle, effectiveDecision == .consented,
-              let action = steps[PrivacyInitStep.deviceRegister]
-        else {
+        let chain = deviceChain
+        guard attemptCycle == cycle, effectiveDecision == .consented else {
+            return
+        }
+        if let deviceRegistration {
+            deviceRegistration { [weak self] succeeded in
+                guard let self, !succeeded, attemptCycle == cycle, chain == deviceChain else { return }
+                retryScheduler.schedule(delayMillis: Self.retryDelayMillis(afterFailure: attempt)) { [weak self] in
+                    guard let self, chain == deviceChain else { return }
+                    attemptDeviceRegister(attempt: attempt + 1, cycle: attemptCycle)
+                }
+            }
+            return
+        }
+        guard let action = steps[PrivacyInitStep.deviceRegister] else {
             return
         }
         do {
@@ -369,30 +392,5 @@ public final class PrivacyGate {
                 self?.attemptDeviceRegister(attempt: attempt + 1, cycle: attemptCycle)
             }
         }
-    }
-}
-
-/// 生产调度器：在主队列上延时执行（PrivacyGate 只在主线程使用）。
-public final class MainQueueRetryScheduler: RetryScheduler {
-    public init() {}
-
-    public func schedule(delayMillis: Int64, action: @escaping () -> Void) {
-        let box = MainThreadAction(action)
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(delayMillis))) {
-            box.run()
-        }
-    }
-}
-
-/// 只在主线程创建与执行的闭包包装（跨 asyncAfter 的 @Sendable 边界）。
-private final class MainThreadAction: @unchecked Sendable {
-    private let action: () -> Void
-
-    init(_ action: @escaping () -> Void) {
-        self.action = action
-    }
-
-    func run() {
-        action()
     }
 }

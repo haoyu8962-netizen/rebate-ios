@@ -26,8 +26,13 @@ public enum PrivacyWithdrawalCleanup {
         SessionTokensCleaner(tokens: SecureSessionTokens(store: KeychainStore())),
         // TODO(APP-05): h5_token 实现后换成会话模块自己的清理器。
         KeychainAccountsCleaner(name: "H5Token", accounts: CredentialAccount.h5Token),
-        // TODO(APP-03): 设备注册实现后换成设备模块自己的清理器（device_id、install_secret）。
-        KeychainAccountsCleaner(name: "DeviceIdentity", accounts: CredentialAccount.deviceIdentity),
+        // 设备凭据（device_id、install_secret，一个 Keychain 条目；APP-03b）。App 用 `replaceCredentialCleaner`
+        // 换成 ClientCore 的 DeviceRegistryCleaner（同名，同时作废进行中的注册、清内存）；
+        // 这里的同名项保证没接线时也删得掉。
+        KeychainAccountsCleaner(
+            name: CredentialAccount.deviceIdentityCleanerName,
+            accounts: CredentialAccount.deviceIdentity
+        ),
     ]
 
     /// 生产用的撤回清理执行器（UserDefaults.standard + 上面的注册表）。
@@ -42,6 +47,16 @@ public enum PrivacyWithdrawalCleanup {
         for each in [withdrawal, target] where !each.registeredNames.contains(cleaner.cleanerName) {
             each.registerFirst(cleaner)
         }
+    }
+
+    /// 用同名清理项替换两个注册表里的凭证清理器（没有同名项时追加）；App 把各模块自己的清理器（如设备凭据）换进来。
+    public static func replaceCredentialCleaner(
+        _ cleaner: any EnvironmentSwitchCleaning,
+        withdrawal: EnvironmentSwitchCleanerRegistry = registry,
+        environmentSwitch target: EnvironmentSwitchCleanerRegistry
+    ) {
+        withdrawal.replace(cleaner)
+        target.replace(cleaner)
     }
 
     /// 把凭证清理器也登记进切换环境的注册表（App 启动时调用一次）。
@@ -138,7 +153,11 @@ public enum CredentialAccount {
     public static let sessionTokens = [SecureSessionTokens.keychainAccount]
     /// h5_token（APP-05 前的占位）。
     public static let h5Token = ["h5_token"]
-    public static let deviceIdentity = ["device_id", "install_secret"]
+    /// 设备凭据：device_id 与 install_secret 合成一个条目（一次写入、一次读出，不会只写一半；APP-03b）。
+    public static let deviceIdentityAccount = "device.identity"
+    public static let deviceIdentity = [deviceIdentityAccount]
+    /// 设备凭据清理项的名字（占位项与 ClientCore 的 DeviceRegistryCleaner 同名，后者替换前者）。
+    public static let deviceIdentityCleanerName = "DeviceIdentity"
 }
 
 public struct KeychainAccountError: Error, Equatable {

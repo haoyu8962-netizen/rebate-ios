@@ -1,0 +1,8 @@
+# ClientCoreVectorTests.swift 是 Codex 按任务书先写的向量测试（APP-03b 任务书 §4，不改不删），放宽它触发的规则。
+disabled_rules:
+  - cyclomatic_complexity
+  - function_body_length
+  - type_body_length
+  - file_length
+  - optional_data_string_conversion
+  - redundant_nil_coalescing

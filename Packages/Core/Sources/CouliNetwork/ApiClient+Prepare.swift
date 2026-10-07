@@ -16,7 +16,9 @@ extension ApiClient {
         }
         let live = read.live
         let accessToken = live?.access
-        let deviceId = readable ? device.deviceId : nil
+        // device_id 与 install_secret 一次读出（同一份凭据，不拼两次读取的结果）。
+        let credentials = readable ? device.credentials : nil
+        let deviceId = credentials?.deviceId
         let decision = RequestHeaderPolicy.decide(
             state: requestState(live, state, hasAccessToken: accessToken != nil, deviceId: deviceId),
             operation: operation,
@@ -43,11 +45,9 @@ extension ApiClient {
         if let key {
             headers[HeaderNames.idempotencyKey] = key
         }
-        if readable, operation.stepUp != nil, let token = call.stepUpToken {
-            headers[HeaderNames.stepUpToken] = token
-        }
+        headers.merge(callHeaders(call, operation, readable: readable)) { _, new in new }
         if decision.includeSignature {
-            guard readable, let secret = device.installSecret else {
+            guard readable, let secret = credentials?.installSecret else {
                 return .rejected(LocalRejectReason.deviceNotReady)
             }
             headers.merge(signatureHeaders(secret, operation.method, url, body)) { _, new in new }
@@ -59,6 +59,18 @@ extension ApiClient {
             account: live?.account.flatMap { $0.isEmpty ? nil : $0 },
             generation: session
         ))
+    }
+
+    /// 调用自带的头：step-up 操作的 X-Step-Up-Token（凭据可读时）、读接口的 If-None-Match（原样）。
+    private func callHeaders(_ call: ApiCall, _ operation: ApiOperation, readable: Bool) -> [String: String] {
+        var headers: [String: String] = [:]
+        if readable, operation.stepUp != nil, let token = call.stepUpToken {
+            headers[HeaderNames.stepUpToken] = token
+        }
+        if operation.isRead, let tag = call.ifNoneMatch, !tag.isEmpty {
+            headers[HeaderNames.ifNoneMatch] = tag
+        }
+        return headers
     }
 
     /// 不含凭据与设备标识的公共头（每次发送新的 X-Trace-Id）。

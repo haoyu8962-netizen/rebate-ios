@@ -1,0 +1,2 @@
+# ClientCoreVectorTests.swift 是 Codex 按任务书先写的向量测试（APP-03b 任务书 §4，不改不删）：不参与格式化。
+--exclude ClientCoreVectorTests.swift

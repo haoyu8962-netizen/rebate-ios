@@ -32,6 +32,8 @@ final class PrivacyController: ObservableObject {
     var onChange: (() -> Void)?
     /// 每次用户操作后调用（在 `onChange` 之后；状态没变也会调用）。
     var onAction: ((Action) -> Void)?
+    /// 结论或弹窗阶段变化后调用（在 `onChange` 之后；AppTracker 据此清队列、停采集，APP-03b）。
+    private var stateObservers: [(PrivacyGateState) -> Void] = []
 
     private let gate: PrivacyGate
     private let clock: () -> Int64
@@ -40,7 +42,8 @@ final class PrivacyController: ObservableObject {
         store: any PrivacyStore = UserDefaultsPrivacyStore(),
         clock: @escaping () -> Int64 = PendingActionStore.wallClockMillis,
         bundledPolicyVersion: String = BundledLegal.privacyPolicyVersion,
-        withdrawalRunner: WithdrawalCleanupRunner = PrivacyWithdrawalCleanup.runner
+        withdrawalRunner: WithdrawalCleanupRunner = PrivacyWithdrawalCleanup.runner,
+        deviceRegistration: ((@escaping (Bool) -> Void) -> Void)? = nil
     ) {
         self.clock = clock
         gate = PrivacyGate(store: store, clock: clock, bundledPolicyVersion: bundledPolicyVersion)
@@ -53,6 +56,10 @@ final class PrivacyController: ObservableObject {
             }
         }
         Self.registerInitSteps(on: gate)
+        if let deviceRegistration {
+            // 设备注册（APP-03b，AppNetwork.registerDevice → DeviceRegistry）：异步完成，失败按闸门的退避重试。
+            gate.registerDeviceRegistration(deviceRegistration)
+        }
         let now = clock()
         gate.coldStart(now: now)
         state = gate.state(now: now)
@@ -62,8 +69,9 @@ final class PrivacyController: ObservableObject {
     /// 唯一的初始化入口登记处：顺序由 `PrivacyInitStep.order` 决定（设备注册 → 推送 → 联盟 → 崩溃 → 微信）。
     /// 本任务各步骤都是空实现；SDK 的初始化调用只能写在 Core 的 PrivacyGate.swift 允许的位置，经这里登记。
     private static func registerInitSteps(on gate: PrivacyGate) {
-        // TODO(APP-03): 设备注册（POST /v1/devices）；成功后上报本地同意记录（client_at = 点击时间）与推送 token。
-        // 失败时抛错，由 PrivacyGate 按 1s、2s、4s…上限 60s 退避重试。
+        // 设备注册（POST /v1/devices）由 init 的 deviceRegistration 登记（APP-03b，异步，失败按退避重试）；
+        // 没有接线时（单测）是空步骤。
+        // TODO(APP-12): 设备注册成功后上报本地同意记录（client_at = 点击时间）与推送 token。
         gate.registerInitStep(name: PrivacyInitStep.deviceRegister) {}
         // TODO(APP-推送任务): MobPush 初始化与隐私授权接口（03 §3.5）。
         gate.registerInitStep(name: PrivacyInitStep.push) {}
@@ -116,6 +124,17 @@ final class PrivacyController: ObservableObject {
         publish(.requestFullFunction)
     }
 
+    /// 切换环境后重新注册设备（AppNetwork 在环境变化时调用；只在本同意周期已初始化时生效）。
+    func restartDeviceRegistration() {
+        gate.restartDeviceRegistration()
+    }
+
+    /// 登记结论变化的观察者：立即收到一次当前状态，之后每次变化都收到。
+    func observeState(_ observer: @escaping (PrivacyGateState) -> Void) {
+        stateObservers.append(observer)
+        observer(state)
+    }
+
     /// 隐私中心【撤回同意】（页面在 APP-12）。
     func withdraw() {
         gate.withdraw(now: clock())
@@ -127,6 +146,9 @@ final class PrivacyController: ObservableObject {
         if next != state {
             state = next
             onChange?()
+            for observer in stateObservers {
+                observer(next)
+            }
         }
         onAction?(action)
     }

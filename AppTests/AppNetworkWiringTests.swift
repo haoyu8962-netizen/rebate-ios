@@ -83,10 +83,10 @@ final class AppNetworkWiringTests: XCTestCase {
     func testInvalidationCleanerIsFirstInBothRegistries() {
         let tokens = MemorySessionTokens(access: "access-1", refresh: "refresh-1", scope: "full", account: "account-A")
         let fixture = makeFixture(tokens: tokens, update: UpdateFixtures.makeUpdate())
-        XCTAssertEqual(fixture.withdrawal.registeredNames, [NetworkInvalidationCleaner.name, SessionTokensCleaner.name])
-        XCTAssertEqual(
-            fixture.environmentSwitch.registeredNames, [NetworkInvalidationCleaner.name, SessionTokensCleaner.name]
-        )
+        // APP-03b：设备凭据的清理项（DeviceRegistryCleaner）追加在后面。
+        let expected = [NetworkInvalidationCleaner.name, SessionTokensCleaner.name, "DeviceIdentity"]
+        XCTAssertEqual(fixture.withdrawal.registeredNames, expected)
+        XCTAssertEqual(fixture.environmentSwitch.registeredNames, expected)
     }
 
     /// 生产组合：CouliApp 用的共享注册表里同样排在第一位（宿主 App 启动时已创建过 AppNetwork）。

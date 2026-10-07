@@ -123,6 +123,9 @@ extension ApiClient {
                 await sleeper(retry.backoffMillis)
                 continue
             }
+            if case let .response(status, headers, _) = outcome {
+                Self.responseSink?.record(status: status, headers: headers)
+            }
             return .sent(ready, outcome)
         }
     }
@@ -343,11 +346,15 @@ extension ApiClient {
                 return .end(supersededReason(exchange.options))
             }
         }
+        if let ended = screenDeviceRejection(effect, exchange) {
+            return ended
+        }
         switch effect.kind {
         case .refreshReplay, .refreshOnly:
             return await refreshAction(effect, exchange)
         case .registerDeviceReplay:
-            return await hooks.reRegisterDevice()
+            // 首次 10402：重新注册（注册表在入口里先隔离被拒凭据），成功后沿用原键重放 1 次。
+            return await hooks.reRegisterDevice(ready.request.headers[HeaderNames.deviceId])
                 ? .replay : .effect(ErrorEffect(code: effect.code, kind: .genericError, includeTrace6: true))
         case .forceUpdate:
             await hooks.onForceUpdate(JSONFields.string(data, "min_supported_version"))

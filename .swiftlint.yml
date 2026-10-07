@@ -64,3 +64,13 @@ custom_rules:
     regex: "#(if|elseif)\\b[^\\n]*\\bDEBUG\\b"
     message: "包在 Staging 下按 Release 编译、看不到 DEBUG；调试能力放 App target 的 #if DEBUG 里（project.yml）"
     severity: error
+
+  # 03 §4.9：PermissionRequester 是申请系统权限的唯一入口；系统授权申请接口只在它的 iOS 系统接口文件里调用（APP-03b）。
+  system_permission_request_only_in_requester:
+    name: "System permission requests only via PermissionRequester"
+    excluded: ".*/PermissionSystem\\.swift$"
+    regex: "\\b(requestAuthorization|requestAccess|requestWhenInUseAuthorization|requestAlwaysAuthorization|requestTrackingAuthorization)\\s*\\("
+    match_kinds:
+      - identifier
+    message: "系统权限只经 PermissionRequester 申请（03 §4.9）；系统授权接口只写在 PermissionSystem.swift"
+    severity: error

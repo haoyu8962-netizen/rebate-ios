@@ -9,7 +9,9 @@
 商店对照表 AppStores（specs/app-stores.yaml，APP-02c）、GET /v1/app-versions/check 响应示例（App target，#if DEBUG，
 调试面板的版本检查假数据，APP-02c）、openapi 操作登记表 ApiOperations（APP-03a：每个 operationId 的方法、路径与
 x-auth / x-signed / x-idempotent / x-step-up / x-error-codes / x-session-scopes / x-min-version-gate / x-implementation）。
-不生成：请求 / 响应模型（另立任务）、事件（specs/events.yaml）、apps.json 片段（分别归 APP-03、APP-03、APP-04/06）。
+APP-03b 加：埋点事件构造函数 TrackerEvents（specs/events.yaml；字段名命中禁用规则即报错退出 2，构建失败）、
+无效设备哈希种子 DeviceHashSeeds（specs/device-hash.vectors.json）、包内默认配置 DefaultConfig（GET /v1/config 响应示例）。
+不生成：请求 / 响应模型（另立任务）、apps.json 片段（APP-04/06）。
 输出不含时间戳，同一快照重复生成逐字一致。只用 Python 3 标准库。
 
 输出目录（两个目录都整个归生成器所有，--check 一起比较）：
@@ -129,6 +131,7 @@ RESERVED_TYPE_NAMES = {
     "BridgeMethodSpec", "BridgeMethods", "BridgeErrors", "DefaultTexts", "DesignTokens", "DebugOnlyRoutes",
     "AppStoreSpec", "AppStores", "AppVersionCheckExample",
     "ApiOperation", "ApiOperations", "ApiMinVersionGate",
+    "TrackValue", "TrackEvent", "TrackerEvents", "DeviceHashSeeds", "DefaultConfig",
     # SwiftPM 为带资源的包生成的 resource_bundle_accessor.swift 里的私有类型。
     "BundleFinder",
 }
@@ -1161,6 +1164,317 @@ def gen_api_operations(out: dict[str, str]):
     put(out, "ApiOperations.swift", "\n".join(lines))
 
 
+# ---------- APP-03b：埋点事件、设备哈希无效种子、包内默认配置 ----------
+
+# events.yaml 头注释：字段名不得含这些分段（按 _ 切分；link_id、pid_scene 例外），也不得含 sub_union_id、custom_parameters。
+EVENT_FORBIDDEN_SEGMENTS = {"url", "href", "link", "deeplink", "tpwd", "pid", "adzone", "relation", "promo"}
+EVENT_FORBIDDEN_EXCEPTIONS = {"link_id", "pid_scene"}
+EVENT_FORBIDDEN_SUBSTRINGS = ["sub_union_id", "custom_parameters"]
+EVENT_FIELD_TYPES = {"string", "integer", "boolean", "enum"}
+# 生成函数的参数里由调用方给的公共字段（其余公共字段由 Tracker 填）。
+EVENT_CALLER_COMMON = {"page": "page", "spm": "spm", "trace_id": "traceId"}
+EVENT_NAME_RE = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)?")
+EVENT_FIELD_RE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def forbidden_event_field(name: str):
+    """命中禁用规则时返回原因，否则 None（events.yaml 头注释的字段名规则）。"""
+    if name in EVENT_FORBIDDEN_EXCEPTIONS:
+        return None
+    for sub in EVENT_FORBIDDEN_SUBSTRINGS:
+        if sub in name:
+            return f"含 {sub}"
+    for seg in name.split("_"):
+        if seg in EVENT_FORBIDDEN_SEGMENTS:
+            return f"含禁用分段 {seg}"
+    return None
+
+
+def event_field_spec(name: str, spec, where: str) -> dict:
+    if not isinstance(name, str) or not EVENT_FIELD_RE.fullmatch(name):
+        raise GenError(f"{where} 字段名不合法：{name!r}")
+    reason = forbidden_event_field(name)
+    if reason:
+        raise GenError(f"{where} 字段名 {name} {reason}（events.yaml：事件字段不带推广 URL、口令、推广位或渠道标识）")
+    if not isinstance(spec, dict):
+        raise GenError(f"{where}.{name} 应为对象")
+    kind = spec.get("type")
+    if kind not in EVENT_FIELD_TYPES:
+        raise GenError(f"{where}.{name} 的 type 不认识：{kind!r}")
+    values = None
+    if kind == "enum":
+        values = spec.get("values")
+        if not isinstance(values, list) or not values or not all(isinstance(v, str) for v in values):
+            raise GenError(f"{where}.{name} 是 enum，values 应为非空字符串列表")
+        if len(set(values)) != len(values):
+            raise GenError(f"{where}.{name} 的 values 有重复")
+    elif "values" in spec:
+        raise GenError(f"{where}.{name} 不是 enum，不应有 values")
+    required = spec.get("required", False)
+    when = spec.get("required_when")
+    if not isinstance(required, bool):
+        raise GenError(f"{where}.{name} 的 required 应为布尔")
+    if when is not None:
+        if required:
+            raise GenError(f"{where}.{name} 不能同时 required 与 required_when")
+        if not isinstance(when, dict) or len(when) != 1:
+            raise GenError(f"{where}.{name} 的 required_when 应为只有一项的 {{字段: 取值}}")
+        (when_field, when_value), = when.items()
+        if not isinstance(when_value, str):
+            raise GenError(f"{where}.{name} 的 required_when 取值应为字符串")
+        when = (when_field, when_value)
+    return {"name": name, "type": kind, "values": values, "required": required, "when": when}
+
+
+def swift_track_value(kind: str, expr: str) -> str:
+    if kind == "enum":
+        return f".string({expr}.rawValue)"
+    if kind == "string":
+        return f".string({expr})"
+    if kind == "integer":
+        return f".integer({expr})"
+    return f".boolean({expr})"
+
+
+def swift_track_literal(kind: str, raw: str, where: str) -> str:
+    if kind in ("enum", "string"):
+        return f".string({swift_string(raw)})"
+    if kind == "integer":
+        try:
+            return f".integer({int(raw)})"
+        except ValueError as exc:
+            raise GenError(f"{where} 的条件取值不是整数：{raw!r}") from exc
+    if raw not in ("true", "false"):
+        raise GenError(f"{where} 的条件取值不是布尔：{raw!r}")
+    return f".boolean({raw})"
+
+
+def gen_events(out: dict[str, str]):
+    doc = load("specs/events.json")
+    common = doc.get("common_fields")
+    events = doc.get("events")
+    if not isinstance(common, dict) or not common:
+        raise GenError("events.yaml 缺 common_fields")
+    if not isinstance(events, dict):
+        raise GenError("events.yaml 缺 events")
+    common_specs = [event_field_spec(k, v, "events.yaml common_fields") for k, v in common.items()]
+    common_names = [c["name"] for c in common_specs]
+    for name in ("event_id", "name", "client_at", "session_id", "device_id", "platform", "app_version", "page"):
+        if name not in common_names:
+            raise GenError(f"events.yaml common_fields 缺 {name}")
+    platform = next(c for c in common_specs if c["name"] == "platform")
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：specs/events.yaml（03 §4.7；TECH-21：业务代码只能调用这里的生成函数）",
+        "",
+        "/// 埋点字段的值（JSON 标量）。",
+        "public enum TrackValue: Swift.Sendable, Swift.Equatable {",
+        "    case string(Swift.String)",
+        "    case integer(Swift.Int)",
+        "    case boolean(Swift.Bool)",
+        "}",
+        "",
+        "/// 一条埋点事件：只能由 `TrackerEvents` 的生成函数构造（初始化方法不公开）。公共字段里 page、spm、trace_id",
+        "/// 由调用方给出，其余（event_id、client_at、session_id、device_id、user_id、platform、app_version、channel）由 Tracker 填。",
+        "public struct TrackEvent: Swift.Sendable, Swift.Equatable {",
+        "    public let name: Swift.String",
+        "    public let page: Swift.String",
+        "    public let spm: Swift.String?",
+        "    public let traceId: Swift.String?",
+        "    /// 事件自身的字段（不含公共字段）；没给的可选字段不出现。",
+        "    public let fields: [Swift.String: TrackValue]",
+        "    /// 按 required_when 应该给却没给的字段名；非空时 Tracker 拒收。",
+        "    public let missingRequired: [Swift.String]",
+        "",
+        "    init(",
+        "        name: Swift.String,",
+        "        page: Swift.String,",
+        "        spm: Swift.String?,",
+        "        traceId: Swift.String?,",
+        "        fields: [Swift.String: TrackValue],",
+        "        missingRequired: [Swift.String]",
+        "    ) {",
+        "        self.name = name",
+        "        self.page = page",
+        "        self.spm = spm",
+        "        self.traceId = traceId",
+        "        self.fields = fields",
+        "        self.missingRequired = missingRequired",
+        "    }",
+        "}",
+        "",
+        "/// events.yaml 的事件构造函数。",
+        "public enum TrackerEvents {",
+        f"    /// events.yaml 的 version。",
+        f"    public static let version = {swift_string(str(doc.get('version', '')))}",
+        "    /// 公共字段名（契约顺序）。",
+        "    public static let commonFields: [Swift.String] = [" + ", ".join(swift_string(n) for n in common_names) + "]",
+        "    /// 必填的公共字段名。",
+        "    public static let requiredCommonFields: [Swift.String] = ["
+        + ", ".join(swift_string(c["name"]) for c in common_specs if c["required"]) + "]",
+        "    /// platform 公共字段的取值。",
+        "    public static let platformValues: [Swift.String] = ["
+        + ", ".join(swift_string(v) for v in (platform["values"] or [])) + "]",
+        "    /// 全部事件名。",
+        "    public static let allNames: [Swift.String] = [" + ", ".join(swift_string(n) for n in events) + "]",
+    ]
+    seen_funcs: dict[str, str] = {}
+    for event_name, event in events.items():
+        where = f"events.yaml events.{event_name}"
+        if not isinstance(event_name, str) or not EVENT_NAME_RE.fullmatch(event_name):
+            raise GenError(f"{where}：事件名不合法")
+        if not isinstance(event, dict):
+            raise GenError(f"{where} 应为对象")
+        fields = event.get("fields") or {}
+        if not isinstance(fields, dict):
+            raise GenError(f"{where}.fields 应为对象")
+        specs = [event_field_spec(k, v, where + ".fields") for k, v in fields.items()]
+        by_name = {s["name"]: s for s in specs}
+        for s in specs:
+            if s["name"] in common_names:
+                raise GenError(f"{where} 字段 {s['name']} 与公共字段同名")
+            if s["when"] and s["when"][0] not in by_name:
+                raise GenError(f"{where}.{s['name']} 的 required_when 引用了不存在的字段 {s['when'][0]}")
+        func = lower_camel(event_name)
+        type_name = upper_camel(event_name)
+        if func.lower() in seen_funcs:
+            raise GenError(f"{where} 的生成名 {func} 与 {seen_funcs[func.lower()]} 冲突")
+        seen_funcs[func.lower()] = event_name
+        enum_fields = [s for s in specs if s["type"] == "enum"]
+        lines.append("")
+        if enum_fields:
+            lines.append(f"    /// {event_name} 的枚举字段取值。")
+            lines.append(f"    public enum {type_name} {{")
+            for s in enum_fields:
+                lines.append(f"        public enum {upper_camel(s['name'])}Value: Swift.String, Swift.Sendable, Swift.CaseIterable {{")
+                cases = set()
+                for raw in s["values"]:
+                    case = lower_camel(raw)
+                    if case in RESERVED_CASE_NAMES:
+                        case = "contract" + upper_camel(raw)
+                    if case in cases:
+                        raise GenError(f"{where}.{s['name']} 的取值 {raw} 生成的 case 名 {case} 重复")
+                    cases.add(case)
+                    lines.append(f"            case {escape_identifier(case)} = {swift_string(raw)}")
+                lines.append("        }")
+            lines.append("    }")
+            lines.append("")
+        description = str(event.get("description", "")).replace("\n", " ")
+        lines.append(f"    /// {event_name}：{description}")
+        params = ["page: Swift.String"]
+        for s in specs:
+            pname = escape_identifier(lower_camel(s["name"]))
+            swift_type = {
+                "string": "Swift.String", "integer": "Swift.Int", "boolean": "Swift.Bool",
+                "enum": f"{type_name}.{upper_camel(s['name'])}Value",
+            }[s["type"]]
+            params.append(f"{pname}: {swift_type}" if s["required"] else f"{pname}: {swift_type}? = nil")
+        params += ["spm: Swift.String? = nil", "traceId: Swift.String? = nil"]
+        lines.append(f"    public static func {escape_identifier(func)}(")
+        lines += [f"        {p}," for p in params[:-1]] + [f"        {params[-1]}"]
+        lines.append("    ) -> TrackEvent {")
+        if specs:
+            lines.append("        var fields: [Swift.String: TrackValue] = [:]")
+            for s in specs:
+                pname = escape_identifier(lower_camel(s["name"]))
+                if s["required"]:
+                    lines.append(f"        fields[{swift_string(s['name'])}] = {swift_track_value(s['type'], pname)}")
+                else:
+                    bound = lower_camel(s["name"]) + "Value"
+                    lines.append(f"        if let {bound} = {pname} {{")
+                    lines.append(f"            fields[{swift_string(s['name'])}] = {swift_track_value(s['type'], bound)}")
+                    lines.append("        }")
+        else:
+            lines.append("        let fields: [Swift.String: TrackValue] = [:]")
+        conditional = [s for s in specs if s["when"]]
+        if conditional:
+            lines.append("        var missing: [Swift.String] = []")
+            for s in conditional:
+                when_field, when_value = s["when"]
+                literal = swift_track_literal(by_name[when_field]["type"], when_value, where + "." + s["name"])
+                lines.append(
+                    f"        if fields[{swift_string(when_field)}] == {literal}, fields[{swift_string(s['name'])}] == nil {{"
+                )
+                lines.append(f"            missing.append({swift_string(s['name'])})")
+                lines.append("        }")
+        else:
+            lines.append("        let missing: [Swift.String] = []")
+        lines += [
+            "        return TrackEvent(",
+            f"            name: {swift_string(event_name)}, page: page, spm: spm, traceId: traceId, fields: fields,",
+            "            missingRequired: missing",
+            "        )",
+            "    }",
+        ]
+    lines += ["}", ""]
+    put(out, "TrackerEvents.swift", "\n".join(lines))
+
+
+HEX64_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def gen_device_hash_seeds(out: dict[str, str]):
+    doc = load("specs/device-hash.vectors.json")
+    seeds = doc.get("invalid_hash_seeds")
+    if not isinstance(seeds, list) or not seeds:
+        raise GenError("device-hash.vectors.json 缺 invalid_hash_seeds")
+    hashes = []
+    for i, row in enumerate(seeds):
+        value = row.get("device_hash") if isinstance(row, dict) else None
+        if not isinstance(value, str) or not HEX64_RE.fullmatch(value):
+            raise GenError(f"device-hash.vectors.json invalid_hash_seeds[{i}].device_hash 应为 64 位小写十六进制")
+        hashes.append(value)
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：specs/device-hash.vectors.json 的 invalid_hash_seeds（BR-ID-09 细则「设备标识的无效值」）",
+        "",
+        "/// 无效设备哈希的种子（config device.invalid_hashes 的初值）：客户端求哈希后命中即视为取不到，不注册、不上报。",
+        "public enum DeviceHashSeeds {",
+        "    public static let invalidHashes: Swift.Set<Swift.String> = [",
+    ]
+    lines += [f"        {swift_string(h)}," for h in sorted(set(hashes))]
+    lines += ["    ]", "}", ""]
+    put(out, "DeviceHashSeeds.swift", "\n".join(lines))
+
+
+# 包内默认配置里去掉的地址类字段：示例里是 example.test 占位地址，不能进包（Release 不含非 prod 地址）。
+DEFAULT_CONFIG_DROPPED_KEYS = ["h5_base_url", "share_domains", "kf"]
+
+
+def gen_default_config(out: dict[str, str]):
+    doc = load("contracts/openapi.json")
+    try:
+        example = doc["paths"]["/v1/config"]["get"]["responses"]["200"]["content"]["application/json"]["example"]
+    except (KeyError, TypeError) as exc:
+        raise GenError(f"openapi 里找不到 GET /v1/config 的 200 响应示例：{exc}") from exc
+    data = example.get("data") if isinstance(example, dict) else None
+    if not isinstance(data, dict):
+        raise GenError("GET /v1/config 的响应示例没有 data 对象")
+    data = json.loads(json.dumps(data))
+    for key in DEFAULT_CONFIG_DROPPED_KEYS:
+        data.pop(key, None)
+    patterns = data.get("link_patterns")
+    if isinstance(patterns, dict):
+        patterns["rules"] = []
+    text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if re.search(r"https?://|example\.test", text):
+        raise GenError("包内默认配置里仍有地址：" + text)
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：contracts/openapi.yaml GET /v1/config 200 响应示例的 data（03 §4.3 包内 default_config.json）。",
+        "// 去掉了地址类字段（" + "、".join(DEFAULT_CONFIG_DROPPED_KEYS) + "）并清空 link_patterns.rules：示例里是",
+        "// example.test 占位地址，不能进包。",
+        "// TODO(N-21): 发布构建时改为从生产配置当时的值生成（03 §4.3：features.search_status 等取生产值）。",
+        "",
+        "/// 包内默认配置（`ConfigStore` 没有当前配置与 LKG 时的最后一层）。",
+        "public enum DefaultConfig {",
+        f"    public static let json: Swift.String = {swift_string(text)}",
+        "}",
+        "",
+    ]
+    put(out, "DefaultConfig.swift", "\n".join(lines))
+
+
 # ---------- 主流程 ----------
 
 
@@ -1179,6 +1493,9 @@ def generate() -> dict[str, str]:
     gen_app_stores(out)
     gen_update_check_example(out)
     gen_api_operations(out)
+    gen_events(out)
+    gen_device_hash_seeds(out)
+    gen_default_config(out)
     return out
 
 

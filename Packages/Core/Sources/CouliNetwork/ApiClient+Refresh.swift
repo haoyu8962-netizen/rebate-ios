@@ -51,7 +51,7 @@ extension ApiClient {
     }
 
     /// 刷新请求一次的结果（解包后、结算前）。
-    private enum RefreshAttempt {
+    enum RefreshAttempt {
         case tokens(access: String, refresh: String, scope: String)
         case rejected
         case transient(String)
@@ -212,90 +212,6 @@ extension ApiClient {
         settled.outcome = .cleared(effect)
         settled.emit = effect
         return settled
-    }
-
-    /// `POST /v1/auth/refresh`（不经过 ErrorActionMapper），只用窗口快照里的 refresh_token。不会抛错。
-    /// 收到 10401 且响应头 Date 可校时（偏差超过 300 秒）时，校时后用新的 X-Timestamp、X-Nonce 重签再发 1 次
-    /// （BR-ID-09；同一窗口的账号、世代与请求体不变，续发前重新校验状态）（R2-04）。
-    private func performRefresh(_ window: RefreshWindow) async -> RefreshAttempt {
-        guard let operation = ApiOperations.byId(Self.refreshOperation) else {
-            return .rejected
-        }
-        guard let body = (try? JSONSerialization.data(withJSONObject: ["refresh_token": window.refreshToken]))
-            .flatMap({ String(data: $0, encoding: .utf8) })
-        else {
-            return .rejected
-        }
-        var resigned = false
-        while true {
-            let outcome: TransportOutcome
-            switch await sendRefreshOnce(window, operation, body) {
-            case let .finished(attempt):
-                return attempt
-            case let .sent(value):
-                outcome = value
-            }
-            guard case let .response(_, headers, data) = outcome, let envelope = Envelope.parse(data) else {
-                if case let .failure(kind) = outcome, kind == HttpTransport.kindCancelled {
-                    return .superseded
-                }
-                return .transient(Self.transportKind(outcome))
-            }
-            if envelope.code == Self.invalidSignatureCode, !resigned, operation.signed, correctClock(headers) {
-                resigned = true
-                continue
-            }
-            // 刷新接口的令牌在 data（TokenPairResponse）。
-            guard envelope.code == 0, let pair = envelope.data as? [String: Any],
-                  let access = JSONFields.string(pair, "access_token"), !access.isEmpty,
-                  let refresh = JSONFields.string(pair, "refresh_token"), !refresh.isEmpty,
-                  let scope = JSONFields.string(pair, "session_scope"), !scope.isEmpty
-            else {
-                return .rejected
-            }
-            return .tokens(access: access, refresh: refresh, scope: scope)
-        }
-    }
-
-    private enum RefreshSend {
-        case finished(RefreshAttempt)
-        case sent(TransportOutcome)
-    }
-
-    /// 刷新请求发一次：每次（含校时重签）都重新取状态、核对作废世代与会话世代、重新组头签名。
-    private func sendRefreshOnce(_ window: RefreshWindow, _ operation: ApiOperation,
-                                 _ body: String) async -> RefreshSend {
-        let state = await readContext()
-        guard isCurrent(window.epoch), state.privacy == PrivacyRaw.full, state.credentialsReadable else {
-            return .finished(.superseded)
-        }
-        let ready: Ready
-        switch prepare(ApiCall(operationId: Self.refreshOperation, body: body), operation, state) {
-        case let .rejected(reason):
-            // 刷新请求本地发不出去（设备未注册等）：不是服务端拒绝，不清会话。
-            return .finished(.transient(reason))
-        case let .ready(value):
-            ready = value
-        }
-        guard ready.generation == window.generation else {
-            return .finished(.superseded)
-        }
-        let outcome = await transport.send(
-            ready.request, timeoutMillis: RetryPolicy.forOperation(operation).timeoutMillis
-        ) { [weak self] in
-            guard let self else {
-                return false
-            }
-            return isCurrent(window.epoch) && currentGeneration == window.generation
-        }
-        return .sent(outcome)
-    }
-
-    static func transportKind(_ outcome: TransportOutcome) -> String {
-        if case let .failure(kind) = outcome {
-            return kind
-        }
-        return HttpTransport.kindNoEnvelope
     }
 
     /// 调用方持有 `lock`。记下「这一代因刷新失败被清」（只留最近几代）。

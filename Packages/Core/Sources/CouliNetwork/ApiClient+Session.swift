@@ -167,3 +167,11 @@ extension ApiClient {
         liveSession(state)?.account.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
+
+public extension ApiClient {
+    /// 经过会话隔离判断的当前账号（登录时保存的 user_id）：隔离中（清会话删除失败）、读取失败、没有会话时为 nil。
+    /// 不判断隐私状态（调用方先确认凭据可读）。埋点的 user_id 取它（APP-03b 共性 9）。
+    var isolatedAccount: String? {
+        lock.withLock { readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 } }
+    }
+}

@@ -213,6 +213,38 @@ class ProbeSnapshot(unittest.TestCase):
         with self.assertRaisesRegex(gen.GenError, "contractAllCases"):
             gen.generate()
 
+    # ---- APP-03b：埋点字段名禁用规则（events.yaml 头注释），命中即生成失败 ----
+
+    def set_event_fields(self, fields: dict):
+        path = os.path.join(self.snapshot, "specs", "events.json")
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+        doc["events"]["probe_event"] = {"description": "probe", "source": "probe", "fields": fields}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False)
+
+    def test_forbidden_event_field_segments_fail_generation(self):
+        for name in ["promo_url", "item_url", "tpwd", "relation_id", "deeplink", "adzone_id", "href",
+                     "sub_union_id", "my_custom_parameters", "pid", "union_link"]:
+            with self.subTest(name=name):
+                self.set_event_fields({name: {"type": "string", "required": False}})
+                with self.assertRaisesRegex(gen.GenError, name):
+                    gen.generate()
+
+    def test_event_field_exceptions_and_common_name_clash(self):
+        self.set_event_fields({"link_id": {"type": "string", "required": True},
+                               "pid_scene": {"type": "string", "required": False}})
+        files = gen.generate()
+        self.assertIn("public static func probeEvent(", files["TrackerEvents.swift"])
+        self.set_event_fields({"page": {"type": "string", "required": True}})
+        with self.assertRaisesRegex(gen.GenError, "公共字段同名"):
+            gen.generate()
+
+    def test_required_when_must_reference_existing_field(self):
+        self.set_event_fields({"attempt_id": {"type": "string", "required_when": {"phase": "purchase"}}})
+        with self.assertRaisesRegex(gen.GenError, "required_when"):
+            gen.generate()
+
     # ---- 现有快照 ----
 
     def test_real_snapshot_typechecks_and_marks_debug_only_table(self):
@@ -222,6 +254,8 @@ class ProbeSnapshot(unittest.TestCase):
         self.assertTrue(app.splitlines()[3] == "#if DEBUG", "App 侧 debug_only 表必须整个在 #if DEBUG 里")
         self.assertIn(gen.DEBUG_ONLY_ROUTE_MARKER, app)
         self.assertGreater(len(gen.DEBUG_ONLY_ROUTE_MARKER.encode()), 15, "标记必须长于 15 字节，避免被内联")
+        self.assertIn("public static func appLaunch(", files["TrackerEvents.swift"])
+        self.assertNotRegex(files["DefaultConfig.swift"], r"https?://|example\\.test")
         self.typecheck(files)
 
 

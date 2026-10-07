@@ -17,6 +17,9 @@ public enum HeaderNames {
     public static let stepUpToken = "X-Step-Up-Token"
     public static let retryAfter = "Retry-After"
     public static let date = "Date"
+    /// 条件请求（03 §4.3：回前台带 ETag 拉取 /v1/config）。
+    public static let ifNoneMatch = "If-None-Match"
+    public static let etag = "ETag"
 
     /// 不含凭据与设备标识的公共头：基本模式、撤回清理未完成时也带。
     public static let anonymous = [appId, platform, appVersion, build, channel, traceId]
@@ -101,13 +104,25 @@ public struct ClientIdentity: Sendable, Equatable {
     }
 }
 
-/// 设备凭据（BR-ID-09）：服务端签发的 device_id 与 install_secret。设备注册在 APP-03b；只在凭据可读时读取。
+/// 设备凭据（BR-ID-09）：服务端签发的 device_id 与 install_secret（APP-03b：ClientCore 的 DeviceRegistry）。
+/// 只在凭据可读时读取。两项一次读出（`credentials`），不拼两次读取的混合结果。
 public protocol DeviceCredentials: Sendable {
     var deviceId: String? { get }
     var installSecret: String? { get }
+    /// 一次读出的 device_id 与 install_secret（任一项缺失为 nil）。默认由上面两项拼出；生产实现覆盖为一次读取。
+    var credentials: (deviceId: String, installSecret: String)? { get }
 }
 
-/// 设备还没注册（APP-03b 之前的实现）：需要签名的接口一律本地返回 device_not_ready。
+public extension DeviceCredentials {
+    var credentials: (deviceId: String, installSecret: String)? {
+        guard let id = deviceId, !id.isEmpty, let secret = installSecret, !secret.isEmpty else {
+            return nil
+        }
+        return (id, secret)
+    }
+}
+
+/// 设备还没注册（测试与未接线时）：需要签名的接口一律本地返回 device_not_ready。生产实现是 ClientCore 的 DeviceRegistry。
 public struct UnregisteredDevice: DeviceCredentials {
     public init() {}
 
@@ -154,17 +169,23 @@ public struct NetworkHooks: Sendable {
     public var onForceUpdate: @Sendable (String?) async -> Void
     /// 每个错误 Effect（页面也能从 `ApiResult.failure` 拿到）。
     public var onEffect: @Sendable (ErrorEffect) async -> Void
-    /// 10402：重新注册设备（APP-03b）；返回 true 后沿用原键重放 1 次。
-    public var reRegisterDevice: @Sendable () async -> Bool
+    /// 10402：重新注册设备（APP-03b，ClientCore 的 DeviceRegistry.reRegister）；参数是被拒请求带的 X-Device-Id
+    /// （单飞：同一个被拒的 device_id 只重新注册 1 次；已被换掉时直接返回 true）。返回 true 后沿用原键重放 1 次。
+    public var reRegisterDevice: @Sendable (_ rejectedDeviceId: String?) async -> Bool
+    /// 10402 且重新注册 / 重放预算已用完（重放、刷新重放再次收到 10402）：隔离这次请求所用的凭据，并把后续恢复交给
+    /// 唯一一条注册退避链（APP-03b 共性 25）。原调用随即结束。只在调用仍属有效世代时调用。
+    public var deviceRejected: @Sendable (_ rejectedDeviceId: String?) -> Void
 
     public init(
         onForceUpdate: @escaping @Sendable (String?) async -> Void = { _ in },
         onEffect: @escaping @Sendable (ErrorEffect) async -> Void = { _ in },
-        reRegisterDevice: @escaping @Sendable () async -> Bool = { false }
+        reRegisterDevice: @escaping @Sendable (_ rejectedDeviceId: String?) async -> Bool = { _ in false },
+        deviceRejected: @escaping @Sendable (_ rejectedDeviceId: String?) -> Void = { _ in }
     ) {
         self.onForceUpdate = onForceUpdate
         self.onEffect = onEffect
         self.reRegisterDevice = reRegisterDevice
+        self.deviceRejected = deviceRejected
     }
 }
 
@@ -186,6 +207,8 @@ public struct ApiCall: Sendable, Equatable {
     public var summary: String
     /// 发起页有可重新转链的商品卡（30144 输出 refetch_product）；App 内链接落地页 LinkLanding 传 false。
     public var fromProductCard: Bool
+    /// 读接口的 If-None-Match（原样发送，不拆引号或 W/ 前缀；03 §4.3 回前台带 ETag 拉取配置）。写接口忽略。
+    public var ifNoneMatch: String?
 
     public init(
         operationId: String,
@@ -195,7 +218,8 @@ public struct ApiCall: Sendable, Equatable {
         idempotencyKey: String? = nil,
         stepUpToken: String? = nil,
         summary: String = "",
-        fromProductCard: Bool = true
+        fromProductCard: Bool = true,
+        ifNoneMatch: String? = nil
     ) {
         self.operationId = operationId
         self.pathParams = pathParams
@@ -205,6 +229,7 @@ public struct ApiCall: Sendable, Equatable {
         self.stepUpToken = stepUpToken
         self.summary = summary
         self.fromProductCard = fromProductCard
+        self.ifNoneMatch = ifNoneMatch
     }
 }
 

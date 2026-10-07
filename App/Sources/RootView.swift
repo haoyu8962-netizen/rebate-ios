@@ -16,6 +16,7 @@ struct RootView: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var privacy: PrivacyController
     @EnvironmentObject private var update: AppUpdate
+    @EnvironmentObject private var permissions: AppPermissions
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -55,6 +56,12 @@ struct RootView: View {
                     onLater: update.dismissPrompt,
                     onGo: update.promptGoStore
                 ).dialog
+            }
+            .couliDialog(isPresented: permissions.rationale != nil) {
+                permissions.rationaleDialog
+            }
+            .couliDialog(isPresented: permissions.settingsGuide != nil) {
+                permissions.settingsGuideDialog
             }
             .couliToast($update.toast)
     }
