@@ -70,6 +70,13 @@ public final class Router: ObservableObject {
     var forceUpdateConsentRequest: RouteRequest?
     /// 会话 / 环境代次：退出登录、切换账号、切换环境时递增，进行中的推送回查结果据此作废。
     private var generation: UInt64 = 0
+    /// 会话归属标签来源（APP-05a 共性 25；App 接 ApiClient.sessionGeneration）：登记 pending_action、发起推送回查时记下，
+    /// 登出收尾按它只清原会话归属的部分。nil = 未接（按旧口径整体清理）。
+    public var sessionTag: (@MainActor () -> UInt64)?
+    /// 当前这条 pending_action 登记时的会话标签（只在内存；记录内容对不上的，例如进程重启前登记的，按归属未知处理）。
+    var pendingTag: (record: PendingAction, tag: UInt64)?
+    /// 已结束的会话标签上界：发起时标签不大于它的推送回查结果丢弃（`sessionEnded(throughSession:)`）。
+    var endedSessionTag: UInt64?
 
     public init(
         routes: [String: RouteSpec] = Routes.all,
@@ -125,7 +132,9 @@ public final class Router: ObservableObject {
             show(RouteDestination(route: nil))
         case .deferred:
             // 外部带进来的请求排队，等条件满足后再交给 Router；App 内的操作不排队。
-            if request.sourceKind != .inApp {
+            // 桥调用（nav.open）也不排队、不补执行：结果以桥的回复为准，调用方已收到「没打开」或被取消
+            // （APP-04 共性 65）。
+            if request.sourceKind != .inApp, request.sourceKind != .bridge {
                 queueLaunch(.route(request), pushLanding: nil)
             }
         case .reject:
@@ -173,12 +182,14 @@ public final class Router: ObservableObject {
         if !params.isEmpty {
             values["params"] = .object(params)
         }
-        pendingStore.save(
+        if pendingStore.save(
             action: Self.openRouteAction,
             values: values,
             now: pendingStore.now,
             origin: request.sourceKind.rawValue
-        )
+        ) {
+            tagPending()
+        }
     }
 
     // MARK: - pending_action
@@ -309,6 +320,7 @@ public final class Router: ObservableObject {
     private func startPush(messageId: String, state guardState: GuardState,
                            using pushLanding: PushLanding, hot: Bool = false) -> Task<Void, Never>? {
         let issued = generation
+        let session = sessionTag?()
         if let blocked = PushLanding.probe(state: guardState, routes: routes) {
             finishPush(blocked, messageId: messageId, issuedAt: issued, hot: hot, landing: pushLanding)
             return nil
@@ -316,7 +328,8 @@ public final class Router: ObservableObject {
         let routes = routes
         return Task { @MainActor [weak self] in
             let result = await pushLanding.land(messageId: messageId, state: guardState, routes: routes)
-            self?.finishPush(result, messageId: messageId, issuedAt: issued, hot: hot, landing: pushLanding)
+            guard let self, !sessionTagEnded(session) else { return }
+            finishPush(result, messageId: messageId, issuedAt: issued, hot: hot, landing: pushLanding)
         }
     }
 

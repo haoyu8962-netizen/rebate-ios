@@ -1,0 +1,5 @@
+# LoginVectorTests.swift 是 Codex 按任务书先写的向量测试（APP-05a 任务书 §4，不改不删），放宽它触发的规则。
+disabled_rules:
+  - cyclomatic_complexity
+  - function_body_length
+  - type_body_length

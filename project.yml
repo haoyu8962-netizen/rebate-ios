@@ -89,7 +89,7 @@ targets:
         products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost]
       - package: DesignSystem
       - package: Features
-        products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web]
+        products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login]
 
   CouliTests:
     type: bundle.unit-test
@@ -137,6 +137,7 @@ schemes:
         - package: Core/ClientCoreTests
         - package: Core/BridgeHostTests
         - package: DesignSystem/DesignSystemTests
+        - package: Features/LoginTests
     profile:
       config: Release
     analyze:

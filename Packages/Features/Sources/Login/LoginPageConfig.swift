@@ -1,0 +1,96 @@
+import Foundation
+
+/// 登录页用到的文案键（BR-TEXT-14；三端同名）。契约 texts.default.json 已有的键（error.*、invite.notice_inviter、
+/// login.help_entry）直接取；其余是 App 草稿表 LoginDraftTexts 里「待定稿，不得提审」的键（TODO(N-26) TEXT-01）。
+/// 本模块不出现中文，文案一律经 `LoginTexts` 取。
+public enum LoginKeys {
+    public static let brand = "login.brand"
+    public static let close = "login.close"
+    public static let back = "login.back"
+    public static let settings = "login.settings"
+    public static let title = "login.title"
+    public static let phoneLabel = "login.phone.label"
+    public static let phonePrefix = "login.phone.prefix"
+    public static let phonePlaceholder = "login.phone.placeholder"
+    public static let phoneClear = "login.phone.clear"
+    public static let agreePrefix = "login.agree.prefix"
+    public static let agreeAgreement = "login.agree.agreement"
+    public static let agreeAnd = "login.agree.and"
+    public static let agreePrivacy = "login.agree.privacy"
+    public static let agreeSuffix = "login.agree.suffix"
+    public static let agreeHint = "login.agree.hint"
+    public static let getCode = "login.get_code"
+    public static let inviteEntry = "login.invite.entry"
+    public static let otherMethods = "login.other_methods"
+    public static let apple = "login.apple"
+    public static let confirmTitle = "login.agree_confirm.title"
+    public static let confirmBodyPrefix = "login.agree_confirm.body_prefix"
+    public static let confirmBodySuffix = "login.agree_confirm.body_suffix"
+    public static let confirmCancel = "login.agree_confirm.cancel"
+    public static let confirmOK = "login.agree_confirm.ok"
+    public static let codeTitle = "login.code.title"
+    public static let codeSentTo = "login.code.sent_to"
+    public static let codeLabel = "login.code.label"
+    public static let codeCountdown = "login.code.countdown"
+    public static let codeResend = "login.code.resend"
+    public static let codeContinue = "login.code.continue"
+    public static let inviteLabel = "login.invite.label"
+    public static let invitePlaceholder = "login.invite.placeholder"
+    public static let inviteClear = "login.invite.clear"
+    public static let submit = "login.submit"
+    public static let help = "login.help_entry"
+    public static let riskBlockedDesc = "login.risk_blocked.desc"
+    public static let riskBlockedOK = "login.risk_blocked.ok"
+    public static let appeal = "cs.appeal_entry"
+    public static let deletionTitle = "error.10007"
+    public static let deletionBody = "login.deletion.body"
+    public static let deletionCS = "login.deletion.cs"
+    public static let deletionOK = "login.deletion.ok"
+    public static let sessionExpired = "error.10404"
+    public static let generic = "error.50001"
+}
+
+/// 文案来源（App 实现：DefaultTexts → 草稿表）。缺键返回空串。
+@MainActor
+public protocol LoginTexts {
+    func text(_ key: String) -> String
+    /// 带变量：{name} 替换为 vars[name]；带占位而没给值时用 fallback 文案。
+    func format(_ key: String, _ vars: [String: String]) -> String
+}
+
+/// 页面的出口（App 接 Router 与 App 能力）。
+@MainActor
+public final class LoginPageConfig {
+    public let service: LoginService
+    public let texts: LoginTexts
+    /// 从强更页进入的受限登录（APP-02c 内部来源标记 `fromForceUpdatePage`，不进路由参数，rule-gaps ROUTE-01）：
+    /// 不显示设置、登录遇到问题、邀请码与第三方登录。
+    public var restricted = false
+    /// 刷新失败清会话后进入（LoginSessionExpired）：进入时提示 error.10404。
+    public var sessionExpired = false
+    /// 第三方登录的位置：APP-05b 实现前只在 Debug / Staging 构建显示占位（版式比对用），Release 不显示。
+    public var showThirdPartySlot = false
+    public var onClose: () -> Void = {}
+    public var onSettings: () -> Void = {}
+    public var onHelp: () -> Void = {}
+    /// 协议链接：type = agreement / privacy（routes.json Agreement.type）。
+    public var onAgreement: (String) -> Void = { _ in }
+    public var onCustomerService: () -> Void = {}
+    /// 登录成功（页面已由执行器关闭）：App 显示邀请绑定结果等。
+    public var onLoggedIn: (LoginOutcome) -> Void = { _ in }
+    /// 10405（受限登录查不到账号 no_account 等）：App 提示先更新（文案键），关闭登录页回到强更页。
+    public var onForceUpdate: (String?) -> Void = { _ in }
+
+    public init(service: LoginService, texts: LoginTexts) {
+        self.service = service
+        self.texts = texts
+    }
+}
+
+/// 页面弹窗。
+public enum LoginDialog: Equatable {
+    case agreeConfirm
+    /// LoginCodeBlocked（标题键）。
+    case blocked(String)
+    case deletionProcessing
+}

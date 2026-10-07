@@ -1,19 +1,5 @@
 import Foundation
 
-/// 一个能力的结果：成功带 data（缺省 {}），失败带桥错误码。data 是只读的 JSON 对象（创建后不再修改）。
-public struct BridgeOutcome: @unchecked Sendable {
-    public let code: Int
-    public let data: [String: Any]?
-
-    public static func ok(_ data: [String: Any] = [:]) -> BridgeOutcome {
-        BridgeOutcome(code: BridgeCode.ok, data: data)
-    }
-
-    public static func fail(_ code: Int) -> BridgeOutcome {
-        BridgeOutcome(code: code, data: nil)
-    }
-}
-
 /// 强更状态（03 §4.4 统一入口守卫的四种状态；检查中由宿主最多等 5 秒，到时按未知）。
 public enum BridgeUpdateState {
     public static let supported = "supported"
@@ -60,6 +46,7 @@ public protocol BridgeServices: AnyObject {
     func user(validity: BridgeCallValidity) async -> BridgeOutcome
     /// auth.getH5Token：readOnly 时只申请只读作用域（强更检查不是 OK / 低于推荐，BR-ID-32 细则「只读作用域」）；令牌不缓存。
     func h5Token(readOnly: Bool, validity: BridgeCallValidity) async -> BridgeOutcome
+    /// auth.login：等登录页结束再结算；完成登录时结果带本次登录保存的会话归属键（`BridgeOutcome.boundAccountKey`，APP-04 共性 68）。
     func login() async -> BridgeOutcome
     /// net.signedRequest：已过 signed_paths 白名单；原生签名代发。bodyJson 是 H5 给的 body 原样序列化的 JSON（没有时为 nil）。
     func signedRequest(
@@ -145,11 +132,11 @@ public final class BridgeHost {
     }
 
     private let protocolProvider: @MainActor () -> BridgeProtocol
-    private let caller: @MainActor () -> BridgeCallerState
+    let caller: @MainActor () -> BridgeCallerState
     /// 业务能力（强引用；它不持有容器）。界面能力是容器自己，弱引用（容器持有本宿主）。
     let services: any BridgeServices
     weak var ui: (any BridgeUI)?
-    private let awaitUpdate: @MainActor () async -> String
+    let awaitUpdate: @MainActor () async -> String
     private var generation: UInt64 = 0
     private var inFlight: [String: Call] = [:]
     private var disposed = false
@@ -311,13 +298,15 @@ public final class BridgeHost {
     }
 
     /// 结算一次调用：只结算自己的登记（invalidate 之后同一个 id 可能已被新的调用占用）；世代与账号都没变才交回结果，否则 90500。
+    /// auth.login 完成登录的结果带本次登录保存的归属键（`BridgeOutcome.boundAccountKey`）：账号核对改为「此刻仍是这次登录保存的
+    /// 会话」，隐私仍须与开始时相同；宿主世代（页面、撤回同意、切换环境）照常核对（APP-04 共性 68）。
     private func settle(id: String, token: UUID, outcome: BridgeOutcome) {
         guard let call = inFlight[id], call.token == token else { return }
         inFlight[id] = nil
         call.validity.revoke()
         call.work?.cancel()
         call.timer?.cancel()
-        let owned = call.generation == generation && caller().accountKey == call.state.accountKey
+        let owned = call.generation == generation && sessionHolds(call.state, method: call.method, outcome: outcome)
         guard owned else {
             call.reply(BridgeProtocol.response(id: id, code: BridgeCode.nativeError))
             return
@@ -338,10 +327,7 @@ public final class BridgeHost {
         generation started: UInt64,
         validity: BridgeCallValidity
     ) async -> BridgeOutcome {
-        let update = state.update == BridgeUpdateState.checking ? await awaitUpdate() : state.update
-        // 等待之后、执行任何副作用之前再核对一次归属（APP-04 三端共性第 4 条）：宿主世代（撤回同意、切换环境、页面换文档、容器销毁）、
-        // 隐私状态与账号都没变才执行；变了就不执行，以 90500 结束（不排队、不补执行）。
-        guard !Task.isCancelled, stillOwned(generation: started, state: state) else {
+        guard let update = await bindCurrentUpdate(state, generation: started) else {
             return .fail(BridgeCode.nativeError)
         }
         if let code = Self.updateGuard(
@@ -367,6 +353,17 @@ public final class BridgeHost {
         defer { navigating = nil }
         return await body()
     }
+
+    /// 结算时的会话核对（见 `settle`）。
+    private func sessionHolds(_ state: BridgeCallerState, method: String, outcome: BridgeOutcome) -> Bool {
+        let now = caller()
+        if method == Self.loginMethod, let bound = outcome.boundAccountKey {
+            return now.accountKey == bound && now.privacy == state.privacy
+        }
+        return now.accountKey == state.accountKey
+    }
+
+    static let loginMethod = "auth.login"
 
     func stillOwned(generation started: UInt64, state: BridgeCallerState) -> Bool {
         let now = caller()

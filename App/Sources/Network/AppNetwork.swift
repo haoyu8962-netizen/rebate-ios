@@ -21,7 +21,8 @@ import Session
 /// - 设备凭据（APP-03b）：`DeviceRegistry` 是 ApiClient 的 `DeviceCredentials`（签名用真实凭据），10402 经
 ///   `NetworkHooks.reRegisterDevice` 单飞重新注册；它的清理项（作废进行中的注册、删凭据）替换两个注册表里的同名占位。
 ///   同意后的注册步骤由 PrivacyController 经 `registerDevice(done:)` 登记进 PrivacyGate（退避沿用闸门的）。
-/// TODO(APP-05): 会话级 Effect（跳登录等）接 Router。
+/// - 会话级 Effect（clear_session_login / clear_session_stay_force_update）连同网络层定下的归属世代交给 AppLogin（APP-05a）：
+///   普通会话失效经 Router 打开 Login，强更场景保持强更页。
 @MainActor
 final class AppNetwork {
     let client: ApiClient
@@ -70,10 +71,13 @@ final class AppNetwork {
             pendingKeys: PendingKeyStore(backend: pendingBackend, clock: PendingActionStore.wallClockMillis),
             hooks: NetworkHooks(
                 onForceUpdate: { minimum in await source.forceUpdate(minimum) },
+                // 会话 Effect 的归属由网络层在清理发生的同一同步区里定下、随 Effect 传出（APP-05a 共性 26）。
+                onEffect: { effect in await source.sessionEffect(effect) },
                 reRegisterDevice: { rejected, isValid in
                     await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
                 },
-                deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) }
+                deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) },
+                sessionRefreshed: { generation, origin in await source.sessionRefreshed(generation, origin: origin) }
             ),
             configuration: configuration
         )
@@ -178,6 +182,27 @@ final class NetworkContextSource {
             update: AppNetwork.networkUpdate(update.routerStatus),
             apiBaseURL: settled ? environment.current.endpoints.apiBaseURL : nil
         )
+    }
+
+    /// 会话被清的 Effect（clear_session_login / clear_session_stay_force_update）：原样（类型不合并）连同它的归属世代
+    /// 交给 AppLogin（APP-05a 共性 18、26）。
+    var onSessionEffect: (@MainActor (ErrorEffect, UInt64) -> Void)?
+    /// 单飞刷新成功（受限会话可能已变为 full，APP-05a 共性 14、19）：带会话世代与刷新来源交给 AppLogin。
+    var onSessionRefreshed: (@MainActor (UInt64, SessionRefreshOrigin) -> Void)?
+
+    func sessionRefreshed(_ generation: UInt64, origin: SessionRefreshOrigin) {
+        onSessionRefreshed?(generation, origin)
+    }
+
+    /// 归属世代只取 Effect 自带的（网络层确实清了会话时才有）；没有清理的会话失效 Effect 不通知（APP-05a 共性 26）。
+    func sessionEffect(_ effect: ErrorEffect) {
+        switch effect.kind {
+        case .clearSessionLogin, .clearSessionStayForceUpdate:
+            guard let generation = effect.sessionGeneration else { return }
+            onSessionEffect?(effect, generation)
+        default:
+            break
+        }
     }
 
     /// 确需强更的 10405（或强更检查未知期间拿到 deletion_only）：进强更（AppUpdate.on10405）。

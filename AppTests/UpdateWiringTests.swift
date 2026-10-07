@@ -78,7 +78,11 @@ final class UpdateWiringTests: XCTestCase {
         let routing = makeRouting(consentedStore(), update: UpdateFixtures.makeUpdate(checker: checker))
         XCTAssertEqual(checker.calls, 1)
         XCTAssertEqual(routing.guardState.update, .checking, "没等满 5 秒：checking（F-ALL-03）")
-        let external = routing.router.open(RouteRequest(route: "Search", from: .bridge))
+        // 桥来源同样判为等待，但不进启动队列、不补执行（APP-04 共性 65，APP-05a R1-05）。
+        let bridge = routing.router.open(RouteRequest(route: "Search", from: .bridge))
+        XCTAssertEqual(bridge.reason, GuardReason.updateChecking)
+        XCTAssertFalse(routing.router.hasPendingLaunchIntent)
+        let external = routing.router.open(RouteRequest(route: "Search", from: .deeplink))
         XCTAssertEqual(external.reason, GuardReason.updateChecking)
         XCTAssertTrue(routing.router.hasPendingLaunchIntent)
         let inApp = routing.router.open(RouteRequest(route: "Search", from: .inApp))

@@ -32,7 +32,8 @@ extension ApiClient {
             }
             // 登录：会话保存成功才算登录成功（R1-11）。
             if case let .notSaved(reason) = await captureLogin(
-                operation, envelope.data, epoch: options.epoch, generation: ready.generation
+                operation, envelope.data, epoch: options.epoch, generation: ready.generation, valid: options.callValid,
+                saved: options.onSessionSaved
             ) {
                 return .sessionNotSaved(reason: reason, traceId: envelope.traceId)
             }
@@ -113,16 +114,9 @@ extension ApiClient {
             case let .ready(value):
                 ready = value
             }
-            // 真正发出（task.resume）前在登记任务的同一把锁里再核对作废世代与会话世代（lessons 22）。
-            // 桥调用另核对调用有效性（APP-04 三端共性第 22 条）。
-            let (epochValue, bound, callValid) = (options.epoch, options.boundGeneration, options.callValid)
-            let outcome = await transport.send(
-                ready.request, timeoutMillis: retry.timeoutMillis, cancelWithTask: callValid != nil
-            ) { [weak self] in
-                guard let self else {
-                    return false
-                }
-                return isCurrent(epochValue) && (bound == nil || currentGeneration == bound) && (callValid?() ?? true)
+            guard let outcome = await sendOnce(ready, timeoutMillis: retry.timeoutMillis, options) else {
+                // 登记时就已作废、请求没有写出：按本地结束（call_cancelled），与「已写出、结果未知」分开（APP-05a 共性 22）。
+                return .finished(rejected(LocalRejectReason.callCancelled, options))
             }
             if case let .failure(kind) = outcome,
                kind == HttpTransport.kindTimeout || kind == HttpTransport.kindDisconnect,
@@ -324,17 +318,6 @@ extension ApiClient {
     static let abandonedCode = 20903
     static let cannotConfirmTextKey = "pending_confirm.cannot_confirm"
 
-    /// 会话级副作用：跳登录与其他前置引导（会登记待办或要求在当前会话里补办）、刷新、清会话。旧世代的响应不得交付。
-    /// guide_only（step-up 操作上的 10001 / 10004 / 10005 / 授权码，以及 30304 等补办引导）都要求当前账号补身份、同意、
-    /// 授权或实名、收款信息，同样按会话世代校验（R3-02）。
-    static func isSessionScoped(_ effect: ErrorEffect) -> Bool {
-        let kinds: Set<ErrorEffectKind> = [
-            .login, .bindPhone, .consent, .stepUp, .authorize, .guideOnly, .refreshReplay, .refreshOnly,
-            .clearSessionLogin, .clearSessionStayForceUpdate,
-        ]
-        return kinds.contains(effect.kind) || effect.registerPending || effect.route == "Login"
-    }
-
     func settleHeld(_ options: RunOptions, kind: String) {
         if let held = options.held {
             pendingKeys.onResponse(key: held.key, kind: kind, account: held.account, callOwner: held.owner)
@@ -368,11 +351,24 @@ extension ApiClient {
         case .forceUpdate:
             await hooks.onForceUpdate(JSONFields.string(data, "min_supported_version"))
         case .clearSessionLogin:
-            clearSession(ifGeneration: ready.generation)
+            return clearAction(effect, exchange)
         default:
             break
         }
         return .effect(effect)
+    }
+
+    /// 10404 清会话：清理是否发生、Effect 归属哪一代，在同一把锁里定下（APP-05a 共性 26）。上面的世代核对之后、这里之前已换代
+    /// （新登录已保存）的，不清新会话，也不发会话失效 Effect——按旧世代的响应结束。
+    private func clearAction(_ effect: ErrorEffect, _ exchange: Exchange) -> PipelineAction {
+        let ready = exchange.ready
+        guard let cleared = clearSession(ifGeneration: ready.generation) else {
+            let failure = lock.withLock { refreshFailures[ready.generation] }
+            return failure.map { .cleared($0) } ?? .end(supersededReason(exchange.options))
+        }
+        var owned = effect
+        owned.sessionGeneration = cleared
+        return .effect(owned)
     }
 
     /// 首次 10402：重新注册（注册表在入口里先隔离被拒凭据），成功后沿用原键重放 1 次。调用有效性一并交给注册窗口；

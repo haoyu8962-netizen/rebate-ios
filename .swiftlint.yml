@@ -27,7 +27,8 @@ custom_rules:
   # BR-TEXT-12：业务页面不硬编码中文文案，一律经文案字典取键。
   no_hardcoded_chinese_in_features:
     name: "No hardcoded Chinese in Features"
-    included: ".*/Packages/Features/.*\\.swift$"
+    # 只管功能源码（页面）；Features/Tests 里的测试断言说明不是界面文案（APP-05a：Codex 先写的 LoginVectorTests 带中文说明）。
+    included: ".*/Packages/Features/Sources/.*\\.swift$"
     regex: "[\\p{Script=Han}\\x{3000}-\\x{303F}\\x{FF00}-\\x{FFEF}]+"
     match_kinds:
       - string

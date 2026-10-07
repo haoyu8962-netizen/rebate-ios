@@ -140,10 +140,17 @@ feature_isolation() {
     (cd "$ROOT/Packages/Features" && swift package dump-package) | python3 -c '
 import json, sys
 manifest = json.load(sys.stdin)
-names = {t["name"] for t in manifest["targets"]}
+names = {t["name"] for t in manifest["targets"] if t.get("type") != "test"}
 bad = []
 for target in manifest["targets"]:
     tname = target["name"]
+    # 测试 target（如 LoginTests）依赖它所测的那一个 Feature，不是 Feature 之间的边；但测试 target 仍不得依赖第二个 Feature。
+    if target.get("type") == "test":
+        own = [value[0] for kind, value in (next(iter(d.items())) for d in target["dependencies"])
+               if kind in ("byName", "target") and value[0] in names]
+        if len(own) > 1:
+            bad.append(tname + " -> " + ", ".join(own))
+        continue
     for dep in target["dependencies"]:
         kind, value = next(iter(dep.items()))
         if kind in ("byName", "target") and value[0] in names:
@@ -214,7 +221,7 @@ staging_has_debug_capabilities() {
     tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect staging.couli.invalid \
-        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 "$app" || return 1
+        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 "$app" || return 1
     [ "$(/usr/libexec/PlistBuddy -c "Print :CouliBuildConfiguration" "$app/Info.plist")" = "Staging" ] || {
         echo "Staging 包的 CouliBuildConfiguration 不是 Staging"
         return 1
@@ -373,7 +380,7 @@ if [ "$FAST" -eq 0 ]; then
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
-        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect 127.0.0.1 \
+        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect 127.0.0.1 \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

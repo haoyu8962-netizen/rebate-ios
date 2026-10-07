@@ -34,6 +34,8 @@ final class RefreshWindow: @unchecked Sendable {
     var abandoned = false
     /// 调用方登记版本（在 `ApiClient.lock` 里每次入队加一）：作废前用它复核判空之后没有新调用方入队（R4-01）。
     var callerVersion: UInt64 = 0
+    /// 开窗口的是冷启动 / 版本恢复的受限会话屏障（在 `ApiClient.lock` 里写入；APP-05a 共性 19）。并入的调用方不改它。
+    var origin = SessionRefreshOrigin.other
 
     init(generation: UInt64, epoch: UInt64, refreshToken: String, account: String?) {
         self.generation = generation
@@ -206,6 +208,9 @@ extension ApiClient {
         if settled.enterForceUpdate {
             await hooks.onForceUpdate(nil)
         }
+        if case .refreshed = settled.outcome {
+            await hooks.sessionRefreshed(window.generation, settled.origin)
+        }
     }
 
     /// 一个窗口的结算：定下的结果、要结算的等待者、要发的会话 Effect 与后续动作。
@@ -216,11 +221,13 @@ extension ApiClient {
         var emit: ErrorEffect?
         var retry = false
         var enterForceUpdate = false
+        var origin = SessionRefreshOrigin.other
     }
 
     /// 调用方持有 `lock`。保存或清除会话、定结果、摘下窗口。
     private func settleWindowLocked(_ window: RefreshWindow, _ attempt: RefreshAttempt) -> WindowSettlement {
         var settled = WindowSettlement()
+        settled.origin = window.origin
         if refreshWindows[window.generation] === window {
             refreshWindows[window.generation] = nil
         }
@@ -271,21 +278,6 @@ extension ApiClient {
         settled.outcome = .cleared(effect)
         settled.emit = effect
         return settled
-    }
-
-    /// 调用方持有 `lock`。记下「这一代因刷新失败被清」（只留最近几代）。
-    private func recordRefreshFailureLocked(_ value: UInt64, _ effect: ErrorEffect) {
-        refreshFailures[value] = effect
-        while refreshFailures.count > Self.refreshFailureMemory, let oldest = refreshFailures.keys.min() {
-            refreshFailures[oldest] = nil
-        }
-    }
-
-    /// 调用方持有 `lock`。会话丢失（刷新失败）的 Effect：以最近读到的强更状态为准（结算前刚读过）。
-    func sessionLostEffectLocked() -> ErrorEffect {
-        lastUpdateSeen == UpdateRaw.below
-            ? ErrorEffect(code: 10002, kind: .clearSessionStayForceUpdate, route: "ForceUpdate")
-            : ErrorEffect(code: 10002, kind: .clearSessionLogin, route: "Login")
     }
 
     // MARK: - 受限会话屏障
@@ -357,6 +349,10 @@ extension ApiClient {
         let admission = admitLocked(bound, access, caller, continuation)
         if case .now = admission {} else {
             refreshWindows[bound]?.barrierSerial = serial
+        }
+        if case let .start(window) = admission {
+            // 屏障开的窗口：冷启动或版本恢复触发的刷新（共性 19）。并入登录复查窗口的屏障不改来源。
+            window.origin = .restrictedBarrier
         }
         return admission
     }

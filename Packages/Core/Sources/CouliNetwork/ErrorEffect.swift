@@ -143,6 +143,9 @@ public struct ErrorEffect: Sendable, Equatable {
     public var action: String?
     /// 20001 字段提示的字段名（data.fields）。
     public var fields: [String]?
+    /// 会话失效 Effect（clear_session_*）的归属（APP-05a 共性 26）：网络层在确实清掉会话的同一同步区里记下的清理后会话世代。
+    /// 没有发生清理的为 nil，App 不据此做会话失效处理，也不得用回调时读到的「当前世代」补作归属。
+    public var sessionGeneration: UInt64?
 
     public init(
         code: Int,

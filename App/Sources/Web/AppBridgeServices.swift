@@ -63,12 +63,44 @@ final class AppBridgeServices: BridgeServices {
         return .ok(token.filter { Self.h5TokenFields.contains($0.key) })
     }
 
-    /// TODO(APP-05)：登录页完成或离开时再结算；现在只打开登录占位路由，按当时的会话返回。
     func login() async -> BridgeOutcome {
-        guard let web else { return .fail(BridgeCode.nativeError) }
-        web.routing.router.open(RouteRequest(route: RoutePolicy.login, from: .bridge))
-        return .ok(["logged_in": web.callerState(fromForceUpdatePage: false).accountKey != nil])
+        guard let web, let login = web.login else { return .fail(BridgeCode.nativeError) }
+        let session = BridgeLoginSession.production(login: login) { [weak web] in
+            web?.callerState(fromForceUpdatePage: false)
+        }
+        return await Self.login(router: web.routing.router, session: session)
     }
+
+    /// auth.login（APP-04 共性 66，bridge.schema.json「Opens Login; resolves when the user finishes or leaves」）：经 Router
+    /// 打开登录页，等这一页离开导航栈——登录成功（会话已保存，登录流程关闭登录页）→ logged_in=true；取消、返回、被清栈 →
+    /// 按此刻有没有会话（通常 false）——再结算，不在打开登录页之前就返回。守卫没让打开（检查中、强更等）按 90500 结束。
+    /// 是否打开了登录页看本次导航的实际结论与新推入的页面条目（按页面 id 绑定，共性 67），不比较路由状态有没有变化。
+    /// 登录成功的结果绑定本次登录保存的会话归属键（共性 68）：BridgeHost 结算时允许这次登录造成的账号变化。
+    /// 等待期间页面、隐私、环境的归属由 BridgeHost 负责：作废时取消执行它的 Task，这里随之结束等待（90500）。
+    static func login(router: Router, session: BridgeLoginSession) async -> BridgeOutcome {
+        let mark = session.mark()
+        let decision = router.open(RouteRequest(route: RoutePolicy.login, from: .bridge))
+        guard decision.kind == .open || decision.kind == .openReadonly,
+              let page = router.path.last, page.route == RoutePolicy.login
+        else {
+            return .fail(BridgeCode.nativeError)
+        }
+        while router.path.contains(where: { $0.id == page.id }) {
+            do {
+                try await Task.sleep(nanoseconds: loginPollNanos)
+            } catch {
+                return .fail(BridgeCode.nativeError)
+            }
+        }
+        guard !Task.isCancelled else { return .fail(BridgeCode.nativeError) }
+        if let key = session.committedKey(mark) {
+            return .ok(["logged_in": true], boundAccountKey: key)
+        }
+        return .ok(["logged_in": session.loggedIn()])
+    }
+
+    /// 等登录页离开导航栈的检查间隔。
+    static let loginPollNanos: UInt64 = 100_000_000
 
     /// signed_paths 已在协议层核对；按 method + path 找 openapi 的签名接口，由 ApiClient 签名代发（03 §5.3 代发约定）。
     /// TODO(N-22)：openapi 9cd1e6f 没有 POST /v1/orders/claims，找不到时按「本端不支持」结束，不臆造请求（与 Android 相同）。
@@ -118,6 +150,11 @@ final class AppBridgeServices: BridgeServices {
             params: params,
             source: RouteSource.bridge.rawValue
         ))
+        // 守卫判为等待（检查中、环境未就绪等）：Router 不把桥请求放进启动队列，这次调用按取消结束（90500），之后也不补执行
+        // （APP-04 共性 65）。
+        if decision.kind == .deferred {
+            return .fail(BridgeCode.nativeError)
+        }
         let opened = decision.kind == .open || decision.kind == .openReadonly
         // 强更未知：只读页面以外的目标不打开，以 90500 结束（不新增码，03 §4.4）。
         if readOnlyPagesOnly, !opened {
@@ -216,5 +253,36 @@ final class AppBridgeServices: BridgeServices {
             body["trace_id"] = traceId
         }
         return ["status": 200, "body": body]
+    }
+}
+
+/// 桥 auth.login 认定「本次登录」用的会话出口（APP-04 共性 68）。
+@MainActor
+struct BridgeLoginSession {
+    /// 打开登录页前记下的登录提交序号（LoginService.commitMark）。
+    let mark: @MainActor () -> UInt64
+    /// `since` 之后有登录保存了会话，且此刻仍是那次保存的会话：返回它的归属键；否则 nil。
+    let committedKey: @MainActor (_ since: UInt64) -> String?
+    /// 此刻有没有会话（没有完成本次登录时的 logged_in）。
+    let loggedIn: @MainActor () -> Bool
+
+    /// 生产取值：LoginService 记下的登录提交（保存后的会话世代由 ApiClient 在保存那把锁里给出），与调用方状态的归属键对照。
+    static func production(
+        login: AppLogin,
+        caller: @escaping @MainActor () -> BridgeCallerState?
+    ) -> BridgeLoginSession {
+        BridgeLoginSession(
+            mark: { [weak login] in login?.service.commitMark ?? 0 },
+            committedKey: { [weak login] since in
+                guard let login, let commit = login.service.lastCommit, commit.serial > since,
+                      let key = caller()?.accountKey,
+                      key == AppWeb.accountKey(account: login.account, generation: commit.generation)
+                else {
+                    return nil
+                }
+                return key
+            },
+            loggedIn: { caller()?.accountKey != nil }
+        )
     }
 }

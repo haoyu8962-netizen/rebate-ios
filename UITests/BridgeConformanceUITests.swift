@@ -75,11 +75,14 @@ final class BridgeConformanceUITests: XCTestCase {
     func testAuthLogin() throws {
         let app = launch()
         app.webViews.firstMatch.buttons["auth.login/normal"].tap()
-        XCTAssertTrue(app.staticTexts["route.placeholder.name"].waitForExistence(timeout: 10))
-        attach("auth-login-opens-login-placeholder")
+        XCTAssertTrue(app.descendants(matching: .any)["login.page"].waitForExistence(timeout: 10))
+        attach("auth-login-opens-login")
+        XCTAssertEqual(routerState(app)["path"], "1", "登录页已压栈")
+        // APP-04 共性 66：登录页还在时桥调用不结算；用户离开登录页后才回包（logged_in=false）。
+        app.buttons["login.close"].tap()
         let report = try waitForReport(app) { $0.item("auth.login/normal")?.outcome != nil }
         assertPassed(report, "auth.login/normal")
-        XCTAssertEqual(routerState(app)["path"], "1", "登录占位路由已压栈")
+        XCTAssertEqual(routerState(app)["path"], "0", "登录页已离开")
     }
 
     func testNavClose() throws {

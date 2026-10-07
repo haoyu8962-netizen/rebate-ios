@@ -14,6 +14,9 @@ enum RouteViewRegistry {
     static let builders: [String: Builder] = [
         RoutePolicy.webPage: { AnyView(WebPageRouteView(destination: $0)) },
         RoutePolicy.externalPage: { AnyView(ExternalPageRouteView(destination: $0)) },
+        // APP-05a：短信登录页（Features/Login）与设置占位页上的【退出登录】。
+        RoutePolicy.login: { AnyView(LoginRouteView(destination: $0)) },
+        "Settings": { AnyView(SettingsPlaceholderView(destination: $0)) },
     ]
 
     @ViewBuilder
@@ -49,9 +52,8 @@ private struct RoutePlaceholderView: View {
                     .foregroundColor(CouliColor.textSecondary)
             }
             if destination.fromForceUpdatePage {
-                // 从强更页进入（APP-02c）：登录页按受限登录显示——不显示【设置】、「登录遇到问题」与邀请码等业务输入，
-                // 只登录已有账号（BR-ID-01 细则「受限会话」）。TODO(APP-05): 真实登录页读这个标记。
-                Text(verbatim: destination.route == RoutePolicy.login ? "restricted login" : "from force update")
+                // 从强更页进入（APP-02c）。登录页（APP-05a LoginRouteView）读这个标记按受限登录显示。
+                Text(verbatim: "from force update")
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .accessibilityIdentifier("route.placeholder.restricted")

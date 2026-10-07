@@ -163,6 +163,16 @@ public struct NetworkContext: Sendable, Equatable {
     }
 }
 
+/// 一次单飞刷新是谁发起的（APP-05a 共性 19）。按开窗口的那个调用方定，之后并入的调用方不改变它。
+public enum SessionRefreshOrigin: Sendable, Equatable {
+    /// 冷启动或强更恢复为受支持后的受限会话屏障（BR-ID-01 细则「受限会话」）：会话刷新成 full 后，App 在世代仍有效时
+    /// 通知启动协调器，经 Router 守卫恢复待办。
+    case restrictedBarrier
+    /// 其他（登录尝试的受限复查、10002 / 10405 refresh_only 等请求触发）：只同步会话状态，不恢复待办——待办由有效的
+    /// 登录流程自己交 Router 恢复；已取消的登录复查不能借这条通知恢复（共性 10）。
+    case other
+}
+
 /// 网络层对外的回调。
 public struct NetworkHooks: Sendable {
     /// 进强更（Update.on10405）：确需强更的 10405，或强更检查未知期间登录 / 刷新拿到 deletion_only（min 为 nil）。
@@ -179,6 +189,10 @@ public struct NetworkHooks: Sendable {
     /// 10402 且重新注册 / 重放预算已用完（重放、刷新重放再次收到 10402）：隔离这次请求所用的凭据，并把后续恢复交给
     /// 唯一一条注册退避链（APP-03b 共性 25）。原调用随即结束。只在调用仍属有效世代时调用。
     public var deviceRejected: @Sendable (_ rejectedDeviceId: String?) -> Void
+    /// 单飞刷新成功、新令牌已保存（受限会话可能因此变为 full；APP-05a 共性 14）：带本次刷新所属的会话世代与刷新来源。
+    /// App 在主线程核对世代仍是当前世代后同步 Router 的会话状态；来源是冷启动 / 版本恢复的受限会话屏障时再通知启动协调，
+    /// 经 Router 守卫恢复待办（共性 19）。
+    public var sessionRefreshed: @Sendable (_ generation: UInt64, _ origin: SessionRefreshOrigin) async -> Void
 
     public init(
         onForceUpdate: @escaping @Sendable (String?) async -> Void = { _ in },
@@ -186,12 +200,16 @@ public struct NetworkHooks: Sendable {
         reRegisterDevice: @escaping @Sendable (
             _ rejectedDeviceId: String?, _ isValid: (@Sendable () -> Bool)?
         ) async -> Bool = { _, _ in false },
-        deviceRejected: @escaping @Sendable (_ rejectedDeviceId: String?) -> Void = { _ in }
+        deviceRejected: @escaping @Sendable (_ rejectedDeviceId: String?) -> Void = { _ in },
+        sessionRefreshed: @escaping @Sendable (
+            _ generation: UInt64, _ origin: SessionRefreshOrigin
+        ) async -> Void = { _, _ in }
     ) {
         self.onForceUpdate = onForceUpdate
         self.onEffect = onEffect
         self.reRegisterDevice = reRegisterDevice
         self.deviceRejected = deviceRejected
+        self.sessionRefreshed = sessionRefreshed
     }
 }
 

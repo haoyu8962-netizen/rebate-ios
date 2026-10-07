@@ -17,11 +17,25 @@ struct RootView: View {
     @EnvironmentObject private var privacy: PrivacyController
     @EnvironmentObject private var update: AppUpdate
     @EnvironmentObject private var permissions: AppPermissions
+    @EnvironmentObject private var login: AppLogin
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
 
     var body: some View {
+        #if DEBUG
+        if let width = DebugLayoutWidth.value {
+            // 截图用（APP-05a）：`-CouliDebugLayoutWidth 320` 把根布局限制为窄屏宽度（模拟器没有 320pt 宽机型）。
+            gatedByEnvironment.frame(width: width).frame(maxWidth: .infinity)
+        } else {
+            gatedByEnvironment
+        }
+        #else
+        gatedByEnvironment
+        #endif
+    }
+
+    @ViewBuilder private var gatedByEnvironment: some View {
         switch environment.gate {
         case .settled:
             #if DEBUG
@@ -63,7 +77,11 @@ struct RootView: View {
             .couliDialog(isPresented: permissions.settingsGuide != nil) {
                 permissions.settingsGuideDialog
             }
+            .couliDialog(isPresented: login.inviteFailedKey != nil) {
+                InviteFailedDialog.make(login, bodyKey: login.inviteFailedKey ?? "login.invite_failed.body")
+            }
             .couliToast($update.toast)
+            .couliToast($login.toast)
     }
 
     /// 隐私弹窗显示条件（R1-01，判定见 `AppRouting.privacyDialogVisible`）；读发布值，界面随之刷新。
@@ -103,6 +121,8 @@ struct RootView: View {
         #if DEBUG
         .sheet(isPresented: $showsDebugPanel) {
             DebugPanelView(store: environment, update: update)
+                .environmentObject(login)
+                .environmentObject(router)
         }
         .overlay(alignment: .bottomTrailing) {
             // 一致性页的逐项结果与路由状态（UI 测试读取；被其他路由盖住时仍在）。

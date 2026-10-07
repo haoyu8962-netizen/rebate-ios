@@ -1,5 +1,7 @@
 #if DEBUG
 import Config
+import CouliNetwork
+import Router
 import SwiftUI
 import Update
 
@@ -13,6 +15,9 @@ enum DebugPanelMarker {
 struct DebugPanelView: View {
     @ObservedObject var store: EnvironmentStore
     @ObservedObject var update: AppUpdate
+    @EnvironmentObject private var login: AppLogin
+    @EnvironmentObject private var router: Router
+    @Environment(\.dismiss) private var dismiss
     @State private var lastError: String?
     @State private var updateScenario = DebugUpdateScenario.current
 
@@ -70,6 +75,39 @@ struct DebugPanelView: View {
                     Text(verbatim: "App update check (fake data)")
                 } footer: {
                     Text(verbatim: AppVersionCheckExample.marker)
+                }
+                Section {
+                    Button {
+                        dismiss()
+                        router.open(RouteRequest(route: RoutePolicy.login, from: .inApp))
+                    } label: {
+                        Text(verbatim: "Open Login")
+                    }
+                    .accessibilityIdentifier("debug.login.open")
+                    Button {
+                        dismiss()
+                        // 与生产同一出口（AppLogin.sessionEffect）：普通会话失效经 Router 打开登录页并提示。
+                        login.sessionEffect(
+                            ErrorEffect(code: 10404, kind: .clearSessionLogin, route: RoutePolicy.login),
+                            generation: login.sessionGeneration
+                        )
+                    } label: {
+                        Text(verbatim: "Login: session expired")
+                    }
+                    .accessibilityIdentifier("debug.login.expired")
+                    Button {
+                        dismiss()
+                        router.open(RouteRequest(route: "Settings", from: .inApp))
+                    } label: {
+                        Text(verbatim: "Settings (logout)")
+                    }
+                    .accessibilityIdentifier("debug.settings")
+                    Text(verbatim: login.loggedIn ? "session: logged in" : "session: guest")
+                        .accessibilityIdentifier("debug.login.session")
+                } header: {
+                    Text(verbatim: "Login (APP-05a)")
+                } footer: {
+                    Text(verbatim: DebugFakeLoginServer.marker)
                 }
                 Section {
                     NavigationLink {

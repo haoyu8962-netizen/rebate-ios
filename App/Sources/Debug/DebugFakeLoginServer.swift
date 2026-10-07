@@ -1,0 +1,149 @@
+#if DEBUG
+import Foundation
+import Generated
+import Router
+import SecureStore
+import Session
+
+/// 本机假服务（APP-05a 截图、冒烟与设计稿比对用；只在 Debug / Staging 编译，APP-04 共性 2）：URLProtocol 桩，
+/// 全部请求在本机回答，不连任何地址。启动参数 `-CouliFakeLoginServer` 打开时才接管 ApiClient 的会话配置。
+/// Release 制品扫描查 `marker` 与类名（tools/ci/release-scan.sh）。
+///
+/// 场景按输入值选：
+/// - 发码：13900000000 → 42901（Retry-After 120）；13700000000 第一次成功、之后 42901（Retry-After 3600，共性 12 演示）；
+///   其余成功（60 秒）。
+/// - 登录：验证码 200020 → 20002、200030 → 20003、444444 → 44001、100070 → 10007 processing、104050 → 10405 no_account；
+///   其余成功：13600000000 拿 deletion_only，其余 full；带邀请码时按新号，语法合法 bound，否则 failed 30401。
+final class DebugFakeLoginServer: URLProtocol {
+    /// 一次回答：业务码、data 的 JSON 文本、响应头。
+    struct Reply {
+        let code: Int
+        let data: String
+        var headers: [String: String] = [:]
+    }
+
+    static let marker = "COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21"
+    static let launchArgument = "-CouliFakeLoginServer"
+
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var sentPhones: Set<String> = []
+
+    /// 启动参数里有 `-CouliFakeLoginServer` 时返回接管所有请求的会话配置；否则 nil。打开时从游客开始：清掉本机会话与
+    /// pending_action（截图与 UI 测试每次冷启动状态一致）。
+    static func configurationIfEnabled(
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> URLSessionConfiguration? {
+        guard arguments.contains(launchArgument) else { return nil }
+        try? SecureSessionTokens(store: KeychainStore()).clear()
+        UserDefaultsPendingBackend().delete()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DebugFakeLoginServer.self]
+        return configuration
+    }
+
+    override static func canInit(with _: URLRequest) -> Bool {
+        true
+    }
+
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let path = request.url?.path ?? ""
+        let body = Self.object(Self.bodyData(request))
+        let reply = Self.answer(path: path, body: body)
+        let (code, data, headers) = (reply.code, reply.data, reply.headers)
+        let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"debug-fake-000000\"}"
+        let url = request.url ?? URL(fileURLWithPath: "/")
+        let response = HTTPURLResponse(
+            url: url, statusCode: code == 0 ? 200 : 400, httpVersion: "HTTP/1.1", headerFields: headers
+        )
+        // 略等一下，界面上能看到加载态。
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { [self] in
+            client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(text.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {}
+
+    private static let refreshed =
+        "{\"access_token\":\"debug-at-2\",\"refresh_token\":\"debug-rt-2\",\"session_scope\":\"full\"}"
+
+    static func answer(path: String, body: [String: Any]) -> Reply {
+        switch path {
+        case "/v1/devices":
+            Reply(code: 0, data: "{\"device_id\":\"debug-fake-device\",\"install_secret\":\"debug-fake-placeholder\"}")
+        case "/v1/config":
+            Reply(code: 0, data: DefaultConfig.json)
+        case "/v1/auth/sms-codes":
+            sms(phone: body["phone"] as? String ?? "")
+        case "/v1/auth/login/sms":
+            login(body)
+        case "/v1/auth/refresh":
+            Reply(code: 0, data: refreshed)
+        default:
+            Reply(code: 0, data: "{}")
+        }
+    }
+
+    private static func sms(phone: String) -> Reply {
+        if phone == "13900000000" {
+            return Reply(code: 42901, data: "{}", headers: ["Retry-After": "120"])
+        }
+        let repeated = lock.withLock { !sentPhones.insert(phone).inserted }
+        if phone == "13700000000", repeated {
+            return Reply(code: 42901, data: "{}", headers: ["Retry-After": "3600"])
+        }
+        return Reply(code: 0, data: "{\"resend_after_sec\":60,\"expires_in_sec\":300}")
+    }
+
+    private static let noAccount = "{\"reason\":\"no_account\",\"min_supported_version\":\"9.9.9\"}"
+
+    private static func login(_ body: [String: Any]) -> Reply {
+        switch body["code"] as? String ?? "" {
+        case "200020": return Reply(code: 20002, data: "{}")
+        case "200030": return Reply(code: 20003, data: "{}")
+        case "444444": return Reply(code: 44001, data: "{}")
+        case "100070": return Reply(code: 10007, data: "{\"stage\":\"processing\"}")
+        case "104050": return Reply(code: 10405, data: noAccount)
+        default: break
+        }
+        let scope = (body["phone"] as? String) == "13600000000" ? "deletion_only" : "full"
+        var bind = ""
+        if let invite = body["invite_code"] as? String {
+            let valid = invite.count == 6 && invite.allSatisfy { "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".contains($0) }
+            bind = valid ? ",\"invite_bind\":{\"result\":\"bound\",\"code\":null}"
+                : ",\"invite_bind\":{\"result\":\"failed\",\"code\":30401}"
+        }
+        let data = "{\"user_id\":\"debug-user\",\"is_new_user\":\(!bind.isEmpty),\"tokens\":{\"access_token\":"
+            + "\"debug-at-1\",\"refresh_token\":\"debug-rt-1\",\"session_scope\":\"\(scope)\"}\(bind)}"
+        return Reply(code: 0, data: data)
+    }
+
+    private static func bodyData(_ request: URLRequest) -> Data {
+        if let data = request.httpBody {
+            return data
+        }
+        guard let stream = request.httpBodyStream else { return Data() }
+        var data = Data()
+        stream.open()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        stream.close()
+        return data
+    }
+
+    private static func object(_ data: Data) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+}
+#endif

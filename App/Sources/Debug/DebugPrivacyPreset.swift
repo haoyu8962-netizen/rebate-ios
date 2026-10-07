@@ -30,3 +30,13 @@ enum DebugPrivacyPreset {
     }
 }
 #endif
+
+#if DEBUG
+/// 截图用的根布局宽度（`-CouliDebugLayoutWidth 320`，只在 Debug / Staging 编译）：模拟器没有 320pt 宽机型时比对窄屏。
+enum DebugLayoutWidth {
+    static var value: CGFloat? {
+        let width = UserDefaults.standard.double(forKey: "CouliDebugLayoutWidth")
+        return width > 0 ? CGFloat(width) : nil
+    }
+}
+#endif

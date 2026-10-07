@@ -14,7 +14,7 @@ import Router
 final class AppRouting {
     /// 守卫状态里由其他任务提供的几项（占位，可在调试时替换）。
     struct Placeholders {
-        // TODO(APP-05): 接 Session（游客 / 已登录 / 已绑手机 / 受限会话）；会话变化时调 `launchConditionsChanged()`。
+        /// 会话状态源未接上（`sessionSource` 为 nil，测试等）时用的会话状态。APP-05a 起生产由 AppLogin 接上 `sessionSource`。
         var session: SessionState = .guest
         // TODO(APP-05): 接实名结论；未知按未实名（auth=realname 进实名前置）。
         var realnameVerified = false
@@ -26,6 +26,10 @@ final class AppRouting {
     let privacy: PrivacyController
     let update: AppUpdate
     var placeholders = Placeholders()
+    /// 守卫的会话状态源（APP-05a：AppLogin 按 ApiClient 的会话现算：游客 / 受限 / 已绑手机）。隐私未同意时一律按游客。
+    var sessionSource: (@MainActor () -> SessionState)?
+    /// 会话状态变化（登录、登出、会话被清）后通知（AppLogin 刷新设置页等）。
+    var onSessionStateChanged: (@MainActor () -> Void)?
     /// Tab 外壳（或基本模式页）已经显示。
     private(set) var shellReady = false
     private var consentObservation: AnyCancellable?
@@ -133,7 +137,7 @@ final class AppRouting {
         return GuardState(
             privacyState: privacy.routerPrivacy,
             updateState: effective ?? .checking,
-            sessionState: placeholders.session,
+            sessionState: currentSession,
             environmentSettled: environment.gate == .settled,
             appVersion: Self.appVersion,
             isDebugBuild: Self.isDebugBuild,
@@ -358,5 +362,25 @@ extension AppRouting {
             params["type"] = .string(type)
         }
         router.openFromPrivacyDialog(RouteRequest(route: "Agreement", values: params, from: .inApp))
+    }
+}
+
+extension AppRouting {
+    // MARK: - 会话（APP-05a）
+
+    var currentSession: SessionState {
+        guard let sessionSource else { return placeholders.session }
+        return privacy.routerPrivacy == .consented ? sessionSource() : .guest
+    }
+
+    /// 会话变化后的路由同步（APP-05a，LoginHost 的出口）：先同步强更页，再通知各处刷新会话显示；
+    /// `resumePending = true`（有效的登录流程）时协调启动（满足条件的 pending_action 随之恢复）；false 时只同步，
+    /// 不恢复待办（APP-05a 共性 10：已作废的登录尝试、登出、会话被清）。
+    func sessionStateChanged(resumePending: Bool) {
+        syncForceUpdate()
+        onSessionStateChanged?()
+        if resumePending {
+            launchConditionsChanged()
+        }
     }
 }

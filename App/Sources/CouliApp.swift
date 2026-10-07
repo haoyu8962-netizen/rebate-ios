@@ -15,6 +15,7 @@ struct CouliApp: App {
     @StateObject private var config: AppConfig
     @StateObject private var permissions: AppPermissions
     @StateObject private var web: AppWeb
+    @StateObject private var login: AppLogin
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -25,7 +26,7 @@ struct CouliApp: App {
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
         // 网络核心（APP-03a）：创建即把「作废并取消在途请求」登记到撤回同意、切换环境两个注册表的第一位；
         // 在 attach 之前它不发任何请求。
-        let network = AppNetwork()
+        let network = Self.makeNetwork()
         // 配置存储（APP-03b）：LKG 清理项要在启动对账（创建 EnvironmentStore）之前登记进切换环境的注册表。
         let config = AppConfig(client: network.client)
         // 埋点队列的清理器先登记（直接删队列文件），再重试上次没清干净的撤回清理（清干净之前任何模块不得读取会话凭据），
@@ -44,6 +45,9 @@ struct CouliApp: App {
         let privacy = PrivacyController(deviceRegistration: { done in network.registerDevice(done: done) })
         let update = Self.makeUpdate()
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
+        // 短信登录（APP-05a）：守卫的会话状态源、会话 Effect 与刷新通知的接收方、登录页配置、登出。在 attach 之前接上：
+        // attach 之后 ApiClient 可能立即发起受限会话刷新，它的通知要有人接。
+        let login = AppLogin(network: network, routing: routing, update: update)
         network.attach(environment: environment, privacy: privacy, update: update) {
             config.environmentChanged()
         }
@@ -64,13 +68,27 @@ struct CouliApp: App {
         let permissions = AppPermissions()
         _permissions = StateObject(wrappedValue: permissions)
         // 两类 WebView 容器与 JSBridge（APP-04）：创建即把「作废在途桥调用」登记进撤回同意、切换环境两个注册表的第一位。
-        _web = StateObject(wrappedValue: AppWeb(
+        let web = AppWeb(
             config: config, network: network, routing: routing, privacy: privacy, update: update,
             tracker: tracker, permissions: permissions
-        ))
+        )
+        web.login = login
+        _web = StateObject(wrappedValue: web)
+        _login = StateObject(wrappedValue: login)
         self.tracker = tracker
         self.routing = routing
         self.network = network
+    }
+
+    /// 网络核心。Debug / Staging 带启动参数 `-CouliFakeLoginServer` 时用本机假服务（URLProtocol 桩，不连任何地址；
+    /// APP-04 共性 2：假登录只在调试构建编译，Release 制品扫描查标记）。
+    private static func makeNetwork() -> AppNetwork {
+        #if DEBUG
+        if let configuration = DebugFakeLoginServer.configurationIfEnabled() {
+            return AppNetwork(configuration: configuration)
+        }
+        #endif
+        return AppNetwork()
     }
 
     private static func makeUpdate() -> AppUpdate {
@@ -90,6 +108,7 @@ struct CouliApp: App {
                 .environmentObject(config)
                 .environmentObject(permissions)
                 .environmentObject(web)
+                .environmentObject(login)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }

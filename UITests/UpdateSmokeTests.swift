@@ -61,12 +61,15 @@ final class UpdateSmokeTests: XCTestCase {
         XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 10), "返回回到强更页")
 
         app.buttons["update.force.deleteAccount"].tap()
-        XCTAssertTrue(name.waitForExistence(timeout: 10))
-        XCTAssertEqual(name.label, "Login")
-        XCTAssertEqual(app.staticTexts["route.placeholder.restricted"].label, "restricted login", "受限登录")
+        // 受限登录（APP-05a）：真实登录页，不显示【设置】、邀请码入口与「登录遇到问题」（BR-ID-01 细则）。
+        XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "login.getCode").exists)
+        XCTAssertFalse(element(app, "login.settings").exists, "受限登录不显示设置")
+        XCTAssertFalse(element(app, "login.inviteEntry").exists, "受限登录不显示邀请码")
+        XCTAssertFalse(element(app, "login.help").exists, "受限登录不显示登录遇到问题")
         save(app, "ForceUpdate-restricted-login")
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 10), "返回回到强更页")
+        app.buttons["login.close"].tap()
+        XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 10), "关闭回到强更页")
 
         // 商店对照表全为 null：【去更新】→ 暂时无法更新与【重试】，不给下载地址。
         app.buttons["update.force.goStore"].tap()

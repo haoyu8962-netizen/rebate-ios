@@ -28,6 +28,8 @@ final class AppWeb: ObservableObject {
     let tracker: AppTracker
     let permissions: AppPermissions
     let hosts = BridgeHostRegistry()
+    /// 短信登录（APP-05a）：桥 auth.login 据它认定本次登录保存的会话（CouliApp 创建后接上）。
+    weak var login: AppLogin?
     /// 容器页随路由真正出栈 teardown（三端共性第 28 条）。
     let routeLifetimes: WebRouteLifetimes
     private let cleaner: BridgeHostsCleaner
@@ -96,13 +98,18 @@ final class AppWeb: ObservableObject {
         // 归属键 = 账号 + 会话世代：同一账号退出后重新登录也算换了归属（三端共性第 15 条）。
         let client = network.client
         let account = privacyRaw == BridgePrivacy.consented
-            ? client.isolatedAccount.map { "\($0)#\(client.sessionGeneration)" } : nil
+            ? Self.accountKey(account: client.isolatedAccount, generation: client.sessionGeneration) : nil
         return BridgeCallerState(
             privacy: privacyRaw,
             accountKey: account,
             update: Self.bridgeUpdate(update.routerStatus),
             fromForceUpdatePage: fromForceUpdatePage
         )
+    }
+
+    /// 桥调用的会话归属键：账号 + 会话世代（没有账号为 nil）。
+    nonisolated static func accountKey(account: String?, generation: UInt64) -> String? {
+        account.map { "\($0)#\(generation)" }
     }
 
     /// 新建一个可信容器（生产取值：可信源只取 bridge_origins，调用方状态取真实的隐私、会话与强更进度）。
