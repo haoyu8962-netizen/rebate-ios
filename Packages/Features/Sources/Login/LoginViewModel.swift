@@ -48,6 +48,13 @@ public final class LoginViewModel: ObservableObject {
         config.service
     }
 
+    /// 剪贴板邀请确认后的预填（APP-07，G16）：进入验证码页时取一次，取走即丢弃；已有输入时不覆盖。
+    func applyInvitePrefill() {
+        guard !config.restricted, let code = config.takeInvitePrefill(), inviteText.isEmpty else { return }
+        inviteText = code
+        inviteOpen = true
+    }
+
     func text(_ key: String) -> String {
         config.texts.text(key)
     }

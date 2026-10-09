@@ -87,7 +87,7 @@ targets:
       - package: Generated
       - package: Core
         products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost, ProductSearch,
-                   TradeJump, Trade]
+                   TradeJump, Trade, Clipboard]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login, Purchase]
@@ -137,6 +137,7 @@ schemes:
         - package: Core/NetworkTests
         - package: Core/ClientCoreTests
         - package: Core/BridgeHostTests
+        - package: Core/ClipboardTests
         - package: DesignSystem/DesignSystemTests
         - package: Features/LoginTests
         - package: Features/SearchTests

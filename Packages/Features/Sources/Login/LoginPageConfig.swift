@@ -80,10 +80,38 @@ public final class LoginPageConfig {
     public var onLoggedIn: (LoginOutcome) -> Void = { _ in }
     /// 10405（受限登录查不到账号 no_account 等）：App 提示先更新（文案键），关闭登录页回到强更页。
     public var onForceUpdate: (String?) -> Void = { _ in }
+    /// 游客在剪贴板邀请提示点了确认（APP-07，G16）：进入验证码页时取一次预填的邀请码（取走即丢弃，之后以用户输入为准）。
+    public var takeInvitePrefill: () -> String? = { nil }
+    /// 邀请码行【粘贴】（APP-07，LoginCodeInvite）：系统粘贴控件交回的文本由 App 只抽码；nil = 不显示。
+    public var invitePaste: LoginInvitePaste?
 
     public init(service: LoginService, texts: LoginTexts) {
         self.service = service
         self.texts = texts
+    }
+}
+
+/// 邀请码【粘贴】的结果：填入的码、要轻提示的文字（「未识别到邀请码」、限流），或什么都不做。
+public enum LoginInvitePasteOutcome: Equatable, Sendable {
+    case code(String)
+    case message(String)
+    case ignored
+}
+
+/// 邀请码行【粘贴】的状态与处理（App 给）：`enabled` 跟随 42901 禁用期（共性第 6 条，执行层另拦）。`begin` 在用户点系统粘贴控件的那一刻
+/// 调用，绑定此刻的登录页实例与前台轮次，返回系统稍后交付文本时的处理（交付时复核，失效 .ignored；APP-07 共性第 28 条）；只抽码，不清空已有输入。
+@MainActor
+public final class LoginInvitePaste: ObservableObject {
+    @Published public var enabled = true
+    public let begin: () -> ((String?) -> LoginInvitePasteOutcome)?
+
+    public init(begin: @escaping () -> ((String?) -> LoginInvitePasteOutcome)?) {
+        self.begin = begin
+    }
+
+    /// 点击与交付在同一时刻。
+    public func handle(_ text: String?) -> LoginInvitePasteOutcome {
+        begin()?(text) ?? .ignored
     }
 }
 

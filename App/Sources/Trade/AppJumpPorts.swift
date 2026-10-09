@@ -1,3 +1,4 @@
+import Clipboard
 import Foundation
 import Generated
 import Trade
@@ -12,11 +13,18 @@ import UIKit
 /// - scheme：`UIApplication.open`（没有 App 处理即失败，不落到浏览器）；universal_link：`.universalLinksOnly`（只拉起认领了该链接的
 ///   App，没装即失败）；h5：交系统浏览器（`UIApplication.open` 打开 http(s) 链接；该域名被别的 App 认领为通用链接时系统会优先拉起
 ///   那个 App，iOS 没有「只用浏览器打开」的公开接口，记 rule-gaps I 段），不进本 App 的两类容器。
-/// - copy_tpwd：写系统剪贴板。TODO(APP-07)：剪贴板识别接入后记下本 App 写入内容的 hash，不再提示（03 §4.6）。
+/// - copy_tpwd：写系统剪贴板只经剪贴板模块的写入口（APP-07，brief §2.3）：先记 hash（之后不再识别它），记不上不写、返回失败。
 /// - 本类不含任何模拟安装状态 / 模拟外跳结果的开关或分支（共性第 42 条）：截图、UI 测试用的假端口是包在它外面的
 ///   `DebugJumpPorts`（App/Sources/Debug，只在 Debug / Staging 编译），Release 制品扫描查它的类名、字段名与启动参数。
 @MainActor
 final class AppJumpPorts: JumpPorts {
+    private let writer: ClipboardWriter?
+
+    /// writer：App 写剪贴板的唯一入口（没有时不写，copy 返回失败）。
+    init(writer: ClipboardWriter?) {
+        self.writer = writer
+    }
+
     func installed(_: String) -> String {
         TradeConstants.installedUnknown
     }
@@ -40,8 +48,7 @@ final class AppJumpPorts: JumpPorts {
     }
 
     func copy(_ text: String) -> Bool {
-        UIPasteboard.general.string = text
-        return true
+        writer?.write(text) ?? false
     }
 
     private func open(_ url: URL, options: [UIApplication.OpenExternalURLOptionsKey: Any]) async -> Bool {

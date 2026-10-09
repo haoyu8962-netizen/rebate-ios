@@ -22,7 +22,8 @@ private struct TrustedWebContainer: View {
         let url = destination.params["url"]?.stringValue.flatMap(URL.init(string:))
         _controller = StateObject(wrappedValue: {
             let controller = web.makeTrustedController(
-                url: url, fromForceUpdatePage: destination.fromForceUpdatePage, onClose: onClose
+                url: url, fromForceUpdatePage: destination.fromForceUpdatePage, container: destination.id,
+                onClose: onClose
             )
             // 路由真正出栈（关闭、清栈、被替换、强更替换栈）时 teardown：作废全部在途桥调用并停止加载。
             web.routeLifetimes.register(destination) { [weak controller] in controller?.teardown() }

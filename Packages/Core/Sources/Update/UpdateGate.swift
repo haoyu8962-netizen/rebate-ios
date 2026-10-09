@@ -90,6 +90,8 @@ public final class UpdateGate {
         record.lastResult = result
         record.lastSuccessAt = now
         record.forcedMinimum = nil
+        record.forcedByServer = nil
+        record.forcedAppVersion = nil
         store.save(record)
         succeededThisRun = true
         lastCheckFailed = false
@@ -115,6 +117,9 @@ public final class UpdateGate {
     // MARK: - 结论
 
     public func state(now _: Int64) -> UpdateState {
+        if forcedByServer {
+            return serverForcedState()
+        }
         let known = Self.evaluate(
             appVersion: appVersion,
             result: record.lastResult,
@@ -155,6 +160,14 @@ public final class UpdateGate {
         now _: Int64,
         canOpen: (String) -> Bool
     ) -> StoreChoice {
+        if forcedByServer {
+            let forced = serverForcedState()
+            // 没有高于本机的最低版本：已上架版本严格高于本机才算
+            return pickForced(
+                result: result, threshold: forced.targetVersion ?? appVersion,
+                strict: forced.targetVersion == nil, canOpen: canOpen
+            )
+        }
         let evaluated = Self.evaluate(
             appVersion: appVersion,
             result: result,
@@ -283,5 +296,52 @@ public final class UpdateGate {
             numbers.append(number)
         }
         return numbers.isEmpty ? nil : numbers
+    }
+}
+
+// MARK: - 服务端判定的强更（APP-07）
+
+public extension UpdateGate {
+    /// 服务端已对本机判定强更（APP-07 共性第 21、24 条）：行内 10405（parse 外层成功、结果行 error_code=10405）、整体 10405 不带最低版本、
+    /// 登录拿到受限会话按「低于」处理时调用。进闸门本身并落盘：强制 below_min，不交给「按缓存最低版本比较」的判断（缓存可能不高于本机，
+    /// 会把这次结论放掉）；跨进程保留，只对收到时的 appVersion 成立（升级后失效，G15）；下一次成功检查解除。
+    func onServerForced(now _: Int64) {
+        record.forcedByServer = true
+        record.forcedAppVersion = appVersion
+        store.save(record)
+    }
+
+    /// 此刻是服务端判定的强更（本机版本未变）。
+    var forcedByServer: Bool {
+        record.forcedByServer == true && record.forcedAppVersion == appVersion
+    }
+}
+
+extension UpdateGate {
+    /// 服务端判定的强更：目标版本只取高于本机的最低版本（10405 带来的或最近一次检查的），否则为 nil——选店时要求已上架版本高于本机。
+    private func serverForcedState() -> UpdateState {
+        let target = [record.forcedMinimum, record.lastResult?.minSupported].compactMap(\.self)
+            .filter { Self.compareVersions(a: appVersion, b: $0) == -1 }
+            .max { Self.compareVersions(a: $0, b: $1) == -1 }
+        return UpdateState(status: .belowMin, targetVersion: target)
+    }
+
+    /// 服务端判定强更的选店：安装来源 → 默认商店 → 其余，已上架版本 ≥ threshold（strict 时 >）且能打开的第一家。
+    private func pickForced(
+        result: UpdateCheckResult, threshold: String, strict: Bool, canOpen: (String) -> Bool
+    ) -> StoreChoice {
+        var seen = Set<String>()
+        let candidates = [installSource, result.defaultStore].compactMap(\.self) + result.stores.map(\.store)
+        for key in candidates where seen.insert(key).inserted {
+            guard let listed = result.listedVersion(of: key),
+                  let order = Self.compareVersions(a: listed, b: threshold), strict ? order > 0 : order >= 0
+            else {
+                continue
+            }
+            if canOpen(key) {
+                return StoreChoice(storeKey: key, unavailable: false)
+            }
+        }
+        return Self.unavailable
     }
 }

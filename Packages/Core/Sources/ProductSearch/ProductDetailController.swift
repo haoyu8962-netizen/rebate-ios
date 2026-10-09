@@ -84,6 +84,17 @@ public final class ProductDetailController: ObservableObject {
         fetch()
     }
 
+    /// 以进程内的卡片种子显示（APP-07 G09：剪贴板 parse 只有 1 张卡）：直接进内容态，不发 getProduct；卡上的 link_id 原样留给购买
+    /// （entry_source=parse，AC-S1-02-TB）。只在第一次生效，之后的 `start()` 不再加载。
+    public func startSeeded(_ product: [String: Any]) {
+        guard !started, !left else { return }
+        started = true
+        snapshot.product = product
+        snapshot.view = ProductDetailState.map(product, context: context())
+        snapshot.phase = .content
+        snapshot.error = nil
+    }
+
     /// 【重试】：只在错误态、限流期外生效。
     @discardableResult
     public func retry() -> Bool {

@@ -32,6 +32,8 @@
 #   - 外跳假端口（APP-06b 共性第 42 条：模拟安装状态 / 模拟外跳结果的开关与执行分支只在调试编译单元）：
 #     标记 COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60、类名 DebugJumpPorts、字段名 debugInstalled / debugNoExternal、
 #     启动参数 CouliFakeTradeNoExternal、假安装状态键 CouliFakeInstalled（App/Sources/Debug/DebugJumpPorts.swift）
+#   - 剪贴板调试计数（APP-07）：标记 COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a、启动参数 CouliClipboardDiagnostics
+#     （App/Sources/Debug/DebugClipboard.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -122,6 +124,8 @@ HITS_LOG="$WORK/hits"
     echo "debugNoExternal"
     echo "CouliFakeTradeNoExternal"
     echo "CouliFakeInstalled"
+    echo "COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a"
+    echo "CouliClipboardDiagnostics"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

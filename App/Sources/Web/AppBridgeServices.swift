@@ -10,15 +10,17 @@ import UIKit
 /// 没有接上的能力返回 90001，不臆造实现。
 @MainActor
 final class AppBridgeServices: BridgeServices {
-    private static let clipboardAutoDetectKey = "couli.clipboard.autoDetect"
     /// 10001 请先登录、10404 登录已过期：桥按未登录结束。
     private static let loginCodes: Set<Int> = [10001, 10404]
     private static let h5TokenFields: Set<String> = ["token", "expire_at", "scope"]
 
     private weak var web: AppWeb?
+    /// 发起调用的网页容器（路由目的地 id）：clipboard.setAutoDetect 只对它生效（G06）。一致性页等没有路由目的地的为 nil。
+    private let container: UUID?
 
-    init(web: AppWeb) {
+    init(web: AppWeb, container: UUID? = nil) {
         self.web = web
+        self.container = container
     }
 
     func env() -> [String: Any] {
@@ -163,9 +165,9 @@ final class AppBridgeServices: BridgeServices {
         return .ok(["opened": opened])
     }
 
-    /// TODO(APP-09)：剪贴板识别模块接入后记下文本哈希、之后不再识别它（03 §4.6）。
+    /// 写剪贴板只经剪贴板模块的写入口（APP-07，brief §2.3）：先记 hash（之后不再识别它），记不上不写、返回失败（共性第 23 条）。
     func clipboardWrite(text: String) -> BridgeOutcome {
-        UIPasteboard.general.string = text
+        guard let writer = web?.clipboard?.writer, writer.write(text) else { return .fail(BridgeCode.nativeError) }
         return .ok()
     }
 
@@ -173,9 +175,10 @@ final class AppBridgeServices: BridgeServices {
         .ok(["text": UIPasteboard.general.string ?? ""])
     }
 
-    /// TODO(APP-09)：剪贴板自动识别的开关由识别模块读取；这里先只记下用户的选择（本机）。
+    /// 只对发起调用的这个网页容器实例生效的临时抑制（APP-07 G06）：容器在栈顶时回前台不识别，容器出栈即失效；不写本机存储、不改设置。
+    /// 旧版写进 UserDefaults 的 couli.clipboard.autoDetect 不再读也不再写。
     func setClipboardAutoDetect(enabled: Bool) -> BridgeOutcome {
-        UserDefaults.standard.set(enabled, forKey: Self.clipboardAutoDetectKey)
+        web?.clipboard?.setWebAutoDetect(container: container, enabled: enabled)
         return .ok()
     }
 

@@ -52,6 +52,7 @@ public struct SearchView: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
+            pasteSlots
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             purchaseTimeout
@@ -79,6 +80,24 @@ public struct SearchView: View {
             restoreFocusTo: $priceChipFocused,
             sheet: { priceSheet }
         )
+    }
+
+    /// 剪贴板（APP-07）：粘贴结果固定在头部下方（不随 phase 隐藏，共性第 10 条）；粘贴入口在输入态、无可搜平台、有 search_disabled
+    /// 回落提示时显示（共性第 11 条）。
+    @ViewBuilder private var pasteSlots: some View {
+        let showsEntry = snapshot.phase == .idle || snapshot.phase == .unavailable || snapshot.notice != nil
+        if page.pasteResult != nil || (showsEntry && page.pasteEntry != nil) {
+            VStack(spacing: CouliSpacing.s3) {
+                page.pasteResult
+                if showsEntry {
+                    page.pasteEntry
+                }
+            }
+            .padding(.horizontal, CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s3)
+            .frame(maxWidth: SearchLayout.maxContentWidth)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     /// 列表卡购买 8 秒没有响应（ProductBuyTimeout；APP-06b 共性第 29 条）：页底「网络不稳定，请重试」+【重试】（同键重放原请求）。

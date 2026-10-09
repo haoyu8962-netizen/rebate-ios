@@ -5,12 +5,13 @@
 // CouliNetwork（请求管线、签名、单飞刷新、ErrorActionMapper、未决键，APP-03a）、
 // ClientCore（设备注册 DeviceRegistry、ConfigStore + LKG、Tracker、PermissionRequester，APP-03b）、
 // BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）、
-// TradeJump（联盟 SDK 适配层：接口 + 不可用实现，APP-06b）与 Trade（open 购买、跳转方案执行、授权、授权管理，APP-06b）；
+// TradeJump（联盟 SDK 适配层：接口 + 不可用实现，APP-06b）与 Trade（open 购买、跳转方案执行、授权、授权管理，APP-06b）、
+// Clipboard（剪贴板识别，APP-07）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
 let placeholderModules = [
-    "Clipboard", "Push",
+    "Push",
 ]
 
 let generated: Target.Dependency = .product(name: "Generated", package: "Generated")
@@ -61,6 +62,11 @@ let coreTargets: [Target] = [
     // specs/open-trade-vectors.json）与执行器（OpenPurchaseController、TradeJumpExecutor、TaobaoAuthFlow、AuthManageController）。
     // Product / Search / Purchase 功能模块都用它（Feature 之间不互相依赖）。测试在 Features/Tests/TradeTests（Codex 先写的位置）。
     .target(name: "Trade", dependencies: ["CouliNetwork", "TradeJump", generated]),
+    // APP-07：剪贴板识别的纯逻辑（读取判定、分类、邀请码抽取、自写记录与提示记录、parse 结果映射，向量
+    // specs/clipboard-vectors.json）与执行端口（ClipboardWatcher、ClipboardWriter、ParseInputService）。不读 UIPasteboard：
+    // 系统剪贴板经 App 给的 SystemClipboard 端口。
+    .target(name: "Clipboard", dependencies: ["CouliNetwork"]),
+    .testTarget(name: "ClipboardTests", dependencies: ["Clipboard", "CouliNetwork"]),
 ]
 
 let placeholderTargets: [Target] = placeholderModules.map {
@@ -80,6 +86,7 @@ let coreProducts: [Product] = [
     .library(name: "ProductSearch", targets: ["ProductSearch"]),
     .library(name: "TradeJump", targets: ["TradeJump"]),
     .library(name: "Trade", targets: ["Trade"]),
+    .library(name: "Clipboard", targets: ["Clipboard"]),
 ]
 
 let placeholderProducts: [Product] = placeholderModules.map { .library(name: $0, targets: [$0]) }

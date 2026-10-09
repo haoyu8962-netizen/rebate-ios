@@ -24,6 +24,8 @@ final class AppLogin: ObservableObject {
     private let routing: AppRouting
     private let texts = AppLoginTexts()
     private var sessionExpiredPending = false
+    /// 剪贴板识别（APP-07）：邀请码【粘贴】与游客邀请预填（CouliApp 创建后接上）。
+    weak var clipboard: AppClipboard?
     /// 第三方登录位置的占位只在 Debug / Staging 显示（APP-05b 实现前，版式比对用）。
     private let showThirdPartySlot: Bool
 
@@ -147,6 +149,11 @@ final class AppLogin: ObservableObject {
         // TODO(N-26)：客服入口（cs.open，/v1/config.kf，未装微信按 cs.wechat_unavailable）在客服任务实现；先打开帮助中心。
         config.onCustomerService = { router.open(RouteRequest(route: "Help", from: .inApp)) }
         config.onLoggedIn = { [weak self] outcome in self?.showInviteResult(outcome) }
+        // 剪贴板（APP-07）：邀请码行【粘贴】（受限登录不显示邀请码，也就没有【粘贴】，H07 同口径）；游客邀请确认后的预填（G16）
+        if let clipboard, !restricted {
+            config.invitePaste = clipboard.makeLoginInvitePaste()
+            config.takeInvitePrefill = { [weak clipboard] in clipboard?.invitePrefill.take() }
+        }
         config.onForceUpdate = { [weak self] key in
             // 10405：提示先更新（error.10405.no_account 等），关闭登录页回到强更页（BR-ID-01 细则「受限登录」）。
             self?.toast = CouliToastMessage(LoginDraftTexts.text(key ?? "error.10405"))

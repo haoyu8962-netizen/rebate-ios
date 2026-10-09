@@ -1,3 +1,4 @@
+import Clipboard
 import Combine
 import CouliNetwork
 import Foundation
@@ -46,8 +47,12 @@ final class AppTrade {
         var visible: Bool
     }
 
+    /// 购买弹层出现（任一页的加载层、确认框、AuthSheet、外跳提示等，H06 同口径）：剪贴板在显示的同步出口作废（APP-07 共性第 4 条）。
+    var onSensitiveOverlay: (@MainActor () -> Void)?
+
     init(
         network: AppNetwork, config: AppConfig, privacy: PrivacyController, routing: AppRouting, login: AppLogin,
+        writer: ClipboardWriter? = nil,
         track: @escaping @MainActor (TrackEvent) -> Void
     ) {
         client = network.client
@@ -59,9 +64,9 @@ final class AppTrade {
         )
         sink = AppLinkJumpSink(track: track)
         #if DEBUG
-        ports = DebugFakeTrade.ports(wrapping: AppJumpPorts())
+        ports = DebugFakeTrade.ports(wrapping: AppJumpPorts(writer: writer))
         #else
-        ports = AppJumpPorts()
+        ports = AppJumpPorts(writer: writer)
         #endif
         executor = TradeJumpExecutor(ports: ports, baichuan: AppTradeStartup.shared.baichuan, sink: sink)
         pending = RouterPurchasePending(router: router)
@@ -120,6 +125,10 @@ final class AppTrade {
         )
         env.retain = controller
         pages[destination.id] = Page(purchase: controller, manage: nil, visible: true)
+        // 弹层从无到有：同步通知剪贴板作废（APP-07 共性第 4 条）；是否在显示一律按此刻仍在栈里的页面现算（不留登记，F-HM-15 教训）
+        controller.$state.map(Self.showsOverlay).removeDuplicates().filter(\.self).sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.onSensitiveOverlay?() }
+        }.store(in: &subscriptions)
         refreshVisibility(path: router.path)
         return controller
     }
@@ -143,6 +152,20 @@ final class AppTrade {
         guard let page = pages.removeValue(forKey: id) else { return }
         page.purchase?.leave()
         page.manage?.leave()
+    }
+
+    /// 购买流程的界面此刻盖在页面上（加载层、确认框、AuthSheet、授权说明、外跳提示）。
+    nonisolated static func showsOverlay(_ state: PurchaseState) -> Bool {
+        state.phase == .loading || state.dialog != nil || state.browserNotice
+    }
+
+    /// 剪贴板的敏感浮层（G12、H06：购买弹层一律按 auth_sheet 处理）：只看此刻仍在栈里的页面。
+    var sensitiveOverlay: String? {
+        let alive = Set(router.path.map(\.id))
+        let showing = pages.contains { id, page in
+            alive.contains(id) && (page.purchase.map { Self.showsOverlay($0.state) } ?? false)
+        }
+        return showing ? ClipboardSensitive.overlayAuthSheet : nil
     }
 
     // MARK: - 前后台

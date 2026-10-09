@@ -179,17 +179,6 @@ final class AppUpdate: ObservableObject {
         }
     }
 
-    // MARK: - 接口层拦截
-
-    /// 网络层收到 10405（APP-03 调用）：直接进 below_min。强更页内容取最近一次成功的检查结果，没有时立即再查一次（03 §4.2）。
-    func on10405(minSupported: String?) {
-        gate.on10405(minSupported: minSupported, now: clock())
-        if gate.lastResult == nil, canCheck {
-            request()
-        }
-        publish()
-    }
-
     // MARK: - 强更页
 
     /// 【去更新】：按 Gate 选店并打开；一家都不行 → 显示「暂时无法更新」与【重试】。没有检查结果时先查一次再选，
@@ -340,5 +329,38 @@ final class AppUpdate: ObservableObject {
             forceUnavailable: unavailable,
             working: working
         )
+    }
+}
+
+extension AppUpdate {
+    // MARK: - 接口层拦截
+
+    /// 网络层收到 10405（APP-03 调用）：直接进 below_min。强更页内容取最近一次成功的检查结果，没有时立即再查一次（03 §4.2）。
+    /// 没带最低版本的（整体 10405 不带 min、登录拿到受限会话按「低于」处理的 markBelow）：服务端已判定强更，进闸门本身并落盘
+    /// （`onServerForced`，APP-07 共性第 24 条）——网络层只把确需强更的 10405 送进来（ErrorActionMapper：本机不低于 min 的受限令牌先刷新）。
+    func on10405(minSupported: String?) {
+        guard let minSupported else {
+            onServerForced()
+            return
+        }
+        gate.on10405(minSupported: minSupported, now: clock())
+        recheckIfNoResult()
+        publish()
+    }
+
+    /// 服务端已判定强更（APP-07：parse 外层成功、结果行 error_code=10405；共性第 20、21、24 条）：强制进 ForceUpdate，不按缓存的最低版本
+    /// 比较；落盘、跨进程保留，成功复查或本机升级后解除。
+    func onServerForced() {
+        gate.onServerForced(now: clock())
+        recheckIfNoResult()
+        publish()
+    }
+
+    /// 进入强更时没有最近一次成功检查结果（商店列表为空）：立即补查一次（03 §4.2，共性第 27 条修订：任何路径进入强更都这样），
+    /// 有检查在途时复用它、不另发；不等用户点【重试】。
+    private func recheckIfNoResult() {
+        if gate.lastResult == nil, canCheck {
+            request()
+        }
     }
 }

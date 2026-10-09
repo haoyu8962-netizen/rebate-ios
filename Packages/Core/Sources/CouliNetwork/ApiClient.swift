@@ -25,7 +25,8 @@ import Session
 /// - 受限会话屏障：进程启动（不论强更状态，below 时也先刷新）、强更状态由低于 / 未知恢复为受支持（App 把 AppUpdate 的状态变化接到
 ///   `updateStateChanged`，立即发起刷新；每次读状态时也会发现）后，存储的会话是 deletion_only 时，带令牌的请求先等
 ///   一次单飞刷新（不论目标接口在不在受限表里）；刷新失败结束原调用并跳登录。
-/// - 10405：确需强更的调 `NetworkHooks.onForceUpdate`（App 接到 AppUpdate.on10405）；升级前留下的受限令牌只刷新
+/// - 10405：确需强更的调 `NetworkHooks.onForceUpdate`（App 接到 AppUpdate.on10405；`ApiCall.forceUpdateByCaller` 的调用只交回 Effect，
+///   由调用方复核归属后自己进强更，APP-07 parse）；升级前留下的受限令牌只刷新
 ///   （失败同上）。登录 / 刷新成功时记下 session_scope；强更检查未知期间拿到 deletion_only 按「低于」处理。
 ///   登录响应的令牌保存失败（或响应已过期）不返回成功（`ApiResult.sessionNotSaved`）。
 /// - 刷新暂时失败（超时、断连、没有外壳）不清会话：等待者与屏障后的首发按网络错误结束，屏障保留；被拒才清会话

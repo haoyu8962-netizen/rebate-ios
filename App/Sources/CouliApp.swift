@@ -17,14 +17,14 @@ struct CouliApp: App {
     @StateObject private var web: AppWeb
     @StateObject private var login: AppLogin
     @StateObject private var search: AppSearch
+    @StateObject private var clipboard: AppClipboard
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
     private let tracker: AppTracker
 
     init() {
-        // 撤回同意要清的凭证，切换环境时同样要清（两边共用占位清理器）；须在启动对账之前登记。
-        PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
+        Self.registerEarlyCleaners()
         // 网络核心（APP-03a）：创建即把「作废并取消在途请求」登记到撤回同意、切换环境两个注册表的第一位；
         // 在 attach 之前它不发任何请求。
         let network = Self.makeNetwork()
@@ -73,20 +73,46 @@ struct CouliApp: App {
             config: config, network: network, routing: routing, privacy: privacy, update: update,
             tracker: tracker, permissions: permissions
         )
-        web.login = login
+        let (clipboard, search) = Self.makeShopping(web: web, login: login)
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
-        // 购买（APP-06b）：AuthSheet 计数、点击结果确认的平台状态、外跳端口、link_jump 上报（经埋点本地队列）、购买待办。
-        let trade = AppTrade(
-            network: network, config: config, privacy: privacy, routing: routing, login: login
-        ) { event in tracker.track(event) }
-        // 搜索与商品详情（APP-06a）：搜索页订阅配置变化（search_status），路由出栈时作废在途请求。
-        _search = StateObject(
-            wrappedValue: AppSearch(network: network, config: config, privacy: privacy, routing: routing, trade: trade)
-        )
+        _clipboard = StateObject(wrappedValue: clipboard)
+        _search = StateObject(wrappedValue: search)
         self.tracker = tracker
         self.routing = routing
         self.network = network
+    }
+
+    /// 须在启动对账之前登记的清理项：撤回同意要清的凭证（切换环境时同样要清，两边共用占位清理器）；剪贴板 hash 记录的撤回清理
+    /// （APP-07：在启动对账重试上次没清干净的撤回之前登记，只进撤回同意的注册表）。
+    private static func registerEarlyCleaners() {
+        PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
+        ClipboardRecordsCleaner.register()
+    }
+
+    /// 剪贴板（APP-07）、购买（APP-06b）与搜索 / 详情（APP-06a）的组装。
+    private static func makeShopping(web: AppWeb, login: AppLogin) -> (AppClipboard, AppSearch) {
+        let (network, routing, privacy) = (web.network, web.routing, web.privacy)
+        let (config, tracker) = (web.config, web.tracker)
+        web.login = login
+        // 剪贴板识别（APP-07）：写剪贴板的唯一入口、自动识别、粘贴入口与 parse；桥与登录页经它。
+        let clipboard = AppClipboard.make(
+            network: network, routing: routing, privacy: privacy, config: config, login: login
+        )
+        web.clipboard = clipboard
+        login.clipboard = clipboard
+        // 购买（APP-06b）：AuthSheet 计数、点击结果确认的平台状态、外跳端口、link_jump 上报（经埋点本地队列）、购买待办。
+        let trade = AppTrade(
+            network: network, config: config, privacy: privacy, routing: routing, login: login,
+            writer: clipboard.writer
+        ) { event in tracker.track(event) }
+        // 购买弹层是剪贴板的敏感浮层（G12、H06）
+        trade.onSensitiveOverlay = { [weak clipboard] in clipboard?.sensitiveOverlayShown() }
+        clipboard.overlaySource = { [weak trade] in trade?.sensitiveOverlay }
+        // 搜索与商品详情（APP-06a）：搜索页订阅配置变化（search_status），路由出栈时作废在途请求。
+        let search = AppSearch(network: network, config: config, privacy: privacy, routing: routing, trade: trade)
+        search.clipboard = clipboard
+        return (clipboard, search)
     }
 
     /// 网络核心。Debug / Staging 带启动参数 `-CouliFakeLoginServer` 时用本机假服务（URLProtocol 桩，不连任何地址；
@@ -119,6 +145,7 @@ struct CouliApp: App {
                 .environmentObject(web)
                 .environmentObject(login)
                 .environmentObject(search)
+                .environmentObject(clipboard)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -134,11 +161,14 @@ struct CouliApp: App {
                         config.enteredBackground()
                         search.restoration.sceneEnteredBackground()
                         search.trade?.sceneChanged(active: false)
+                        clipboard.sceneBackground()
                     case .active:
                         routing.sceneBecameActive()
                         config.enteredForeground()
                         search.restoration.sceneBecameActive()
                         search.trade?.sceneChanged(active: true)
+                        // 剪贴板：冷启动第一次与进过后台之后的那一次才判定（下拉通知等 inactive → active 不算，共性第 1 条）
+                        clipboard.sceneActive()
                     case .inactive:
                         // 系统弹窗、切换 App 的过渡：同样作废续执行许可（03 §4.5「进入后台不外跳」，保守）
                         search.trade?.sceneChanged(active: false)

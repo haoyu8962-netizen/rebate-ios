@@ -138,6 +138,25 @@ final class ApiClientSessionTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requests.count, 1)
     }
 
+    /// APP-07 R1-02：调用方自己执行强更副作用（parse）时网络层不调 onForceUpdate，Effect 与最低版本照常交回；缺省调用不变。
+    func testForceUpdateByCallerSkipsHookButReturnsEffect() async {
+        let harness = makeHarness()
+        StubURLProtocol.install { _ in fail(10405, status: 403, data: "{\"min_supported_version\":\"1.3.0\"}") }
+        let deferred = await harness.client.send(ApiCall(
+            operationId: "parseInput", body: "{\"text\":\"x\",\"scene\":\"clipboard\"}", forceUpdateByCaller: true
+        ))
+        XCTAssertEqual(deferred.effect?.kind, .forceUpdate)
+        guard case let .failure(code, _, data, _, _, _) = deferred else {
+            return XCTFail("\(deferred)")
+        }
+        XCTAssertEqual(code, 10405)
+        XCTAssertTrue((String(bytes: data ?? Data(), encoding: .utf8) ?? "").contains("1.3.0"), "最低版本随 data 交回调用方")
+        XCTAssertTrue(harness.recorder.forceUpdateCalls.isEmpty, "网络层不替调用方进强更")
+        let ordinary = await harness.client.send(ApiCall(operationId: "parseInput", body: "{\"text\":\"x\"}"))
+        XCTAssertEqual(ordinary.effect?.kind, .forceUpdate)
+        XCTAssertEqual(harness.recorder.forceUpdateCalls, ["1.3.0"], "没声明的调用照旧由网络层进强更")
+    }
+
     // MARK: - 登录与刷新响应
 
     func testLoginReadsTokensFromDataTokens() async {

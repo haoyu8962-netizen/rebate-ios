@@ -19,6 +19,7 @@ struct RootView: View {
     @EnvironmentObject private var permissions: AppPermissions
     @EnvironmentObject private var login: AppLogin
     @EnvironmentObject private var search: AppSearch
+    @EnvironmentObject private var clipboard: AppClipboard
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -83,6 +84,8 @@ struct RootView: View {
             }
             .couliToast($update.toast)
             .couliToast($login.toast)
+            // 剪贴板 parse 的多卡弹层（APP-07 G09）：盖在发起页上，发起页离开即消失
+            .clipboardCardSheet(clipboard)
     }
 
     /// 隐私弹窗显示条件（R1-01，判定见 `AppRouting.privacyDialogVisible`）；读发布值，界面随之刷新。
@@ -129,6 +132,16 @@ struct RootView: View {
             // 一致性页的逐项结果与路由状态（UI 测试读取；被其他路由盖住时仍在）。
             if showsConformance {
                 DebugConformanceResultsOverlay()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if DebugClipboard.diagnostics {
+                // UI 测试读（APP-07）：探测、parse 请求与 App 写系统剪贴板的次数（不含任何剪贴板内容）
+                Text(verbatim: clipboard.debugDiagnostics)
+                    .font(.system(size: 6))
+                    .foregroundColor(.clear)
+                    .accessibilityIdentifier("clipboard.debug")
+                    .allowsHitTesting(false)
             }
         }
         #endif
@@ -181,6 +194,9 @@ struct RootView: View {
                 HomeSearchEntry { router.open(RouteRequest(route: "Search", from: .inApp)) }
                     .padding(.horizontal, CouliSpacing.s4)
                     .padding(.top, CouliSpacing.s2)
+                // 剪贴板（APP-07）：提示条、粘贴结果、「粘贴链接，先查返利」卡；只在首页 Tab 根页（APP-11 的首页 SDUI 之前挂在固定位置）
+                HomeClipboardArea(clipboard: clipboard)
+                    .fixedSize(horizontal: false, vertical: true)
                 RouteViewRegistry.view(for: root)
                 #if DEBUG
                 if !DebugPrivacyPreset.hidesDebugInfo {

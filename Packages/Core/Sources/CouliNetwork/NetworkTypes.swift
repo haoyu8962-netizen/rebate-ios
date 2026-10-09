@@ -233,6 +233,10 @@ public struct ApiCall: Sendable, Equatable {
     public var fromProductCard: Bool
     /// 读接口的 If-None-Match（原样发送，不拆引号或 W/ 前缀；03 §4.3 回前台带 ETag 拉取配置）。写接口忽略。
     public var ifNoneMatch: String?
+    /// 强更副作用由调用方执行（APP-07 parse，共性第 29 条）：确需强更的 10405 不调 `NetworkHooks.onForceUpdate`，Effect（kind=forceUpdate）
+    /// 照常随 `.failure` 返回，调用方在主线程复核请求归属（发起页、会话、环境、取消）后再进强更；迟到或已失效的响应不跳强更、不落盘。
+    /// 缺省 false：其余调用的 10405 行为不变。
+    public var forceUpdateByCaller: Bool
 
     public init(
         operationId: String,
@@ -243,7 +247,8 @@ public struct ApiCall: Sendable, Equatable {
         stepUpToken: String? = nil,
         summary: String = "",
         fromProductCard: Bool = true,
-        ifNoneMatch: String? = nil
+        ifNoneMatch: String? = nil,
+        forceUpdateByCaller: Bool = false
     ) {
         self.operationId = operationId
         self.pathParams = pathParams
@@ -254,6 +259,7 @@ public struct ApiCall: Sendable, Equatable {
         self.summary = summary
         self.fromProductCard = fromProductCard
         self.ifNoneMatch = ifNoneMatch
+        self.forceUpdateByCaller = forceUpdateByCaller
     }
 }
 

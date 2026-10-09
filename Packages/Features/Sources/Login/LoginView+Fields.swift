@@ -136,6 +136,10 @@ extension LoginView {
                     .buttonStyle(CouliPlainButtonStyle())
                     .accessibilityLabel(Text(verbatim: text(LoginKeys.inviteClear)))
                 }
+                if let paste = model.config.invitePaste {
+                    InvitePasteButton(paste: paste, model: model)
+                        .padding(.trailing, CouliSpacing.s2)
+                }
             }
             .background(
                 RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
@@ -180,5 +184,29 @@ extension LoginView {
             .buttonStyle(.plain)
             .accessibilityIdentifier("login.apple")
         }
+    }
+}
+
+/// 邀请码行【粘贴】（APP-07，LoginCodeInvite）：系统粘贴控件（文字与读屏名由系统给），用户点了才读；只抽码填入，抽不到轻提示、不清空已有
+/// 输入（BR-INV-04）。42901 禁用期内置灰（共性第 6 条）。
+struct InvitePasteButton: View {
+    @ObservedObject var paste: LoginInvitePaste
+    let model: LoginViewModel
+
+    var body: some View {
+        SystemPasteControl(style: .plain, isEnabled: paste.enabled, identifier: "login.invitePaste") {
+            guard let handle = paste.begin() else { return nil }
+            return { [model] text in
+                switch handle(text) {
+                case let .code(code):
+                    model.inviteText = code
+                case let .message(message):
+                    model.toast = CouliToastMessage(message)
+                case .ignored:
+                    break
+                }
+            }
+        }
+        .fixedSize()
     }
 }

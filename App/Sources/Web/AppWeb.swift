@@ -30,6 +30,8 @@ final class AppWeb: ObservableObject {
     let hosts = BridgeHostRegistry()
     /// 短信登录（APP-05a）：桥 auth.login 据它认定本次登录保存的会话（CouliApp 创建后接上）。
     weak var login: AppLogin?
+    /// 剪贴板识别（APP-07）：桥 clipboard.write 经它的写入口、setAutoDetect 按容器实例抑制（CouliApp 创建后接上）。
+    weak var clipboard: AppClipboard?
     /// 容器页随路由真正出栈 teardown（三端共性第 28 条）。
     let routeLifetimes: WebRouteLifetimes
     private let cleaner: BridgeHostsCleaner
@@ -116,10 +118,12 @@ final class AppWeb: ObservableObject {
     func makeTrustedController(
         url: URL?,
         fromForceUpdatePage: Bool,
+        container: UUID? = nil,
         onClose: @escaping @MainActor () -> Void
     ) -> TrustedWebController {
         makeTrustedController(
             url: url,
+            container: container,
             protocolProvider: { [weak self] in
                 self?.productionProtocol() ?? BridgeProtocol(trustedOrigins: [], linkPatterns: [:], shareDomains: [])
             },
@@ -137,11 +141,12 @@ final class AppWeb: ObservableObject {
     /// （App/Sources/Debug，Release 不编译）另给本机源与契约示例规则（APP-04 三端共性第 2 条）。
     func makeTrustedController(
         url: URL?,
+        container: UUID? = nil,
         protocolProvider: @escaping @MainActor () -> BridgeProtocol,
         caller: @escaping @MainActor () -> BridgeCallerState,
         onClose: @escaping @MainActor () -> Void
     ) -> TrustedWebController {
-        let services = AppBridgeServices(web: self)
+        let services = AppBridgeServices(web: self, container: container)
         return TrustedWebController(
             url: url,
             appVersion: Self.appVersion,

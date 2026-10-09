@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import ProductSearch
+import SwiftUI
 import Trade
 
 /// 搜索页用到的文案键（三端同名）。契约 texts.default.json 已有的（error.*、external_page.retry）直接取；其余是 App 草稿表
@@ -144,6 +145,19 @@ public final class SearchPageConfig: ObservableObject {
     }
 
     private var purchaseRelay: AnyCancellable?
+    /// 剪贴板粘贴入口（APP-07，SearchTyping「粘贴查返利」：系统粘贴控件 + 说明文字；App 给）。输入态、无可搜平台、search_disabled
+    /// 回落提示期间显示（共性第 11 条）。nil = 不显示。
+    public var pasteEntry: AnyView?
+    /// 剪贴板粘贴结果（30132 与【用商品名搜索】、轻提示、邀请确认；App 给）：固定在头部下方，不随搜索 phase 隐藏（共性第 10 条）。
+    public var pasteResult: AnyView?
+    /// 30132【用商品名搜索】填进本页搜索框并搜索（A15）。
+    public func searchByName(_ query: String) {
+        input = query
+        guard !SearchQuery.normalizeKeyword(query).isEmpty, controller.submit(query) else { return }
+        input = controller.snapshot.keyword
+        history.record(input)
+    }
+
     /// 页面状态变化（去重后）：App 写入场景状态（共性 20）。
     public var onStateChange: (SearchPageState) -> Void = { _ in }
     /// 平台购买状态的配置源（features.platform_status，R2-01）：列表卡购买按钮同样按它置灰。

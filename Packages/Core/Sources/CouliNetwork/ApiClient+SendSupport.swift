@@ -23,6 +23,13 @@ extension ApiClient {
         return outcome
     }
 
+    /// 确需强更的 10405：交 `onForceUpdate`。调用方声明自己执行强更副作用的（parse）只把 Effect 交回，由调用方在主线程复核请求归属后
+    /// 再进强更（APP-07 共性第 29 条）。
+    func forceUpdateUnlessCallerHandles(_ data: [String: Any], _ call: ApiCall) async {
+        guard !call.forceUpdateByCaller else { return }
+        await hooks.onForceUpdate(JSONFields.string(data, "min_supported_version"))
+    }
+
     /// 会话级副作用：跳登录与其他前置引导（会登记待办或要求在当前会话里补办）、刷新、清会话。旧世代的响应不得交付。
     /// guide_only（step-up 操作上的 10001 / 10004 / 10005 / 授权码，以及 30304 等补办引导）都要求当前账号补身份、同意、
     /// 授权或实名、收款信息，同样按会话世代校验（R3-02）。

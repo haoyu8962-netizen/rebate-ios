@@ -5,6 +5,7 @@ import Product
 import ProductSearch
 import Router
 import Search
+import SwiftUI
 import Trade
 
 /// 本页面打开的路由名（都在 routes.json 里登记；SearchWiringTests 逐个核对）。
@@ -43,6 +44,11 @@ final class AppSearch: ObservableObject {
     let lifetimes: WebRouteLifetimes
     /// 进程回收恢复（共性 20）：按路由身份保存页面状态并持久化，冷启动外壳出现后重开。
     let restoration: SearchRouteRestoration
+    /// 剪贴板识别（APP-07）：SearchTyping 的粘贴入口与结果、详情页的 parse 卡种子。nil = 不接（单测组合）。
+    /// 多卡弹层的商品卡与搜索卡用同一份平台购买状态（R3-01）。
+    weak var clipboard: AppClipboard? {
+        didSet { clipboard?.purchaseSource = purchaseStatus }
+    }
 
     init(
         network: AppNetwork, config: AppConfig, privacy: PrivacyController, routing: AppRouting, trade: AppTrade? = nil,
@@ -82,6 +88,12 @@ final class AppSearch: ObservableObject {
         }
         restoration.registerFlush(for: id) { [weak page] in page?.flushState() }
         page.onBack = { router.close(destination) }
+        if let clipboard {
+            // SearchTyping「粘贴查返利」与粘贴结果（APP-07）；30132【用商品名搜索】填进本页搜索框（A15）
+            page.pasteEntry = AnyView(SearchPasteEntry(clipboard: clipboard))
+            page.pasteResult = AnyView(SearchPasteResult(clipboard: clipboard, origin: id.uuidString))
+            clipboard.bindSearchFill(id) { [weak page] query in page?.searchByName(query) }
+        }
         page.onOpenProduct = { platform, key, ref in
             var values: [String: JSONValue] = ["platform": .string(platform), "product_key": .string(key)]
             if let ref, !ref.isEmpty {
@@ -134,6 +146,11 @@ final class AppSearch: ObservableObject {
         lifetimes.register(destination) { [weak controller] in
             controller?.leave()
             trade?.pageLeft(destinationId)
+        }
+        // 剪贴板 parse 只有 1 张卡时的进程内种子（APP-07 G09）：沿用 parse 卡的 link_id，不重取
+        if let key = destination.params["product_key"]?.stringValue,
+           let seed = clipboard?.seeds.claim(destination.id, productKey: key) {
+            controller.startSeeded(seed)
         }
         let page = ProductPageConfig(controller: controller, texts: texts)
         page.purchase = purchase

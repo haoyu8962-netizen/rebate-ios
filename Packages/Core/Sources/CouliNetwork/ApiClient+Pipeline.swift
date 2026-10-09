@@ -349,7 +349,7 @@ extension ApiClient {
         case .registerDeviceReplay:
             return await reRegisterAction(effect, exchange)
         case .forceUpdate:
-            await hooks.onForceUpdate(JSONFields.string(data, "min_supported_version"))
+            await forceUpdateUnlessCallerHandles(data, exchange.call)
         case .clearSessionLogin:
             return clearAction(effect, exchange)
         default:

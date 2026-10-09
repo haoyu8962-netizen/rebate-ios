@@ -11,17 +11,26 @@ public struct UpdateRecord: Sendable, Equatable, Codable {
     public var dismissedLatest: String?
     /// 接口层 10405 带来的最低支持版本（下一次成功检查覆盖）。
     public var forcedMinimum: String?
+    /// 服务端已对本机判定强更（APP-07 共性第 21、24 条：行内 10405、整体 10405 不带最低版本、登录拿到受限会话）：对 `forcedAppVersion`
+    /// 无条件 below_min，不按缓存的最低版本比较；下一次成功检查或本机升级后解除。旧记录没有这两项时按 nil（不强更）。
+    public var forcedByServer: Bool?
+    /// 服务端判定强更时的本机版本（升级后失效，G15）。
+    public var forcedAppVersion: String?
 
     public init(
         lastResult: UpdateCheckResult? = nil,
         lastSuccessAt: Int64? = nil,
         dismissedLatest: String? = nil,
-        forcedMinimum: String? = nil
+        forcedMinimum: String? = nil,
+        forcedByServer: Bool? = nil,
+        forcedAppVersion: String? = nil
     ) {
         self.lastResult = lastResult
         self.lastSuccessAt = lastSuccessAt
         self.dismissedLatest = dismissedLatest
         self.forcedMinimum = forcedMinimum
+        self.forcedByServer = forcedByServer
+        self.forcedAppVersion = forcedAppVersion
     }
 }
 

@@ -189,6 +189,47 @@ enum DebugFakeSearch {
         return items
     }
 
+    // MARK: - 剪贴板 parse（APP-07）
+
+    /// `/v1/inputs/parse`：按上传片段（只有链接与「」标题）里的场景词回答——默认 1 张卡（详情样例卡 tb:milk）；`multi` 两条（1 张卡 +
+    /// 1 条 30131）；`multi30132` 两条（1 张卡 + 1 条 30132）；`busy` 42901（Retry-After 10）；`fail` 50001；`unsupported` 30131；
+    /// `unrec` 30132；`inline10405` 行内 10405；`slow` 3 秒后回答。全部在本机回答，不连任何地址。
+    static func parse(_ body: [String: Any]) -> Answer {
+        let text = body["text"] as? String ?? ""
+        let trace = "0199a3b4-5c6d-7e8f-9a0b-1c2d3e000002"
+        func has(_ word: String) -> Bool {
+            text.contains(word)
+        }
+        if has("busy") {
+            return Answer(code: 42901, data: "{}", headers: ["Retry-After": "10"], traceId: trace)
+        }
+        if has("fail") {
+            return Answer(code: 50001, data: "{}", traceId: trace)
+        }
+        if has("unsupported") {
+            return Answer(code: 30131, data: "{}", traceId: trace)
+        }
+        if has("unrec") {
+            return Answer(code: 30132, data: "{}", traceId: trace)
+        }
+        var milk = card("taobao", key: "tb:milk", title: "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶", price: 5678,
+                        coupon: 1000, rebate: (123, 234), estNet: 4555, tags: ["有券"],
+                        keys: ["price_basis", "rebate_estimate"])
+        milk["shop_name"] = "乳品生活旗舰店"
+        milk["link_id"] = "0199a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a99"
+        let hit: [String: Any] = ["platform": "taobao", "kind": "url", "raw": "https://e.tb.cn/h.Demo01?tk=Sample"]
+        var results: [[String: Any]] = [["hit": hit, "card": milk]]
+        if has("multi30132") {
+            results.append(["hit": ["platform": "taobao", "kind": "text", "raw": "「全脂纯牛奶 250ml」"], "error_code": 30132])
+        } else if has("multi") {
+            results.append(["hit": ["platform": "taobao", "kind": "url", "raw": "https://e.tb.cn/unsupported"],
+                            "error_code": 30131])
+        } else if has("inline10405") {
+            results = [["hit": hit, "error_code": 10405]]
+        }
+        return Answer(code: 0, data: json(["results": results]), delay: has("slow") ? 3 : 0.3, traceId: trace)
+    }
+
     // MARK: - 详情
 
     private static func detail(_ key: String) -> Answer {

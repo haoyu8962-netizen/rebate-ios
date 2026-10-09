@@ -237,3 +237,46 @@ final class UpdateGateBehaviorTests: XCTestCase {
         XCTAssertEqual(outcome, .failure)
     }
 }
+
+/// APP-07 共性第 21、24 条：服务端已判定强更进闸门本身并落盘，不按缓存最低版本比较；成功复查或本机升级后解除。
+final class UpdateServerForcedTests: XCTestCase {
+    private let ok = UpdateCheckResult(
+        minSupported: "1.0.0", recommended: nil, latest: "1.3.0", defaultStore: "a",
+        stores: [UpdateStoreListing(store: "a", version: "1.3.0"), UpdateStoreListing(store: "b", version: "1.1.0")]
+    )
+
+    private func gate(_ store: MemoryUpdateStore, appVersion: String = "1.1.0") -> UpdateGate {
+        UpdateGate(
+            store: store,
+            clock: { 0 },
+            appVersion: appVersion,
+            platform: "ios",
+            channel: "test",
+            installSource: "b"
+        )
+    }
+
+    func testServerForcedIgnoresLowerCachedMinimumAndPersists() {
+        let store = MemoryUpdateStore()
+        let subject = gate(store)
+        subject.apply(result: ok, now: 1)
+        XCTAssertEqual(subject.state(now: 1).status, .ok)
+        subject.onServerForced(now: 2)
+        XCTAssertEqual(subject.state(now: 2), UpdateState(status: .belowMin, targetVersion: nil))
+        let rebuilt = gate(store)
+        rebuilt.onColdStart(now: 3)
+        XCTAssertEqual(rebuilt.state(now: 3).status, .belowMin, "跨进程保留")
+        let choice = rebuilt.pickStore(result: ok, now: 3) { _ in true }
+        XCTAssertEqual(choice.storeKey, "a", "没有高于本机的最低版本：只选已上架版本高于本机的商店")
+        rebuilt.apply(result: ok, now: 4)
+        XCTAssertEqual(rebuilt.state(now: 4).status, .ok, "成功复查解除")
+    }
+
+    func testServerForcedLapsesAfterUpgrade() {
+        let store = MemoryUpdateStore()
+        gate(store).onServerForced(now: 1)
+        let upgraded = gate(store, appVersion: "1.2.0")
+        upgraded.onColdStart(now: 2)
+        XCTAssertNotEqual(upgraded.state(now: 2).status, .belowMin, "本机升级后失效（G15）")
+    }
+}

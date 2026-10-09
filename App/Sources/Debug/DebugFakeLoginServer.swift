@@ -71,7 +71,13 @@ final class DebugFakeLoginServer: URLProtocol {
         // APP-06b：购买场景（DebugFakeTrade）先于搜索与详情。
         let trade = DebugFakeTrade.answer(path: path, query: query, request: request, body: body)
         // APP-06a：搜索与详情场景（DebugFakeSearch）。
-        let search = trade == nil ? DebugFakeSearch.answer(path: path, query: query) : nil
+        // APP-07：剪贴板 parse（DebugFakeSearch.parse）。
+        let search = trade == nil
+            ? (path == "/v1/inputs/parse" ? DebugFakeSearch.parse(body) : DebugFakeSearch.answer(
+                path: path,
+                query: query
+            ))
+            : nil
         let reply = trade.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
             ?? search.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
             ?? Self.answer(path: path, body: body)
