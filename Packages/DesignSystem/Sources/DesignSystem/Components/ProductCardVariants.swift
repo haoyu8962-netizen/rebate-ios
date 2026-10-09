@@ -27,7 +27,7 @@ public struct ProductGridCard<ImageContent: View>: View {
     }
 
     static func showsNarrowRebate(_ data: ProductCardData) -> Bool {
-        data.rebate.kind != .none
+        data.rebate.kind != .none && data.showsRebate
     }
 
     /// 卡上实际显示的返利标签内容（金额隐藏时为「预估返 ****」）。
@@ -180,14 +180,17 @@ public struct ProductDetailHeader: View {
     private let data: ProductCardData
     private let fetchedAt: String?
     private let shopName: String?
+    private let staleNote: String?
 
     /// - Parameters:
     ///   - fetchedAt: 取价时间（已按 BR-TEXT-11 格式化的时间，如 `CouliFormat.timeListPast` 去掉日期词后的「10:00」）。
     ///   - shopName: 店铺名。
-    public init(_ data: ProductCardData, fetchedAt: String? = nil, shopName: String? = nil) {
+    ///   - staleNote: 缓存降级报价时取价处的提示（BR-PRICE-11「价格可能已变化…」；APP-06a 共性 3），接在取价时间后。
+    public init(_ data: ProductCardData, fetchedAt: String? = nil, shopName: String? = nil, staleNote: String? = nil) {
         self.data = data
         self.fetchedAt = fetchedAt
         self.shopName = shopName
+        self.staleNote = staleNote
     }
 
     public var body: some View {
@@ -198,17 +201,28 @@ public struct ProductDetailHeader: View {
                     PriceSubLine(data.price, style: .footnote)
                 }
             }
-            // 金额隐藏时返利标签显示「预估返 ****」（F-IOS-06），「以结算为准」随金额一起不显示。
-            CouliFlowLayout(horizontalSpacing: CouliSpacing.s4, verticalSpacing: CouliSpacing.s1) {
-                RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .detail, isLarge: true)
-                if let note = data.settlementNote, data.rebate.kind == .range, !data.amountHidden {
-                    Text(verbatim: note)
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.textSecondary)
-                        .fixedSize()
+            if let unavailable = data.priceUnavailableText {
+                // 价格不可用（BR-PRICE-01；APP-06a 共性 1）：不显示任何金额与取价时间，只显示这句。
+                Text(verbatim: unavailable)
+                    .couliFont(.body, weight: .couliSemibold)
+                    .foregroundColor(CouliColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // 金额隐藏时返利标签显示「预估返 ****」（F-IOS-06），「以结算为准」随金额一起不显示。
+                // 平台返利未开放（R3-02）：返利标签与「以结算为准」都不显示，取价时间照常。
+                if data.showsRebate {
+                    CouliFlowLayout(horizontalSpacing: CouliSpacing.s4, verticalSpacing: CouliSpacing.s1) {
+                        RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .detail, isLarge: true)
+                        if let note = data.settlementNote, data.rebate.kind == .range, !data.amountHidden {
+                            Text(verbatim: note)
+                                .couliFont(.footnote)
+                                .foregroundColor(CouliColor.textSecondary)
+                                .fixedSize()
+                        }
+                    }
                 }
+                metaRow
             }
-            metaRow
             let notes = (data.price.presaleLabel != nil ? [PriceTerms.presalePriceNote] : []) + data.notes
             ForEach(notes, id: \.self) { note in
                 Text(verbatim: note)
@@ -229,8 +243,10 @@ public struct ProductDetailHeader: View {
                     title: data.title,
                     style: .body,
                     weight: .couliSemibold,
-                    lineLimit: nil
+                    lineLimit: nil,
+                    isHeader: true
                 )
+                .accessibilityIdentifier("product.title")
                 if let shopName {
                     Text(verbatim: shopName)
                         .couliFont(.footnote)
@@ -242,8 +258,10 @@ public struct ProductDetailHeader: View {
     }
 
     @ViewBuilder private var metaRow: some View {
-        let estNet = EstNetLine.visibleText(data.estNet, rebate: data.rebate, amountHidden: data.amountHidden)
-        let fetched = fetchedAt.map { PriceTerms.priceFetchedAt + " " + $0 }
+        let estNet = data.showsRebate
+            ? EstNetLine.visibleText(data.estNet, rebate: data.rebate, amountHidden: data.amountHidden) : nil
+        let stale = staleNote.map { PriceTerms.separator + $0 } ?? ""
+        let fetched = fetchedAt.map { PriceTerms.priceFetchedAt + " " + $0 + stale }
         if estNet != nil || fetched != nil {
             CouliFlowLayout(horizontalSpacing: CouliSpacing.s4, verticalSpacing: 0) {
                 EstNetLine(
@@ -254,10 +272,12 @@ public struct ProductDetailHeader: View {
                     style: .footnote
                 )
                 if let fetched {
+                    // 取价时间 + 缓存降级提示是可变长文案（共性 24，03 §10.4）：不固定宽度，放不下一行时按可用宽度换行。
                     Text(verbatim: fetched)
                         .couliFont(.footnote, monospacedDigits: true)
                         .foregroundColor(CouliColor.textSecondary)
-                        .fixedSize()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("product.fetchedAt")
                 }
             }
         }

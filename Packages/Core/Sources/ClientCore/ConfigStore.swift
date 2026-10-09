@@ -49,7 +49,14 @@ public final class ConfigStore {
     private var lkg: Layer?
     /// 上一次成功的完整 link_patterns（随 LKG 文件保存）。
     private var lastGoodPatterns: [String: Any]?
-    private var inFlight = false
+    /// 在途拉取的编号；没有为 nil。同一时刻只有一个在途拉取。
+    private var inFlight: UInt64?
+    /// 已发出的拉取的最大编号（单调递增，切换环境不归零）。
+    private var sequence: UInt64 = 0
+    /// 最近一次被服务端确认的拉取编号（200 取得新配置，或有效的 304 重新确认当前配置）；还没有为 0（APP-06a 共性 10）。
+    private var appliedId: UInt64 = 0
+    /// `requestFresh` 时有拉取在途：在途的这次结算后再发一次（在途的那次是此刻之前发出的，结果不能当作更新的配置）。
+    private var pendingFresh = false
     /// 切换环境时 +1：之前发出的拉取结果丢弃。
     private var generation: UInt64 = 0
     private var observers: [UUID: (ConfigStore) -> Void] = [:]
@@ -103,6 +110,19 @@ public final class ConfigStore {
         ConfigResolver.searchStatus(layers: layers, platformKey: platform)
     }
 
+    /// 某个平台的购买状态 `features.platform_status.<platform>`（契约 PlatformPurchaseStatus：on / maintenance /
+    /// not_launched；APP-06a R2-01）：与搜索开关同样逐个平台回落（当前 → LKG → 包内），取第一层带该平台字符串取值的。
+    /// 三层都没有时为 nil，由调用方决定（TODO(N-27)）。
+    public func platformStatus(platform: String) -> String? {
+        for layer in layers {
+            if let value = layer?.value(at: "features.platform_status") as? [String: Any],
+               let status = value[platform] as? String {
+                return status
+            }
+        }
+        return nil
+    }
+
     /// link_patterns（当前 → 上一次成功 → 包内）。
     public var linkPatternsJson: String? {
         let previous = lastGoodPatterns.map { ConfigDocument(object: ["link_patterns": $0]) }
@@ -112,6 +132,37 @@ public final class ConfigStore {
 
     private var layers: [ConfigDocument?] {
         [current?.document, lkg?.document, bundled]
+    }
+
+    /// 搜索 Tab 用的三层原始取值（APP-06a `SearchTabs.resolve` 的输入）：`current` / `lkg` / `bundled` 各为该层
+    /// `features.search_status` 的原样对象（未知取值保留，由 SearchTabs 按 off 处理、不回落）；某层没有该对象时不放。
+    public func searchStatusLayers() -> [String: Any] {
+        var out: [String: Any] = [:]
+        let named: [(String, ConfigDocument?)] = [
+            (Self.sourceCurrent, current?.document), (Self.sourceLKG, lkg?.document), (Self.sourceBundled, bundled),
+        ]
+        for (name, layer) in named {
+            if let object = layer?.value(at: "features.search_status") as? [String: Any] {
+                out[name] = object
+            }
+        }
+        return out
+    }
+
+    /// 最近一次被服务端确认的那份配置（当前配置，没有当前配置时为 LKG）里的 `features.search_status` 原样对象；
+    /// 没有为 nil。search_disabled 之后只按它里面「明确为 on」恢复平台（APP-06a 共性 8）。
+    public var confirmedSearchStatus: [String: Any]? {
+        (current?.document ?? lkg?.document)?.value(at: "features.search_status") as? [String: Any]
+    }
+
+    /// 已发出的拉取的最大编号（单调递增）。编号大于它的拉取一定在此刻之后才发出。
+    public var issuedFetchId: UInt64 {
+        sequence
+    }
+
+    /// 最近一次被服务端确认（200 或有效的 304）的拉取编号；还没有为 0。
+    public var appliedFetchId: UInt64 {
+        appliedId
     }
 
     // MARK: - 生命周期
@@ -128,10 +179,22 @@ public final class ConfigStore {
         fetch(ifNoneMatch: current?.etag ?? lkg?.etag)
     }
 
+    /// 要一份「此刻之后才发出」的配置（APP-06a 共性 2、8：50304 search_disabled 刷新配置）：没有在途拉取就立即拉取
+    /// （带 ETag）；有在途拉取时，它结算（成功或失败）后再发一次。
+    public func requestFresh() {
+        guard inFlight == nil else {
+            pendingFresh = true
+            return
+        }
+        fetch(ifNoneMatch: current?.etag ?? lkg?.etag)
+    }
+
     /// 切换环境：删 LKG 文件，丢掉当前配置与 LKG（回到包内默认），在途拉取的结果丢弃。删除失败抛错（清理器据此阻断）。
     public func clearForEnvironmentSwitch() throws {
         generation &+= 1
-        inFlight = false
+        inFlight = nil
+        pendingFresh = false
+        appliedId = 0
         current = nil
         lkg = nil
         lastGoodPatterns = nil
@@ -162,25 +225,39 @@ public final class ConfigStore {
     }
 
     private func fetch(ifNoneMatch: String?) {
-        guard !inFlight else {
+        guard inFlight == nil else {
             return
         }
-        inFlight = true
+        sequence &+= 1
+        let id = sequence
+        inFlight = id
         let sent = generation
         fetcher(ifNoneMatch) { [weak self] reply in
-            self?.receive(reply, generation: sent)
+            self?.receive(reply, id: id, generation: sent, sentEtag: ifNoneMatch)
         }
     }
 
-    private func receive(_ reply: ConfigReply, generation sent: UInt64) {
-        guard sent == generation else {
+    private func receive(_ reply: ConfigReply, id: UInt64, generation sent: UInt64, sentEtag: String?) {
+        guard sent == generation, inFlight == id else {
             return
         }
-        inFlight = false
+        inFlight = nil
+        apply(reply, id: id, sentEtag: sentEtag)
+        if pendingFresh {
+            pendingFresh = false
+            fetch(ifNoneMatch: current?.etag ?? lkg?.etag)
+        }
+    }
+
+    private func apply(_ reply: ConfigReply, id: UInt64, sentEtag: String?) {
+        if reply.kindRaw == ConfigReply.notModified {
+            confirm(id, sentEtag: sentEtag)
+            return
+        }
         guard reply.kindRaw == ConfigReply.ok,
               let document = ConfigDocument.parse(reply.bodyJson)
         else {
-            // 304、失败、内容不是 JSON 对象：内容与来源都不变。
+            // 失败、内容不是 JSON 对象：内容与来源都不变。
             return
         }
         let patterns = document.value(at: "link_patterns").flatMap(ConfigResolver.completePatterns)
@@ -191,6 +268,19 @@ public final class ConfigStore {
         lkg = current ?? lkg
         current = Layer(document: document, etag: reply.etag)
         lastGoodPatterns = patterns
+        appliedId = id
+        notify()
+    }
+
+    /// 有效的 304（APP-06a 共性 10）：带 ETag 发出、且本进程有对应的那份配置（当前配置或 LKG）时，服务端重新确认了它：
+    /// 记下确认编号并通知订阅者（search_disabled 分界之后的确认据此恢复明确为 on 的平台）；内容、LKG、ETag、来源都不变。
+    /// 没带 ETag、或没有可确认的配置时的 304 不改任何东西（TODO(N-21) rule-gaps 第 3 条）。同一时刻只有一个在途拉取、
+    /// 切换环境作废在途结果，所以结算时被确认的仍是发出时那一份。
+    private func confirm(_ id: UInt64, sentEtag: String?) {
+        guard sentEtag != nil, current != nil || lkg != nil else {
+            return
+        }
+        appliedId = id
         notify()
     }
 

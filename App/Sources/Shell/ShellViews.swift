@@ -196,3 +196,35 @@ struct LaunchBackdropView: View {
         .accessibilityIdentifier("launch.backdrop")
     }
 }
+
+/// 首页顶部的搜索入口（APP-06a；与基本模式页同一写法）。TODO(APP-11)：首页实现后并入首页顶栏。
+struct HomeSearchEntry: View {
+    let onSearch: () -> Void
+
+    var body: some View {
+        Button(action: onSearch) {
+            HStack(spacing: CouliSpacing.s2) {
+                CouliIconView(.search, size: 20)
+                Text(verbatim: ShellDraftTexts.basicSearchPlaceholder)
+                    .couliFont(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(CouliColor.textSecondary)
+            .padding(.vertical, CouliSpacing.s2)
+            .padding(.horizontal, CouliSpacing.s3)
+            .frame(minHeight: CouliHitTarget.minimum)
+            .background(
+                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
+                    .fill(CouliColor.backgroundSurface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
+                    .stroke(CouliColor.borderControl, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.search")
+    }
+}

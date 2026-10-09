@@ -1,6 +1,6 @@
 import XCTest
 
-/// 冒烟（APP-02a）：Debug 包用测试 scheme 深链打开一个声明了 deeplink 的路由（进占位页）
+/// 冒烟（APP-02a）：Debug 包用测试 scheme 深链打开一个声明了 deeplink 的路由（Search，APP-06a 起是真实页面）
 /// 与一个没声明的路由（不打开，停在首页）。设置环境变量 TEST_RUNNER_COULI_SHOT_DIR 时另把截图写到该目录。
 @MainActor
 final class DeepLinkSmokeTests: XCTestCase {
@@ -10,9 +10,10 @@ final class DeepLinkSmokeTests: XCTestCase {
 
     func testDeclaredDeepLinkOpensPlaceholder() throws {
         let app = try launchAndOpen("couli-debug://r/Search?q=paper&platform=jd")
-        // 首页 Tab 根也是路由占位页（APP-02b），按名称找推入的那一页。
-        let name = placeholder(app, "Search")
-        XCTAssertTrue(name.waitForExistence(timeout: 15), "Search placeholder did not appear")
+        // APP-06a 起 Search 是真实页面：深链参数 q 填进搜索框。
+        let field = app.textFields["search.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "Search page did not appear")
+        XCTAssertEqual(field.value as? String, "paper")
         save(app, "01-deeplink-search-opens-placeholder")
     }
 

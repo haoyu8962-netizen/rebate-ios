@@ -16,6 +16,7 @@ struct CouliApp: App {
     @StateObject private var permissions: AppPermissions
     @StateObject private var web: AppWeb
     @StateObject private var login: AppLogin
+    @StateObject private var search: AppSearch
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -75,6 +76,10 @@ struct CouliApp: App {
         web.login = login
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
+        // 搜索与商品详情（APP-06a）：搜索页订阅配置变化（search_status），路由出栈时作废在途请求。
+        _search = StateObject(
+            wrappedValue: AppSearch(network: network, config: config, privacy: privacy, routing: routing)
+        )
         self.tracker = tracker
         self.routing = routing
         self.network = network
@@ -109,6 +114,7 @@ struct CouliApp: App {
                 .environmentObject(permissions)
                 .environmentObject(web)
                 .environmentObject(login)
+                .environmentObject(search)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -122,9 +128,11 @@ struct CouliApp: App {
                     case .background:
                         routing.sceneEnteredBackground()
                         config.enteredBackground()
+                        search.restoration.sceneEnteredBackground()
                     case .active:
                         routing.sceneBecameActive()
                         config.enteredForeground()
+                        search.restoration.sceneBecameActive()
                     default: break
                     }
                 }

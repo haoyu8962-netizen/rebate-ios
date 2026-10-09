@@ -1,110 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// 商品卡上的一个优惠标签。
-public struct ProductCardTag: Sendable, Hashable {
-    public let text: String
-    public let style: Style
-
-    public enum Style: Sendable, Hashable {
-        /// 有券、预售、规格以下单页为准等：白底描边。
-        case outline
-        /// 规格待确认、标题显示为…：中性底 + 信息图标。
-        case info
-    }
-
-    public init(_ text: String, style: Style = .outline) {
-        self.text = text
-        self.style = style
-    }
-}
-
-/// 商品卡的内容。文字类字段（平台名、标题、按钮动词、说明句）由调用方从字典与接口给；
-/// 价格与返利用 `PriceTagModel` / `RebateTagModel` / `EstNetModel` 的结果。
-public struct ProductCardData: Sendable {
-    public var platformName: String
-    public var title: String
-    /// 优惠标签（预售标签由 `price.presaleLabel` 自动放在最前，不用重复给）。
-    public var tags: [ProductCardTag]
-    public var price: PriceTagContent
-    public var rebate: RebateTagContent
-    public var estNet: String?
-    public var estNetAccessibility: String?
-    /// 副行里的额外说明（如「规格以下单页为准」），排在券前 / 无券之后、预售说明之前（GUIDE §7.2.1）。
-    public var notes: [String]
-    /// 比价区间时的「以结算为准」（底行左侧）；单一金额时为 nil。
-    public var settlementNote: String?
-    /// 购买按钮动词（cta.text_key 的文案）。
-    public var buyBase: String
-    public var amountHidden: Bool
-    /// i 图标展开的口径说明全文（disclaimer_keys 对应的文案）。
-    public var disclaimer: String
-    /// i 图标按钮的读屏名称。
-    public var disclaimerButtonLabel: String
-
-    public init(
-        platformName: String,
-        title: String,
-        tags: [ProductCardTag] = [],
-        price: PriceTagContent,
-        rebate: RebateTagContent,
-        estNet: String? = nil,
-        estNetAccessibility: String? = nil,
-        notes: [String] = [],
-        settlementNote: String? = nil,
-        buyBase: String,
-        amountHidden: Bool = false,
-        disclaimer: String,
-        disclaimerButtonLabel: String
-    ) {
-        self.platformName = platformName
-        self.title = title
-        self.tags = tags
-        self.price = price
-        self.rebate = rebate
-        self.estNet = estNet
-        self.estNetAccessibility = estNetAccessibility
-        self.notes = notes
-        self.settlementNote = settlementNote
-        self.buyBase = buyBase
-        self.amountHidden = amountHidden
-        self.disclaimer = disclaimer
-        self.disclaimerButtonLabel = disclaimerButtonLabel
-    }
-
-    var allTags: [ProductCardTag] {
-        (price.presaleLabel.map { [ProductCardTag($0)] } ?? []) + tags
-    }
-
-    /// 金额未知（amount_unknown）：不显示任何价格与返利金额，只显示「可返利，金额以订单为准」（BR-PRICE-08）。
-    var hidesPrice: Bool {
-        rebate.kind == .unknown
-    }
-
-    /// 价格口径 i 按钮（BR-PRICE-03「单卡 i 图标」）是否显示：跟着价格走，与返利标签是否显示无关
-    /// （暂无返利、金额隐藏时照样保留）；卡上没有价格（金额未知）或没有说明全文时不显示。
-    static func showsDisclaimerButton(_ data: ProductCardData) -> Bool {
-        !data.hidesPrice && !data.disclaimer.isEmpty
-    }
-
-    var subLines: [(text: String, spoken: String)] {
-        if hidesPrice {
-            return notes.map { ($0, $0) }
-        }
-        var lines: [(String, String)] = [
-            (price.subLine ?? PriceTerms.noCoupon, price.subLineAccessibilityText ?? PriceTerms.noCoupon),
-        ]
-        lines += notes.map { ($0, $0) }
-        if price.presaleLabel != nil {
-            lines.append((PriceTerms.presalePriceNote, PriceTerms.presalePriceNote))
-        }
-        if let estNet = EstNetLine.visibleText(estNet, rebate: rebate, amountHidden: amountHidden) {
-            lines.append((estNet, estNetAccessibility ?? estNet))
-        }
-        return lines
-    }
-}
-
 /// 商品卡布局。
 public enum ProductCardLayout: Sendable {
     /// 搜索结果列表卡（GUIDE §7.2.1 定稿写法，主价 22）。
@@ -121,19 +17,33 @@ public struct ProductCard<ImageContent: View>: View {
     private let layout: ProductCardLayout
     private let image: ImageContent
     private let onBuy: () -> Void
+    private let onDisclaimer: (() -> Void)?
+    private let disclaimerFocus: AccessibilityFocusState<Bool>.Binding?
     @State private var disclaimerExpanded = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// - Parameters:
+    ///   - onDisclaimer: 给了就由调用方打开口径说明弹层（SearchDisclaimerNote），i 按钮不在卡内展开。
+    ///   - disclaimerFocus: i 按钮的读屏焦点绑定（弹层关闭后焦点回到这里，`couliDialog(restoreFocusTo:)`）。
     public init(
         _ data: ProductCardData,
         layout: ProductCardLayout = .list,
         onBuy: @escaping () -> Void,
+        onDisclaimer: (() -> Void)? = nil,
+        disclaimerFocus: AccessibilityFocusState<Bool>.Binding? = nil,
         @ViewBuilder image: () -> ImageContent
     ) {
         self.data = data
         self.layout = layout
         self.onBuy = onBuy
+        self.onDisclaimer = onDisclaimer
+        self.disclaimerFocus = disclaimerFocus
         self.image = image()
+    }
+
+    private var disclaimerBinding: Binding<Bool> {
+        guard let onDisclaimer else { return $disclaimerExpanded }
+        return Binding(get: { false }, set: { _ in onDisclaimer() })
     }
 
     /// 辅助字号档（≈200% 起）：价格区（标签、价格、返利、副行）移出右栏、占整卡宽，金额整段不拆。
@@ -162,7 +72,7 @@ public struct ProductCard<ImageContent: View>: View {
                 priceArea
             }
             bottomRow
-            if disclaimerExpanded, ProductCardData.showsDisclaimerButton(data) {
+            if disclaimerExpanded, onDisclaimer == nil, ProductCardData.showsDisclaimerButton(data) {
                 Text(verbatim: data.disclaimer)
                     .couliFont(.caption)
                     .foregroundColor(CouliColor.textSecondary)
@@ -172,7 +82,8 @@ public struct ProductCard<ImageContent: View>: View {
         .couliCard(padding: CouliSpacing.s3)
         .overlay(alignment: .topTrailing) {
             if layout == .agent, ProductCardData.showsDisclaimerButton(data) {
-                DisclaimerInfoButton(isExpanded: $disclaimerExpanded, accessibilityLabel: data.disclaimerButtonLabel)
+                DisclaimerInfoButton(isExpanded: disclaimerBinding, accessibilityLabel: data.disclaimerButtonLabel)
+                    .couliOptionalFocus(disclaimerFocus)
                     .padding(CouliSpacing.s1)
             }
         }
@@ -187,8 +98,10 @@ public struct ProductCard<ImageContent: View>: View {
                 if !data.hidesPrice {
                     PriceTag(data.price, size: layout == .list ? .list : .compact)
                 }
-                // 金额隐藏时显示「预估返 ****」，不整个隐藏（F-IOS-06）。
-                RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .list)
+                // 金额隐藏时显示「预估返 ****」，不整个隐藏（F-IOS-06）。价格不可用、平台返利未开放时不显示返利。
+                if data.showsRebate {
+                    RebateTag(data.rebate.hidingAmount(data.amountHidden), placement: .list)
+                }
             }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(data.subLines.enumerated()), id: \.offset) { _, line in
@@ -202,7 +115,7 @@ public struct ProductCard<ImageContent: View>: View {
     private var bottomRow: some View {
         CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s1) {
             if layout == .list {
-                let note = data.amountHidden ? nil : data.settlementNote
+                let note = data.amountHidden || !data.showsRebate ? nil : data.settlementNote
                 let showsInfo = ProductCardData.showsDisclaimerButton(data)
                 if note != nil || showsInfo {
                     HStack(spacing: 0) {
@@ -214,9 +127,10 @@ public struct ProductCard<ImageContent: View>: View {
                         }
                         if showsInfo {
                             DisclaimerInfoButton(
-                                isExpanded: $disclaimerExpanded,
+                                isExpanded: disclaimerBinding,
                                 accessibilityLabel: data.disclaimerButtonLabel
                             )
+                            .couliOptionalFocus(disclaimerFocus)
                             // 视觉上贴近说明文字（设计稿 margin-left: -6），命中区不变。
                             .padding(.leading, -(CouliSpacing.s2 - CouliSpacing.s1 / 2))
                         }
@@ -226,7 +140,7 @@ public struct ProductCard<ImageContent: View>: View {
                 }
             }
             BuyButton(base: data.buyBase, rebate: data.rebate, amountHidden: data.amountHidden, context: buyContext,
-                      action: onBuy)
+                      state: data.buyState, action: onBuy)
                 // 按钮比整行还宽时文字在按钮内折行（不截断）。
                 .fixedSize(horizontal: false, vertical: true)
                 .couliFlowPushTrailing()
@@ -242,8 +156,28 @@ public struct ProductCard<ImageContent: View>: View {
 
 public extension ProductCard where ImageContent == EmptyView {
     /// 无图（占位底）。
-    init(_ data: ProductCardData, layout: ProductCardLayout = .list, onBuy: @escaping () -> Void) {
-        self.init(data, layout: layout, onBuy: onBuy) { EmptyView() }
+    init(
+        _ data: ProductCardData,
+        layout: ProductCardLayout = .list,
+        onBuy: @escaping () -> Void,
+        onDisclaimer: (() -> Void)? = nil,
+        disclaimerFocus: AccessibilityFocusState<Bool>.Binding? = nil
+    ) {
+        self.init(data, layout: layout, onBuy: onBuy, onDisclaimer: onDisclaimer, disclaimerFocus: disclaimerFocus) {
+            EmptyView()
+        }
+    }
+}
+
+extension View {
+    /// 有绑定时挂读屏焦点，没有时原样。
+    @ViewBuilder
+    func couliOptionalFocus(_ binding: AccessibilityFocusState<Bool>.Binding?) -> some View {
+        if let binding {
+            accessibilityFocused(binding)
+        } else {
+            self
+        }
     }
 }
 
@@ -342,12 +276,15 @@ struct TagRow: View {
 }
 
 /// 标题前放平台来源标签（行内，和标题同一段文字一起换行）。读屏合为一项、来源在前（adaptation-a11y-spec §8）。
+/// `isHeader`：详情页的「平台 + 商品名」是页面标题（A11yFocusProduct 第 10 项「平台、商品名，标题」，03 §10.5），
+/// 读屏角色为标题，可用标题转子定位；列表卡里的不是。
 public struct BadgedTitle: View {
     private let platform: String
     private let title: String
     private let style: CouliTextStyle
     private let weight: Font.Weight
     private let lineLimit: Int?
+    private let isHeader: Bool
     @ScaledMetric private var fontSize: CGFloat
     @Environment(\.displayScale) private var displayScale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -357,13 +294,15 @@ public struct BadgedTitle: View {
         title: String,
         style: CouliTextStyle,
         weight: Font.Weight = .regular,
-        lineLimit: Int?
+        lineLimit: Int?,
+        isHeader: Bool = false
     ) {
         self.platform = platform
         self.title = title
         self.style = style
         self.weight = weight
         self.lineLimit = lineLimit
+        self.isHeader = isHeader
         _fontSize = ScaledMetric(wrappedValue: style.baseSize, relativeTo: style.relativeTo)
     }
 
@@ -378,8 +317,18 @@ public struct BadgedTitle: View {
             .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: platform + PriceTerms.spokenPause + title))
-            .accessibilityAddTraits(.isStaticText)
+            .accessibilityLabel(Text(verbatim: Self.accessibilityText(platform: platform, title: title)))
+            .accessibilityAddTraits(Self.accessibilityTraits(isHeader: isHeader))
+    }
+
+    /// 合并朗读的文字：来源在前（「淘宝，标题」）。
+    static func accessibilityText(platform: String, title: String) -> String {
+        platform + PriceTerms.spokenPause + title
+    }
+
+    /// 读屏角色：详情标题为标题（isHeader），其余为静态文字。
+    static func accessibilityTraits(isHeader: Bool) -> AccessibilityTraits {
+        isHeader ? [.isStaticText, .isHeader] : .isStaticText
     }
 
     @MainActor

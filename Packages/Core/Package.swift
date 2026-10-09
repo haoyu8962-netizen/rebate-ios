@@ -4,7 +4,7 @@
 // 与 Update（强更检查、可关闭提示、选店，APP-02c）、SecureStore（Keychain）、Session（令牌）、
 // CouliNetwork（请求管线、签名、单飞刷新、ErrorActionMapper、未决键，APP-03a）、
 // ClientCore（设备注册 DeviceRegistry、ConfigStore + LKG、Tracker、PermissionRequester，APP-03b）、
-// BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）；
+// BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
@@ -49,6 +49,10 @@ let coreTargets: [Target] = [
     // 容器（WKWebView）在 Features/Web。
     .target(name: "BridgeHost", dependencies: [generated]),
     .testTarget(name: "BridgeHostTests", dependencies: ["BridgeHost"]),
+    // APP-06a：搜索与商品详情的纯逻辑（SearchQuery、SearchTabs、SearchPager、SearchResultState、SearchSession、
+    // ProductDetailState）与执行器（SearchController、ProductDetailController）。Search 功能模块转出它，Product 功能
+    // 模块直接用它（Feature 之间不互相依赖）。模块名不与任何系统框架同名。
+    .target(name: "ProductSearch", dependencies: ["CouliNetwork", generated]),
 ]
 
 let placeholderTargets: [Target] = placeholderModules.map {
@@ -65,6 +69,7 @@ let coreProducts: [Product] = [
     .library(name: "CouliNetwork", targets: ["CouliNetwork"]),
     .library(name: "ClientCore", targets: ["ClientCore"]),
     .library(name: "BridgeHost", targets: ["BridgeHost"]),
+    .library(name: "ProductSearch", targets: ["ProductSearch"]),
 ]
 
 let placeholderProducts: [Product] = placeholderModules.map { .library(name: $0, targets: [$0]) }

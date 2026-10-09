@@ -36,6 +36,8 @@ final class DebugFakeLoginServer: URLProtocol {
         guard arguments.contains(launchArgument) else { return nil }
         try? SecureSessionTokens(store: KeychainStore()).clear()
         UserDefaultsPendingBackend().delete()
+        // 商品图走系统 AsyncImage（URLSession.shared）：只接管假图片主机（APP-06a 共性 22）。
+        URLProtocol.registerClass(DebugFakeSearchImages.self)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [DebugFakeLoginServer.self]
         return configuration
@@ -49,25 +51,39 @@ final class DebugFakeLoginServer: URLProtocol {
         request
     }
 
+    private let stoppedLock = NSLock()
+    private nonisolated(unsafe) var stopped = false
+
     override func startLoading() {
         let path = request.url?.path ?? ""
-        let body = Self.object(Self.bodyData(request))
-        let reply = Self.answer(path: path, body: body)
+        var query: [String: String] = [:]
+        for item in URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
+            .queryItems ?? [] {
+            query[item.name] = item.value ?? ""
+        }
+        // APP-06a：搜索与详情场景（DebugFakeSearch）。
+        let search = DebugFakeSearch.answer(path: path, query: query)
+        let reply = search.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
+            ?? Self.answer(path: path, body: Self.object(Self.bodyData(request)))
         let (code, data, headers) = (reply.code, reply.data, reply.headers)
-        let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"debug-fake-000000\"}"
+        let trace = search?.traceId ?? "debug-fake-000000"
+        let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"\(trace)\"}"
         let url = request.url ?? URL(fileURLWithPath: "/")
         let response = HTTPURLResponse(
             url: url, statusCode: code == 0 ? 200 : 400, httpVersion: "HTTP/1.1", headerFields: headers
         )
-        // 略等一下，界面上能看到加载态。
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { [self] in
+        // 略等一下，界面上能看到加载态。被 ApiClient 取消（换条件、离开页面）的请求不再回答。
+        DispatchQueue.global().asyncAfter(deadline: .now() + (search?.delay ?? 0.3)) { [self] in
+            guard !stoppedLock.withLock({ stopped }) else { return }
             client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(text.utf8))
             client?.urlProtocolDidFinishLoading(self)
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        stoppedLock.withLock { stopped = true }
+    }
 
     private static let refreshed =
         "{\"access_token\":\"debug-at-2\",\"refresh_token\":\"debug-rt-2\",\"session_scope\":\"full\"}"
@@ -77,7 +93,7 @@ final class DebugFakeLoginServer: URLProtocol {
         case "/v1/devices":
             Reply(code: 0, data: "{\"device_id\":\"debug-fake-device\",\"install_secret\":\"debug-fake-placeholder\"}")
         case "/v1/config":
-            Reply(code: 0, data: DefaultConfig.json)
+            Reply(code: 0, data: DebugFakeSearch.config())
         case "/v1/auth/sms-codes":
             sms(phone: body["phone"] as? String ?? "")
         case "/v1/auth/login/sms":

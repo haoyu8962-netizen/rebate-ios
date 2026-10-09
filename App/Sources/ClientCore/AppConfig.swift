@@ -4,6 +4,7 @@ import Config
 import CouliNetwork
 import Foundation
 import Generated
+import ProductSearch
 
 /// App 的配置存储（03 §4.3；APP-03b）：持有 Core 的 `ConfigStore`，把快照发布给各 Feature。
 ///
@@ -71,6 +72,12 @@ final class AppConfig: ObservableObject {
         wasBackgrounded = true
     }
 
+    /// 50304 search_disabled：要一份此刻之后才发出的配置（APP-06a 共性 2、8）。还没冷启动时不拉（环境闸门未通过）。
+    func requestFresh() {
+        guard started else { return }
+        store.requestFresh()
+    }
+
     /// 回前台（之前进过后台）：带 ETag 拉取。
     func enteredForeground() {
         guard started, wasBackgrounded else {
@@ -95,5 +102,42 @@ final class ConfigLKGCleaner: EnvironmentSwitchCleaning {
 
     func cleanForEnvironmentSwitch() throws {
         try store.clearForEnvironmentSwitch()
+    }
+}
+
+/// 搜索页的配置源（APP-06a）：Tab 三层取值、确认编号、刷新与订阅都转给 ConfigStore。
+extension AppConfig: SearchConfigSource {
+    func searchStatusLayers() -> [String: Any] {
+        store.searchStatusLayers()
+    }
+
+    var confirmedSearchStatus: [String: Any]? {
+        store.confirmedSearchStatus
+    }
+
+    var issuedFetchId: UInt64 {
+        store.issuedFetchId
+    }
+
+    var appliedFetchId: UInt64 {
+        store.appliedFetchId
+    }
+
+    func observeSearchConfig(_ handler: @escaping @MainActor () -> Void) -> SearchObservation {
+        let token = store.observe { _ in
+            MainActor.assumeIsolated { handler() }
+        }
+        return SearchObservation { token.cancel() }
+    }
+}
+
+/// 详情页与搜索列表的平台购买状态（APP-06a R2-01）：`features.platform_status.<platform>` 逐个平台回落，订阅转给 ConfigStore。
+extension AppConfig: PurchaseStatusSource {
+    func purchaseStatus(platform: String) -> String? {
+        store.platformStatus(platform: platform)
+    }
+
+    func observePurchaseStatus(_ handler: @escaping @MainActor () -> Void) -> SearchObservation {
+        observeSearchConfig(handler)
     }
 }

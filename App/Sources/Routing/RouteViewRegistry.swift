@@ -17,6 +17,9 @@ enum RouteViewRegistry {
         // APP-05a：短信登录页（Features/Login）与设置占位页上的【退出登录】。
         RoutePolicy.login: { AnyView(LoginRouteView(destination: $0)) },
         "Settings": { AnyView(SettingsPlaceholderView(destination: $0)) },
+        // APP-06a：搜索（Features/Search）与商品详情（Features/Product）。
+        "Search": { AnyView(SearchRouteView(destination: $0)) },
+        "ProductDetail": { AnyView(ProductDetailRouteView(destination: $0)) },
     ]
 
     @ViewBuilder

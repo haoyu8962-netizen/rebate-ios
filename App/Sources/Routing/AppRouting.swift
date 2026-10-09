@@ -32,6 +32,9 @@ final class AppRouting {
     var onSessionStateChanged: (@MainActor () -> Void)?
     /// Tab 外壳（或基本模式页）已经显示。
     private(set) var shellReady = false
+    /// 等启动协调的自动动作（APP-06a R2-03：进程回收后的页面恢复）。它们和启动意图、pending_action 一样属于「自动执行的
+    /// 动作」（03 §4.4 统一入口守卫）：等环境与隐私闸门、本轮强更检查有结果或等满 5 秒、外壳就绪之后才执行一次。
+    var launchAutoActions: [LaunchAutoAction] = []
     private var consentObservation: AnyCancellable?
     private var pathObservation: AnyCancellable?
     private(set) lazy var router: Router = .init(
@@ -317,6 +320,7 @@ final class AppRouting {
         let readiness = readiness
         let now = PendingActionStore.wallClockMillis()
         router.launchConditionsChanged(readiness: readiness, shellReady: shellReady, now: now)
+        runLaunchAutoActions(readiness: readiness, now: now)
         scheduleLaunchRetry(readiness: readiness, now: now)
     }
 
@@ -331,7 +335,9 @@ final class AppRouting {
         retryTask = nil
         scheduledLaunchRetryAt = nil
         // 截止时间已过（超时那次已协调）时为 nil：只等状态变化再协调（R1-06）。
-        guard let retryAt = router.launchConditionsRetryAt(readiness: readiness, now: now) else { return }
+        guard let retryAt = router.launchConditionsRetryAt(readiness: readiness, now: now)
+            ?? autoActionRetryAt(readiness: readiness, now: now)
+        else { return }
         scheduledLaunchRetryAt = retryAt
         let delay = max(retryAt - now, 0)
         retryTask = Task { @MainActor [weak self] in

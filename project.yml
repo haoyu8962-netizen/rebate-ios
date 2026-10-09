@@ -86,7 +86,7 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost]
+        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost, ProductSearch]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login]
@@ -138,6 +138,7 @@ schemes:
         - package: Core/BridgeHostTests
         - package: DesignSystem/DesignSystemTests
         - package: Features/LoginTests
+        - package: Features/SearchTests
     profile:
       config: Release
     analyze:

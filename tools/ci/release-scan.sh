@@ -27,6 +27,7 @@
 #     「假定已登录」的调试归属键 conformance-assumed-login、回环地址 127.0.0.1 / localhost（本机一致性源与 Info.plist 的
 #     ATS 例外只在 Debug）、包内 WebView 测试页名 bridge-frames（只在测试 bundle）
 #   - 登录本机假服务（APP-05a；APP-04 三端共性第 2 条）：标记 COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21
+#   - 搜索与详情本机假服务（APP-06a）：标记 COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94、类型名 DebugFakeSearch
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -107,6 +108,8 @@ HITS_LOG="$WORK/hits"
     echo "COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21"
     echo "DebugFakeLoginServer"
     echo "CouliFakeLoginServer"
+    echo "COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94"
+    echo "DebugFakeSearch"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

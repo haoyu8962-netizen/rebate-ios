@@ -20,6 +20,16 @@ let extraDependencies: [String: [Target.Dependency]] = [
         .product(name: "CouliNetwork", package: "Core"),
         .product(name: "Session", package: "Core"),
     ],
+    // Search / Product（APP-06a）：搜索与详情的纯逻辑和执行器在 Core 的 ProductSearch（Search 转出它；Product 直接用它，
+    // 两个 Feature 之间没有依赖边）。
+    "Search": [
+        .product(name: "ProductSearch", package: "Core"),
+        .product(name: "CouliNetwork", package: "Core"),
+    ],
+    "Product": [
+        .product(name: "ProductSearch", package: "Core"),
+        .product(name: "CouliNetwork", package: "Core"),
+    ],
 ]
 
 let package = Package(
@@ -50,6 +60,18 @@ let package = Package(
                 .product(name: "CouliNetwork", package: "Core"),
                 .product(name: "Session", package: "Core"),
                 .product(name: "Generated", package: "Generated"),
+            ]
+        ),
+        // Codex 先写的向量测试（specs/search-product-vectors.json）与搜索 / 详情集成测试（本地 URLProtocol 假服务）。
+        .testTarget(
+            name: "SearchTests",
+            dependencies: [
+                "Search",
+                .product(name: "ProductSearch", package: "Core"),
+                .product(name: "CouliNetwork", package: "Core"),
+                .product(name: "Session", package: "Core"),
+                .product(name: "Generated", package: "Generated"),
+                .product(name: "DesignSystem", package: "DesignSystem"),
             ]
         ),
     ],

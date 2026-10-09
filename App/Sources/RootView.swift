@@ -18,6 +18,7 @@ struct RootView: View {
     @EnvironmentObject private var update: AppUpdate
     @EnvironmentObject private var permissions: AppPermissions
     @EnvironmentObject private var login: AppLogin
+    @EnvironmentObject private var search: AppSearch
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -151,6 +152,8 @@ struct RootView: View {
                 home: { root in homeTab(root) }
             )
             .onAppear {
+                // 外壳就绪：启动协调随之放行启动意图、恢复待办，以及进程回收前的搜索与详情页（共性 20；R2-03 页面恢复
+                // 登记在启动协调里，等本轮强更检查有结果或等满 5 秒）。
                 routing.shellAppeared()
             }
         }
@@ -174,6 +177,10 @@ struct RootView: View {
             )
         } else {
             VStack(spacing: 0) {
+                // 首页的搜索入口（APP-06a 冒烟：首页 → Search）。首页内容本身在 APP-11。
+                HomeSearchEntry { router.open(RouteRequest(route: "Search", from: .inApp)) }
+                    .padding(.horizontal, CouliSpacing.s4)
+                    .padding(.top, CouliSpacing.s2)
                 RouteViewRegistry.view(for: root)
                 #if DEBUG
                 if !DebugPrivacyPreset.hidesDebugInfo {
