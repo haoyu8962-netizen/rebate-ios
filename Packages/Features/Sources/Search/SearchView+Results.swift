@@ -231,12 +231,22 @@ extension SearchView {
 
     private func card(_ item: [String: Any], index: Int, prefix: String) -> some View {
         let platform = item["platform"] as? String ?? ""
-        var mapping = ProductCardMapper.map(item, texts: texts.text)
+        // 下架（30141 / availability=off_shelf，只绑定这张卡）：购买按钮立即置灰（APP-06b 共性第 5、28 条）
+        let offShelf = item["availability"] as? String == "off_shelf"
+        var mapping = ProductCardMapper.map(item, texts: texts.text, buyEnabled: !offShelf)
         // 平台购买状态（features.platform_status，R2-01）：维护中置灰「稍后再试」，未开放置灰「{平台}返利即将开放」，
         // 未开放还隐藏返利金额与预估返后（R3-02，设计稿 ProductCardDegrade ①）。
         mapping.data = ProductCardMapper.applyPurchaseStatus(
             mapping.data, statusRaw: page.purchaseStatusRaw(platform: platform), texts: texts.text
         )
+        // 本页购买状态（APP-06b）：这张卡的 open 在途显示加载态；42901 限流期间置灰（共性第 11 条）
+        if mapping.data.buyState == .normal, let purchase = page.purchaseController?.state {
+            if purchase.phase == .loading, purchase.owns(item) {
+                mapping.data.buyState = .loading
+            } else if purchase.rateLimited {
+                mapping.data.buyState = .disabled
+            }
+        }
         let key = item["product_key"] as? String
         let ref = item["item_ref"] as? String
         let open = {
@@ -247,10 +257,9 @@ extension SearchView {
         return ProductCard(
             mapping.data,
             onBuy: {
-                // TODO(APP-06b)：列表上的购买走 open 流程；本任务先进详情，由详情页发出购买意图。
-                // 点击前按此刻的配置再核对一次平台购买状态（R2-01）。
-                if page.buyAllowed(platform: platform) {
-                    open()
+                // 列表上的购买直接走 open 流程（APP-06b）。点击前按此刻的配置再核对一次平台购买状态（R2-01）。
+                if page.buyAllowed(platform: platform), !offShelf {
+                    config.onBuy(item)
                 }
             },
             onDisclaimer: {
@@ -264,6 +273,7 @@ extension SearchView {
         .contentShape(Rectangle())
         // 点卡片（读屏双击标题）进详情；卡内 i 按钮与购买按钮各自独立聚焦。
         .onTapGesture(perform: open)
+        .modifier(SearchCompareReason(item: item, texts: texts) { config.onSimilar(item) })
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("\(prefix).\(index)")
         // 结果卡（推荐卡不算）在列表视口坐标系里的框：用来找视口顶部的卡（R3-01）。
@@ -278,5 +288,34 @@ extension SearchView {
         )
         .onAppear { visible.insert(index) }
         .onDisappear { visible.remove(index) }
+    }
+}
+
+/// 比价无返利原因行（ProductPriceCompareCancelled 的卡片原因行；APP-06b 共性第 15 条：搜索卡关闭比价无返利弹窗后也要渲染原因行与
+/// 【看看相似商品】）：卡片上 no_rebate_cause=price_compare 时接在卡片下方。
+struct SearchCompareReason: ViewModifier {
+    let item: [String: Any]
+    let texts: SearchTexts
+    let onSimilar: () -> Void
+
+    func body(content: Content) -> some View {
+        if item["no_rebate_cause"] as? String == "price_compare" {
+            VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                content
+                CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s1) {
+                    Text(verbatim: texts.text(SearchKeys.compareReason))
+                        .couliFont(.footnote)
+                        .foregroundColor(CouliColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    CouliButton(texts.text(SearchKeys.similar), kind: .text, size: .compact, action: onSimilar)
+                        .accessibilityIdentifier("search.similar")
+                }
+                .padding(.horizontal, CouliSpacing.s3)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("search.compareReason")
+            }
+        } else {
+            content
+        }
     }
 }

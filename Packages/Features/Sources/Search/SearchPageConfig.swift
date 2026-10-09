@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import ProductSearch
+import Trade
 
 /// 搜索页用到的文案键（三端同名）。契约 texts.default.json 已有的（error.*、external_page.retry）直接取；其余是 App 草稿表
 /// SearchDraftTexts 里「待定稿，不得提审」的键（TODO(N-27)）。本模块不出现中文，文案一律经 `SearchTexts` 取。
@@ -36,6 +37,11 @@ public enum SearchKeys {
     public static let disclaimerTitle = "card.disclaimer_title"
     public static let disclaimerClose = "card.disclaimer_close"
     public static let retry = "external_page.retry"
+    /// 比价原因行与相似商品入口（APP-06b，契约 no_rebate.price_compare*）。
+    public static let compareReason = "no_rebate.price_compare"
+    public static let similar = "no_rebate.price_compare.similar"
+    /// 购买超时条（ProductBuyTimeout，契约 buy.timeout；APP-06b 共性第 29 条）。
+    public static let buyTimeout = "buy.timeout"
 
     public static func sort(_ raw: String) -> String {
         "search.sort." + raw
@@ -123,6 +129,21 @@ public final class SearchPageConfig: ObservableObject {
     public var onBack: () -> Void = {}
     /// 打开商品详情（经 Router 打开 ProductDetail：platform、product_key、item_ref）。
     public var onOpenProduct: (_ platform: String, _ productKey: String, _ itemRef: String?) -> Void = { _, _, _ in }
+    /// 列表卡的【购买】（APP-06b：App 交给本页的 OpenPurchaseController.buy；点击前已核对平台购买状态）。
+    public var onBuy: (_ item: [String: Any]) -> Void = { _ in }
+    /// 【看看相似商品】（BR-PRICE-08；比价无返利弹窗关闭后卡片原因行上的入口，共性第 15 条）。
+    public var onSimilar: (_ item: [String: Any]) -> Void = { _ in }
+    /// 本页的购买执行器（APP-06b）：卡片按钮的加载 / 限流、超时条（共性第 29 条）；浮层由 App 盖在页面之上。
+    /// 它的每次发布都转成本页的发布，让卡片按钮跟着重画。
+    public var purchaseController: OpenPurchaseController? {
+        didSet {
+            purchaseRelay = purchaseController?.objectWillChange.sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+        }
+    }
+
+    private var purchaseRelay: AnyCancellable?
     /// 页面状态变化（去重后）：App 写入场景状态（共性 20）。
     public var onStateChange: (SearchPageState) -> Void = { _ in }
     /// 平台购买状态的配置源（features.platform_status，R2-01）：列表卡购买按钮同样按它置灰。

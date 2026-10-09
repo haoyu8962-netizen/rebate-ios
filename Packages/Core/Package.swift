@@ -4,12 +4,12 @@
 // 与 Update（强更检查、可关闭提示、选店，APP-02c）、SecureStore（Keychain）、Session（令牌）、
 // CouliNetwork（请求管线、签名、单飞刷新、ErrorActionMapper、未决键，APP-03a）、
 // ClientCore（设备注册 DeviceRegistry、ConfigStore + LKG、Tracker、PermissionRequester，APP-03b）、
-// BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）；
+// BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）、
+// TradeJump（联盟 SDK 适配层：接口 + 不可用实现，APP-06b）与 Trade（open 购买、跳转方案执行、授权、授权管理，APP-06b）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
 let placeholderModules = [
-    "TradeJump",
     "Clipboard", "Push",
 ]
 
@@ -53,6 +53,14 @@ let coreTargets: [Target] = [
     // ProductDetailState）与执行器（SearchController、ProductDetailController）。Search 功能模块转出它，Product 功能
     // 模块直接用它（Feature 之间不互相依赖）。模块名不与任何系统框架同名。
     .target(name: "ProductSearch", dependencies: ["CouliNetwork", generated]),
+    // APP-06b：联盟 SDK 适配层（百川接口 + 不可用实现；不引入任何 SDK）。
+    .target(name: "TradeJump", dependencies: [generated]),
+    // APP-06b：open
+    // 购买的纯逻辑（OpenAttempt、OpenResponseAction、OpenErrorAction、JumpPlanRunner、LinkJumpEvents、AuthMethodPicker，
+    // 向量
+    // specs/open-trade-vectors.json）与执行器（OpenPurchaseController、TradeJumpExecutor、TaobaoAuthFlow、AuthManageController）。
+    // Product / Search / Purchase 功能模块都用它（Feature 之间不互相依赖）。测试在 Features/Tests/TradeTests（Codex 先写的位置）。
+    .target(name: "Trade", dependencies: ["CouliNetwork", "TradeJump", generated]),
 ]
 
 let placeholderTargets: [Target] = placeholderModules.map {
@@ -70,6 +78,8 @@ let coreProducts: [Product] = [
     .library(name: "ClientCore", targets: ["ClientCore"]),
     .library(name: "BridgeHost", targets: ["BridgeHost"]),
     .library(name: "ProductSearch", targets: ["ProductSearch"]),
+    .library(name: "TradeJump", targets: ["TradeJump"]),
+    .library(name: "Trade", targets: ["Trade"]),
 ]
 
 let placeholderProducts: [Product] = placeholderModules.map { .library(name: $0, targets: [$0]) }

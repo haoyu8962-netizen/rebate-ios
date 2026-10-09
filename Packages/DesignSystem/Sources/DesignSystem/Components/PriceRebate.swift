@@ -77,11 +77,14 @@ public struct PriceSubLine: View {
     }
 
     public var body: some View {
-        SegmentedLine(
-            text: content.subLine ?? PriceTerms.noCoupon,
-            spoken: content.subLineAccessibilityText ?? PriceTerms.noCoupon,
-            style: style
-        )
+        // 主价没有口径词 = 券前价与券额待补齐（APP-06b）：不写副行。
+        if !content.mainLabel.isEmpty {
+            SegmentedLine(
+                text: content.subLine ?? PriceTerms.noCoupon,
+                spoken: content.subLineAccessibilityText ?? PriceTerms.noCoupon,
+                style: style
+            )
+        }
     }
 }
 

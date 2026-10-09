@@ -28,6 +28,10 @@
 #     ATS 例外只在 Debug）、包内 WebView 测试页名 bridge-frames（只在测试 bundle）
 #   - 登录本机假服务（APP-05a；APP-04 三端共性第 2 条）：标记 COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21
 #   - 搜索与详情本机假服务（APP-06a）：标记 COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94、类型名 DebugFakeSearch
+#   - 购买本机假服务（APP-06b）：标记 COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7、类型名 DebugFakeTrade
+#   - 外跳假端口（APP-06b 共性第 42 条：模拟安装状态 / 模拟外跳结果的开关与执行分支只在调试编译单元）：
+#     标记 COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60、类名 DebugJumpPorts、字段名 debugInstalled / debugNoExternal、
+#     启动参数 CouliFakeTradeNoExternal、假安装状态键 CouliFakeInstalled（App/Sources/Debug/DebugJumpPorts.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -110,6 +114,14 @@ HITS_LOG="$WORK/hits"
     echo "CouliFakeLoginServer"
     echo "COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94"
     echo "DebugFakeSearch"
+    echo "COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7"
+    echo "DebugFakeTrade"
+    echo "COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60"
+    echo "DebugJumpPorts"
+    echo "debugInstalled"
+    echo "debugNoExternal"
+    echo "CouliFakeTradeNoExternal"
+    echo "CouliFakeInstalled"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

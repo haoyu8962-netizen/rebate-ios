@@ -86,10 +86,11 @@ targets:
         embed: false
       - package: Generated
       - package: Core
-        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost, ProductSearch]
+        products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost, ProductSearch,
+                   TradeJump, Trade]
       - package: DesignSystem
       - package: Features
-        products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login]
+        products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login, Purchase]
 
   CouliTests:
     type: bundle.unit-test
@@ -139,6 +140,7 @@ schemes:
         - package: DesignSystem/DesignSystemTests
         - package: Features/LoginTests
         - package: Features/SearchTests
+        - package: Features/TradeTests
     profile:
       config: Release
     analyze:

@@ -36,6 +36,12 @@ final class DebugFakeLoginServer: URLProtocol {
         guard arguments.contains(launchArgument) else { return nil }
         try? SecureSessionTokens(store: KeychainStore()).clear()
         UserDefaultsPendingBackend().delete()
+        // APP-06b：购买场景（`-CouliFakeTradeLoggedIn` 冷启动直接是已登录的假账号，截购买流程用；假令牌不是凭据）。
+        DebugFakeTrade.prepare(arguments: arguments)
+        if arguments.contains(DebugFakeTrade.loggedInArgument) {
+            try? SecureSessionTokens(store: KeychainStore())
+                .save(access: "debug-at-trade", refresh: "debug-rt-trade", scope: "full", account: "debug-fake-user")
+        }
         // 商品图走系统 AsyncImage（URLSession.shared）：只接管假图片主机（APP-06a 共性 22）。
         URLProtocol.registerClass(DebugFakeSearchImages.self)
         let configuration = URLSessionConfiguration.ephemeral
@@ -61,19 +67,23 @@ final class DebugFakeLoginServer: URLProtocol {
             .queryItems ?? [] {
             query[item.name] = item.value ?? ""
         }
+        let body = Self.object(Self.bodyData(request))
+        // APP-06b：购买场景（DebugFakeTrade）先于搜索与详情。
+        let trade = DebugFakeTrade.answer(path: path, query: query, request: request, body: body)
         // APP-06a：搜索与详情场景（DebugFakeSearch）。
-        let search = DebugFakeSearch.answer(path: path, query: query)
-        let reply = search.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
-            ?? Self.answer(path: path, body: Self.object(Self.bodyData(request)))
+        let search = trade == nil ? DebugFakeSearch.answer(path: path, query: query) : nil
+        let reply = trade.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
+            ?? search.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
+            ?? Self.answer(path: path, body: body)
         let (code, data, headers) = (reply.code, reply.data, reply.headers)
-        let trace = search?.traceId ?? "debug-fake-000000"
+        let trace = search?.traceId ?? (trade != nil ? "0199a3b4-5c6d-7e8f-9a0b-1c2d3e5d81a7" : "debug-fake-000000")
         let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"\(trace)\"}"
         let url = request.url ?? URL(fileURLWithPath: "/")
         let response = HTTPURLResponse(
             url: url, statusCode: code == 0 ? 200 : 400, httpVersion: "HTTP/1.1", headerFields: headers
         )
         // 略等一下，界面上能看到加载态。被 ApiClient 取消（换条件、离开页面）的请求不再回答。
-        DispatchQueue.global().asyncAfter(deadline: .now() + (search?.delay ?? 0.3)) { [self] in
+        DispatchQueue.global().asyncAfter(deadline: .now() + (trade?.delay ?? search?.delay ?? 0.3)) { [self] in
             guard !stoppedLock.withLock({ stopped }) else { return }
             client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(text.utf8))

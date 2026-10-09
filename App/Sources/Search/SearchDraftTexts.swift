@@ -98,11 +98,12 @@ enum SearchDraftTexts {
 /// 文案来源：契约字典 → 草稿表 → 契约 fallback；缺键返回空串。
 struct AppSearchTexts: SearchTexts {
     func text(_ key: String) -> String {
-        DefaultTexts.text(key) ?? SearchDraftTexts.drafts[key] ?? DefaultTexts.fallback(key) ?? ""
+        DefaultTexts.text(key) ?? SearchDraftTexts.drafts[key] ?? TradeDraftTexts.drafts[key] ?? DefaultTexts
+            .fallback(key) ?? ""
     }
 
     func format(_ key: String, _ vars: [String: String]) -> String {
-        var result = DefaultTexts.text(key) ?? SearchDraftTexts.drafts[key] ?? ""
+        var result = DefaultTexts.text(key) ?? SearchDraftTexts.drafts[key] ?? TradeDraftTexts.drafts[key] ?? ""
         for (name, value) in vars where !value.isEmpty {
             result = result.replacingOccurrences(of: "{\(name)}", with: value)
         }

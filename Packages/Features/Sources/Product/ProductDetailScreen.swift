@@ -1,6 +1,7 @@
 import DesignSystem
 import ProductSearch
 import SwiftUI
+import Trade
 
 /// 详情页用到的文案键（三端同名）。契约已有的（error.*、external_page.retry）直接取；其余在 App 草稿表 SearchDraftTexts
 /// （TODO(N-27) 待定稿，不得提审）。本模块不出现中文。
@@ -13,6 +14,13 @@ public enum ProductKeys {
     public static let priceStale = "card.price_stale"
     public static let settleNote = "product.settle_note"
     public static let retry = "external_page.retry"
+    /// 购买超时条（ProductBuyTimeout，契约 buy.timeout）。
+    public static let buyTimeout = "buy.timeout"
+    /// 比价原因行与相似商品入口（ProductPriceCompareCancelled，BR-PRICE-08；契约 no_rebate.price_compare*）。
+    public static let compareReason = "no_rebate.price_compare"
+    public static let similar = "no_rebate.price_compare.similar"
+    /// 明确未安装、全部路径失败后的按钮（ProductJumpNotInstalled，BR-ATTR-27 ②；草稿 TODO(N-28)）。
+    public static let notInstalled = "trade.not_installed"
     /// 30143（商品信息已失效，请重新搜索，error-codes navigate → Search）。
     static let refExpiredCode = 30143
     /// 30141（商品已下架，置灰；BR-PRICE-21）。
@@ -29,8 +37,12 @@ public final class ProductPageConfig: ObservableObject {
     public var onResearch: () -> Void = {}
     /// 【问问 AI】（经 Router 打开 AgentChat，routes.json 登记的 AI 助手路由；页面本身在 APP-10）。
     public var onAskAI: () -> Void = {}
-    /// 购买意图（APP-06a 只到这里）。TODO(APP-06b)：open 购买、TradeJump、授权。
+    /// 购买意图（APP-06b：App 交给 OpenPurchaseController.buy）。
     public var onBuyIntent: (_ product: [String: Any]) -> Void = { _ in }
+    /// 【看看相似商品】（BR-PRICE-08：同平台、原样标题；详情首次进入、没点过购买也可用，共性第 15 条）。
+    public var onSimilar: (_ product: [String: Any]) -> Void = { _ in }
+    /// 本页的购买执行器（APP-06b）：底栏按钮的加载 / 限流 / 安装提示、超时条；浮层由 App 盖在页面之上。
+    public var purchase: OpenPurchaseController?
 
     public init(controller: ProductDetailController, texts: SearchTexts) {
         self.controller = controller
@@ -45,6 +57,8 @@ public final class ProductPageConfig: ObservableObject {
 public struct ProductDetailScreen: View {
     private let config: ProductPageConfig
     @ObservedObject private var controller: ProductDetailController
+    /// 购买按钮的读屏焦点：购买弹层关闭后回到这里（A11yFocusAuthSheet「返回」）。
+    @AccessibilityFocusState private var buyFocused: Bool
 
     public init(config: ProductPageConfig) {
         self.config = config
@@ -131,6 +145,9 @@ public struct ProductDetailScreen: View {
                     // 容器保留子元素（读屏各项不变），标识只给容器，不覆盖内部「平台 + 商品名」的 product.title。
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("product.header")
+                    if product["no_rebate_cause"] as? String == "price_compare" {
+                        compareReason(product)
+                    }
                     let lines = disclaimerLines(mapping, view: view)
                     if !lines.isEmpty {
                         DisclaimerFooter(lines: lines, style: .boxed)
@@ -141,8 +158,31 @@ public struct ProductDetailScreen: View {
                 .frame(maxWidth: ProductLayout.maxContentWidth)
                 .frame(maxWidth: .infinity)
             }
-            bottomBar(product, mapping: mapping)
+            if let purchase = config.purchase {
+                ProductPurchaseBar(purchase: purchase, texts: texts, buyFocus: $buyFocused) { state in
+                    bottomBar(product, mapping: mapping, purchase: state)
+                }
+            } else {
+                bottomBar(product, mapping: mapping, purchase: nil)
+            }
         }
+    }
+
+    /// 比价原因行（ProductPriceCompareCancelled；APP-06b 共性第 15 条：卡片上有 no_rebate_cause=price_compare 就显示，首次进入也有）。
+    private func compareReason(_ product: [String: Any]) -> some View {
+        CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s1) {
+            Text(verbatim: texts.text(ProductKeys.compareReason))
+                .couliFont(.footnote)
+                .foregroundColor(CouliColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            CouliButton(texts.text(ProductKeys.similar), kind: .text, size: .compact) {
+                config.onSimilar(product)
+            }
+            .accessibilityIdentifier("product.similar")
+        }
+        .padding(.horizontal, CouliSpacing.s1)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("product.compareReason")
     }
 
     /// 口径说明框：disclaimer_keys 的句子 + 入账说明（共性 15，BR-TEXT-04、F-PROD-05：设计稿 Product 第二行「确认收货后随联盟
@@ -159,8 +199,19 @@ public struct ProductDetailScreen: View {
 
     /// 底栏。购买按钮按平台购买状态（features.platform_status，R2-01；已由 applyPurchaseStatus 并入 mapping）：维护中置灰
     /// 「稍后再试」，未开放置灰「{平台}返利即将开放」；配置变化时随执行器发布刷新，点击时执行器再核对一次。
-    private func bottomBar(_ product: [String: Any], mapping: ProductCardMapping) -> some View {
-        let state = mapping.data.buyState
+    private func bottomBar(
+        _ product: [String: Any], mapping: ProductCardMapping, purchase: PurchaseState?
+    ) -> some View {
+        var state = mapping.data.buyState
+        if state == .normal, let purchase {
+            // 购买在途：按钮加载态；42901 限流：置灰（APP-06b，共性第 11 条）
+            if purchase.phase == .loading {
+                state = .loading
+            } else if purchase.rateLimited {
+                state = .disabled
+            }
+        }
+        let notInstalled = state == .normal && purchase?.notInstalled == true
         return HStack(spacing: CouliSpacing.s3) {
             Button(action: config.onAskAI) {
                 VStack(spacing: 2) {
@@ -175,19 +226,9 @@ public struct ProductDetailScreen: View {
             }
             .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
             .accessibilityIdentifier("product.askAI")
-            BuyButton(
-                base: mapping.data.buyBase,
-                rebate: mapping.data.rebate,
-                context: .detail,
-                state: state,
-                size: .regular,
-                fillsWidth: true
-            ) {
-                if controller.buyIntent() {
-                    config.onBuyIntent(product)
-                }
-            }
-            .accessibilityIdentifier("product.buy")
+            buyButton(product, mapping: mapping, state: state, notInstalled: notInstalled)
+                .accessibilityFocused($buyFocused)
+                .accessibilityIdentifier("product.buy")
         }
         .padding(.horizontal, CouliSpacing.s4)
         .padding(.vertical, CouliSpacing.s2)
@@ -201,7 +242,64 @@ public struct ProductDetailScreen: View {
     }
 }
 
+extension ProductDetailScreen {
+    /// 购买按钮。明确未安装、全部路径失败（ProductJumpNotInstalled）：「安装X后下单才有返利」，点了重新发起一次购买（新键，A08 同口径）。
+    @ViewBuilder
+    func buyButton(
+        _ product: [String: Any], mapping: ProductCardMapping, state: BuyButtonState, notInstalled: Bool
+    ) -> some View {
+        let tap = {
+            if controller.buyIntent() {
+                config.onBuyIntent(product)
+            }
+        }
+        if notInstalled {
+            let name = texts.text("platform." + controller.platform)
+            CouliButton(texts.format(ProductKeys.notInstalled, ["platform_name": name]), fillsWidth: true, action: tap)
+        } else {
+            BuyButton(
+                base: mapping.data.buyBase, rebate: mapping.data.rebate, context: .detail, state: state, size: .regular,
+                fillsWidth: true, action: tap
+            )
+        }
+    }
+}
+
 /// 大屏（最小宽度 ≥ 600pt，03 §10.4）：详情内容限宽并水平居中。
 enum ProductLayout {
     static let maxContentWidth: CGFloat = 600
+}
+
+/// 订阅购买执行器的底栏：超时条（ProductBuyTimeout：「网络不稳定，请重试」+【重试】，沿用原键）在底栏上方；底栏按购买状态渲染。
+struct ProductPurchaseBar<Bar: View>: View {
+    @ObservedObject var purchase: OpenPurchaseController
+    let texts: SearchTexts
+    let buyFocus: AccessibilityFocusState<Bool>.Binding
+    @ViewBuilder let bar: (PurchaseState) -> Bar
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if purchase.state.phase == .timeout {
+                RetryBanner(
+                    message: texts.text(ProductKeys.buyTimeout),
+                    retryTitle: texts.text(ProductKeys.retry),
+                    isEnabled: !purchase.state.rateLimited
+                ) {
+                    purchase.retryAfterTimeout()
+                }
+                .padding(.horizontal, CouliSpacing.s4)
+                .padding(.bottom, CouliSpacing.s2)
+                .accessibilityIdentifier("product.buyTimeout")
+            }
+            bar(purchase.state)
+        }
+        .onChange(of: purchase.state.dialog == nil) { closed in
+            // 弹层关闭（取消、授权取消、确认后）：焦点回到底栏购买按钮（A11yFocusAuthSheet；DS 弹层关闭动画后再移）
+            guard closed else { return }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                buyFocus.wrappedValue = true
+            }
+        }
+    }
 }

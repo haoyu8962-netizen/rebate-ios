@@ -1,7 +1,7 @@
 import XCTest
 
 /// 冒烟（APP-06a 验收 5.2）：Debug 包 + 本机假服务（`-CouliFakeLoginServer`，搜索与详情场景见 DebugFakeSearch）。
-/// 首页搜索框 → Search → 输入关键词 → 结果 → 换 Tab、排序、筛选 → 进详情 → 发出购买意图。顺带核对 A11yHitSearch 的命中区。
+/// 首页搜索框 → Search → 输入关键词 → 结果 → 换 Tab、排序、筛选 → 进详情 → 购买（游客进登录，APP-06b）。顺带核对 A11yHitSearch 的命中区。
 /// 设置环境变量 TEST_RUNNER_COULI_SHOT_DIR 时另跑设计稿比对的截图用例，把截图写到该目录。
 @MainActor
 final class SearchSmokeTests: XCTestCase {
@@ -63,8 +63,9 @@ final class SearchSmokeTests: XCTestCase {
         XCTAssertTrue(element(app, "search.card.0").waitForExistence(timeout: 10))
         element(app, "search.card.0").tap()
         XCTAssertTrue(element(app, "product.buy").waitForExistence(timeout: 10), "没有进详情")
+        // APP-06b：购买走 open 流程；游客 open 得 10001 → 登记购买待办并进登录页（BR-ID-10）。
         element(app, "product.buy").tap()
-        XCTAssertTrue(app.staticTexts["已发出购买意图（APP-06b 接 open 流程）"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10), "游客购买没有进登录页")
     }
 
     private func requireShots() throws {
@@ -216,9 +217,6 @@ final class SearchSmokeTests: XCTestCase {
         app.swipeUp()
         pause()
         save(app, "Product-2")
-        element(app, "product.buy").tap()
-        pause(0.3)
-        save(app, "Product-buy-intent")
         let names = ["Product-no-rebate", "Product-off-shelf-30141", "Product-ref-expired-30143", "Product-stale",
                      "Product-price-unavailable"]
         for (index, name) in names.enumerated() {

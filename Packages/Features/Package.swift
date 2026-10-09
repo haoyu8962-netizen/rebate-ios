@@ -7,7 +7,7 @@ let features: [(name: String, task: String)] = [
     ("Home", "APP-11"), ("Search", "APP-06"), ("Product", "APP-06"),
     ("Agent", "APP-10"), ("Orders", "APP-08"), ("Wallet", "APP-09"),
     ("Me", "APP-12"), ("Auth", "APP-05"), ("Web", "APP-04"),
-    ("Login", "APP-05a"),
+    ("Login", "APP-05a"), ("Purchase", "APP-06b"),
 ]
 
 /// 个别 Feature 额外依赖的 Core 模块（仍只依赖 Core，不依赖其他 Feature）。
@@ -25,10 +25,18 @@ let extraDependencies: [String: [Target.Dependency]] = [
     "Search": [
         .product(name: "ProductSearch", package: "Core"),
         .product(name: "CouliNetwork", package: "Core"),
+        .product(name: "Trade", package: "Core"),
     ],
     "Product": [
         .product(name: "ProductSearch", package: "Core"),
         .product(name: "CouliNetwork", package: "Core"),
+        .product(name: "Trade", package: "Core"),
+    ],
+    // Purchase（APP-06b）：购买浮层（加载层、超时条、确认框、AuthSheet、JumpTip、浏览器提示）与授权管理页。执行器在 Core 的 Trade；
+    // 由 App 盖在详情页 / 搜索页之上（Product、Search 不依赖本模块）。
+    "Purchase": [
+        .product(name: "Trade", package: "Core"),
+        .product(name: "ProductSearch", package: "Core"),
     ],
 ]
 
@@ -72,6 +80,22 @@ let package = Package(
                 .product(name: "Session", package: "Core"),
                 .product(name: "Generated", package: "Generated"),
                 .product(name: "DesignSystem", package: "DesignSystem"),
+            ]
+        ),
+        // Codex 先写的向量测试（specs/open-trade-vectors.json，`@testable import Trade`）与购买、外跳、授权、授权管理的执行器测试
+        // 与本地假服务（URLProtocol + 真实 ApiClient）集成测试。被测模块 Trade 在 Core（Features 之间没有依赖边）；弹窗文字拼装
+        // （PurchaseText，共性第 47 条）在本包的 Purchase。
+        .testTarget(
+            name: "TradeTests",
+            dependencies: [
+                "Purchase",
+                .product(name: "Trade", package: "Core"),
+                .product(name: "TradeJump", package: "Core"),
+                .product(name: "ProductSearch", package: "Core"),
+                .product(name: "DesignSystem", package: "DesignSystem"),
+                .product(name: "CouliNetwork", package: "Core"),
+                .product(name: "Session", package: "Core"),
+                .product(name: "Generated", package: "Generated"),
             ]
         ),
     ],

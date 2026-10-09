@@ -1,4 +1,5 @@
 import Product
+import Purchase
 import Router
 import Search
 import SwiftUI
@@ -24,7 +25,12 @@ private struct SearchRouteContent: View {
     }
 
     var body: some View {
-        SearchView(config: config)
+        if let purchase = config.purchaseController {
+            SearchView(config: config)
+                .purchaseOverlay(purchase, texts: config.texts)
+        } else {
+            SearchView(config: config)
+        }
     }
 }
 
@@ -49,6 +55,11 @@ private struct ProductRouteContent: View {
     }
 
     var body: some View {
-        ProductDetailScreen(config: config)
+        if let purchase = config.purchase {
+            ProductDetailScreen(config: config)
+                .purchaseOverlay(purchase, texts: config.texts)
+        } else {
+            ProductDetailScreen(config: config)
+        }
     }
 }

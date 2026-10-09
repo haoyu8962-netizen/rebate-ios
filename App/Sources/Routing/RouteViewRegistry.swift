@@ -20,6 +20,9 @@ enum RouteViewRegistry {
         // APP-06a：搜索（Features/Search）与商品详情（Features/Product）。
         "Search": { AnyView(SearchRouteView(destination: $0)) },
         "ProductDetail": { AnyView(ProductDetailRouteView(destination: $0)) },
+        // APP-06b：授权管理（Features/Purchase）；「我的」Tab 占位页先放授权管理与设置入口（页面本身在 APP-12）。
+        "AuthManage": { AnyView(AuthManageRouteView(destination: $0)) },
+        "Me": { AnyView(MePlaceholderView(destination: $0)) },
     ]
 
     @ViewBuilder

@@ -42,7 +42,7 @@ public enum ProductCardMapper {
         nowMillis: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
     ) -> ProductCardMapping {
         let platform = card["platform"] as? String ?? ""
-        let basis = card["rebate_basis"] as? String ?? ""
+        let basis = rebateBasis(card)
         let unavailable = priceUnavailable(card)
         let price = priceTag(card, platform: platform, unavailable: unavailable)
         let minFen = int64(card["rebate_min_fen"])
@@ -92,6 +92,14 @@ public enum ProductCardMapper {
             return PriceTagModel.make(
                 platform: platform, priceFen: priceFen, couponFen: couponFen, finalPriceFen: finalFen,
                 isPresale: presale
+            )
+        }
+        // 新券后价已知、口径与券前价待补齐（APP-06b 共性第 34、37 条）：只显示已知的新价，不带口径词、不写「无券」。
+        if !unavailable, pricePending(card), let finalFen = int64(card["final_price_fen"]) {
+            return PriceTagContent(
+                mainLabel: "", mainAmount: CouliFormat.money(fen: finalFen), subLine: nil, noCoupon: false,
+                presaleLabel: presale ? PriceTerms.presale : nil,
+                mainAccessibilityText: CouliFormat.moneySpoken(fen: finalFen), subLineAccessibilityText: nil
             )
         }
         // 没有可展示的价格：PriceTag 不出现（hidesPrice），这里不带任何金额。
@@ -170,7 +178,29 @@ public enum ProductCardMapper {
         if card["rebate_basis"] as? String == RebateBasis.amountUnknown.rawValue {
             return false
         }
+        if pricePending(card), int64(card["final_price_fen"]) != nil {
+            return false
+        }
         return ["price_fen", "coupon_fen", "final_price_fen"].contains { int64(card[$0]) == nil }
+    }
+
+    /// 客户端临时展示状态（APP-06b 共性第 16 条，Core Trade 的 CardPatch.provisionalKey）：open 响应把返利由 0 变为正数、却不带口径时
+    /// 置上，按服务端区间显示（不落入「暂无返利」），重取的权威卡补上口径后去掉。
+    public static let provisionalRebateKey = "client_provisional_rebate"
+
+    /// 客户端「价格待补齐」状态（APP-06b 共性第 34 条，Core Trade 的 CardPatch.pricePendingKey）。
+    public static let pricePendingKey = "client_price_pending"
+
+    public static func pricePending(_ card: [String: Any]) -> Bool {
+        bool(card[pricePendingKey]) == true
+    }
+
+    /// 返利口径：临时展示状态且口径未知时按区间（normal）显示，其余原样。
+    static func rebateBasis(_ card: [String: Any]) -> String {
+        if let basis = card["rebate_basis"] as? String {
+            return basis
+        }
+        return bool(card[provisionalRebateKey]) == true ? RebateBasis.normal.rawValue : ""
     }
 
     /// BR-PRICE-11：stale=true，或 age_sec > 300（正好 300 不提示）。

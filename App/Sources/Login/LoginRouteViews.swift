@@ -52,6 +52,13 @@ struct SettingsPlaceholderView: View {
         }
         .padding(CouliSpacing.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // APP-06b：授权管理入口（A22 同口径）放在页底，不改占位页原有内容的位置
+        .overlay(alignment: .bottom) {
+            if !destination.readonly {
+                AuthManageEntryRow()
+                    .padding(CouliSpacing.s4)
+            }
+        }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
         .couliDialog(isPresented: confirming, restoreFocusTo: $logoutFocused) {
             CouliDialog(

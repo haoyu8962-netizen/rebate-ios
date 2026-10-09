@@ -5,6 +5,7 @@
 --ifdef no-indent
 --ranges no-space
 --maxwidth 120
---exclude Packages/Generated/Sources,App/Sources/Generated,Packages/*/.build,.build,DerivedData,Couli.xcodeproj,tools/ci/lint-fixtures
+# Codex 先写的 OpenTradeVectorTests.swift（APP-06b）约定不改：排除在格式检查之外（import 顺序与条件赋值写法与本仓库风格不同）。
+--exclude Packages/Generated/Sources,App/Sources/Generated,Packages/*/.build,.build,DerivedData,Couli.xcodeproj,tools/ci/lint-fixtures,Packages/Features/Tests/TradeTests/OpenTradeVectorTests.swift
 # 与 Codex 先写的 ContractConformanceTests 风格一致所需的放宽。
 --disable hoistTry,docComments,wrapMultilineStatementBraces,numberFormatting

@@ -59,6 +59,10 @@ public enum ProductDetailState {
         if JSON.string(product["rebate_basis"]) == RebateBasis.amountUnknown.rawValue {
             return false
         }
+        // 新券后价已知、券前价与券额待补齐（APP-06b 共性第 34 条）：照常可买
+        if JSON.bool(product["client_price_pending"]) == true, JSON.int64(product["final_price_fen"]) != nil {
+            return false
+        }
         return ["price_fen", "coupon_fen", "final_price_fen"].contains { JSON.int64(product[$0]) == nil }
     }
 

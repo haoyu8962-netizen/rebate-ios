@@ -279,6 +279,17 @@ public extension View {
                                       restoreFocus: restoreFocusTo, panel: dialog))
     }
 
+    /// 盖上居中的自定义面板（加载层「正在打开淘宝」、浏览器提示等不是标准弹窗的模态层；APP-06b）：同样模态、底层对读屏隐藏、
+    /// 遮罩不关闭，关闭后焦点回到触发控件。面板自己负责把读屏焦点放到标题。
+    func couliPanel(
+        isPresented: Bool,
+        restoreFocusTo: AccessibilityFocusState<Bool>.Binding? = nil,
+        @ViewBuilder panel: @escaping () -> some View
+    ) -> some View {
+        modifier(ModalOverlayModifier(isPresented: isPresented, alignment: .center, dismissOnScrim: nil,
+                                      restoreFocus: restoreFocusTo, panel: panel))
+    }
+
     /// 盖上底部半屏。`dismissOnScrim` 为 nil 时点遮罩不关闭（资金与验证类，adaptation-a11y-spec §4）。
     /// - Parameter restoreFocusTo: 同 `couliDialog`；按钮、关闭键、遮罩任一方式关闭后焦点都回到触发控件。
     func couliSheet(

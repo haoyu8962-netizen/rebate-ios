@@ -40,6 +40,9 @@ public final class ProductDetailController: ObservableObject {
     private var session = SearchSession()
     private let block: RetryBlock
     private let requests = InFlightRequests()
+    /// 购买结果写回后的权威卡重取（APP-06b：补齐价格字段、30144 重新加载）：与页面加载分开作废，离开页面时一并取消。
+    private let patchRequests = InFlightRequests()
+    private var patchSeq: Int64 = 0
     private var left = false
     private var started = false
     public let platform: String
@@ -94,6 +97,7 @@ public final class ProductDetailController: ObservableObject {
         left = true
         session.leave()
         requests.cancelAll()
+        patchRequests.cancelAll()
         block.cancelTimer()
         purchaseObservation?.cancel()
         purchaseObservation = nil
@@ -112,8 +116,32 @@ public final class ProductDetailController: ObservableObject {
         return canBuy
     }
 
+    /// 用购买结果更新这张卡（APP-06b，BR-PRICE-12：open 响应的新价格、new_link_id、无返利状态，30141 下架）：重新映射详情模型
+    /// （下架、价格未知时购买按钮立即置灰，APP-06b 共性第 28 条）。不是内容态、已离开时不改。
+    public func updateProduct(_ transform: ([String: Any]) -> [String: Any]) {
+        guard !left, snapshot.phase == .content, let product = snapshot.product else { return }
+        let next = transform(product)
+        snapshot.product = next
+        snapshot.view = ProductDetailState.map(next, context: context())
+    }
+
+    /// 按这张卡的 product_key + item_ref 重取权威商品卡（APP-06b 共性第 7、9、17、26 条），到达时用 `merge`（此刻的卡, 重取到的卡）
+    /// 决定落到页面上的卡（补齐只填未知字段且核对卡片版本；30144 整卡替换但不覆盖之后写入的购买结果）。不进加载态、不打断弹层；
+    /// 失败、离开页面时什么都不做（卡片保持原样，价格未知就按未知展示）。
+    public func refetch(merge: @escaping ([String: Any], [String: Any]) -> [String: Any]) {
+        guard !left, !productKey.isEmpty else { return }
+        patchSeq += 1
+        let seq = patchSeq
+        let query = itemRef.map { "item_ref=" + SearchQuery.encode($0) }
+        let call = ApiCall(operationId: "getProduct", pathParams: ["product_key": productKey], query: query)
+        patchRequests.send(api, call, seq: seq) { [weak self] result in
+            guard let self, !left, case let .success(data, _, _) = result, let fresh = JSON.parse(data) else { return }
+            updateProduct { merge($0, fresh) }
+        }
+    }
+
     /// 配置变化（或发购买意图前）：按此刻的配置更新购买状态；离开页面后不再更新。
-    private func purchaseChanged() {
+    public func purchaseChanged() {
         guard !left, let source = purchaseSource else { return }
         let current = source.purchase(platform: platform)
         if snapshot.purchase != current {

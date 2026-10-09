@@ -76,9 +76,13 @@ struct CouliApp: App {
         web.login = login
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
+        // 购买（APP-06b）：AuthSheet 计数、点击结果确认的平台状态、外跳端口、link_jump 上报（经埋点本地队列）、购买待办。
+        let trade = AppTrade(
+            network: network, config: config, privacy: privacy, routing: routing, login: login
+        ) { event in tracker.track(event) }
         // 搜索与商品详情（APP-06a）：搜索页订阅配置变化（search_status），路由出栈时作废在途请求。
         _search = StateObject(
-            wrappedValue: AppSearch(network: network, config: config, privacy: privacy, routing: routing)
+            wrappedValue: AppSearch(network: network, config: config, privacy: privacy, routing: routing, trade: trade)
         )
         self.tracker = tracker
         self.routing = routing
@@ -129,11 +133,16 @@ struct CouliApp: App {
                         routing.sceneEnteredBackground()
                         config.enteredBackground()
                         search.restoration.sceneEnteredBackground()
+                        search.trade?.sceneChanged(active: false)
                     case .active:
                         routing.sceneBecameActive()
                         config.enteredForeground()
                         search.restoration.sceneBecameActive()
-                    default: break
+                        search.trade?.sceneChanged(active: true)
+                    case .inactive:
+                        // 系统弹窗、切换 App 的过渡：同样作废续执行许可（03 §4.5「进入后台不外跳」，保守）
+                        search.trade?.sceneChanged(active: false)
+                    @unknown default: break
                     }
                 }
         }

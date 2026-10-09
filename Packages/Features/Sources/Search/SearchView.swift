@@ -1,5 +1,6 @@
 import DesignSystem
 import SwiftUI
+import Trade
 import UIKit
 
 /// 搜索页（设计稿 Search、SearchTyping、SearchEmpty、SearchFilterPrice、SearchCardCompare、SearchDisclaimerNote、
@@ -53,6 +54,7 @@ public struct SearchView: View {
             header
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            purchaseTimeout
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
         .onAppear(perform: openOnce)
@@ -77,6 +79,22 @@ public struct SearchView: View {
             restoreFocusTo: $priceChipFocused,
             sheet: { priceSheet }
         )
+    }
+
+    /// 列表卡购买 8 秒没有响应（ProductBuyTimeout；APP-06b 共性第 29 条）：页底「网络不稳定，请重试」+【重试】（同键重放原请求）。
+    @ViewBuilder private var purchaseTimeout: some View {
+        if let purchase = page.purchaseController, purchase.state.phase == .timeout {
+            RetryBanner(
+                message: texts.text(SearchKeys.buyTimeout),
+                retryTitle: texts.text(SearchKeys.retry),
+                isEnabled: !purchase.state.rateLimited
+            ) {
+                purchase.retryAfterTimeout()
+            }
+            .padding(.horizontal, CouliSpacing.s4)
+            .padding(.vertical, CouliSpacing.s2)
+            .accessibilityIdentifier("search.buyTimeout")
+        }
     }
 
     private var priceSheet: some View {

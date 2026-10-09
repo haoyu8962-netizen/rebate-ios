@@ -211,9 +211,10 @@ public final class Router: ObservableObject {
     ///   冷启动与条件变化时为 false——前置未满足（登录、绑手机、实名、隐私同意）一律保留记录、不自动拉起前置页（F-IOS-08）。
     func resumePending(state current: GuardState, entersPrerequisite: Bool) {
         guard let pending = pendingStore.load(now: pendingStore.now) else { return }
-        guard pending.action == Self.openRouteAction,
-              let route = pending.paramValues["route"]?.stringValue
-        else {
+        // 不是「打开路由」的待办（APP-06b 购买 open_link）由登记它的发起页自己执行一次（Router 只负责同一份本地记录的计时与清除）：
+        // 这里既不执行也不删除（H02 同口径）。记录损坏（open_route 却没有路由名）仍删除。
+        guard pending.action == Self.openRouteAction else { return }
+        guard let route = pending.paramValues["route"]?.stringValue else {
             pendingStore.clear()
             return
         }

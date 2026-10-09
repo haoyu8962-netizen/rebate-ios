@@ -117,7 +117,8 @@ public struct ProductCardData: Sendable {
         if hidesPrice {
             return notes.map { ($0, $0) }
         }
-        var lines: [(String, String)] = [
+        // 主价没有口径词 = 券前价与券额待补齐（APP-06b）：不写副行（不能把券额未知写成「无券」）。
+        var lines: [(String, String)] = price.mainLabel.isEmpty ? [] : [
             (price.subLine ?? PriceTerms.noCoupon, price.subLineAccessibilityText ?? PriceTerms.noCoupon),
         ]
         lines += notes.map { ($0, $0) }

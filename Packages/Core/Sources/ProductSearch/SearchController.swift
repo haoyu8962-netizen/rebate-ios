@@ -98,6 +98,9 @@ public final class SearchController: ObservableObject {
     let block: RetryBlock
     var pager = SearchPager()
     let requests = InFlightRequests()
+    /// 购买结果写回后的权威卡重取（APP-06b）：与搜索请求分开作废，离开页面时一并取消。
+    let patchRequests = InFlightRequests()
+    var patchSeq: Int64 = 0
     var left = false
     var observation: SearchObservation?
     /// 本页收到 search_disabled 的平台 → 收到时配置拉取的分界（issuedFetchId）。只有分界之后发出并被服务端确认的配置
@@ -296,10 +299,45 @@ public final class SearchController: ObservableObject {
         restoreTarget = nil
         session.leave()
         requests.cancelAll()
+        patchRequests.cancelAll()
         block.cancelTimer()
         deferredAutoRun = false
         observation?.cancel()
         observation = nil
+    }
+
+    /// 用购买结果更新列表里的那张卡（APP-06b，BR-PRICE-12：只换这一张；结果与推荐卡都找）。按 product_key 认卡（换了 link_id 也认得出）。
+    public func updateItem(productKey: String, _ transform: ([String: Any]) -> [String: Any]) {
+        guard !left, !productKey.isEmpty else { return }
+        var changed = false
+        func patch(_ items: inout [[String: Any]]) {
+            for index in items.indices where items[index]["product_key"] as? String == productKey {
+                items[index] = transform(items[index])
+                changed = true
+            }
+        }
+        patch(&snapshot.items)
+        patch(&snapshot.fallbackItems)
+        if changed {
+            publish()
+        }
+    }
+
+    /// 按这张卡的 product_key + item_ref 重取权威商品卡（APP-06b 共性第 7、9、17、26 条），到达时只替换这一张（`merge` 决定怎么落）。
+    /// 离开页面、失败时什么都不做。
+    public func refetchItem(
+        productKey: String,
+        itemRef: String?,
+        merge: @escaping ([String: Any], [String: Any]) -> [String: Any]
+    ) {
+        guard !left, !productKey.isEmpty else { return }
+        patchSeq += 1
+        let query = itemRef.map { "item_ref=" + SearchQuery.encode($0) }
+        let call = ApiCall(operationId: "getProduct", pathParams: ["product_key": productKey], query: query)
+        patchRequests.send(api, call, seq: patchSeq) { [weak self] result in
+            guard let self, !left, case let .success(data, _, _) = result, let fresh = JSON.parse(data) else { return }
+            updateItem(productKey: productKey) { merge($0, fresh) }
+        }
     }
 
     /// 配置变化（ConfigStore 订阅，含 304 确认）：重算 Tab。当前平台不再可搜时，作废并取消属于它的在途请求（搜索与翻页），

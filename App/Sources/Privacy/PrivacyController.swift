@@ -75,8 +75,11 @@ final class PrivacyController: ObservableObject {
         gate.registerInitStep(name: PrivacyInitStep.deviceRegister) {}
         // TODO(APP-推送任务): MobPush 初始化与隐私授权接口（03 §3.5）。
         gate.registerInitStep(name: PrivacyInitStep.push) {}
-        // TODO(APP-外跳任务): 百川等联盟 SDK（03 §3.5）。
-        gate.registerInitStep(name: PrivacyInitStep.union) {}
+        // APP-06b：百川等联盟 SDK（03 §3.5）。本包没有 SDK（不可用实现，AppKey 占位，TODO(N-28)）：初始化失败即 phase=startup
+        // 上报 sdk_init_failed（BR-ATTR-27 淘宝行），下一次 sdk 步骤前重试 1 次。
+        gate.registerInitStep(name: PrivacyInitStep.union) {
+            MainActor.assumeIsolated { AppTradeStartup.shared.unionInitStep() }
+        }
         // TODO(APP-崩溃任务): Sentry（境内自建服务端，03 §3.5）。
         gate.registerInitStep(name: PrivacyInitStep.crash) {}
         // TODO(APP-05): 微信 OpenSDK（03 §3.5）。
