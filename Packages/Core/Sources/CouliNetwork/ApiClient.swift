@@ -201,9 +201,13 @@ public final class ApiClient: @unchecked Sendable {
     /// 全局只有「设备锁 → 网络锁」一个方向（DeviceRegistry 在设备锁里读 `invalidationTicket`、在设备锁里调用组请求的准入判断）；
     /// 网络锁里从不调用设备凭据。设备屏障先于作废世代竖起，所以任何在网络锁里判断通过、尚未读设备凭据的组请求，
     /// 读取时都会在设备锁里看到屏障（或在屏障竖起之前读完，即读取发生在撤回开始之前）。调用方须串行调用（清理器都在主线程）。
+    ///
+    /// 切换环境（FU-IOS-0711）：`EnvironmentApplier` 在发布 switching、读取保留项之前经 `EnvironmentSwitchClosing` 先同步调用一次，
+    /// 清理器第一位再调一次（可重复）。推进作废世代与取消在途任务在传输层登记任务的同一把锁里（`HttpTransport.closeAll`），
+    /// 与 `sendOnce` 的最终准入互斥：准入通过的请求在作废之前已经启动并随即被取消，作废之后的准入一律不启动。
     public func invalidateSessions() {
-        raiseWithdrawalReadBarriers()
-        transport.cancelAll()
+        device.withdrawalStarted(networkEpoch: currentEpoch)
+        transport.closeAll { raiseNetworkBarrier() }
     }
 
     /// 撤回禁读屏障（APP-08 iOS r3h NEW-05）：竖起设备屏障（只取设备锁）→ 取网络锁推进作废世代、会话换代、竖起网络屏障。
@@ -212,6 +216,11 @@ public final class ApiClient: @unchecked Sendable {
     /// 锁顺序不变：先不持网络锁地取设备锁，再取网络锁，两步不嵌套。
     public func raiseWithdrawalReadBarriers() {
         device.withdrawalStarted(networkEpoch: currentEpoch)
+        raiseNetworkBarrier()
+    }
+
+    /// 取网络锁推进作废世代、会话换代、竖起网络屏障（调用方不持网络锁；可在传输锁里调用，顺序「传输锁 → 网络锁」）。
+    private func raiseNetworkBarrier() {
         lock.withLock {
             epoch &+= 1
             generation &+= 1
@@ -350,9 +359,11 @@ public final class ApiClient: @unchecked Sendable {
         let before = currentEpoch
         var state = await context()
         state.readEpoch = before
-        // 撤回禁读屏障只由「作废之后取得、期间没有再作废」的可读快照放下（APP-08 iOS r3f NEW-01）
+        // 撤回禁读屏障只由「作废之后取得、期间没有再作废」的可读快照放下（APP-08 iOS r3f NEW-01）；切换环境期间（环境未就绪）
+        // 的快照不放下（FU-IOS-0711）
         lock.withLock {
-            if readBarrier, epoch == before, state.privacy == PrivacyRaw.full, state.credentialsReadable {
+            if readBarrier, epoch == before, state.environmentSettled, state.privacy == PrivacyRaw.full,
+               state.credentialsReadable {
                 readBarrier = false
             }
         }

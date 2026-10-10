@@ -50,13 +50,16 @@ final class EnvironmentStore: ObservableObject {
         guard environment != current else {
             return
         }
-        // 一开始就同步关闭环境闸门：清理与提交期间不放行任何请求（含设备注册）。
-        switching = true
         defer {
             switching = false
             switchAttempts += 1
         }
-        try applier.apply(environmentID: environment.id)
+        // 发布 switching、读取保留项之前先同步关闭（FU-IOS-0711，APP-03b 共性 10、17）：`apply` 先做网络作废（推进作废世代、
+        // 竖网络屏障）、设备禁读、取消在途传输，之后才回调这里发布 switching（关闭环境闸门：清理与提交期间不放行任何请求，
+        // 含设备注册），再读取保留项、运行清理器。持有切换前「环境就绪」快照的后台请求此后零读取凭据、零发送。
+        try applier.apply(environmentID: environment.id) {
+            switching = true
+        }
         defaults.set(environment.id, forKey: AppNamespace.environmentSelectionKey)
         current = environment
     }

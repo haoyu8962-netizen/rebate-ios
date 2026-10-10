@@ -53,8 +53,10 @@ public final class EnvironmentApplier {
     }
 
     /// 切换到另一个环境前调用：跑全部清理器，全部成功才记录新环境；有失败抛出第一个失败，记录不变。
-    public func apply(environmentID: String) throws {
-        let failures = cleanPreservingRecords()
+    /// `publishSwitching`（FU-IOS-0711）：在关闭步骤（`closeRequests`）完成之后、读取保留项与运行清理器之前同步调用一次，
+    /// 切换入口用它发布 switching——发布时网络作废、设备禁读、传输取消都已完成。
+    public func apply(environmentID: String, publishSwitching: () -> Void = {}) throws {
+        let failures = cleanPreservingRecords(afterClosing: publishSwitching)
         if let first = failures.first {
             throw first
         }
@@ -65,7 +67,16 @@ public final class EnvironmentApplier {
         defaults.set(environmentID, forKey: AppNamespace.appliedEnvironmentKey)
     }
 
-    private func cleanPreservingRecords() -> [EnvironmentCleanupFailure] {
+    /// 切换关闭步骤（FU-IOS-0711，APP-03b 共性 10、17）：同步作废网络、竖设备屏障、取消在途传输。本类每次清理（启动对账、
+    /// 阻断页重试、手动切换）开头先调用，早于发布 switching（`apply` 的 `publishSwitching`）、读取保留项与任何清理器。可重复调用。
+    public func closeRequests() {
+        registry.closeForEnvironmentSwitch()
+    }
+
+    /// 顺序固定：关闭 → 发布切换状态（`afterClosing`）→ 保存保留项 → 清理器 → 恢复保留项。
+    private func cleanPreservingRecords(afterClosing: () -> Void = {}) -> [EnvironmentCleanupFailure] {
+        closeRequests()
+        afterClosing()
         let saved = AppNamespace.preservedOnEnvironmentSwitchKeys.map { ($0, defaults.object(forKey: $0)) }
         let failures = registry.cleanAll()
         for (key, value) in saved {

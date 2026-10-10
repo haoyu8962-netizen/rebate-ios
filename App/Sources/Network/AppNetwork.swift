@@ -44,7 +44,8 @@ final class AppNetwork {
         credentialsReadable: @escaping @MainActor () -> Bool = {
             PrivacyWithdrawalCleanup.runner.credentialsReadable
         },
-        configuration: URLSessionConfiguration = .ephemeral
+        configuration: URLSessionConfiguration = .ephemeral,
+        snapshotTap: (@Sendable (NetworkContext) async -> NetworkContext)? = nil
     ) {
         let source = NetworkContextSource(credentialsReadable: credentialsReadable)
         self.source = source
@@ -65,7 +66,14 @@ final class AppNetwork {
         self.registry = registry
         client = ApiClient(
             identity: Self.identity,
-            context: { await source.snapshot() },
+            // snapshotTap 只给测试用（生产为 nil）：在取到快照之后、交回网络层之前插入暂停，模拟持旧快照的后台请求（FU-IOS-0711）。
+            context: {
+                let state = await source.snapshot()
+                guard let snapshotTap else {
+                    return state
+                }
+                return await snapshotTap(state)
+            },
             device: device ?? registry,
             tokens: tokens,
             pendingKeys: PendingKeyStore(backend: pendingBackend, clock: PendingActionStore.wallClockMillis),

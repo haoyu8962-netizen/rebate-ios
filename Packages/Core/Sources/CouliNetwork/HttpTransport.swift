@@ -34,9 +34,21 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     private var sessions: [Int64: URLSession] = [:]
     private var tasks: [Int: URLSessionTask] = [:]
     private var nextId = 0
+    /// 只给测试用的观察 / 暂停点（FU-IOS-0711 R1-01），生产为 nil。见 `HttpTransportProbe`。
+    /// 用单独的锁保存：`closeAll` 要在取传输锁之前读它（暂停点可能正持有传输锁）。
+    private let probeLock = NSLock()
+    private var probeStorage: HttpTransportProbe?
+    private var probe: HttpTransportProbe? {
+        probeLock.withLock { probeStorage }
+    }
 
     init(configuration: URLSessionConfiguration) {
         self.configuration = configuration
+    }
+
+    /// 测试注入（internal，只经 `@testable import` 可见）：须在发出任何请求之前设置。
+    func installProbe(_ probe: HttpTransportProbe?) {
+        probeLock.withLock { probeStorage = probe }
     }
 
     private func session(timeoutMillis: Int64) -> URLSession {
@@ -61,6 +73,8 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     }
 
     /// isCurrent 在登记任务的同一把锁里检查：请求已被作废（撤回同意等）就立即取消，不会漏过 `cancelAll`。
+    /// 最终准入与启动（`task.resume`）在同一把锁里完成（FU-IOS-0711）：`closeAll` 也取这把锁推进作废世代，所以每个请求要么在
+    /// 作废之前已经启动（随后被 `closeAll` 取消），要么准入时已看到新世代、不启动——不存在「准入通过、作废开始、之后才启动」的交错。
     /// `cancelWithTask` 为真时（桥调用，APP-04 三端共性第 45 条）：调用方的 Task 被取消（桥调用到截止时间、页面关闭）
     /// 就取消对应的网络任务，不等它自己超时；登记前已取消的直接不发。
     func send(
@@ -90,15 +104,17 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
                 let task = urlSession.dataTask(with: request) { data, response, error in
                     continuation.resume(returning: Self.outcome(data: data, response: response, error: error))
                 }
-                let current = lock.withLock {
+                lock.withLock {
                     tasks[id] = task
-                    return isCurrent() && !(cancelWithTask && Task.isCancelled)
+                    let admitted = isCurrent() && !(cancelWithTask && Task.isCancelled)
+                    probe?.admitted(admitted)
+                    if !admitted {
+                        // 先取消再启动：任务直接以 cancelled 结束，请求不会发出。
+                        task.cancel()
+                    }
+                    probe?.starting(admitted)
+                    task.resume()
                 }
-                if !current {
-                    // 先取消再启动：任务直接以 cancelled 结束，请求不会发出。
-                    task.cancel()
-                }
-                task.resume()
             }
         } onCancel: {
             guard cancelWithTask else { return }
@@ -110,7 +126,18 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
 
     /// 取消全部在途任务（结果按 cancelled，没有统一外壳）。
     func cancelAll() {
-        let running = lock.withLock { Array(tasks.values) }
+        closeAll {}
+    }
+
+    /// 关闭发送（撤回同意、切换环境；FU-IOS-0711）：在登记任务的同一把锁里先执行 `invalidate`（ApiClient 推进作废世代、竖网络屏障，
+    /// 取网络锁——锁顺序「传输锁 → 网络锁」，与 `send` 的最终准入相同），再取消此刻登记的全部任务。之后任何请求的最终准入都看到新世代。
+    func closeAll(_ invalidate: () -> Void) {
+        probe?.closeRequested()
+        let running: [URLSessionTask] = lock.withLock {
+            invalidate()
+            probe?.invalidated()
+            return Array(tasks.values)
+        }
         for task in running {
             task.cancel()
         }
@@ -152,4 +179,15 @@ final class HttpTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable
         // 不跟随：重定向后的请求不再经过白名单、凭据与签名检查（三端统一）。
         completionHandler(nil)
     }
+}
+
+/// 传输层测试观察点（FU-IOS-0711 R1-01）：确定性构造「最终准入通过 → 切换推进作废世代 → 启动」的交错。
+/// 生产不设置（`HttpTransport.probe` 为 nil，各调用点是一次可选链空操作）；协议是 internal，不进公开接口。
+/// 调用位置：`admitted` / `starting` 在 `send` 的准入与 `task.resume` 之间（当前实现在传输锁里）；`closeRequested` 在 `closeAll`
+/// 取传输锁之前；`invalidated` 在 `closeAll` 的传输锁里、作废之后。`admitted` 可以阻塞（模拟准入之后被抢占）。
+protocol HttpTransportProbe: AnyObject, Sendable {
+    func admitted(_ live: Bool)
+    func starting(_ live: Bool)
+    func closeRequested()
+    func invalidated()
 }

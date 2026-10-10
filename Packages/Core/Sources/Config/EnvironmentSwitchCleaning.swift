@@ -18,6 +18,14 @@ public protocol WithdrawalReadBarrierRaising: EnvironmentSwitchCleaning {
     func raiseWithdrawalReadBarriers()
 }
 
+/// 切换环境的关闭步骤（FU-IOS-0711，APP-03b 共性 10、17）：要在**发布 switching、读取保留项之前**同步完成的那部分——
+/// 网络作废（推进作废世代、竖网络禁读屏障）、设备禁读（设备屏障）、取消在途传输。不删任何东西、不抛错、可重复调用。
+/// 切换环境的每个入口（`EnvironmentApplier.closeRequests`）在一切清理之前调用；清理器本身仍照常在 `cleanAll` 里执行。
+@MainActor
+public protocol EnvironmentSwitchClosing: EnvironmentSwitchCleaning {
+    func closeForEnvironmentSwitch()
+}
+
 public struct EnvironmentCleanupFailure: Error, Sendable, Equatable {
     public let cleanerName: String
     public let message: String
@@ -73,6 +81,14 @@ public final class EnvironmentSwitchCleanerRegistry {
     public func raiseWithdrawalReadBarriers() {
         for case let cleaner as any WithdrawalReadBarrierRaising in cleaners {
             cleaner.raiseWithdrawalReadBarriers()
+        }
+    }
+
+    /// 按登记顺序同步执行全部切换关闭步骤（FU-IOS-0711）：切换环境入口在发布 switching、读取保留项、运行任何清理器之前调用，
+    /// 使「switching 已生效、清理器尚未执行」的窗口里旧请求已读不到凭据、发不出去。
+    public func closeForEnvironmentSwitch() {
+        for case let cleaner as any EnvironmentSwitchClosing in cleaners {
+            cleaner.closeForEnvironmentSwitch()
         }
     }
 
