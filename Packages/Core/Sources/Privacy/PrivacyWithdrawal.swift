@@ -130,6 +130,8 @@ public final class WithdrawalCleanupRunner {
     /// 返回失败项。
     @discardableResult
     public func run() -> [EnvironmentCleanupFailure] {
+        // 屏障先于标记（APP-08 iOS r3h NEW-05）：发布待清理标记（含内存的未落盘标记）之前同步竖起禁读屏障。
+        raiseReadBarriers()
         if !isPending {
             if store.commitWithdrawalVerified() {
                 writeGuard.markPersisted()
@@ -144,11 +146,20 @@ public final class WithdrawalCleanupRunner {
         return failures
     }
 
+    /// 撤回禁读屏障（APP-08 iOS r3h NEW-05）：同步竖起清理器注册表里各项的禁读屏障（网络 readBarrier、作废世代、设备
+    /// withdrawalBarrier）。撤回清理的每个入口——`PrivacyGate.withdraw`、补写撤回记录、`run`、`retryIfPending`——都在发布待清理
+    /// 标记（含内存的未落盘标记）之前调用它；只竖屏障、不删除，可重复调用。
+    public func raiseReadBarriers() {
+        registry.raiseWithdrawalReadBarriers()
+    }
+
     /// 启动、回前台时调用（任何模块读取凭据之前）：撤回记录没落盘的先补写；有未完成的撤回清理就再清一次。
     /// 返回是否已干净（记录已落盘且清理完成）。
     @discardableResult
     public func retryIfPending() -> Bool {
         if writeGuard.isUnpersisted {
+            // 补写待清理标记之前先竖屏障（APP-08 iOS r3h NEW-05）。
+            raiseReadBarriers()
             guard store.commitWithdrawalVerified() else {
                 return false
             }

@@ -11,6 +11,13 @@ public protocol EnvironmentSwitchCleaning: AnyObject {
     func cleanForEnvironmentSwitch() throws
 }
 
+/// 撤回同意的禁读屏障（APP-08 iOS r3h NEW-05）：要在**发布待清理标记之前**同步竖起的那部分（如网络层的禁读屏障、作废世代、
+/// 设备凭据屏障）。只竖屏障、不删任何东西；可重复调用。清理器注册表在撤回清理的每个入口、写待清理标记之前调用它。
+@MainActor
+public protocol WithdrawalReadBarrierRaising: EnvironmentSwitchCleaning {
+    func raiseWithdrawalReadBarriers()
+}
+
 public struct EnvironmentCleanupFailure: Error, Sendable, Equatable {
     public let cleanerName: String
     public let message: String
@@ -59,6 +66,14 @@ public final class EnvironmentSwitchCleanerRegistry {
 
     public var registeredNames: [String] {
         cleaners.map(\.cleanerName)
+    }
+
+    /// 按登记顺序竖起全部撤回禁读屏障（APP-08 iOS r3h NEW-05）：撤回清理的每个入口在发布待清理标记（含内存的未落盘标记）之前
+    /// 同步调用，使「标记已生效、清理器尚未执行」的窗口里旧请求已读不到凭据。
+    public func raiseWithdrawalReadBarriers() {
+        for case let cleaner as any WithdrawalReadBarrierRaising in cleaners {
+            cleaner.raiseWithdrawalReadBarriers()
+        }
     }
 
     /// 依次运行全部清理；一项失败不影响其他项，返回全部失败。

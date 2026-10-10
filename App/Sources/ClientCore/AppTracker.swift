@@ -132,6 +132,12 @@ final class AppTracker {
         queue?.track(event: event) ?? false
     }
 
+    /// 带发起时固定的账号归属采集（r3g NEW-06）：调用方已比较来源未变；user_id 用归属里的账号。
+    @discardableResult
+    func track(_ event: TrackEvent, attribution: TrackAttribution?) -> Bool {
+        queue?.track(event: event, attribution: attribution) ?? false
+    }
+
     /// TODO(N-20): /v1/events 未定义，先不上报。接通时：只登记交接、发送前核对 `ticket.isValid`，经
     /// `ApiClient.send(_:ticket:)` 以 `ticket.clientTicket` 发送，并用 `ticket.onCancel` 登记取消、结束时 `finish()`。
     /// 空实现也明确结束票据（APP-03b 共性 26）：同步拒收，不留在发送中。

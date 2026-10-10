@@ -67,6 +67,8 @@ public enum LocalRejectReason {
     public static let sessionUnreadable = "session_unreadable"
     /// 调用开始后隐私或环境世代变了（撤回同意、切换环境，`ApiClient.invalidateSessions`）：在途请求及其重试、重放作废。
     public static let callCancelled = "call_cancelled"
+    /// 发送前闸门不放行（APP-08：订单请求的共享 42901 禁用期），没有写出。
+    public static let sendBlocked = "send_blocked"
     /// 未知 operationId 或路径参数没填全（调用方的编程错误，不发出）。
     public static let invalidCall = "invalid_call"
     /// 登录成功但令牌没能写进安全存储（`ApiResult.sessionNotSaved`）：不算登录成功。
@@ -111,9 +113,23 @@ public protocol DeviceCredentials: Sendable {
     var installSecret: String? { get }
     /// 一次读出的 device_id 与 install_secret（任一项缺失为 nil）。默认由上面两项拼出；生产实现覆盖为一次读取。
     var credentials: (deviceId: String, installSecret: String)? { get }
+    /// 带准入的一次读出（APP-08 iOS r3g NEW-05）：实现方在**自己的锁里**先检查撤回禁读屏障，再调用 `admit`，`admit` 返回
+    /// 网络层准入的作废世代（nil = 不准读）；两项都通过才读凭据。`admit` 会取 ApiClient 的锁：锁顺序固定为
+    /// 「设备锁 → 网络锁」，ApiClient 持网络锁时绝不调用本方法。
+    func credentials(admittedBy admit: () -> UInt64?) -> (deviceId: String, installSecret: String)?
+    /// 撤回同意、切换环境开始（ApiClient.invalidateSessions 在推进作废世代**之前**、不持网络锁时调用）：在设备锁里竖起设备凭据的
+    /// 撤回禁读屏障。`networkEpoch` 是推进前的作废世代：之后只有网络层准入的世代大于它（作废之后取得的可读快照）才放下。
+    func withdrawalStarted(networkEpoch: UInt64)
 }
 
 public extension DeviceCredentials {
+    /// 默认实现（测试替身）：先问准入再读，不是原子的。生产实现 DeviceRegistry 在设备锁里完成。
+    func credentials(admittedBy admit: () -> UInt64?) -> (deviceId: String, installSecret: String)? {
+        admit() == nil ? nil : credentials
+    }
+
+    func withdrawalStarted(networkEpoch _: UInt64) {}
+
     var credentials: (deviceId: String, installSecret: String)? {
         guard let id = deviceId, !id.isEmpty, let secret = installSecret, !secret.isEmpty else {
             return nil
@@ -147,6 +163,10 @@ public struct NetworkContext: Sendable, Equatable {
     public let update: String
     /// 当前环境的 API 基址；环境未就绪时为 nil。
     public let apiBaseURL: URL?
+    /// 取这份快照之前那一刻的作废世代（只由 `ApiClient.readContext` 填写，APP-08 iOS NEW-01）。凭据只在「快照允许读取」且
+    /// 「作废世代仍是取快照前那一份」时才读：撤回同意、切换环境都在网络层同一把锁里推进作废世代，异步等待之前取得的
+    /// `credentialsReadable` 一旦隔了一次作废就不再可信。nil = 来源不明（没经 readContext），一律按不可读。
+    var readEpoch: UInt64?
 
     public init(
         privacy: String,
@@ -193,6 +213,8 @@ public struct NetworkHooks: Sendable {
     /// App 在主线程核对世代仍是当前世代后同步 Router 的会话状态；来源是冷启动 / 版本恢复的受限会话屏障时再通知启动协调，
     /// 经 Router 守卫恢复待办（共性 19）。
     public var sessionRefreshed: @Sendable (_ generation: UInt64, _ origin: SessionRefreshOrigin) async -> Void
+    /// 测试探针（APP-08 iOS r3g NEW-05）：组请求时会话准入判断通过之后、读设备凭据之前调用（不持任何锁）。生产不设。
+    public var afterCredentialAdmission: @Sendable () -> Void = {}
 
     public init(
         onForceUpdate: @escaping @Sendable (String?) async -> Void = { _ in },

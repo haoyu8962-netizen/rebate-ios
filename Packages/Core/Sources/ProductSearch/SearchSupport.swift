@@ -5,9 +5,22 @@ import Foundation
 /// 都核对归属，调用方 Task 被取消时同时取消传输）。
 public protocol SearchApi: AnyObject, Sendable {
     func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool) async -> ApiResult
+    /// 带流程固定的请求归属发送（APP-08 iOS r3f NEW-03）：由购买 / 授权流程派生、经本模块发出的请求（购买结果触发的商品补齐、30144
+    /// 重新加载）把那次购买尝试固定的归属交网络层，首次绑定前、组请求后与写出前只比较，不一致零发送。`expected` 为 nil 时同
+    /// `send(_:isValid:)`。
+    func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?) async -> ApiResult
 }
 
-extension ApiClient: SearchApi {}
+extension ApiClient: SearchApi {
+    public func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?
+    ) async -> ApiResult {
+        guard let expected else {
+            return await send(call, isValid: isValid)
+        }
+        return await send(call, isValid: isValid, sendAllowed: { true }, expected: expected)
+    }
+}
 
 /// 搜索页用到的配置能力（生产为 App 的 AppConfig → ConfigStore；测试用假实现）。
 @MainActor
@@ -69,13 +82,16 @@ final class InFlightRequests {
     private var entries: [Int64: (owner: RequestOwner, cancel: () -> Void)] = [:]
 
     /// 发出一次调用；Task 在主线程结算（结算前先由调用方复核序号）。
+    /// `expected`：流程固定的请求归属（购买派生的补齐，r3f NEW-03）；nil = 页面自己的请求（不比较）。
     func send(
-        _ api: SearchApi, _ call: ApiCall, seq: Int64,
+        _ api: SearchApi, _ call: ApiCall, seq: Int64, expected: RequestOwnership? = nil,
         settle: @escaping @MainActor (ApiResult) -> Void
     ) {
         let owner = RequestOwner()
         let task = Task { @MainActor [weak self] in
-            let result = await api.send(call) { owner.isValid }
+            let result = expected == nil
+                ? await api.send(call) { owner.isValid }
+                : await api.send(call, isValid: { owner.isValid }, expected: expected)
             self?.entries[seq] = nil
             settle(result)
         }

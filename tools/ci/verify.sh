@@ -380,7 +380,7 @@ if [ "$FAST" -eq 0 ]; then
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
-        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal --expect COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a --expect CouliClipboardDiagnostics --expect 127.0.0.1 \
+        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal --expect COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a --expect CouliClipboardDiagnostics --expect COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19 --expect 127.0.0.1 \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

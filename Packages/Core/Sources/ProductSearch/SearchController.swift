@@ -325,16 +325,18 @@ public final class SearchController: ObservableObject {
 
     /// 按这张卡的 product_key + item_ref 重取权威商品卡（APP-06b 共性第 7、9、17、26 条），到达时只替换这一张（`merge` 决定怎么落）。
     /// 离开页面、失败时什么都不做。
+    /// `expected`：发起补齐的购买尝试固定的请求归属（`PurchaseAttempt.source.request`，r3f NEW-03），交网络层只比较；换号后零发送。
     public func refetchItem(
         productKey: String,
         itemRef: String?,
+        expected: RequestOwnership? = nil,
         merge: @escaping ([String: Any], [String: Any]) -> [String: Any]
     ) {
         guard !left, !productKey.isEmpty else { return }
         patchSeq += 1
         let query = itemRef.map { "item_ref=" + SearchQuery.encode($0) }
         let call = ApiCall(operationId: "getProduct", pathParams: ["product_key": productKey], query: query)
-        patchRequests.send(api, call, seq: patchSeq) { [weak self] result in
+        patchRequests.send(api, call, seq: patchSeq, expected: expected) { [weak self] result in
             guard let self, !left, case let .success(data, _, _) = result, let fresh = JSON.parse(data) else { return }
             updateItem(productKey: productKey) { merge($0, fresh) }
         }

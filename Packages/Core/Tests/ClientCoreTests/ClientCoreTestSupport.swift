@@ -252,11 +252,13 @@ struct DeviceFixture {
 func makeDeviceFixture(
     identifiers: [String?] = [ClientCoreFixtures.idfv],
     secure: MemorySecureStore = MemorySecureStore(),
-    tokens: MemorySessionTokens = MemorySessionTokens(),
+    tokens: any SessionTokens = MemorySessionTokens(),
     admitRead: @escaping @MainActor @Sendable () -> Bool = { true },
     clock: @escaping @Sendable () -> Int64 = { 1_790_661_600_000 },
     nonce: @escaping @Sendable () -> String = { "b5a8f07b9dda63c3f78ed24c341d25b3" },
-    registryContext: (@Sendable (CoreTestState) async -> NetworkContext)? = nil
+    registryContext: (@Sendable (CoreTestState) async -> NetworkContext)? = nil,
+    afterCredentialAdmission: @escaping @Sendable () -> Void = {},
+    clientContext: (@Sendable (CoreTestState) async -> NetworkContext)? = nil
 ) -> DeviceFixture {
     let state = CoreTestState()
     let reader = ScriptedIdentifierReader(identifiers)
@@ -267,18 +269,20 @@ func makeDeviceFixture(
         context: { await registryContext?(state) ?? state.context },
         admitRead: admitRead
     )
+    var hooks = NetworkHooks(
+        reRegisterDevice: { rejected, isValid in
+            await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
+        },
+        deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) }
+    )
+    hooks.afterCredentialAdmission = afterCredentialAdmission
     let client = ApiClient(
         identity: ClientIdentity(platform: "ios", appVersion: "1.2.0", build: "120", channel: "app_store"),
-        context: { state.context },
+        context: { await clientContext?(state) ?? state.context },
         device: registry,
         tokens: tokens,
         pendingKeys: PendingKeyStore(backend: MemoryPendingKeyBackend(), clock: { 0 }),
-        hooks: NetworkHooks(
-            reRegisterDevice: { rejected, isValid in
-                await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
-            },
-            deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) }
-        ),
+        hooks: hooks,
         configuration: CoreStubProtocol.configuration(),
         clock: clock,
         sleeper: { _ in },

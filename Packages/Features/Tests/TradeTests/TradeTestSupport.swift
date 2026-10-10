@@ -11,6 +11,8 @@ final class FakeTradeApi: TradeApi, @unchecked Sendable {
     struct Sent {
         let call: ApiCall
         let isValid: @Sendable () -> Bool
+        /// 调用方交给网络层的固定归属（iOS RC-06：JumpTip 请求）；nil = 没带。
+        var expected: RequestOwnership?
     }
 
     private let lock = NSLock()
@@ -21,8 +23,14 @@ final class FakeTradeApi: TradeApi, @unchecked Sendable {
     var auto: ((ApiCall) -> ApiResult?)?
 
     func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool) async -> ApiResult {
+        await send(call, isValid: isValid, expected: nil)
+    }
+
+    func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?
+    ) async -> ApiResult {
         let index: Int = lock.withLock {
-            sent.append(Sent(call: call, isValid: isValid))
+            sent.append(Sent(call: call, isValid: isValid, expected: expected))
             return sent.count - 1
         }
         if let result = auto?(call) {
@@ -49,6 +57,11 @@ final class FakeTradeApi: TradeApi, @unchecked Sendable {
 
     var calls: [ApiCall] {
         lock.withLock { sent.map(\.call) }
+    }
+
+    /// 某类调用带的固定归属（按发出顺序）。
+    func expected(_ operation: String) -> [RequestOwnership?] {
+        lock.withLock { sent.filter { $0.call.operationId == operation }.map(\.expected) }
     }
 
     func calls(_ operation: String) -> [ApiCall] {
@@ -173,15 +186,6 @@ final class FakePorts: JumpPorts {
 }
 
 @MainActor
-final class FakeSink: LinkJumpSink {
-    var events: [TradeObject] = []
-
-    func report(_ fields: TradeObject) {
-        events.append(fields)
-    }
-}
-
-@MainActor
 final class FakeEnv: PurchaseEnv {
     var isLoggedIn = true
     var isBasic = false
@@ -191,6 +195,7 @@ final class FakeEnv: PurchaseEnv {
     var opened: [(String, [String: String])] = []
     var card: TradeObject
     var refetches: [(TradeObject, (TradeObject, TradeObject) -> TradeObject)] = []
+    var refetchRequests: [RequestOwnership?] = [] // 补齐带的请求归属（r3f NEW-03）
     var help: (route: String, params: [String: String])? = ("Help", ["article_id": "a1"])
 
     init(card: TradeObject) {
@@ -228,8 +233,11 @@ final class FakeEnv: PurchaseEnv {
         opened.append((route, params))
     }
 
-    func refetchCard(_ target: TradeObject, merge: @escaping (TradeObject, TradeObject) -> TradeObject) {
+    func refetchCard(
+        _ target: TradeObject, request: RequestOwnership?, merge: @escaping (TradeObject, TradeObject) -> TradeObject
+    ) {
         refetches.append((target, merge))
+        refetchRequests.append(request)
     }
 
     func helpLink(_: String) -> (route: String, params: [String: String])? {
@@ -318,12 +326,12 @@ final class PurchaseHarness {
     let controller: OpenPurchaseController
     let executor: TradeJumpExecutor
 
-    init(card: TradeObject = TradeFixtures.card()) {
+    init(card: TradeObject = TradeFixtures.card(), sessionKey: @escaping @MainActor () -> String? = { "user-1" }) {
         env = FakeEnv(card: card)
         let pendingClock = pendingClock
         pending = MemoryPurchasePending { pendingClock.now }
         executor = TradeJumpExecutor(ports: ports, baichuan: baichuan, sink: sink)
-        let tips = JumpTipService(api: api) { "user-1" }
+        let tips = JumpTipService(api: api, sessionKey: sessionKey)
         var generated = 0
         let sleeper = sleeper
         controller = OpenPurchaseController(

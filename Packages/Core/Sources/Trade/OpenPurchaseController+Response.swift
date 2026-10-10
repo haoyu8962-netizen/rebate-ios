@@ -3,7 +3,15 @@ import Foundation
 import Generated
 
 extension OpenPurchaseController {
-    func settle(_ result: ApiResult, attempt: PurchaseAttempt) {
+    func settle(_ result: ApiResult, attempt: PurchaseAttempt, origin: String? = nil,
+                request: RequestOwnership? = nil) {
+        // 获取方案期间来源变了（换账号、切环境、换执行器）：旧方案作废，不更新卡片、不外跳、不弹确认（iOS RC-06）
+        guard originCurrent(origin) else {
+            ready = nil
+            revokePermit()
+            state.phase = .idle
+            return
+        }
         let late = LateResponsePolicy.decide(interrupt: interrupt == "timeout" ? LateResponsePolicy.cancel : interrupt)
         if !late.jump || !permitted(attempt) {
             // 取消、离开、后台、超时之后才到：只更新卡片（新价格、new_link_id、无返利状态），不外跳、不弹确认、不进登录 / 授权
@@ -18,9 +26,12 @@ extension OpenPurchaseController {
         state.phase = .idle
         switch result {
         case let .success(data, traceId, _):
-            onSuccess(TJSON.parse(data) ?? [:], traceId: traceId, attempt: attempt)
+            onSuccess(TJSON.parse(data) ?? [:], traceId: traceId, attempt: attempt, origin: origin, request: request)
         case let .failure(code, _, data, traceId, effect, _):
-            onFailure(code: code, data: TJSON.parse(data) ?? [:], traceId: traceId, effect: effect, attempt: attempt)
+            onFailure(
+                code: code, data: TJSON.parse(data) ?? [:], traceId: traceId, effect: effect, attempt: attempt,
+                origin: origin
+            )
         case .transportFailure:
             // 超时、断网、没有外壳：与 8 秒超时同样处理，【重试】重放原尝试
             interrupt = "timeout"
@@ -33,7 +44,10 @@ extension OpenPurchaseController {
         }
     }
 
-    func onSuccess(_ data: TradeObject, traceId: String?, attempt: PurchaseAttempt) {
+    func onSuccess(
+        _ data: TradeObject, traceId: String?, attempt: PurchaseAttempt, origin: String? = nil,
+        request: RequestOwnership? = nil
+    ) {
         // 判断基准是尝试的原卡快照：迟到响应更新过的展示卡片不能消除改价 / 返利归零的确认（共性第 1 条，BR-PRICE-13）
         let outcome = OpenResponseAction.map(response: ["code": 0, "data": data], context: openContext(
             attempt.card, noRebateConfirmed: attempt.noRebate
@@ -47,9 +61,11 @@ extension OpenPurchaseController {
         let jump = ReadyJump(
             plan: plan, identity: PurchaseIdentity(
                 attemptId: attemptId,
-                linkId: outcome.replaceLinkId ?? attempt.linkId
+                linkId: outcome.replaceLinkId ?? attempt.linkId,
+                // link_jump 的账号归属固定为这次尝试的请求归属（r3g NEW-06）
+                owner: request
             ),
-            attempt: attempt
+            attempt: attempt, origin: origin, request: request
         )
         ready = jump
         if outcome.requoteNotice {
@@ -74,7 +90,10 @@ extension OpenPurchaseController {
         }
     }
 
-    func onFailure(code: Int, data: TradeObject, traceId: String?, effect: ErrorEffect, attempt: PurchaseAttempt) {
+    func onFailure(
+        code: Int, data: TradeObject, traceId: String?, effect: ErrorEffect, attempt: PurchaseAttempt,
+        origin: String? = nil
+    ) {
         let outcome = OpenErrorAction.map(code: code, data: data)
         switch outcome.actionRaw {
         case OpenErrorActions.login:
@@ -85,7 +104,7 @@ extension OpenPurchaseController {
             ))
             env.open(route: PurchaseRoutes.login, params: [:])
         case OpenErrorActions.authSheet, OpenErrorActions.authJump:
-            authRequired(code: code, data: data, attempt: attempt)
+            authRequired(code: code, data: data, attempt: attempt, origin: origin)
         case OpenErrorActions.notice:
             notice(code: code, outcome: outcome, traceId: outcome.showTrace6 ? traceId : nil, attempt: attempt)
         case OpenErrorActions.error:
@@ -100,8 +119,13 @@ extension OpenPurchaseController {
         case OpenErrorActions.refetch:
             // 30144：按这张卡的 product_key + item_ref 重取（搜索卡与详情同样），替换后等用户再点（03 §4.2，共性第 9 条）
             toast(outcome.textKey ?? PurchaseTextKeys.refExpired)
+            // 补齐请求带这次尝试的固定归属（r3f NEW-03），结果合并前再比较来源：来源变了不落到页面上
             let target = latestCard(attempt)
-            env.refetchCard(target, merge: CardPatch.reload(expected: CardPatch.revision(target)))
+            let reload = CardPatch.reload(expected: CardPatch.revision(target))
+            env.refetchCard(target, request: attempt.source?.request) { [weak self] current, fresh in
+                guard let self, sourceStillCurrent(attempt) else { return current }
+                return reload(current, fresh)
+            }
         case OpenErrorActions.forceUpdate:
             break
         default:
@@ -110,20 +134,24 @@ extension OpenPurchaseController {
     }
 
     /// 30101 / 30102 / 30111：记下授权上下文，弹 AuthSheet 或二选一（BR-ID-18）。
-    private func authRequired(code: Int, data: TradeObject, attempt: PurchaseAttempt) {
+    private func authRequired(code: Int, data: TradeObject, attempt: PurchaseAttempt, origin: String?) {
         let platform = attempt.platform
         keys.authRequired(code: code)
-        authContext = AuthContext(code: code, linkId: attempt.linkId, data: data, attempt: attempt)
+        // 授权上下文的来源与请求归属都取自这次尝试的固定来源（第五次修复 RC-06 残余）
+        authContext = AuthContext(
+            code: code, linkId: attempt.linkId, data: data, attempt: attempt,
+            origin: attempt.source?.origin ?? origin, request: attempt.source?.request
+        )
         // 自动弹出每平台每会话最多 2 次（BR-ID-18）；用户在二选一里主动【重试】进来的不算自动弹出、不受限（共性第 10 条）
         if attempt.userAuthRetry || counter.tryAutoPop(platform) {
             pending.register(pendingParams(
                 attempt.card, linkId: attempt.linkId, key: nil, kind: PurchasePendingKeys.kindAuth, attempt: attempt
             ))
-            showDialog(.authSheet(platform: platform, busy: false))
+            showDialog(.authSheet(platform: platform, busy: false), from: attempt)
         } else {
             // 同一会话第 3 次起不再自动拉起授权，直接给二选一（BR-ID-18）；只删本页登记的待办（共性第 44 条）
             clearOwnPending()
-            showDialog(.authDeclined(platform: platform, failed: false))
+            showDialog(.authDeclined(platform: platform, failed: false), from: attempt)
         }
     }
 
@@ -131,7 +159,7 @@ extension OpenPurchaseController {
     /// 30103 / 30121 / 30151 / 30153 带按钮。
     private func notice(code: Int, outcome: OpenErrorOutcome, traceId: String?, attempt: PurchaseAttempt) {
         if code == 30101 || code == 30102 {
-            showDialog(.authUnavailable(textKey: outcome.textKey))
+            showDialog(.authUnavailable(textKey: outcome.textKey), from: attempt)
         } else if code == 50301 {
             let status = outcome.silent ? TradeConstants.notLaunched : TradeConstants.maintenance
             env.markPlatformStatus(attempt.platform, status: status)
@@ -142,7 +170,7 @@ extension OpenPurchaseController {
             showDialog(.notice(
                 textKey: outcome.textKey, traceId: traceId, noRebate: outcome.offerNoRebate,
                 contact: outcome.offerContact, retry: false
-            ))
+            ), from: attempt)
         } else {
             toast(outcome.textKey ?? PurchaseTextKeys.generic, traceId: traceId)
         }
@@ -158,7 +186,10 @@ extension OpenPurchaseController {
             }
             toast(outcome.textKey ?? PurchaseTextKeys.offShelf)
         } else if code == 50303 {
-            showDialog(.notice(textKey: outcome.textKey, traceId: traceId, noRebate: true, contact: false, retry: true))
+            showDialog(
+                .notice(textKey: outcome.textKey, traceId: traceId, noRebate: true, contact: false, retry: true),
+                from: attempt
+            )
         } else {
             toast(outcome.textKey ?? PurchaseTextKeys.generic, traceId: traceId)
         }
@@ -198,12 +229,20 @@ extension OpenPurchaseController {
         // 只补齐价格 / 口径字段，不整卡替换；补齐带卡片版本，旧的补齐响应不得填入新一次购买结果（共性第 17、26 条）
         if CardPatch.needsRefetch(before, data) {
             let fill = CardPatch.fill(expected: CardPatch.revision(after))
-            env.refetchCard(after) { [weak self] current, fresh in
+            // 补齐请求带这次尝试的固定归属交网络层只比较（r3f NEW-03）；结果合并前再比较来源：来源变了（换号、切环境、换执行器）
+            // 补齐结果不落到页面、不记下
+            env.refetchCard(after, request: attempt.source?.request) { [weak self] current, fresh in
+                guard let self, sourceStillCurrent(attempt) else { return current }
                 let merged = fill(current, fresh)
-                self?.adoptRefreshed(merged)
+                adoptRefreshed(merged)
                 return merged
             }
         }
+    }
+
+    /// 购买派生请求的结果合并前（r3f NEW-03）：发起它的尝试固定的来源仍是当前来源。只比较，不取来赋值。
+    func sourceStillCurrent(_ attempt: PurchaseAttempt) -> Bool {
+        originCurrent(attempt.source?.origin)
     }
 
     /// 补齐后的卡（共性第 30 条：券失效确认框补齐后按券额给口径词）：同一张卡、版本没变时记下。

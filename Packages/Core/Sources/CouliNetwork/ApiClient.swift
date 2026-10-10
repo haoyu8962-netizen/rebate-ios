@@ -68,6 +68,8 @@ public final class ApiClient: @unchecked Sendable {
     /// 会话世代：登录、清会话、退出、作废时 +1；刷新不变（同一会话换令牌）。
     var generation: UInt64 = 0
     var clockOffsetMillis: Int64 = 0
+    /// 显示用的服务端时钟偏移（`calibratedNowMillis`；响应头 Date 相差超过 300 秒时校正，10401 校时同步更新）。
+    var displayOffsetMillis: Int64 = 0
     /// 冷启动的受限会话屏障待执行（进程启动时为 true）：不论强更状态（含 below）都在首次带令牌请求前刷新（R2-03）。
     var coldStartRefreshDue = true
     /// 强更状态由低于 / 未知恢复为受支持后的受限会话屏障待执行（只在不低于时执行）。
@@ -86,6 +88,10 @@ public final class ApiClient: @unchecked Sendable {
     /// 删除失败、在内存里已作废的会话（不可读；持续重试删除，删掉或被新会话覆盖后解除）。
     var revokedSession: RevokedSession?
     var revokedRetryAttempt = 0
+    /// 撤回禁读屏障（APP-08 iOS r3f NEW-01）：撤回同意、切换环境（`invalidateSessions`）时在同一把锁里竖起；只有之后取得的状态快照
+    /// （取快照前后作废世代未变）表明完整模式且撤回清理已完成时才放下（`readContext`）。网络层每一处令牌读取——包括没有状态快照的
+    /// 登出、刷新入队、后台删除重试、Restricted 刷新后的读取、对外的隔离账号 / 作用域 / 请求归属——都先在锁里比较它，竖着时不读令牌。
+    var readBarrier = false
 
     public init(
         identity: ClientIdentity,
@@ -127,6 +133,13 @@ public final class ApiClient: @unchecked Sendable {
         return await run(call, operation, isReplay: false, options: RunOptions(epoch: currentEpoch))
     }
 
+    /// 服务端校准后的当前时刻（毫秒；BR-TEXT-11「以服务端校准后的时钟为准」，APP-08 共性第 34 条）：本机时钟 + 按响应头 Date
+    /// 校出的偏移（任一响应的 Date 与本机相差超过 300 秒时校正；10401 校时也同步）。没校过或偏差在 300 秒以内就是本机时钟。
+    /// 相对时间（今天 / 昨天）、缓存时间提示等显示用它；测时长（禁用期、超时）仍用本机时钟；签名用的偏移不受它影响。
+    public var calibratedNowMillis: Int64 {
+        clock() + lock.withLock { displayOffsetMillis }
+    }
+
     /// 当前的作废世代（撤回同意、切换环境时 +1）。长流程（如设备注册）在开始时取下，发送时用 `send(_:ticket:)` 交回。
     public var invalidationTicket: UInt64 {
         currentEpoch
@@ -156,6 +169,21 @@ public final class ApiClient: @unchecked Sendable {
         return await run(call, operation, isReplay: false, options: options)
     }
 
+    /// 带调用有效性与发送前闸门发送（订单请求，APP-08 共性第 13、27 条）：`isValid` 同 `send(_:isValid:)`（归属，失效即作废、
+    /// 丢弃迟到响应）；`sendAllowed` 只在每次实际写出前核对（含退避重试与各类重放），为假时本地结束（`send_blocked`），
+    /// 已写出的请求不受它影响。两个闭包都可能在任意线程调用，须线程安全。
+    public func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, sendAllowed: @escaping @Sendable () -> Bool
+    ) async -> ApiResult {
+        guard let operation = ApiOperations.byId(call.operationId) else {
+            return .localReject(reason: LocalRejectReason.invalidCall)
+        }
+        var options = RunOptions(epoch: currentEpoch)
+        options.callValid = isValid
+        options.sendAllowed = sendAllowed
+        return await run(call, operation, isReplay: false, options: options)
+    }
+
     /// 实际发起的刷新次数（`POST /v1/auth/refresh`）。
     public var refreshCalls: Int {
         lock.withLock { refreshCount }
@@ -168,12 +196,32 @@ public final class ApiClient: @unchecked Sendable {
 
     /// 撤回同意、切换环境时调用（`NetworkInvalidationCleaner` 登记在两个清理注册表的第一位，先于清令牌）：
     /// 作废全部在途请求、它们的重试与重放，取消在途任务（含还在等连接、TLS 的）；会话换代，迟到的刷新结果不再保存。
+    ///
+    /// 锁顺序（APP-08 iOS r3g NEW-05）：先在**不持网络锁**时通知设备凭据竖起撤回禁读屏障（只取设备锁），再取网络锁推进作废世代。
+    /// 全局只有「设备锁 → 网络锁」一个方向（DeviceRegistry 在设备锁里读 `invalidationTicket`、在设备锁里调用组请求的准入判断）；
+    /// 网络锁里从不调用设备凭据。设备屏障先于作废世代竖起，所以任何在网络锁里判断通过、尚未读设备凭据的组请求，
+    /// 读取时都会在设备锁里看到屏障（或在屏障竖起之前读完，即读取发生在撤回开始之前）。调用方须串行调用（清理器都在主线程）。
     public func invalidateSessions() {
+        raiseWithdrawalReadBarriers()
+        transport.cancelAll()
+    }
+
+    /// 撤回禁读屏障（APP-08 iOS r3h NEW-05）：竖起设备屏障（只取设备锁）→ 取网络锁推进作废世代、会话换代、竖起网络屏障。
+    /// 撤回清理的每个入口在**发布待清理标记之前**同步调用（`EnvironmentSwitchCleanerRegistry.raiseWithdrawalReadBarriers`），
+    /// 清理器执行时（`invalidateSessions`）再调一次。可重复调用：每次都推进世代，屏障只由之后取得的可读快照放下。
+    /// 锁顺序不变：先不持网络锁地取设备锁，再取网络锁，两步不嵌套。
+    public func raiseWithdrawalReadBarriers() {
+        device.withdrawalStarted(networkEpoch: currentEpoch)
         lock.withLock {
             epoch &+= 1
             generation &+= 1
+            readBarrier = true
         }
-        transport.cancelAll()
+    }
+
+    /// 网络禁读屏障此刻是否竖着（测试与诊断）。
+    public var withdrawalReadBarrierRaised: Bool {
+        lock.withLock { readBarrier }
     }
 
     /// 退出登录（APP-05 调用；切换账号时先调它再登录）：清会话、换代——旧世代的在途请求不再重试、重放；
@@ -232,6 +280,11 @@ public final class ApiClient: @unchecked Sendable {
         var resigned = false
         /// 调用方给的有效性（桥调用：页面关闭、导航后为假）；nil = 只看作废世代。
         var callValid: (@Sendable () -> Bool)?
+        /// 发送前闸门（APP-08 共性第 13、27 条）：只在每次实际写出前核对（首发、读接口退避后的重试、10002 / 10402 / 10401 的
+        /// 重放），为假时本地结束（send_blocked），不写出。不参与归属：已写出的请求照常收结果（成功、错误、10405 都不丢）。
+        var sendAllowed: (@Sendable () -> Bool)?
+        /// 调用方固定的请求归属（APP-08 iOS RC-01）：首次归属绑定前、组请求后与实际写出前只比较，不一致零发送；nil = 不比较。
+        var expected: RequestOwnership?
         /// 登录响应的会话保存成功时，在保存所用的同一把锁里回调保存后的会话世代（APP-04 共性 68：桥 auth.login 绑定本次登录
         /// 保存的会话）。nil = 不需要。
         var onSessionSaved: (@Sendable (UInt64) -> Void)?
@@ -291,8 +344,18 @@ public final class ApiClient: @unchecked Sendable {
     }
 
     /// 读状态，顺便记下最新的强更状态（发现恢复为受支持时重新挂上受限会话屏障）。
+    /// 快照记下取之前的作废世代（`NetworkContext.readEpoch`，APP-08 iOS NEW-01）：之后凭据读取前在同一把锁里先比较它，
+    /// 期间撤回过同意 / 切过环境就不再信任这份快照里的可读性。
     func readContext() async -> NetworkContext {
-        let state = await context()
+        let before = currentEpoch
+        var state = await context()
+        state.readEpoch = before
+        // 撤回禁读屏障只由「作废之后取得、期间没有再作废」的可读快照放下（APP-08 iOS r3f NEW-01）
+        lock.withLock {
+            if readBarrier, epoch == before, state.privacy == PrivacyRaw.full, state.credentialsReadable {
+                readBarrier = false
+            }
+        }
         _ = noteUpdate(state.update)
         return state
     }

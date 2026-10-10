@@ -16,9 +16,21 @@ public enum TradeOperations {
 /// 调用方 Task 被取消时同时取消传输）。
 public protocol TradeApi: AnyObject, Sendable {
     func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool) async -> ApiResult
+    /// 带调用方固定的请求归属发送（iOS RC-06：JumpTip 的 getTips / markTipRead）：`expected` 非 nil 时网络层在首次归属绑定前、组请求后与
+    /// 实际写出前只比较，账号 / 会话世代 / 作废世代不一致即本地结束、零发送；nil 与 `send(_:isValid:)` 相同。
+    func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?) async -> ApiResult
 }
 
-extension ApiClient: TradeApi {}
+extension ApiClient: TradeApi {
+    public func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?
+    ) async -> ApiResult {
+        guard expected != nil else {
+            return await send(call, isValid: isValid)
+        }
+        return await send(call, isValid: isValid, sendAllowed: { true }, expected: expected)
+    }
+}
 
 /// 一次请求的归属（线程安全）：所属的点击 / 授权世代失效、页面离开时同步置为无效（ApiClient 在任意线程读取）。
 public final class TradeOwner: @unchecked Sendable {
@@ -53,11 +65,16 @@ public final class TradeCalls {
     }
 
     /// 发出一次调用，`group` 用于按类作废（open 请求、授权、须知等）。返回结果在主线程交给调用方，调用方须再复核归属。
-    public func send(_ call: ApiCall, group: String) async -> ApiResult {
+    public func send(_ call: ApiCall, group: String, expected: RequestOwnership? = nil) async -> ApiResult {
         let owner = TradeOwner()
         let id = UUID()
         let api = api
-        let task = Task { await api.send(call) { owner.isValid } }
+        let task = Task {
+            if let expected {
+                return await api.send(call, isValid: { owner.isValid }, expected: expected)
+            }
+            return await api.send(call) { owner.isValid }
+        }
         entries[id] = Entry(owner: owner, group: group, cancel: { task.cancel() })
         let result = await task.value
         entries[id] = nil
@@ -182,49 +199,6 @@ public final class AuthSheetCounter {
         if clock() - since >= Self.resetAfterMillis {
             counts = [:]
         }
-    }
-}
-
-/// JumpTip 已读（BR-ATTR-21：每个用户、每个平台首次外跳前展示一次，服务端记已读；getTips / markTipRead）。已读状态按会话缓存在内存，
-/// 读取失败时按「未读」保守展示（多看一次须知不影响归属）。`sessionKey` 变了（换账号、退出）就重新读。
-@MainActor
-public final class JumpTipService {
-    private let calls: TradeCalls
-    private let sessionKey: @MainActor () -> String?
-    private var cachedFor: String?
-    private var read: Set<String>?
-
-    public init(api: TradeApi, sessionKey: @escaping @MainActor () -> String?) {
-        calls = TradeCalls(api: api)
-        self.sessionKey = sessionKey
-    }
-
-    /// 这个平台要不要先显示下单须知。没有会话（游客）不显示（游客 open 拿 10001，不会走到这里）。
-    public func shouldShow(_ platform: String) async -> Bool {
-        guard let key = sessionKey() else { return false }
-        if cachedFor != key || read == nil {
-            let result = await calls.send(ApiCall(operationId: TradeOperations.getTips), group: "tips")
-            cachedFor = key
-            if case let .success(data, _, _) = result, let object = TJSON.parse(data) {
-                let tips = TJSON.object(object["jump_tip"]) ?? [:]
-                read = Set(tips.compactMap { TJSON.string($0.value) != nil ? $0.key : nil })
-            } else {
-                read = nil
-            }
-        }
-        return read?.contains(platform) != true
-    }
-
-    /// 用户点了【知道了，去X】：先本地记已读，再告诉服务端（失败不影响外跳）。
-    public func markRead(_ platform: String) {
-        var current = read ?? []
-        current.insert(platform)
-        read = current
-        cachedFor = sessionKey()
-        let body = TJSON.encode(["platform": platform])
-        let call = ApiCall(operationId: TradeOperations.markTipRead, pathParams: ["tip_key": "jump_tip"], body: body)
-        let calls = calls
-        Task { @MainActor in _ = await calls.send(call, group: "tips") }
     }
 }
 

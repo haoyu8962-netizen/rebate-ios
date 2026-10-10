@@ -150,6 +150,10 @@ extension ApiClient {
         guard bound == generation else {
             return .now(refreshFailures[bound].map { .cleared($0) } ?? .superseded, emit: nil, retry: false)
         }
+        // 刷新入队前的会话读取同样过撤回禁读屏障（r3f NEW-01）：竖着时零读取，按已换代结束（撤回同意 / 切换环境本身也会换代）。
+        guard !readBarrier else {
+            return .now(.superseded, emit: nil, retry: false)
+        }
         let read = readSessionLocked()
         if read == .unreadable {
             // 会话读不出（可能还在）：不刷新、不清会话，原调用按网络错误结束（R2-01）。
@@ -337,7 +341,7 @@ extension ApiClient {
         let serial = restrictedBarrierSerial
         let due = coldStartRefreshDue || (recoveryRefreshDue && state.update != UpdateRaw.below)
         guard due, restrictedBarrierPassed != RestrictedBarrierMark(generation: generation, serial: serial),
-              state.privacy == PrivacyRaw.full, state.credentialsReadable,
+              credentialsReadableLocked(state),
               let live = readSessionLocked().live, let access = live.access
         else {
             return nil

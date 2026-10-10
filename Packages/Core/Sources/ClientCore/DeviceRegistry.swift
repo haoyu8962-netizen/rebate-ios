@@ -71,6 +71,7 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
         case none
         case identity(DeviceIdentity)
         case unreadable
+        case blocked // 撤回禁读屏障竖着（r3g NEW-05）：没有读取
     }
 
     /// 进行中的一次注册：绑定发起时的清理世代，只有同一世代的等待者能并入（APP-03b 共性 24）；等待者在 `lock` 里登记。
@@ -129,6 +130,10 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
     var needsRegistration: (@Sendable () -> Void)?
     weak var client: ApiClient?
     var requestCount = 0
+    /// 设备凭据的撤回禁读屏障（r3g NEW-05，见 DeviceRegistry+Barrier.swift）：值是竖起前的网络作废世代，竖着时 `readLocked` 零读取；
+    /// `identityReadCount` 记越过屏障的实际读取次数（测试与诊断）。
+    var withdrawalBarrier: UInt64?
+    var identityReadCount = 0
 
     public init(
         store: DeviceIdentityStore,
@@ -159,7 +164,7 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
         credentials?.installSecret
     }
 
-    /// 一次读出（同一份凭据）。读取失败、作废中、已被 10402 拒绝（隔离中）都按没有。
+    /// 一次读出（同一份凭据）。读取失败、作废中、已被 10402 拒绝（隔离中）、撤回禁读屏障竖着都按没有。
     public var credentials: (deviceId: String, installSecret: String)? {
         let usable: DeviceIdentity? = lock.withLock { usableLocked() }
         return usable.map { ($0.deviceId, $0.installSecret) }
@@ -209,6 +214,8 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
             return await joinOrStart(epoch: startEpoch)
         case .unreadable:
             return .storeUnreadable
+        case .blocked:
+            return .notAllowed
         }
     }
 
@@ -245,13 +252,12 @@ public final class DeviceRegistry: DeviceCredentials, @unchecked Sendable {
 
     // MARK: - 内部
 
-    func allowed() async -> Bool {
-        let state = await context()
-        return state.environmentSettled && state.privacy == PrivacyRaw.full && state.credentialsReadable
-    }
-
-    /// 调用方持有 `lock`。
+    /// 调用方持有 `lock`。撤回禁读屏障竖着时零读取（不碰缓存、不读安全存储，r3g NEW-05）。
     func readLocked() -> Read {
+        if withdrawalBarrier != nil {
+            return .blocked
+        }
+        identityReadCount += 1
         switch cache {
         case let .known(identity):
             return identity.map(Read.identity) ?? .none

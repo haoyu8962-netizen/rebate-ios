@@ -36,6 +36,12 @@ final class DebugFakeLoginServer: URLProtocol {
         guard arguments.contains(launchArgument) else { return nil }
         try? SecureSessionTokens(store: KeychainStore()).clear()
         UserDefaultsPendingBackend().delete()
+        // APP-08：订单 Tab 的恢复记录每次冷启动从空开始（`-CouliFakeOrdersKeepState` 时保留，截进程恢复用）
+        if !arguments.contains("-CouliFakeOrdersKeepState") {
+            UserDefaults.standard.removeObject(forKey: "orders.page_state")
+            UserDefaults.standard.removeObject(forKey: "amount_mask.hidden")
+            UserDefaults.standard.removeObject(forKey: "orders.push_row_used")
+        }
         // APP-06b：购买场景（`-CouliFakeTradeLoggedIn` 冷启动直接是已登录的假账号，截购买流程用；假令牌不是凭据）。
         DebugFakeTrade.prepare(arguments: arguments)
         if arguments.contains(DebugFakeTrade.loggedInArgument) {
@@ -68,6 +74,11 @@ final class DebugFakeLoginServer: URLProtocol {
             query[item.name] = item.value ?? ""
         }
         let body = Self.object(Self.bodyData(request))
+        // APP-08：订单场景（DebugFakeOrders）先于其他场景；offline 开关时按传输失败结束（断网演示）。
+        if let orders = DebugFakeOrders.answer(method: request.httpMethod ?? "GET", path: path, query: query) {
+            answerOrders(orders)
+            return
+        }
         // APP-06b：购买场景（DebugFakeTrade）先于搜索与详情。
         let trade = DebugFakeTrade.answer(path: path, query: query, request: request, body: body)
         // APP-06a：搜索与详情场景（DebugFakeSearch）。
@@ -94,6 +105,29 @@ final class DebugFakeLoginServer: URLProtocol {
             client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(text.utf8))
             client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    private func answerOrders(_ reply: DebugFakeOrders.Reply) {
+        let url = request.url ?? URL(fileURLWithPath: "/")
+        switch reply {
+        case .offline:
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { [self] in
+                guard !stoppedLock.withLock({ stopped }) else { return }
+                client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            }
+        case let .answer(code, data, headers, delay):
+            let trace = "0199a3b4-5c6d-7e8f-9a0b-1c2d3e6a2f19"
+            let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"\(trace)\"}"
+            let response = HTTPURLResponse(
+                url: url, statusCode: code == 0 ? 200 : 400, httpVersion: "HTTP/1.1", headerFields: headers
+            )
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [self] in
+                guard !stoppedLock.withLock({ stopped }) else { return }
+                client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: Data(text.utf8))
+                client?.urlProtocolDidFinishLoading(self)
+            }
         }
     }
 

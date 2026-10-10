@@ -32,6 +32,16 @@ public final class OpenPurchaseController: ObservableObject {
     static let pageGroup = "page"
 
     @Published public internal(set) var state = PurchaseState()
+    /// 外跳已执行（拉起 App、交浏览器或复制口令；参数为平台与发起时固定的来源）：发起页据此在回到前台后拉一次待跟单卡（APP-08 G07）。
+    /// `origin` 是外跳发起那一刻 `jumpOrigin` 给的值（会话、环境与持有者世代）；持有者交付时与自己此刻的来源比较，旧事件不操作新服务（iOS RC-06）。
+    public var onJumpedOut: (@MainActor (_ platform: String, _ origin: String?) -> Void)?
+    /// 来源（持有者给；nil = 没接）：在**发起获取跳转方案**（每次发 open）时取一次，随这次获取、`ReadyJump` 与完成事件原样传递；
+    /// 之后（响应结算、确认、等待结束、外跳与交付）只与它比较，不再取来赋值（iOS RC-06）。
+    public var jumpOrigin: (@MainActor () -> String?)?
+    /// 来源与请求归属（持有者给，**一次读取**同时给出，iOS RC-06 / APP-09 共性第 65 条）：给了就在发起获取方案时用它固定来源与请求归属；
+    /// 没给时来源取 `jumpOrigin`、归属为 nil（不比较）。请求归属随方案传给 JumpTip 的 getTips / markTipRead，网络层发送前只比较。
+    /// 之后对「当前来源」的读取一律经 `jumpOrigin` 且只做比较。
+    public var jumpSource: (@MainActor () -> JumpSource)?
 
     let calls: TradeCalls
     let executor: TradeJumpExecutor
@@ -73,6 +83,11 @@ public final class OpenPurchaseController: ObservableObject {
     var permit: Permit?
     /// 最近一次成功响应（确认后外跳、比价弹窗用）。
     var ready: ReadyJump?
+    /// 当前弹窗的固定来源（APP-08 iOS NEW-02）：产生它的购买尝试与那次尝试的固定来源 / 请求归属、无返利原因。弹窗上的【重试】
+    /// 【仍去购买（无返利）】先与它核对，来源或尝试变了即作废弹窗，零请求。
+    var dialogOrigin: DialogOrigin?
+    /// 弹窗实例编号（r3f NEW-02）：每次 `showDialog` 加 1，写进弹窗票据与 `dialogOrigin`。
+    var dialogSerial: UInt64 = 0
     /// 被授权码拦下的上下文。
     var authContext: AuthContext?
     var awaitingAuthReturn = false
@@ -111,11 +126,20 @@ public final class OpenPurchaseController: ObservableObject {
         let plan: TradeObject
         let identity: PurchaseIdentity
         let attempt: PurchaseAttempt
+        /// 获取这份方案时固定的来源（会话、环境与持有者世代；iOS RC-06）。
+        let origin: String?
+        /// 与来源同一次读取固定的请求归属（JumpTip 请求交网络层比较；nil = 不比较）。
+        let request: RequestOwnership?
 
-        init(plan: TradeObject, identity: PurchaseIdentity, attempt: PurchaseAttempt) {
+        init(
+            plan: TradeObject, identity: PurchaseIdentity, attempt: PurchaseAttempt, origin: String?,
+            request: RequestOwnership? = nil
+        ) {
             self.plan = plan
             self.identity = identity
             self.attempt = attempt
+            self.origin = origin
+            self.request = request
         }
     }
 
@@ -124,12 +148,22 @@ public final class OpenPurchaseController: ObservableObject {
         let linkId: String
         let data: TradeObject
         let attempt: PurchaseAttempt
+        /// 拿到授权码的那次获取方案时固定的来源（iOS RC-06）：授权的每一步（去授权、重查、自动执行）都先与它比较。
+        let origin: String?
+        /// 与来源同一次读取固定的请求归属（APP-08 iOS 第五次修复 RC-06 残余）：授权状态查询、淘宝绑定、30104 恢复取授权地址都带着它
+        /// 交网络层比较；alive 检查之后才换号的，网络层按不一致零发送。nil = 不比较（没接持有者）。
+        let request: RequestOwnership?
 
-        init(code: Int, linkId: String, data: TradeObject, attempt: PurchaseAttempt) {
+        init(
+            code: Int, linkId: String, data: TradeObject, attempt: PurchaseAttempt, origin: String? = nil,
+            request: RequestOwnership? = nil
+        ) {
             self.code = code
             self.linkId = linkId
             self.data = data
             self.attempt = attempt
+            self.origin = origin
+            self.request = request
         }
 
         var platform: String {
@@ -185,6 +219,37 @@ public final class OpenPurchaseController: ObservableObject {
     /// 购买按钮此刻可点（限流、在途、有弹层时不可点）。
     public var canTap: Bool {
         !left && !busy && !gate.active
+    }
+}
+
+/// 弹窗的固定来源（APP-08 iOS NEW-02）：授权拒绝、授权失败、50303、带无返利的提示等弹窗由哪次尝试、哪份固定来源产生。
+final class DialogOrigin {
+    /// 弹窗实例编号（与 `PurchaseState.dialogTicket.serial` 相同，r3f NEW-02）。
+    let serial: UInt64
+    let attempt: PurchaseAttempt
+    /// 产生弹窗的那次尝试的固定来源与请求归属（`PurchaseAttempt.source`）。
+    let source: JumpSource?
+    /// 【仍去购买（无返利）】的原因：只取自产生弹窗的同一来源（授权拒绝 / 授权失败），不在点击时再读别的状态。
+    let noRebateReason: String?
+
+    init(serial: UInt64, attempt: PurchaseAttempt, source: JumpSource?, noRebateReason: String?) {
+        self.serial = serial
+        self.attempt = attempt
+        self.source = source
+        self.noRebateReason = noRebateReason
+    }
+}
+
+/// 外跳来源与请求归属（持有者一次读取给出，iOS RC-06）。
+public struct JumpSource: Equatable {
+    /// 来源（会话、环境与持有者世代）；nil = 没有。
+    public let origin: String?
+    /// 请求归属（账号、会话世代、作废世代）；nil = 不比较。
+    public let request: RequestOwnership?
+
+    public init(origin: String?, request: RequestOwnership?) {
+        self.origin = origin
+        self.request = request
     }
 }
 

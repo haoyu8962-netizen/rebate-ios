@@ -1,3 +1,4 @@
+import CouliNetwork
 import Foundation
 
 /// 购买浮层的阶段。
@@ -80,6 +81,9 @@ public struct PurchaseState {
     /// 最近一次点购买的卡（搜索页只给这张卡加按钮覆盖）。
     public var card: TradeObject?
     public var dialog: PurchaseDialog?
+    /// 当前弹窗实例的票据（APP-08 iOS r3f NEW-02，APP-09 共性第 63 条）：每弹出一个弹窗换一张。页面在**渲染时**取出它，按钮回调把这份
+    /// 不可变的值交回执行器；执行器只比较，旧回调拿着旧票据，碰不到之后出现的新弹窗。
+    public internal(set) var dialogTicket: PurchaseDialogTicket?
     public var toast: PurchaseToast?
     /// 42901 限时禁用购买按钮与【重试】（Retry-After，缺省 5 秒）。
     public var rateLimited = false
@@ -87,6 +91,10 @@ public struct PurchaseState {
     public var notInstalled = false
     /// 即将交系统浏览器：「将通过浏览器打开X」+【取消】（ProductJumpBrowser）。
     public var browserNotice = false
+    /// 当前这次加载层的编号（r3g NEW-02）：页面渲染时取出交给【取消】回调，旧加载层的回调取消不了新的加载。
+    public internal(set) var loadingTicket: Int?
+    /// 当前这次「将通过浏览器打开」提示的编号（r3g NEW-02），用法同上。
+    public internal(set) var browserTicket: UInt64?
 
     public init() {}
 
@@ -95,6 +103,16 @@ public struct PurchaseState {
         guard let card else { return false }
         return CardPatch.sameCard(card, item)
     }
+}
+
+/// 弹窗实例票据（APP-08 iOS r3f NEW-02）：弹窗实例编号、产生它的尝试编号与那次尝试的固定来源。不可变，渲染时捕获。
+public struct PurchaseDialogTicket: Equatable, Sendable {
+    /// 弹窗实例编号（执行器内每弹出一次加 1）。
+    public let serial: UInt64
+    /// 产生弹窗的购买尝试的点击编号（没有尝试的弹窗为 nil）。
+    public let click: Int?
+    /// 产生弹窗的那次尝试固定的来源（`PurchaseAttempt.source.origin`）。
+    public let origin: String?
 }
 
 /// 购买流程要的页面环境（App 给）。
@@ -117,7 +135,11 @@ public protocol PurchaseEnv: AnyObject {
     func open(route: String, params: [String: String])
     /// 按 `target` 的 product_key + item_ref 重取权威商品卡（getProduct；之后仍须用户再点），结果到达时用 `merge`（此刻页面上的那张卡,
     /// 重取到的卡）→ 新卡 决定怎么落到页面上（共性第 17、26 条）。失败、页面已离开时什么都不做（卡片保持原样）。
-    func refetchCard(_ target: TradeObject, merge: @escaping (TradeObject, TradeObject) -> TradeObject)
+    /// `request`：发起补齐的购买尝试固定的请求归属（`PurchaseAttempt.source.request`，APP-08 iOS r3f NEW-03），App 原样交给页面执行器
+    /// 与网络层只比较，换号后零发送；nil = 不比较。
+    func refetchCard(
+        _ target: TradeObject, request: RequestOwnership?, merge: @escaping (TradeObject, TradeObject) -> TradeObject
+    )
     /// 帮助入口（/v1/config.help_links.<key>：{route, params}），没有配置为 nil（不显示入口）。
     func helpLink(_ key: String) -> (route: String, params: [String: String])?
 }
@@ -139,6 +161,10 @@ public final class PurchaseAttempt {
     public let installed: String
     /// 用户在二选一里主动点【重试】发起的（拦下时直接给授权，不占自动弹出次数，共性第 10 条）。
     public let userAuthRetry: Bool
+    /// 这次尝试的固定来源与请求归属（APP-08 iOS 第五次修复，APP-09 共性第 65 条）：首次发 open 时取一次（或由发起它的流程直接给出），
+    /// 之后超时重试、授权查询 / 绑定 / 恢复、授权后的自动 open、它产生的弹窗都只用这一份——请求带着它交网络层比较，任何地方都不再读
+    /// 当前会话来赋值。登录后重放是新尝试（`replay`），不继承。
+    var source: JumpSource?
 
     init(
         click: Int, card: TradeObject, linkId: String, body: String, key: String, noRebate: Bool,

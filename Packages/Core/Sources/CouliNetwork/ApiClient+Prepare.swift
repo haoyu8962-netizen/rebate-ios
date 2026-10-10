@@ -5,10 +5,14 @@ import Session
 /// 公共头 → 签名（03 §4.2 中间件前两步）：每次实际发送前重新组装。
 extension ApiClient {
     /// 公共头 → 签名：决定要带的头，读凭据（只在可读时），算签名。
-    func prepare(_ call: ApiCall, _ operation: ApiOperation, _ state: NetworkContext) -> Prepared {
-        let readable = state.privacy == PrivacyRaw.full && state.credentialsReadable
-        // 会话快照与世代在同一把锁里读（已作废的会话按没有）。
-        let (read, session) = lock.withLock { (readable ? readSessionLocked() : SessionRead.none, generation) }
+    /// `options` 给出时（业务调用）：同一把锁里先比较——快照仍可信、调用仍属当前作废世代、带固定归属的会话世代未变——再读凭据
+    /// （APP-08 iOS NEW-01）；任何一项不满足都不读令牌与设备凭据（随后的归属比较按不一致本地结束）。
+    func prepare(
+        _ call: ApiCall, _ operation: ApiOperation, _ state: NetworkContext, _ options: RunOptions? = nil
+    ) -> Prepared {
+        // 可读性判断、世代比较与会话读取在同一把锁里，按「先比较、再读取」的顺序（已作废的会话按没有）。
+        let guarded = guardedSessionRead(state, options)
+        let (read, session, readable) = (guarded.read, guarded.generation, guarded.readable)
         // 会话读取失败（可能有会话）：需要会话的接口一律不发（不能当成没有会话匿名发出，也拿不到可信的 scope、账号），
         // 不需要会话的接口照常不带令牌发出（R2-01）。
         if read == .unreadable, operation.auth != "none" {
@@ -16,8 +20,11 @@ extension ApiClient {
         }
         let live = read.live
         let accessToken = live?.access
-        // device_id 与 install_secret 一次读出（同一份凭据，不拼两次读取的结果）。
-        let credentials = readable ? device.credentials : nil
+        hooks.afterCredentialAdmission()
+        // device_id 与 install_secret 一次读出（同一份凭据，不拼两次读取的结果）。设备凭据也过撤回禁读屏障（APP-08 iOS r3g
+        // NEW-05）：设备锁里先查设备自己的屏障，再回到网络锁重做同一项准入比较（锁顺序「设备锁 → 网络锁」），都通过才读。
+        // 这里不持网络锁。
+        let credentials = readable ? device.credentials(admittedBy: { admittedEpoch(state, options) }) : nil
         let deviceId = credentials?.deviceId
         let decision = RequestHeaderPolicy.decide(
             state: requestState(live, state, hasAccessToken: accessToken != nil, deviceId: deviceId),
@@ -103,6 +110,39 @@ extension ApiClient {
     }
 
     /// 会话作用域：凭据不可读或没有会话时按 full（不带令牌，接口照 full 判定）。
+    /// 组请求用的一次会话读取（APP-08 iOS NEW-01）：同一把锁里先比较（快照仍可信、调用仍属当前作废世代、固定归属的会话世代未变），
+    /// 全部通过才读令牌；否则按没有会话、不可读。
+    struct GuardedRead {
+        let read: SessionRead
+        let generation: UInt64
+        let readable: Bool
+    }
+
+    func guardedSessionRead(_ state: NetworkContext, _ options: RunOptions?) -> GuardedRead {
+        lock.withLock {
+            let allowed = admitLocked(state, options)
+            return GuardedRead(
+                read: allowed ? readSessionLocked() : SessionRead.none, generation: generation, readable: allowed
+            )
+        }
+    }
+
+    /// 调用方持有 `lock`：组请求的凭据准入（快照仍可信、调用仍属当前作废世代、固定归属的会话世代未变）。
+    func admitLocked(_ state: NetworkContext, _ options: RunOptions?) -> Bool {
+        guard credentialsReadableLocked(state, runEpoch: options?.epoch) else {
+            return false
+        }
+        if let expected = options?.expected, expected.generation != generation || expected.epoch != epoch {
+            return false
+        }
+        return true
+    }
+
+    /// 设备凭据读取的准入（由设备实现在设备锁里调用，这里再取网络锁）：通过时返回当前作废世代，否则 nil。
+    func admittedEpoch(_ state: NetworkContext, _ options: RunOptions?) -> UInt64? {
+        lock.withLock { admitLocked(state, options) ? epoch : nil }
+    }
+
     func currentScope(_ state: NetworkContext) -> String {
         liveSession(state)?.scope ?? SessionScope.full
     }

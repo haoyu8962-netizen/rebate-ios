@@ -7,8 +7,50 @@ import Trade
 
 // ProductAuthUnavailable、授权结果查不到、ProductJumpSdkFailed、错误提示）
 
+/// 购买浮层上**全部**按钮的回调（APP-08 iOS r3f / r3g NEW-02，APP-09 共性第 63 条）：渲染时一次取出弹窗票据、加载编号、浏览器提示编号，
+/// 回调只把这些不可变的值交回执行器，执行时不再读当前状态。旧页面的旧回调拿着旧票据，碰不到之后出现的新弹窗：不改新弹窗、
+/// 不发请求、不外跳。覆盖：继续购买 / JumpTip 确认 / 比价无返利（confirm）、取消 / 关闭 / 系统返回 / 读屏擦除（dismiss）、
+/// 授权查询【重试】（recheck）、【去授权】（authorize）、二选一与提示的【重试】【仍去购买（无返利）】、【联系客服】、【查看说明】、
+/// 【看看相似商品】、加载层与浏览器提示的【取消】。
+struct PurchaseDialogActions {
+    let retry: () -> Void
+    let noRebate: () -> Void
+    let confirm: () -> Void
+    let dismiss: () -> Void
+    let recheck: () -> Void
+    let authorize: () -> Void
+    let contact: () -> Void
+    let explain: () -> Void
+    let similar: () -> Void
+    let cancelLoading: () -> Void
+    let cancelBrowser: () -> Void
+}
+
 extension PurchaseOverlay {
+    /// 渲染时捕获票据，生成全部按钮回调（r3f / r3g NEW-02）。
+    func overlayActions() -> PurchaseDialogActions {
+        let ticket = state.dialogTicket
+        let loading = state.loadingTicket
+        let browser = state.browserTicket
+        let controller = controller
+        return PurchaseDialogActions(
+            retry: { controller.retryPurchase(ticket) },
+            noRebate: { controller.buyWithoutRebate(ticket) },
+            confirm: { controller.confirm(ticket) },
+            dismiss: { controller.dismissDialog(ticket) },
+            recheck: { controller.recheckAuth(ticket) },
+            authorize: { controller.authorize(ticket) },
+            contact: { controller.contactService(ticket) },
+            explain: { controller.viewExplanation(ticket) },
+            similar: { controller.similar(dialog: ticket) },
+            cancelLoading: { controller.cancelLoading(loading) },
+            cancelBrowser: { controller.cancelBrowser(browser) }
+        )
+    }
+
     @ViewBuilder var dialog: some View {
+        // 渲染时捕获（r3f / r3g NEW-02）
+        let actions = overlayActions()
         switch state.dialog {
         case let .confirmPrice(oldFen, newFen, rebateGone, coupon):
             DialogCard(title: text.text(coupon ? PurchaseKeys.couponGoneTitle : PurchaseKeys.priceChangedTitle)) {
@@ -22,8 +64,8 @@ extension PurchaseOverlay {
                 bodyText(text.text(PurchaseKeys.priceAsk))
             } buttons: {
                 twoButtons(
-                    secondary: (text.text(PurchaseKeys.cancel), controller.dismissDialog),
-                    primary: (text.text(PurchaseKeys.continueBuy), controller.confirm)
+                    secondary: (text.text(PurchaseKeys.cancel), actions.dismiss),
+                    primary: (text.text(PurchaseKeys.continueBuy), actions.confirm)
                 )
             }
             .accessibilityIdentifier("purchase.priceChanged")
@@ -32,8 +74,8 @@ extension PurchaseOverlay {
                 bodyText(rebateGoneBody(newFen: priceFen, oldFen: oldFen))
             } buttons: {
                 twoButtons(
-                    secondary: (text.text(PurchaseKeys.cancel), controller.dismissDialog),
-                    primary: (text.text(PurchaseKeys.continueBuy), controller.confirm)
+                    secondary: (text.text(PurchaseKeys.cancel), actions.dismiss),
+                    primary: (text.text(PurchaseKeys.continueBuy), actions.confirm)
                 )
             }
             .accessibilityIdentifier("purchase.rebateGone")
@@ -48,12 +90,12 @@ extension PurchaseOverlay {
                 ))
             } buttons: {
                 CouliButton(text.text(PurchaseKeys.retry), isEnabled: !state.rateLimited, fillsWidth: true) {
-                    controller.retryPurchase()
+                    actions.retry()
                 }
                 .accessibilityIdentifier("purchase.auth.retry")
                 CouliButton(text.text(PurchaseKeys.buyNoRebate), kind: .secondary, isEnabled: !state.rateLimited,
                             fillsWidth: true) {
-                    controller.buyWithoutRebate()
+                    actions.noRebate()
                 }
                 .accessibilityIdentifier("purchase.auth.noRebate")
             }
@@ -65,11 +107,11 @@ extension PurchaseOverlay {
             } buttons: {
                 // 42901 Retry-After 期间【重试】置灰（共性第 19 条；执行层也拦下）
                 CouliButton(text.text(PurchaseKeys.retry), isEnabled: !state.rateLimited, fillsWidth: true) {
-                    controller.recheckAuth()
+                    actions.recheck()
                 }
                 .accessibilityIdentifier("purchase.authCheck.retry")
                 CouliButton(text.text(PurchaseKeys.cancel), kind: .secondary, fillsWidth: true) {
-                    controller.dismissDialog()
+                    actions.dismiss()
                 }
             }
             .accessibilityIdentifier("purchase.authCheckFailed")
@@ -77,14 +119,14 @@ extension PurchaseOverlay {
             DialogCard(title: text.text(textKey ?? "error.30101.auth_unavailable", platform: platform), icon: .info) {
                 bodyText(text.text(PurchaseKeys.authUnavailableBody))
             } buttons: {
-                CouliButton(text.text(PurchaseKeys.ok), fillsWidth: true) { controller.dismissDialog() }
+                CouliButton(text.text(PurchaseKeys.ok), fillsWidth: true) { actions.dismiss() }
             }
             .accessibilityIdentifier("purchase.authUnavailable")
         case .sdkFailed:
             DialogCard(title: text.text(PurchaseKeys.sdkFailedTitle), icon: .alert) {
                 bodyText(text.text(PurchaseKeys.sdkFailedBody))
             } buttons: {
-                CouliButton(text.text(PurchaseKeys.ok), fillsWidth: true) { controller.dismissDialog() }
+                CouliButton(text.text(PurchaseKeys.ok), fillsWidth: true) { actions.dismiss() }
             }
             .accessibilityIdentifier("purchase.sdkFailed")
         case let .notice(textKey, traceId, noRebate, contact, retry):
@@ -96,23 +138,22 @@ extension PurchaseOverlay {
             } buttons: {
                 if retry {
                     CouliButton(text.text(PurchaseKeys.retry), isEnabled: !state.rateLimited, fillsWidth: true) {
-                        controller.retryPurchase()
+                        actions.retry()
                     }
                 }
                 if noRebate {
                     CouliButton(text.text(PurchaseKeys.buyNoRebate), kind: retry ? .secondary : .primary,
                                 isEnabled: !state.rateLimited, fillsWidth: true) {
-                        controller.buyWithoutRebate()
+                        actions.noRebate()
                     }
                     .accessibilityIdentifier("purchase.notice.noRebate")
                 }
                 if contact {
                     CouliButton(text.text(PurchaseKeys.contact), kind: .secondary, fillsWidth: true) {
-                        controller.contactService()
+                        actions.contact()
                     }
                 }
-                CouliButton(text.text(PurchaseKeys.cancel), kind: .text, fillsWidth: true) { controller.dismissDialog()
-                }
+                CouliButton(text.text(PurchaseKeys.cancel), kind: .text, fillsWidth: true) { actions.dismiss() }
             }
             .accessibilityIdentifier("purchase.notice")
         default:

@@ -43,6 +43,9 @@ public final class ProductPageConfig: ObservableObject {
     public var onSimilar: (_ product: [String: Any]) -> Void = { _ in }
     /// 本页的购买执行器（APP-06b）：底栏按钮的加载 / 限流 / 安装提示、超时条；浮层由 App 盖在页面之上。
     public var purchase: OpenPurchaseController?
+    /// 待跟单卡（APP-08 G07：外跳回到前台后拉一次，只显示同平台那一张；设计稿 ProductPendingTrack 在内容与底栏之间）。App 给，卡片视图在
+    /// Orders 功能模块；nil = 不显示。
+    public var pendingTrack: AnyView?
 
     public init(controller: ProductDetailController, texts: SearchTexts) {
         self.controller = controller
@@ -157,6 +160,11 @@ public struct ProductDetailScreen: View {
                 .padding(CouliSpacing.s4)
                 .frame(maxWidth: ProductLayout.maxContentWidth)
                 .frame(maxWidth: .infinity)
+            }
+            if let pendingTrack = config.pendingTrack {
+                pendingTrack
+                    .frame(maxWidth: ProductLayout.maxContentWidth)
+                    .frame(maxWidth: .infinity)
             }
             if let purchase = config.purchase {
                 ProductPurchaseBar(purchase: purchase, texts: texts, buyFocus: $buyFocused) { state in
@@ -280,12 +288,14 @@ struct ProductPurchaseBar<Bar: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             if purchase.state.phase == .timeout {
+                // 渲染时捕获这次超时的编号（r3g NEW-02），旧回调重放不了之后的超时
+                let ticket = purchase.state.loadingTicket
                 RetryBanner(
                     message: texts.text(ProductKeys.buyTimeout),
                     retryTitle: texts.text(ProductKeys.retry),
                     isEnabled: !purchase.state.rateLimited
                 ) {
-                    purchase.retryAfterTimeout()
+                    purchase.retryAfterTimeout(ticket)
                 }
                 .padding(.horizontal, CouliSpacing.s4)
                 .padding(.bottom, CouliSpacing.s2)

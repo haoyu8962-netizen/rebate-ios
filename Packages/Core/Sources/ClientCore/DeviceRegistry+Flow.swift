@@ -28,7 +28,7 @@ extension DeviceRegistry {
             switch readLocked() {
             case let .identity(identity) where !rejectedDeviceIds.contains(identity.deviceId):
                 return (true, epoch)
-            case .unreadable:
+            case .unreadable, .blocked:
                 return (false, epoch)
             default:
                 return (nil, epoch)

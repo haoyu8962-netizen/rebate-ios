@@ -34,6 +34,12 @@ let extraDependencies: [String: [Target.Dependency]] = [
     ],
     // Purchase（APP-06b）：购买浮层（加载层、超时条、确认框、AuthSheet、JumpTip、浏览器提示）与授权管理页。执行器在 Core 的 Trade；
     // 由 App 盖在详情页 / 搜索页之上（Product、Search 不依赖本模块）。
+    // Orders（APP-08）：订单列表、详情与待跟单卡的纯逻辑和执行器在 Core 的 OrderCore（待跟单卡也给商品详情 / 搜索页用：卡片视图在本模块，
+    // 由 App 作为 AnyView 交给 Product / Search 页面，Feature 之间没有依赖边）。
+    "Orders": [
+        .product(name: "OrderCore", package: "Core"),
+        .product(name: "CouliNetwork", package: "Core"),
+    ],
     "Purchase": [
         .product(name: "Trade", package: "Core"),
         .product(name: "ProductSearch", package: "Core"),
@@ -96,6 +102,20 @@ let package = Package(
                 .product(name: "CouliNetwork", package: "Core"),
                 .product(name: "Session", package: "Core"),
                 .product(name: "Generated", package: "Generated"),
+            ]
+        ),
+        // 订单列表、详情与待跟单卡的执行器与页面接线测试（本地 URLProtocol 假服务 + 真实 ApiClient；APP-08 §2.12）。
+        .testTarget(
+            name: "OrdersTests",
+            dependencies: [
+                "Orders",
+                .product(name: "OrderCore", package: "Core"),
+                .product(name: "CouliNetwork", package: "Core"),
+                .product(name: "Session", package: "Core"),
+                .product(name: "Router", package: "Core"),
+                .product(name: "Clipboard", package: "Core"),
+                .product(name: "Generated", package: "Generated"),
+                .product(name: "DesignSystem", package: "DesignSystem"),
             ]
         ),
     ],

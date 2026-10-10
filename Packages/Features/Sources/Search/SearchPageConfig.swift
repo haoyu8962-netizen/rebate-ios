@@ -150,6 +150,8 @@ public final class SearchPageConfig: ObservableObject {
     public var pasteEntry: AnyView?
     /// 剪贴板粘贴结果（30132 与【用商品名搜索】、轻提示、邀请确认；App 给）：固定在头部下方，不随搜索 phase 隐藏（共性第 10 条）。
     public var pasteResult: AnyView?
+    /// 待跟单卡（APP-08 G07：列表卡购买外跳回到前台后拉一次，只显示同平台那一张；App 给，卡片视图在 Orders 功能模块）。nil = 不显示。
+    public var pendingTrack: AnyView?
     /// 30132【用商品名搜索】填进本页搜索框并搜索（A15）。
     public func searchByName(_ query: String) {
         input = query

@@ -54,12 +54,28 @@ extension ApiClient {
         }
     }
 
-    /// 凭据可读时的当前会话读取结果（隐私不允许读时按没有）。
+    /// 凭据可读时的当前会话读取结果（隐私不允许读时按没有）。可读性判断与读取在同一把锁里（APP-08 iOS NEW-01）。
     func readSession(_ state: NetworkContext) -> SessionRead {
-        guard state.privacy == PrivacyRaw.full, state.credentialsReadable else {
-            return .none
+        lock.withLock { credentialsReadableLocked(state) ? readSessionLocked() : .none }
+    }
+
+    /// 调用方持有 `lock`（APP-08 iOS NEW-01）：此刻能否读取凭据。必须同时满足——
+    /// - 撤回禁读屏障已放下（`readBarrier`，r3f）；
+    /// - 快照允许：完整模式、撤回清理已完成（`credentialsReadable`）；
+    /// - 快照仍可信：取快照之前的作废世代（`readEpoch`）仍是当前的。撤回同意、切换环境都在这把锁里推进作废世代
+    ///   （`invalidateSessions`，先于清令牌），所以异步等待期间发生过撤回的旧快照在这里被拒，不会再去读残留令牌；
+    /// - 调用仍属当前作废世代（`runEpoch`，给出时）。
+    /// 调用方据此在**同一把锁里**先比较、再读取；任何一项不满足都不读令牌、不读设备凭据。
+    func credentialsReadableLocked(_ state: NetworkContext, runEpoch: UInt64? = nil) -> Bool {
+        guard !readBarrier, state.privacy == PrivacyRaw.full, state.credentialsReadable,
+              let readEpoch = state.readEpoch, readEpoch == epoch
+        else {
+            return false
         }
-        return lock.withLock { readSessionLocked() }
+        if let runEpoch, runEpoch != epoch {
+            return false
+        }
+        return true
     }
 
     /// 凭据可读时的当前会话（作废、读取失败都按没有；需要区分读取失败的地方用 `readSession(_:)`）。
@@ -112,10 +128,16 @@ extension ApiClient {
 
     /// 调用方持有 `lock`。清本世代会话并换代：先在内存里作废（不可读），再删除；删除失败保持作废、返回 true（要重试）。
     /// 读不出当前会话（读取失败、损坏）时同样隔离（身份未知），只有确认没有会话才不隔离。
+    /// 撤回禁读屏障竖着时（撤回同意 / 切换环境的清理期间，r3f NEW-01）只删除、不读取：身份按未知隔离（存储里的任何会话都按它处理；
+    /// 新登录保存成功会在同一把锁里解除隔离）。
     @discardableResult
     func clearSessionLocked() -> Bool {
         generation &+= 1
         let revoked: RevokedSession
+        if readBarrier {
+            revokedSession = RevokedSession(access: nil, refresh: nil, identityKnown: false)
+            return deleteRevokedLocked()
+        }
         do {
             guard let snapshot = try tokens.readSession() else {
                 revokedSession = nil
@@ -127,6 +149,12 @@ extension ApiClient {
             revoked = RevokedSession(access: nil, refresh: nil, identityKnown: false)
         }
         revokedSession = revoked
+        return deleteRevokedLocked()
+    }
+
+    /// 调用方持有 `lock`。只删除、不读取：删掉即解除隔离（返回 false），删不掉保持隔离（返回 true，要重试）。
+    /// 隔离中存储里只可能是被隔离的会话（新登录与刷新保存都在这把锁里、且分别先解除隔离 / 要求世代未变），所以不必先读出来核对身份。
+    func deleteRevokedLocked() -> Bool {
         do {
             try tokens.clear()
             revokedSession = nil
@@ -136,7 +164,8 @@ extension ApiClient {
         }
     }
 
-    /// 删除失败的会话按退避持续重试删除（每次读会话也会重试）。
+    /// 删除失败的会话按退避持续重试删除（每次读会话也会重试）。后台重试**只删除、不读取**（APP-08 iOS r3f NEW-01）：醒来时不论
+    /// 撤回禁读屏障、作废世代如何，都不调用令牌存储的读取，只在仍有隔离时再删一次。
     func scheduleRevokedRetry() {
         let delay: Int64 = lock.withLock {
             let index = min(revokedRetryAttempt, revokedRetryDelays.count - 1)
@@ -149,8 +178,7 @@ extension ApiClient {
                 return
             }
             let again: Bool = lock.withLock {
-                _ = readSessionLocked()
-                if revokedSession == nil {
+                guard revokedSession != nil, deleteRevokedLocked() else {
                     revokedRetryAttempt = 0
                     return false
                 }
@@ -171,8 +199,11 @@ extension ApiClient {
 public extension ApiClient {
     /// 经过会话隔离判断的当前账号（登录时保存的 user_id）：隔离中（清会话删除失败）、读取失败、没有会话时为 nil。
     /// 不判断隐私状态（调用方先确认凭据可读）。埋点的 user_id 取它（APP-03b 共性 9）。
+    /// 撤回禁读屏障竖着时（r3f NEW-01）不读令牌，按 nil。
     var isolatedAccount: String? {
-        lock.withLock { readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 } }
+        lock.withLock {
+            readBarrier ? nil : readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 }
+        }
     }
 
     /// 会话世代（登录、退出、清会话都会加一）。同一账号退出后重新登录也是新世代（APP-04 三端共性第 15 条：桥调用按世代绑定）。

@@ -1,8 +1,10 @@
+import ClientCore
 import Clipboard
 import Combine
 import CouliNetwork
 import Foundation
 import Generated
+import Privacy
 import ProductSearch
 import Purchase
 import Router
@@ -37,6 +39,8 @@ final class AppTrade {
     private let config: AppConfig
     private let privacy: PrivacyController
     private let router: Router
+    /// 撤回清理已完成（`WithdrawalCleanupRunner.credentialsReadable`；测试可换）。
+    private let readable: @MainActor () -> Bool
     private var sceneActive = true
     private var pages: [UUID: Page] = [:]
     private var subscriptions: Set<AnyCancellable> = []
@@ -47,14 +51,19 @@ final class AppTrade {
         var visible: Bool
     }
 
+    /// 发起页回到前台（场景在前台且它是导航栈顶）：APP-08 待跟单卡在外跳回来后拉一次（G07）。
+    var onPageForeground: (@MainActor (UUID) -> Void)?
+
     /// 购买弹层出现（任一页的加载层、确认框、AuthSheet、外跳提示等，H06 同口径）：剪贴板在显示的同步出口作废（APP-07 共性第 4 条）。
     var onSensitiveOverlay: (@MainActor () -> Void)?
 
     init(
         network: AppNetwork, config: AppConfig, privacy: PrivacyController, routing: AppRouting, login: AppLogin,
         writer: ClipboardWriter? = nil,
-        track: @escaping @MainActor (TrackEvent) -> Void
+        credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable },
+        track: @escaping @MainActor (TrackEvent, TrackAttribution?) -> Void
     ) {
+        readable = credentialsReadable
         client = network.client
         self.config = config
         self.privacy = privacy
@@ -62,7 +71,10 @@ final class AppTrade {
         overrides = PlatformStatusOverrides(
             issuedMark: { config.issuedFetchId }, appliedMark: { config.appliedFetchId }
         )
-        sink = AppLinkJumpSink(track: track)
+        sink = AppLinkJumpSink(
+            track: track,
+            ownership: Self.ownershipReader(network.client, privacy, credentialsReadable)
+        )
         #if DEBUG
         ports = DebugFakeTrade.ports(wrapping: AppJumpPorts(writer: writer))
         #else
@@ -71,7 +83,10 @@ final class AppTrade {
         executor = TradeJumpExecutor(ports: ports, baichuan: AppTradeStartup.shared.baichuan, sink: sink)
         pending = RouterPurchasePending(router: router)
         let client = network.client
-        tips = JumpTipService(api: client) { client.isolatedAccount }
+        // 撤回清理未完成时不读凭据（按没有会话：不查、不显示 JumpTip；iOS NEW-01 同口径）
+        tips = JumpTipService(api: client) {
+            PrivacyWithdrawalCleanup.runner.credentialsReadable ? client.isolatedAccount : nil
+        }
         webCode = Self.makeWebCode()
         // 百川启动初始化失败（同意隐私后的联盟步骤）：phase=startup 上报 sdk_init_failed
         let executor = executor
@@ -83,7 +98,12 @@ final class AppTrade {
         // 会话变为已登录：本页登记的登录待办自动重放一次（发起页不在前台时等回到前台）
         login.$sessionVersion.dropFirst().sink { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, login.loggedIn else { return }
+                guard let self else { return }
+                // 会话变化（退出、换号、重新登录）：授权管理页比较构造时的归属，不是当前的就清空 A 的状态并作废（r3f NEW-04）
+                for page in self.pages.values {
+                    page.manage?.sessionChanged()
+                }
+                guard login.loggedIn else { return }
                 for page in self.pages.values {
                     page.purchase?.resumeAfterLogin()
                 }
@@ -116,7 +136,7 @@ final class AppTrade {
     func makePurchase(
         for destination: RouteDestination,
         updateCard: @escaping @MainActor (TradeObject, @escaping (TradeObject) -> TradeObject) -> Void,
-        refetchCard: @escaping @MainActor (TradeObject, @escaping (TradeObject, TradeObject) -> TradeObject) -> Void
+        refetchCard: @escaping AppPurchaseEnv.Refetch
     ) -> OpenPurchaseController {
         let env = AppPurchaseEnv(trade: self, updateCard: updateCard, refetchCard: refetchCard)
         let controller = OpenPurchaseController(
@@ -124,6 +144,13 @@ final class AppTrade {
             webCode: webCode, baichuan: AppTradeStartup.shared.baichuan
         )
         env.retain = controller
+        // 缺省的来源与请求归属（APP-08 iOS 第五次修复）：没接待跟单卡的页面也在新尝试第一次发送时固定一次，open、授权请求带着它交
+        // 网络层比较；来源键由同一份归属组成（账号、会话世代、作废世代），之后只比较。有待跟单卡时 AppOrders 换成带 slot 世代的那一份。
+        controller.jumpOrigin = { [weak self] in self?.ownershipKey(self?.requestOwnership()) }
+        controller.jumpSource = { [weak self] in
+            let request = self?.requestOwnership()
+            return JumpSource(origin: self?.ownershipKey(request), request: request)
+        }
         pages[destination.id] = Page(purchase: controller, manage: nil, visible: true)
         // 弹层从无到有：同步通知剪贴板作废（APP-07 共性第 4 条）；是否在显示一律按此刻仍在栈里的页面现算（不留登记，F-HM-15 教训）
         controller.$state.map(Self.showsOverlay).removeDuplicates().filter(\.self).sink { [weak self] _ in
@@ -135,8 +162,16 @@ final class AppTrade {
 
     /// 授权管理页（routes.json AuthManage；入口只在「我的」与设置页，经 Router 打开，守卫保留）。
     func authManagePage(_ destination: RouteDestination) -> AuthManagePageConfig {
+        // 页面构造时一次固定请求归属（APP-09 共性第 65 条）：之后换号的旧页面零发送
+        // 之后只比较（r3f NEW-04）：会话世代、作废世代仍是构造时的那一份；只读内存世代，不读令牌
+        let ownership = requestOwnership()
+        let client = client
         let controller = AuthManageController(
-            api: client, executor: executor, ports: ports, webCode: webCode, baichuan: AppTradeStartup.shared.baichuan
+            api: client, executor: executor, ports: ports, webCode: webCode, baichuan: AppTradeStartup.shared.baichuan,
+            ownership: ownership,
+            stillOwned: {
+                client.sessionGeneration == ownership.generation && client.invalidationTicket == ownership.epoch
+            }
         )
         pages[destination.id] = Page(purchase: nil, manage: controller, visible: true)
         refreshVisibility(path: router.path)
@@ -170,6 +205,11 @@ final class AppTrade {
 
     // MARK: - 前后台
 
+    /// 这个发起页此刻在前台（场景在前台且它是导航栈顶）。
+    func isPageVisible(_ id: UUID) -> Bool {
+        pages[id]?.visible == true
+    }
+
     func sceneChanged(active: Bool) {
         sceneActive = active
         if active {
@@ -193,6 +233,7 @@ final class AppTrade {
             if visible {
                 page.purchase?.onForeground()
                 page.manage?.onForeground()
+                onPageForeground?(id)
             } else {
                 page.purchase?.onBackground()
                 page.manage?.onBackground()
@@ -202,8 +243,33 @@ final class AppTrade {
 
     // MARK: - 环境
 
+    /// 此刻是否已登录。基本模式或撤回清理未完成（凭据不可读）时一律按未登录，**不读令牌**（发起页 onForeground 等处每次
+    /// 都会问它；APP-08 iOS 第五次修复，既有旁路）。
     var loggedIn: Bool {
-        client.isolatedSessionScope != nil
+        guard credentialsReadable() else { return false }
+        return client.isolatedSessionScope != nil
+    }
+
+    /// 会话凭据此刻可读：不在基本模式且撤回清理已完成。
+    func credentialsReadable() -> Bool {
+        !basicMode && readable()
+    }
+
+    /// link_jump 的归属比较用与购买来源同一种读取（`requestOwnership()`，r3g NEW-06）；sink 在 self 初始化前创建，所以单独给出。
+    static func ownershipReader(
+        _ client: ApiClient, _ privacy: PrivacyController, _ readable: @escaping @MainActor () -> Bool
+    ) -> @MainActor () -> RequestOwnership {
+        { client.currentOwnership(credentialsReadable: privacy.state.decision != .basicMode && readable()) }
+    }
+
+    /// 此刻的请求归属（网络层同一把锁里一次读出；不可读时只取内存世代、不读令牌）。只在固定来源时调用，之后只比较。
+    func requestOwnership() -> RequestOwnership {
+        client.currentOwnership(credentialsReadable: credentialsReadable())
+    }
+
+    /// 由请求归属组成的来源键（只比较）。
+    func ownershipKey(_ request: RequestOwnership?) -> String? {
+        request.map { "\($0.account ?? "-")#\($0.generation)#\($0.epoch)" }
     }
 
     var basicMode: Bool {
@@ -230,62 +296,6 @@ final class AppTrade {
         else { return nil }
         let params = (object["params"] as? [String: Any] ?? [:]).compactMapValues { $0 as? String }
         return (route, params)
-    }
-}
-
-/// 一个发起页的购买环境（PurchaseEnv）。
-@MainActor
-final class AppPurchaseEnv: PurchaseEnv {
-    private weak var trade: AppTrade?
-    private let update: @MainActor (TradeObject, @escaping (TradeObject) -> TradeObject) -> Void
-    private let refetch: @MainActor (TradeObject, @escaping (TradeObject, TradeObject) -> TradeObject) -> Void
-    /// 执行器（弱引用即可；只为调试时能从环境找到它）。
-    weak var retain: OpenPurchaseController?
-
-    init(
-        trade: AppTrade,
-        updateCard: @escaping @MainActor (TradeObject, @escaping (TradeObject) -> TradeObject) -> Void,
-        refetchCard: @escaping @MainActor (TradeObject, @escaping (TradeObject, TradeObject) -> TradeObject) -> Void
-    ) {
-        self.trade = trade
-        update = updateCard
-        refetch = refetchCard
-    }
-
-    func loggedIn() -> Bool {
-        trade?.loggedIn ?? false
-    }
-
-    func basicMode() -> Bool {
-        trade?.basicMode ?? true
-    }
-
-    func requestConsent() {
-        trade?.requestConsent()
-    }
-
-    func platformStatus(_ platform: String) -> String? {
-        trade?.platformStatus(platform)
-    }
-
-    func markPlatformStatus(_ platform: String, status: String) {
-        trade?.overrides.mark(platform, status: status)
-    }
-
-    func updateCard(_ target: TradeObject, transform: @escaping (TradeObject) -> TradeObject) {
-        update(target, transform)
-    }
-
-    func open(route: String, params: [String: String]) {
-        trade?.open(route: route, params: params)
-    }
-
-    func refetchCard(_ target: TradeObject, merge: @escaping (TradeObject, TradeObject) -> TradeObject) {
-        refetch(target, merge)
-    }
-
-    func helpLink(_ key: String) -> (route: String, params: [String: String])? {
-        trade?.helpLink(key)
     }
 }
 

@@ -40,6 +40,9 @@ public final class TaobaoAuthFlow {
     private let installed: @MainActor (String) -> String
     /// 30104 恢复要再次拉起授权时，用户点【去授权】发出的授权许可仍有效（进过后台即撤销，共性第 31 条）。
     private let relaunchAllowed: @MainActor () -> Bool
+    /// 流程开始时固定的请求归属（APP-08 iOS 第五次修复 RC-06 残余）：bindings 与 30104 恢复的 auth-url 都带着它交网络层比较；
+    /// `alive` 检查之后才换号的，网络层按不一致零发送。nil = 不比较。
+    private let expected: RequestOwnership?
 
     public init(
         calls: TradeCalls,
@@ -47,11 +50,13 @@ public final class TaobaoAuthFlow {
         webCode: WebCodeAuthorizer,
         baichuan: BaichuanAdapter,
         keyGenerator: @escaping () -> String,
+        expected: RequestOwnership? = nil,
         alive: @escaping @MainActor () -> Bool,
         installed: @escaping @MainActor (String) -> String,
         relaunchAllowed: @escaping @MainActor () -> Bool = { true }
     ) {
         self.relaunchAllowed = relaunchAllowed
+        self.expected = expected
         self.calls = calls
         self.group = group
         self.webCode = webCode
@@ -157,7 +162,7 @@ public final class TaobaoAuthFlow {
             operationId: TradeOperations.bindUnion, pathParams: ["platform": platform],
             body: bindBody(state: state, credential: credential), idempotencyKey: keyGenerator()
         )
-        return await calls.send(call, group: group)
+        return await calls.send(call, group: group, expected: expected)
     }
 
     /// auth-url：重新取 state 与方式列表。
@@ -166,6 +171,6 @@ public final class TaobaoAuthFlow {
             operationId: TradeOperations.getUnionAuthUrl, pathParams: ["platform": platform],
             query: "installed=" + installed(platform)
         )
-        return await calls.send(call, group: group)
+        return await calls.send(call, group: group, expected: expected)
     }
 }

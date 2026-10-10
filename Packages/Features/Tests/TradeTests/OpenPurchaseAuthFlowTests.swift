@@ -47,7 +47,7 @@ final class OpenPurchaseAuthFlowTests: XCTestCase {
         rig.controller.dismissDialog()
         XCTAssertEqual(rig.controller.state.dialog, .authDeclined(platform: "taobao", failed: false))
         XCTAssertNil(rig.pending.peek(), "关闭授权：删除待办")
-        rig.controller.buyWithoutRebate()
+        rig.controller.buyWithoutRebate(rig.controller.state.dialogTicket)
         await eventually { rig.opens().count == 2 }
         let body = TradeFixtures.body(rig.opens()[1])
         XCTAssertEqual(body["no_rebate"] as? Bool, true)
@@ -79,7 +79,7 @@ final class OpenPurchaseAuthFlowTests: XCTestCase {
             }
         }
         XCTAssertEqual(rig.controller.state.dialog, .authDeclined(platform: "taobao", failed: false), "第 3 次直接二选一")
-        rig.controller.retryPurchase()
+        rig.controller.retryPurchase(rig.controller.state.dialogTicket)
         await eventually { rig.opens().count == 4 }
         rig.replyOpen(3, TradeFixtures.fail(30101, authData))
         await eventually { rig.controller.state.dialog == .authSheet(platform: "taobao", busy: false) }

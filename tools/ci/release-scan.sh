@@ -34,6 +34,8 @@
 #     启动参数 CouliFakeTradeNoExternal、假安装状态键 CouliFakeInstalled（App/Sources/Debug/DebugJumpPorts.swift）
 #   - 剪贴板调试计数（APP-07）：标记 COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a、启动参数 CouliClipboardDiagnostics
 #     （App/Sources/Debug/DebugClipboard.swift）
+#   - 订单本机假服务（APP-08）：标记 COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19、类型名 DebugFakeOrders、启动参数 CouliFakeOrders
+#     （App/Sources/Debug/DebugFakeOrders.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -126,6 +128,9 @@ HITS_LOG="$WORK/hits"
     echo "CouliFakeInstalled"
     echo "COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a"
     echo "CouliClipboardDiagnostics"
+    echo "COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19"
+    echo "DebugFakeOrders"
+    echo "CouliFakeOrders"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

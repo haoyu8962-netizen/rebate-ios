@@ -1,3 +1,4 @@
+import CouliNetwork
 import Foundation
 import TradeJump
 
@@ -19,16 +20,28 @@ public protocol JumpPorts: AnyObject {
 @MainActor
 public protocol LinkJumpSink: AnyObject {
     func report(_ fields: TradeObject)
+    /// 购买外跳的步骤（APP-08 iOS r3g NEW-06）：带发起时固定的请求归属（账号 + 世代），上报口编码 user_id 时用它；交给埋点队列之前
+    /// 比较当前归属，变了就丢弃。没有固定归属（nil）时同 `report(_:)`。
+    func report(_ fields: TradeObject, owner: RequestOwnership?)
+}
+
+public extension LinkJumpSink {
+    func report(_ fields: TradeObject, owner _: RequestOwnership?) {
+        report(fields)
+    }
 }
 
 /// 这次外跳属于哪一次购买（open 响应的 attempt_id 与替换后的 link_id）。auth_jump 为 nil（不上报 link_jump）。
 public struct PurchaseIdentity: Equatable, Sendable {
     public let attemptId: String
     public let linkId: String
+    /// 这次购买发起时固定的请求归属（APP-08 iOS r3g NEW-06）：link_jump 埋点的账号归属只取它。
+    public let owner: RequestOwnership?
 
-    public init(attemptId: String, linkId: String) {
+    public init(attemptId: String, linkId: String, owner: RequestOwnership? = nil) {
         self.attemptId = attemptId
         self.linkId = linkId
+        self.owner = owner
     }
 }
 
@@ -226,7 +239,7 @@ public final class TradeJumpExecutor {
         for fields in LinkJumpEvents.build(
             attemptId: identity.attemptId, linkId: identity.linkId, steps: [step], isAuthJump: false
         ) {
-            sink.report(fields)
+            sink.report(fields, owner: identity.owner)
         }
     }
 }

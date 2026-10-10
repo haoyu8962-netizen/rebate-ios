@@ -199,6 +199,8 @@ final class AppNetworkWiringTests: XCTestCase {
 final class AppStubProtocol: URLProtocol, @unchecked Sendable {
     enum Reply {
         case json(status: Int, body: String)
+        /// 带响应头（如 Date）的回应。
+        case jsonHeaders(status: Int, headers: [String: String], body: String)
         case hold
     }
 
@@ -287,11 +289,17 @@ final class AppStubProtocol: URLProtocol, @unchecked Sendable {
             }
             waiters.forEach { $0.resume() }
         case let .json(status, body):
-            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])
-            client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: Data(body.utf8))
-            client?.urlProtocolDidFinishLoading(self)
+            deliver(url, status: status, headers: [:], body: body)
+        case let .jsonHeaders(status, headers, body):
+            deliver(url, status: status, headers: headers, body: body)
         }
+    }
+
+    private func deliver(_ url: URL, status: Int, headers: [String: String], body: String) {
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)
+        client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
     }
 
     override func stopLoading() {

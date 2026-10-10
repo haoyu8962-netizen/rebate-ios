@@ -126,6 +126,8 @@ public final class PrivacyGate {
     /// 撤回同意时的本地清理入口（令牌、device_id、install_secret）。
     /// 生产接 `PrivacyWithdrawalCleanup.registry`（APP-01 清理器注册表的形式，见 PrivacyWithdrawal.swift）。
     public var withdrawalCleanup: () -> Void
+    /// 撤回禁读屏障（r3h NEW-05）：写待清理 / 未落盘标记之前同步调用（App 接 `WithdrawalCleanupRunner.raiseReadBarriers`）。
+    public var raiseWithdrawalReadBarriers: () -> Void = {}
     /// 撤回记录未落盘的内存标记（与 `WithdrawalCleanupRunner.writeGuard` 共用同一个实例）。
     public var withdrawalWriteGuard = WithdrawalWriteGuard()
 
@@ -224,6 +226,7 @@ public final class PrivacyGate {
     /// 撤回记录写入失败不吞掉（F-ALL-05）：内存里立即按基本模式、不放行，凭据不可读，并按 1s、2s、4s…上限 60s 持续重试写入，
     /// 落盘成功后再跑一次清理（清干净才删待清理标记）。
     public func withdraw(now _: Int64) {
+        raiseWithdrawalReadBarriers() // 屏障先于标记（r3h NEW-05）：先竖网络与设备的禁读屏障，再写标记
         let persisted = store.commitWithdrawalVerified()
         if !persisted {
             withdrawalWriteGuard.markUnpersisted()
@@ -328,6 +331,7 @@ public final class PrivacyGate {
 
     /// 补写撤回记录；成功清内存标记。
     private func persistWithdrawal() -> Bool {
+        raiseWithdrawalReadBarriers()
         guard store.commitWithdrawalVerified() else {
             return false
         }
@@ -350,9 +354,9 @@ public final class PrivacyGate {
     }
 
     private func forceBasicModeIfCleanupPending() {
-        if store.withdrawalCleanupPending {
-            store.commitWithdrawal()
-        }
+        guard store.withdrawalCleanupPending else { return }
+        raiseWithdrawalReadBarriers()
+        store.commitWithdrawal()
     }
 
     private func orderedStepNames() -> [String] {

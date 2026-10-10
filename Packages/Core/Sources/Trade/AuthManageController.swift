@@ -76,6 +76,13 @@ public final class AuthManageController: ObservableObject {
     private var authPermit = false
     private var backgroundCount = 0
     private var toastSeq = 0
+    /// 页面构造时**一次**固定的请求归属（APP-08 iOS 第五次修复，APP-09 共性第 65 条）：加载、取授权地址、淘宝绑定与 30104 恢复都带着它
+    /// 交网络层比较；之后换了账号 / 会话 / 环境的旧页面零发送（本地按不一致结束，显示网络错误），不把请求重新绑定到当前会话。nil = 不比较。
+    private let ownership: RequestOwnership?
+    /// 构造时的归属此刻仍是当前的（APP-08 iOS r3f NEW-04）：持有者给，只比较（会话世代、作废世代），不读令牌、不赋值。nil = 不比较。
+    private let stillOwned: (@MainActor () -> Bool)?
+    /// 已因会话变化作废（r3f NEW-04）：A 的授权状态已清空，之后的迟到响应零展示、零外跳，本页不再发请求（要重进）。
+    public private(set) var revoked = false
 
     public init(
         api: TradeApi,
@@ -84,8 +91,12 @@ public final class AuthManageController: ObservableObject {
         webCode: WebCodeAuthorizer,
         baichuan: BaichuanAdapter,
         keyGenerator: @escaping () -> String = { UUID().uuidString.lowercased() },
-        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
+        ownership: RequestOwnership? = nil,
+        stillOwned: (@MainActor () -> Bool)? = nil
     ) {
+        self.ownership = ownership
+        self.stillOwned = stillOwned
         calls = TradeCalls(api: api)
         self.executor = executor
         self.ports = ports
@@ -97,14 +108,17 @@ public final class AuthManageController: ObservableObject {
 
     /// 加载（进入页面、【重试】、授权回来）。42901 禁用期间执行层直接拦下（不只靠按钮置灰）。
     public func load() {
-        guard !left, !gate.active else { return }
+        guard owned(), !left, !gate.active else { return }
         generation += 1
         let gen = generation
         state.phase = .loading
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let result = await calls.send(ApiCall(operationId: TradeOperations.listUnionBindings), group: Self.group)
-            guard !left, gen == generation else { return }
+            let result = await calls.send(
+                ApiCall(operationId: TradeOperations.listUnionBindings), group: Self.group, expected: ownership
+            )
+            // 结算前比较构造时的归属（r3f NEW-04）：换号后才回来的 A 的结果零展示
+            guard !left, gen == generation, owned() else { return }
             switch result {
             case let .success(data, _, _):
                 state.rows = Self.rows(TJSON.objects(TJSON.parse(data)?["items"]))
@@ -129,8 +143,8 @@ public final class AuthManageController: ObservableObject {
 
     /// 用户点【去授权】。
     public func authorize(_ platform: String) {
-        guard let row = state.rows.first(where: { $0.platform == platform }), !gate.active, !left, row.canAuthorize,
-              state.busyPlatform == nil
+        guard owned(), let row = state.rows.first(where: { $0.platform == platform }), !gate.active, !left,
+              row.canAuthorize, state.busyPlatform == nil
         else { return }
         state.busyPlatform = platform
         authPermit = true
@@ -143,7 +157,7 @@ public final class AuthManageController: ObservableObject {
                 operationId: TradeOperations.getUnionAuthUrl, pathParams: ["platform": platform],
                 query: "installed=" + installed
             )
-            let result = await calls.send(call, group: Self.group)
+            let result = await calls.send(call, group: Self.group, expected: ownership)
             guard alive(gen) else { return }
             switch result {
             case let .success(data, _, _):
@@ -156,8 +170,41 @@ public final class AuthManageController: ObservableObject {
         }
     }
 
+    /// 授权流程仍属本次点击且本页归属仍是当前的（r3f NEW-04）：auth-url 成功响应、拼多多外跳、淘宝绑定 / 恢复的每一步都经它，
+    /// 换号后不执行旧授权方案、不外跳。
     private func alive(_ gen: Int) -> Bool {
-        !left && gen == authGen
+        !left && gen == authGen && owned()
+    }
+
+    /// 构造时的归属仍是当前的；不是就清空并作废本页（r3f NEW-04）。只比较。
+    private func owned() -> Bool {
+        guard !revoked else { return false }
+        guard stillOwned?() ?? true else {
+            revoke()
+            return false
+        }
+        return true
+    }
+
+    /// 会话变化（持有者在会话版本变化时调用；回到前台、每次结算前也会自查，r3f NEW-04）：归属已不是当前的就清空并作废本页。
+    public func sessionChanged() {
+        _ = owned()
+    }
+
+    /// 清空 A 的授权状态并作废：世代加 1 丢弃在途加载与授权流程，取消在途请求，撤销授权许可；页面显示需重进的错误态。
+    private func revoke() {
+        guard !revoked else { return }
+        revoked = true
+        generation += 1
+        authGen += 1
+        authPermit = false
+        awaitingReturn = false
+        gate.cancelTimer()
+        calls.cancel()
+        var cleared = AuthManageState()
+        cleared.phase = .error
+        cleared.errorKey = Self.networkKey
+        state = cleared
     }
 
     /// 拼多多：授权跳转（不上报 link_jump）。只在前台、仍属本次授权、用户许可仍有效时执行下一步（共性第 25、31 条）。
@@ -191,6 +238,7 @@ public final class AuthManageController: ObservableObject {
         // 淘宝：含 30104 按 reason 的恢复（共性第 18 条）；本页发起的授权不重放任何 open
         let flow = TaobaoAuthFlow(
             calls: calls, group: Self.group, webCode: webCode, baichuan: baichuan, keyGenerator: keyGenerator,
+            expected: ownership,
             alive: { [weak self] in self?.alive(gen) ?? false },
             installed: { [weak self] in self?.ports.installed($0) ?? TradeConstants.installedUnknown },
             relaunchAllowed: { [weak self] in self.map { $0.authPermit && $0.foreground } ?? false }
@@ -200,7 +248,10 @@ public final class AuthManageController: ObservableObject {
             done(Self.authFailedKey)
             return
         }
-        switch await flow.run(platform: platform, initial: data) {
+        let outcome = await flow.run(platform: platform, initial: data)
+        // 授权流程结束时本页已换号 / 离开 / 有新的点击（r3f NEW-04）：结果零展示
+        guard alive(gen) else { return }
+        switch outcome {
         case .bound:
             // 绑定成功：刷新本页，不重放任何 open（BR-ID-17 细则）
             state.busyPlatform = nil
@@ -242,7 +293,8 @@ public final class AuthManageController: ObservableObject {
     /// 回到前台：拼多多授权跳转之后刷新本页。
     public func onForeground() {
         foreground = true
-        guard awaitingReturn, !left else { return }
+        // 换号后返回（r3f NEW-04）：先比较归属，不是当前的就清空 A 的状态
+        guard owned(), awaitingReturn, !left else { return }
         awaitingReturn = false
         load()
     }

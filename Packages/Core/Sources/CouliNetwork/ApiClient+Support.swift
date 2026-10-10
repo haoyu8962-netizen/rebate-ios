@@ -17,8 +17,25 @@ extension ApiClient {
         guard abs(offset) > Self.maxSkewMillis else {
             return false
         }
-        lock.withLock { clockOffsetMillis = offset }
+        lock.withLock {
+            clockOffsetMillis = offset
+            displayOffsetMillis = offset
+        }
         return true
+    }
+
+    /// 显示用的服务端时钟（BR-TEXT-11「以服务端校准后的时钟为准」，APP-08 共性第 34 条）：每个带 Date 的响应都看一次，相差超过
+    /// 300 秒才按 Date 校正，否则视为不偏（不因秒级网络延迟抖动）。只影响 `calibratedNowMillis`，不改签名用的偏移
+    /// （签名只在 10401 时校时，BR-ID-09 / 10401 细则）。
+    func observeServerDate(_ headers: [String: String]) {
+        guard let raw = headers.first(where: { $0.key.caseInsensitiveCompare(HeaderNames.date) == .orderedSame })?
+            .value,
+            let server = Self.parseHTTPDate(raw)
+        else {
+            return
+        }
+        let offset = Int64(server.timeIntervalSince1970 * 1000) - clock()
+        lock.withLock { displayOffsetMillis = abs(offset) > Self.maxSkewMillis ? offset : 0 }
     }
 
     static func parseHTTPDate(_ text: String) -> Date? {

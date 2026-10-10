@@ -23,6 +23,12 @@ enum RouteViewRegistry {
         // APP-06b：授权管理（Features/Purchase）；「我的」Tab 占位页先放授权管理与设置入口（页面本身在 APP-12）。
         "AuthManage": { AnyView(AuthManageRouteView(destination: $0)) },
         "Me": { AnyView(MePlaceholderView(destination: $0)) },
+        // APP-08：订单列表（订单 Tab 根）与详情（Features/Orders）；订单页的 H5 入口（找回、流水、帮助）接可信容器。
+        "OrderList": { AnyView(OrderListRouteView(destination: $0)) },
+        "OrderDetail": { AnyView(OrderDetailRouteView(destination: $0)) },
+        "FindOrder": { AnyView(H5RouteView(destination: $0)) },
+        "Ledger": { AnyView(H5RouteView(destination: $0)) },
+        "Help": { AnyView(H5RouteView(destination: $0)) },
     ]
 
     @ViewBuilder

@@ -86,8 +86,10 @@ public struct SearchView: View {
     /// 回落提示时显示（共性第 11 条）。
     @ViewBuilder private var pasteSlots: some View {
         let showsEntry = snapshot.phase == .idle || snapshot.phase == .unavailable || snapshot.notice != nil
-        if page.pasteResult != nil || (showsEntry && page.pasteEntry != nil) {
+        if page.pasteResult != nil || (showsEntry && page.pasteEntry != nil) || page.pendingTrack != nil {
             VStack(spacing: CouliSpacing.s3) {
+                // 待跟单卡（APP-08 G07）：没有卡时视图本身为空
+                page.pendingTrack
                 page.pasteResult
                 if showsEntry {
                     page.pasteEntry
@@ -103,12 +105,14 @@ public struct SearchView: View {
     /// 列表卡购买 8 秒没有响应（ProductBuyTimeout；APP-06b 共性第 29 条）：页底「网络不稳定，请重试」+【重试】（同键重放原请求）。
     @ViewBuilder private var purchaseTimeout: some View {
         if let purchase = page.purchaseController, purchase.state.phase == .timeout {
+            // 渲染时捕获这次超时的编号（r3g NEW-02），旧回调重放不了之后的超时
+            let ticket = purchase.state.loadingTicket
             RetryBanner(
                 message: texts.text(SearchKeys.buyTimeout),
                 retryTitle: texts.text(SearchKeys.retry),
                 isEnabled: !purchase.state.rateLimited
             ) {
-                purchase.retryAfterTimeout()
+                purchase.retryAfterTimeout(ticket)
             }
             .padding(.horizontal, CouliSpacing.s4)
             .padding(.vertical, CouliSpacing.s2)

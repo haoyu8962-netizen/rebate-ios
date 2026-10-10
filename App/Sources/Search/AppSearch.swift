@@ -1,6 +1,7 @@
 import CouliNetwork
 import DesignSystem
 import Foundation
+import Privacy
 import Product
 import ProductSearch
 import Router
@@ -36,6 +37,8 @@ final class AppSearch: ObservableObject {
     private let config: AppConfig
     private let privacy: PrivacyController
     private let router: Router
+    /// 撤回清理已完成（凭据可读；测试可换）。
+    private let readable: @MainActor () -> Bool
     /// 购买（APP-06b）：每个详情页、搜索页一份 OpenPurchaseController；点击结果确认的平台状态并入卡片映射。
     /// nil = 不接购买（单测组合）：页面按 APP-06a 只到购买意图。
     let trade: AppTrade?
@@ -46,14 +49,18 @@ final class AppSearch: ObservableObject {
     let restoration: SearchRouteRestoration
     /// 剪贴板识别（APP-07）：SearchTyping 的粘贴入口与结果、详情页的 parse 卡种子。nil = 不接（单测组合）。
     /// 多卡弹层的商品卡与搜索卡用同一份平台购买状态（R3-01）。
+    /// 订单（APP-08）：发起购买的页面上的待跟单卡（G07 ②）。nil = 不接（单测组合）。
+    weak var orders: AppOrders?
     weak var clipboard: AppClipboard? {
         didSet { clipboard?.purchaseSource = purchaseStatus }
     }
 
     init(
         network: AppNetwork, config: AppConfig, privacy: PrivacyController, routing: AppRouting, trade: AppTrade? = nil,
-        restorationDefaults: UserDefaults = .standard
+        restorationDefaults: UserDefaults = .standard,
+        credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable }
     ) {
+        readable = credentialsReadable
         client = network.client
         self.config = config
         self.privacy = privacy
@@ -109,21 +116,42 @@ final class AppSearch: ObservableObject {
                     guard let key = target["product_key"] as? String else { return }
                     controller?.updateItem(productKey: key, transform)
                 },
-                refetchCard: { [weak controller] target, merge in
-                    guard let key = target["product_key"] as? String else { return }
-                    controller?.refetchItem(productKey: key, itemRef: target["item_ref"] as? String, merge: merge)
-                }
+                refetchCard: { [weak controller] in Self.refetch(controller, $0, $1, $2) }
             )
             page.purchaseController = purchase
+            page.pendingTrack = orders?.pendingSlot(for: destination, purchase: purchase, trade: trade)
             page.onBuy = { [weak purchase] item in purchase?.buy(item, spm: AppSearchSpm.searchList) }
             page.onSimilar = { [weak purchase] item in purchase?.similar(item) }
         }
         return page
     }
 
+    /// 列表卡的补齐（r3f NEW-03）：只换那一张；购买尝试的固定归属原样交给 SearchController → 网络层只比较。
+    static func refetch(
+        _ controller: SearchController?, _ target: [String: Any], _ request: RequestOwnership?,
+        _ merge: @escaping ([String: Any], [String: Any]) -> [String: Any]
+    ) {
+        guard let key = target["product_key"] as? String else { return }
+        let ref = target["item_ref"] as? String
+        controller?.refetchItem(productKey: key, itemRef: ref, expected: request, merge: merge)
+    }
+
+    /// 商品卡映射的上下文（是否登录、隐私模式）。基本模式或撤回清理未完成（凭据不可读）时按未登录，**不读令牌**
+    /// （APP-08 iOS 第五次修复，既有旁路）。
+    static func productContext(
+        client: ApiClient, privacy: PrivacyController, readable: @MainActor () -> Bool
+    ) -> [String: Any] {
+        let basic = privacy.state.decision == .basicMode
+        return [
+            "loggedIn": !basic && readable() && client.isolatedSessionScope != nil,
+            "privacy": basic ? "basic" : "consented",
+        ]
+    }
+
     func productPage(_ destination: RouteDestination) -> ProductPageConfig {
         let client = client
         let privacy = privacy
+        let readable = readable
         let controller = ProductDetailController(
             api: client,
             platform: destination.params["platform"]?.stringValue ?? "",
@@ -131,15 +159,12 @@ final class AppSearch: ObservableObject {
             itemRef: destination.params["item_ref"]?.stringValue,
             purchase: purchaseStatus
         ) {
-            [
-                "loggedIn": client.isolatedSessionScope != nil,
-                "privacy": privacy.state.decision == .basicMode ? "basic" : "consented",
-            ]
+            Self.productContext(client: client, privacy: privacy, readable: readable)
         }
         let purchase = trade?.makePurchase(
             for: destination,
             updateCard: { [weak controller] _, transform in controller?.updateProduct(transform) },
-            refetchCard: { [weak controller] _, merge in controller?.refetch(merge: merge) }
+            refetchCard: { [weak controller] _, request, merge in controller?.refetch(expected: request, merge: merge) }
         )
         let trade = trade
         let destinationId = destination.id
@@ -154,6 +179,7 @@ final class AppSearch: ObservableObject {
         }
         let page = ProductPageConfig(controller: controller, texts: texts)
         page.purchase = purchase
+        page.pendingTrack = orders?.pendingSlot(for: destination, purchase: purchase, trade: trade)
         let router = router
         page.onBack = { router.close(destination) }
         page.onResearch = {

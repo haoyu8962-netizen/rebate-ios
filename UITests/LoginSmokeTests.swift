@@ -74,10 +74,10 @@ final class LoginSmokeTests: XCTestCase {
         typeCode(app, "482913")
         save(app, "LoginCode-filled")
         app.buttons["login.submit"].tap()
-        let name = app.staticTexts.matching(identifier: "route.placeholder.name")
-            .matching(NSPredicate(format: "label == %@", "OrderList")).firstMatch
-        XCTAssertTrue(name.waitForExistence(timeout: 10), "登录后没有回到原意图 OrderList")
-        XCTAssertFalse(element(app, "login.page").exists, "登录页已关闭")
+        // APP-08 起 OrderList 是真实的订单页（不再是占位页）：以订单页右上常驻的「未跟单？去找回」为准
+        XCTAssertTrue(element(app, "orders.findEntry").waitForExistence(timeout: 10), "登录后没有回到原意图 OrderList")
+        // 订单页在登录页下面早已存在：等登录页的关闭动画结束再断言（rule-gaps I23，负载高时关闭动画慢）
+        XCTAssertTrue(element(app, "login.page").waitForNonExistence(timeout: 10), "登录页已关闭")
         save(app, "Login-success-resumed-pending")
 
         // 登出：设置占位页（调试面板入口；「我的」是占位页）。

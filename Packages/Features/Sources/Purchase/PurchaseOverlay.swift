@@ -33,34 +33,36 @@ public struct PurchaseOverlay: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content
+        // 渲染时一次取出全部按钮回调（r3g NEW-02）：每个回调只带这次渲染的票据，执行时不读当前状态。
+        let actions = overlayActions()
+        return content
             // 半屏：关闭键、点遮罩、读屏双指擦除都等同关闭（A11yFocusAuthSheet「关闭方式」）
-            .couliSheet(isPresented: state.dialog?.isSheet == true, dismissOnScrim: controller.dismissDialog) {
+            .couliSheet(isPresented: state.dialog?.isSheet == true, dismissOnScrim: actions.dismiss) {
                 sheet.frame(maxWidth: PurchaseLayout.maxContentWidth)
-                    .accessibilityAction(.escape) { controller.dismissDialog() }
+                    .accessibilityAction(.escape) { actions.dismiss() }
             }
             // 居中弹窗：遮罩不关闭（要用户明确选择）；读屏双指擦除等同【取消】
             .couliPanel(isPresented: state.dialog.map { !$0.isSheet } ?? false) {
                 dialog.frame(maxWidth: PurchaseLayout.maxContentWidth)
-                    .accessibilityAction(.escape) { controller.dismissDialog() }
+                    .accessibilityAction(.escape) { actions.dismiss() }
             }
             .couliPanel(isPresented: state.phase == .loading) {
                 ProgressPanel(
                     title: text.text(PurchaseKeys.opening, platform: platform),
                     cancelTitle: text.text(PurchaseKeys.openingCancel),
-                    onCancel: controller.cancelLoading
+                    onCancel: actions.cancelLoading
                 )
                 .accessibilityIdentifier("purchase.opening")
-                .accessibilityAction(.escape) { controller.cancelLoading() }
+                .accessibilityAction(.escape) { actions.cancelLoading() }
             }
             .couliPanel(isPresented: state.browserNotice) {
                 ProgressPanel(
                     title: text.text(PurchaseKeys.browserNotice, platform: platform),
                     cancelTitle: text.text(PurchaseKeys.openingCancel),
-                    onCancel: controller.cancelBrowser
+                    onCancel: actions.cancelBrowser
                 )
                 .accessibilityIdentifier("purchase.browser")
-                .accessibilityAction(.escape) { controller.cancelBrowser() }
+                .accessibilityAction(.escape) { actions.cancelBrowser() }
             }
             .couliToast($toast)
             .onChange(of: state.toast) { value in
@@ -73,17 +75,19 @@ public struct PurchaseOverlay: ViewModifier {
     // MARK: - 半屏
 
     @ViewBuilder private var sheet: some View {
+        // 渲染时捕获（r3g NEW-02）
+        let actions = overlayActions()
         switch state.dialog {
         case let .authSheet(platform, busy):
             CouliSheet(
                 title: text.withTrace(authTitleKey(platform), platform: platform, traceId: nil),
                 closeLabel: text.text(PurchaseKeys.close),
-                onClose: controller.dismissDialog
+                onClose: actions.dismiss
             ) {
                 BulletBox(lines: authLines(platform))
             } actions: {
                 CouliButton(text.text(PurchaseKeys.authGo), isLoading: busy, isEnabled: !busy, fillsWidth: true) {
-                    controller.authorize()
+                    actions.authorize()
                 }
                 .accessibilityIdentifier("purchase.auth.go")
             }
@@ -92,12 +96,12 @@ public struct PurchaseOverlay: ViewModifier {
             CouliSheet(
                 title: text.text(PurchaseKeys.jumpTipTitle),
                 closeLabel: text.text(PurchaseKeys.close),
-                onClose: controller.dismissDialog
+                onClose: actions.dismiss
             ) {
                 BulletList(lines: [text.text(PurchaseKeys.jumpTipLine1), text.text(PurchaseKeys.jumpTipLine2)])
             } actions: {
                 CouliButton(text.text(PurchaseKeys.jumpTipGo, platform: platform), fillsWidth: true) {
-                    controller.confirm()
+                    actions.confirm()
                 }
                 .accessibilityIdentifier("purchase.jumpTip.go")
             }
@@ -106,7 +110,7 @@ public struct PurchaseOverlay: ViewModifier {
             CouliSheet(
                 title: text.text(PurchaseKeys.compareTitle),
                 closeLabel: text.text(PurchaseKeys.close),
-                onClose: controller.dismissDialog
+                onClose: actions.dismiss
             ) {
                 Text(verbatim: text.text(PurchaseKeys.compareBody))
                     .couliFont(.footnote)
@@ -114,15 +118,15 @@ public struct PurchaseOverlay: ViewModifier {
                     .fixedSize(horizontal: false, vertical: true)
                 if controller.explanationAvailable {
                     CouliButton(text.text(PurchaseKeys.compareExplain), kind: .text, size: .compact) {
-                        controller.viewExplanation()
+                        actions.explain()
                     }
                     .accessibilityIdentifier("purchase.compare.explain")
                 }
             } actions: {
-                CouliButton(text.text(PurchaseKeys.buyNoRebate), fillsWidth: true) { controller.confirm() }
+                CouliButton(text.text(PurchaseKeys.buyNoRebate), fillsWidth: true) { actions.confirm() }
                     .accessibilityIdentifier("purchase.compare.buy")
                 CouliButton(text.text(PurchaseKeys.similar), kind: .secondary, fillsWidth: true) {
-                    controller.similar()
+                    actions.similar()
                 }
                 .accessibilityIdentifier("purchase.compare.similar")
             }

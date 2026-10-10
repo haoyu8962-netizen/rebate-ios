@@ -18,6 +18,7 @@ struct CouliApp: App {
     @StateObject private var login: AppLogin
     @StateObject private var search: AppSearch
     @StateObject private var clipboard: AppClipboard
+    @StateObject private var orders: AppOrders
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -74,6 +75,8 @@ struct CouliApp: App {
             tracker: tracker, permissions: permissions
         )
         let (clipboard, search) = Self.makeShopping(web: web, login: login)
+        let orders = Self.makeOrders(web: web, login: login, clipboard: clipboard, search: search)
+        _orders = StateObject(wrappedValue: orders)
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
         _clipboard = StateObject(wrappedValue: clipboard)
@@ -88,6 +91,8 @@ struct CouliApp: App {
     private static func registerEarlyCleaners() {
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
         ClipboardRecordsCleaner.register()
+        // APP-08：订单断网缓存（撤回同意与切换环境都删；待清理状态在缓存目录之外，启动对账重试撤回清理时一并完成）
+        OrderCacheCleaner.register()
     }
 
     /// 剪贴板（APP-07）、购买（APP-06b）与搜索 / 详情（APP-06a）的组装。
@@ -105,7 +110,7 @@ struct CouliApp: App {
         let trade = AppTrade(
             network: network, config: config, privacy: privacy, routing: routing, login: login,
             writer: clipboard.writer
-        ) { event in tracker.track(event) }
+        ) { event, attribution in tracker.track(event, attribution: attribution) }
         // 购买弹层是剪贴板的敏感浮层（G12、H06）
         trade.onSensitiveOverlay = { [weak clipboard] in clipboard?.sensitiveOverlayShown() }
         clipboard.overlaySource = { [weak trade] in trade?.sensitiveOverlay }
@@ -113,6 +118,17 @@ struct CouliApp: App {
         let search = AppSearch(network: network, config: config, privacy: privacy, routing: routing, trade: trade)
         search.clipboard = clipboard
         return (clipboard, search)
+    }
+
+    /// 订单（APP-08）：订单列表、详情与待跟单卡；商品详情 / 搜索页的待跟单卡经 AppSearch 接上（外跳回前台后拉一次）。
+    private static func makeOrders(web: AppWeb, login: AppLogin, clipboard: AppClipboard,
+                                   search: AppSearch) -> AppOrders {
+        let orders = AppOrders(network: web.network, config: web.config, routing: web.routing, login: login)
+        orders.clipboard = clipboard
+        orders.permissions = web.permissions
+        search.orders = orders
+        search.trade?.onPageForeground = { [weak orders] id in orders?.pageForeground(id) }
+        return orders
     }
 
     /// 网络核心。Debug / Staging 带启动参数 `-CouliFakeLoginServer` 时用本机假服务（URLProtocol 桩，不连任何地址；
@@ -146,6 +162,7 @@ struct CouliApp: App {
                 .environmentObject(login)
                 .environmentObject(search)
                 .environmentObject(clipboard)
+                .environmentObject(orders)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -162,6 +179,7 @@ struct CouliApp: App {
                         search.restoration.sceneEnteredBackground()
                         search.trade?.sceneChanged(active: false)
                         clipboard.sceneBackground()
+                        orders.sceneEnteredBackground()
                     case .active:
                         routing.sceneBecameActive()
                         config.enteredForeground()
@@ -169,6 +187,7 @@ struct CouliApp: App {
                         search.trade?.sceneChanged(active: true)
                         // 剪贴板：冷启动第一次与进过后台之后的那一次才判定（下拉通知等 inactive → active 不算，共性第 1 条）
                         clipboard.sceneActive()
+                        orders.sceneBecameActive()
                     case .inactive:
                         // 系统弹窗、切换 App 的过渡：同样作废续执行许可（03 §4.5「进入后台不外跳」，保守）
                         search.trade?.sceneChanged(active: false)

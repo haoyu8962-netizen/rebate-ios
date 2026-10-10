@@ -6,7 +6,7 @@
 // ClientCore（设备注册 DeviceRegistry、ConfigStore + LKG、Tracker、PermissionRequester，APP-03b）、
 // BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）、
 // TradeJump（联盟 SDK 适配层：接口 + 不可用实现，APP-06b）与 Trade（open 购买、跳转方案执行、授权、授权管理，APP-06b）、
-// Clipboard（剪贴板识别，APP-07）；
+// Clipboard（剪贴板识别，APP-07）、OrderCore（订单与待跟单卡，APP-08）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
@@ -67,6 +67,11 @@ let coreTargets: [Target] = [
     // 系统剪贴板经 App 给的 SystemClipboard 端口。
     .target(name: "Clipboard", dependencies: ["CouliNetwork"]),
     .testTarget(name: "ClipboardTests", dependencies: ["Clipboard", "CouliNetwork"]),
+    // APP-08：订单列表与详情、待跟单卡的纯逻辑（查询参数、显示规则、错误 → 动作、待跟单卡、断网缓存策略，向量 specs/order-vectors.json）
+    // 与执行器（OrderListController、PendingTrackService、OrderSessionHub、OrderCacheStore 等）。
+    // Orders 功能模块用它；待跟单卡也给商品详情 / 搜索页用。Router 只用参数校验与 JSONValue。
+    .target(name: "OrderCore", dependencies: ["CouliNetwork", "Router", generated]),
+    .testTarget(name: "OrderCoreTests", dependencies: ["OrderCore", "CouliNetwork", "Session", generated]),
 ]
 
 let placeholderTargets: [Target] = placeholderModules.map {
@@ -87,6 +92,7 @@ let coreProducts: [Product] = [
     .library(name: "TradeJump", targets: ["TradeJump"]),
     .library(name: "Trade", targets: ["Trade"]),
     .library(name: "Clipboard", targets: ["Clipboard"]),
+    .library(name: "OrderCore", targets: ["OrderCore"]),
 ]
 
 let placeholderProducts: [Product] = placeholderModules.map { .library(name: $0, targets: [$0]) }

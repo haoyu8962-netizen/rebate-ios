@@ -1,4 +1,6 @@
+import ClientCore
 import Clipboard
+import CouliNetwork
 import Foundation
 import Generated
 import Trade
@@ -62,18 +64,36 @@ final class AppJumpPorts: JumpPorts {
 
 /// link_jump 上报（经 Tracker 本地队列；上报 sink 仍为 TODO(N-20)）。业务字段来自 `LinkJumpEvents.build`；公共字段 page：购买可从详情
 /// 或搜索结果发起，三端统一记 ProductDetail（A14 同口径，TODO(N-28)），startup 同样记 ProductDetail。
+/// 购买外跳的步骤带发起时固定的请求归属（APP-08 iOS r3g NEW-06）：交给埋点队列之前与当前归属比较，变了（换号、切环境）就丢弃；
+/// 没变时 user_id 用固定归属里的账号编码，不在编码时再读当前会话。
 @MainActor
 final class AppLinkJumpSink: LinkJumpSink {
     static let page = "ProductDetail"
-    private let track: @MainActor (TrackEvent) -> Void
+    private let track: @MainActor (TrackEvent, TrackAttribution?) -> Void
+    /// 此刻的请求归属（与购买来源同一种读取，只用于比较）。
+    private let ownership: @MainActor () -> RequestOwnership
 
-    init(track: @escaping @MainActor (TrackEvent) -> Void) {
+    init(
+        track: @escaping @MainActor (TrackEvent, TrackAttribution?) -> Void,
+        ownership: @escaping @MainActor () -> RequestOwnership
+    ) {
         self.track = track
+        self.ownership = ownership
     }
 
     func report(_ fields: TradeObject) {
+        report(fields, owner: nil)
+    }
+
+    func report(_ fields: TradeObject, owner: RequestOwnership?) {
         guard let event = Self.event(fields) else { return }
-        track(event)
+        guard let owner else {
+            // 没有固定归属的事件（phase=startup）：照旧按当前会话编码
+            track(event, nil)
+            return
+        }
+        guard ownership() == owner else { return }
+        track(event, TrackAttribution(userId: owner.account))
     }
 
     /// 业务字段 → 生成函数（枚举不认识的值不上报，不臆造）。

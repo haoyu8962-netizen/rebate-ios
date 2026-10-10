@@ -29,7 +29,7 @@ public final class TrustedWebController: NSObject, ObservableObject {
 
     public let webView: WKWebView
     public private(set) var host: BridgeHost?
-    private let initialURL: URL?
+    private var initialURL: URL?
     private var started = false
     private let onOpenExternal: @MainActor (URL) -> Void
     private let onClose: @MainActor () -> Void
@@ -38,6 +38,9 @@ public final class TrustedWebController: NSObject, ObservableObject {
     private var toastTask: Task<Void, Never>?
     /// 被取消的子框架文档导航次数（诊断与测试用：证明同源子框架确实没有载入）。
     private(set) var blockedSubframeCount = 0
+
+    /// H5 路由的地址来源（APP-08 共性第 22、29 条）：首次加载与首次未加载成后的【重试】都重新取（读生效配置、生成地址）。
+    public var urlProvider: (@MainActor () -> URL?)?
 
     /// - Parameters:
     ///   - url: 要打开的地址（Router 已按 bridge_origins 放行；容器加载前再判一次）。
@@ -92,6 +95,7 @@ public final class TrustedWebController: NSObject, ObservableObject {
     public func start() {
         guard !started else { return }
         started = true
+        initialURL = urlProvider?() ?? initialURL
         guard let url = initialURL, isTrustedDocument(url), !AuthPages.isAuthPage(url.absoluteString) else {
             loadFailed = true
             return

@@ -139,13 +139,16 @@ public final class ProductDetailController: ObservableObject {
     /// 按这张卡的 product_key + item_ref 重取权威商品卡（APP-06b 共性第 7、9、17、26 条），到达时用 `merge`（此刻的卡, 重取到的卡）
     /// 决定落到页面上的卡（补齐只填未知字段且核对卡片版本；30144 整卡替换但不覆盖之后写入的购买结果）。不进加载态、不打断弹层；
     /// 失败、离开页面时什么都不做（卡片保持原样，价格未知就按未知展示）。
-    public func refetch(merge: @escaping ([String: Any], [String: Any]) -> [String: Any]) {
+    /// `expected`：发起补齐的购买尝试固定的请求归属（`PurchaseAttempt.source.request`，r3f NEW-03），交网络层只比较；换号后零发送。
+    public func refetch(
+        expected: RequestOwnership? = nil, merge: @escaping ([String: Any], [String: Any]) -> [String: Any]
+    ) {
         guard !left, !productKey.isEmpty else { return }
         patchSeq += 1
         let seq = patchSeq
         let query = itemRef.map { "item_ref=" + SearchQuery.encode($0) }
         let call = ApiCall(operationId: "getProduct", pathParams: ["product_key": productKey], query: query)
-        patchRequests.send(api, call, seq: seq) { [weak self] result in
+        patchRequests.send(api, call, seq: seq, expected: expected) { [weak self] result in
             guard let self, !left, case let .success(data, _, _) = result, let fresh = JSON.parse(data) else { return }
             updateProduct { merge($0, fresh) }
         }

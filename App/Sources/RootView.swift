@@ -168,6 +168,12 @@ struct RootView: View {
                 // 外壳就绪：启动协调随之放行启动意图、恢复待办，以及进程回收前的搜索与详情页（共性 20；R2-03 页面恢复
                 // 登记在启动协调里，等本轮强更检查有结果或等满 5 秒）。
                 routing.shellAppeared()
+                #if DEBUG
+                // 截图用（APP-08）：`-CouliStartTab orders` 冷启动直接切到订单 Tab（窄屏截图时首页布局挡住 Tab 栏的点击）
+                if UserDefaults.standard.string(forKey: "CouliStartTab") == ShellTab.orders.rawValue {
+                    _ = routing.selectTab(.orders)
+                }
+                #endif
             }
         }
     }

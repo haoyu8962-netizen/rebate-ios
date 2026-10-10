@@ -55,6 +55,10 @@ final class PrivacyController: ObservableObject {
                 _ = withdrawalRunner.run()
             }
         }
+        // 屏障先于标记（APP-08 iOS r3h NEW-05）：闸门每次写待清理标记、未落盘标记之前，同步竖起网络与设备的禁读屏障。
+        gate.raiseWithdrawalReadBarriers = {
+            MainActor.assumeIsolated { withdrawalRunner.raiseReadBarriers() }
+        }
         Self.registerInitSteps(on: gate)
         if let deviceRegistration {
             // 设备注册（APP-03b，AppNetwork.registerDevice → DeviceRegistry）：异步完成，失败按闸门的退避重试。

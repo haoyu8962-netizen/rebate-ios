@@ -17,7 +17,8 @@ public extension ApiClient {
     /// 当前会话的作用域（经过会话隔离判断：隔离中、读取失败、没有会话时为 nil）。守卫的会话状态据此区分受限会话。
     var isolatedSessionScope: String? {
         lock.withLock {
-            guard let live = readSessionLocked().live, live.access != nil else {
+            // 撤回禁读屏障竖着时不读令牌（r3f NEW-01）
+            guard !readBarrier, let live = readSessionLocked().live, live.access != nil else {
                 return nil
             }
             return live.scope ?? SessionScope.full
@@ -49,8 +50,7 @@ public extension ApiClient {
         }
         switch outcome {
         case .refreshed:
-            let scope = lock.withLock { readSessionLocked().live?.scope }
-            return scope == SessionScope.deletionOnly ? .restricted : .full
+            return recheckAfterRefresh(state, bound)
         case .transient:
             return .restricted
         case .cleared:
@@ -62,6 +62,21 @@ public extension ApiClient {
 }
 
 extension ApiClient {
+    /// 刷新完成后的读取（APP-08 iOS r3f NEW-01）：同一把锁里先比较（快照仍可信、撤回禁读屏障已放下、会话世代未变）、再读取；
+    /// 刷新等待期间撤回过同意 / 切过环境 / 换过会话的，零读取、按已失效结束。
+    func recheckAfterRefresh(_ state: NetworkContext, _ bound: UInt64) -> RestrictedRecheck {
+        let scope: String?? = lock.withLock {
+            guard credentialsReadableLocked(state), generation == bound else {
+                return nil
+            }
+            return .some(readSessionLocked().live?.scope)
+        }
+        guard let scope else {
+            return .cancelled
+        }
+        return scope == SessionScope.deletionOnly ? .restricted : .full
+    }
+
     /// 调用方持有 `lock`。会话丢失（刷新失败）的 Effect：以最近读到的强更状态为准（结算前刚读过）。
     /// 只在刚清过会话（`clearSessionLocked`）之后、同一把锁里调用：Effect 归属这次清理之后的会话世代（APP-05a 共性 26）。
     func sessionLostEffectLocked() -> ErrorEffect {

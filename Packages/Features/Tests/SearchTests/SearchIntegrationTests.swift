@@ -19,6 +19,16 @@ final class ManualSearchApi: SearchApi, @unchecked Sendable {
         }
     }
 
+    /// 带固定归属的发送（r3f NEW-03）：本假端口不做归属比较（比较由真实 ApiClient 的测试覆盖），记下给出的归属。
+    private(set) var expectedSeen: [RequestOwnership?] = []
+
+    func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?
+    ) async -> ApiResult {
+        lock.withLock { expectedSeen.append(expected) }
+        return await send(call, isValid: isValid)
+    }
+
     var count: Int {
         lock.withLock { pending.count }
     }

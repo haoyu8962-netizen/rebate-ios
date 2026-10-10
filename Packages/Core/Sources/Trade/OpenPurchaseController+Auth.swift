@@ -4,10 +4,16 @@ import Foundation
 // MARK: - 授权
 
 public extension OpenPurchaseController {
-    /// AuthSheet【去授权】。
-    func authorize() {
+    /// AuthSheet【去授权】。`ticket`：页面渲染时捕获的弹窗票据（r3g NEW-02）；不是当前弹窗（旧回调）时什么都不做。
+    func authorize(_ ticket: PurchaseDialogTicket?) {
+        guard isCurrentDialog(ticket) else { return }
         guard let context = authContext, case let .authSheet(platform, busy) = state.dialog, !busy,
               !left else { return }
+        // 先比较来源（iOS RC-06）：旧账号 / 旧环境的 AuthSheet 不拉起授权、不发授权请求
+        guard originCurrent(context.origin) else {
+            dropStaleAuth(context)
+            return
+        }
         state.dialog = .authSheet(platform: platform, busy: true)
         authPermit = true
         authGen += 1
@@ -20,45 +26,24 @@ public extension OpenPurchaseController {
     }
 
     /// 授权结果查不到时的【重试】：重新查询授权状态（listUnionBindings）；42901 禁用期间执行层直接拦下。
-    func recheckAuth() {
+    /// `ticket`：同 `authorize(_:)`（r3g NEW-02）：旧弹窗的回调不读新弹窗、不发请求。
+    func recheckAuth(_ ticket: PurchaseDialogTicket?) {
+        guard isCurrentDialog(ticket) else { return }
         guard case let .authCheckFailed(_, _, _, afterBind) = state.dialog, let context = authContext, !left,
               !gate.active
         else { return }
+        guard originCurrent(context.origin) else {
+            dropStaleAuth(context)
+            return
+        }
         hideDialog()
         queryBindings(context, afterBind: afterBind)
     }
 
-    /// 二选一的【重试】、50303 的【重试】：一次新的点击（新键）；二选一里的【重试】是用户主动授权，不受自动弹出次数限制（共性第 10 条）。
-    func retryPurchase() {
-        let dialog = state.dialog
-        hideDialog()
-        authContext = nil
-        let target = current.map(latestCard) ?? card
-        var userRetry = false
-        if case .authDeclined = dialog {
-            userRetry = true
-        }
-        buy(target, spm: spm, userAuthRetry: userRetry)
-    }
-
-    /// 【仍去购买（无返利）】：no_rebate=true 的新请求（BR-ID-18、BR-PRICE-08）。
-    func buyWithoutRebate() {
-        let dialog = state.dialog
-        hideDialog()
-        var reason: String?
-        if case let .authDeclined(_, failed) = dialog {
-            reason = failed ? TradeConstants.noRebateAuthFailed : TradeConstants.noRebateAuthDeclined
-        }
-        authContext = nil
-        guard !left, !busy, !gate.active else { return }
-        let target = current.map(latestCard) ?? card
-        // 无返利购买同样先核对平台状态与可购状态（共性第 27 条；send 里还会再核对一次）
-        guard purchasable(target, notify: true) else { return }
-        startClick(target, key: keys.start(), noRebate: true, noRebateReason: reason, userAuthRetry: false)
-    }
-
     /// 【联系客服】：统一客服出口未接入前经 Router 打开帮助中心（TODO(N-28) A03 同口径）。
-    func contactService() {
+    /// `ticket`：同 `authorize(_:)`（r3g NEW-02）：旧弹窗的回调不关新弹窗、不打开页面。
+    func contactService(_ ticket: PurchaseDialogTicket?) {
+        guard isCurrentDialog(ticket) else { return }
         hideDialog()
         env.open(route: PurchaseRoutes.help, params: [:])
     }
@@ -74,8 +59,16 @@ public extension OpenPurchaseController {
         env.open(route: PurchaseRoutes.search, params: Self.similarParams(product ?? card))
     }
 
+    /// 比价弹窗里的【看看相似商品】（r3g NEW-02）：票据是当前的比价弹窗才执行，旧回调零效果。
+    func similar(dialog ticket: PurchaseDialogTicket?) {
+        guard isCurrentDialog(ticket), state.dialog == .compareNoRebate else { return }
+        similar()
+    }
+
     /// 比价说明【查看说明】：/v1/config.help_links.price_compare（没有配置不显示入口）。
-    func viewExplanation() {
+    /// `ticket`：同 `authorize(_:)`（r3g NEW-02）。
+    func viewExplanation(_ ticket: PurchaseDialogTicket?) {
+        guard isCurrentDialog(ticket) else { return }
         guard let link = env.helpLink(PurchaseRoutes.helpPriceCompare) else { return }
         env.open(route: link.route, params: link.params)
     }
@@ -101,10 +94,12 @@ extension OpenPurchaseController {
             let outcome = await executor.execute(
                 plan: plan, platform: context.platform, installed: ports.installed(context.platform), identity: nil,
                 allowed: { [weak self] in
-                    self.map { $0.authLive(context, gen) && $0.foreground && $0.authPermit } ?? false
+                    self.map {
+                        $0.authLive(context, gen) && $0.originCurrent(context.origin) && $0.foreground && $0.authPermit
+                    } ?? false
                 }
             )
-            guard authLive(context, gen) else { return }
+            guard authCurrent(context, gen) else { return }
             let launched = outcome.run.final == JumpTypes.finalOpened || outcome.run.final == JumpTypes.finalBrowser
             if launched || outcome.stopped {
                 // 拉起了，或跳转途中进入后台：回来后由服务端确认（查到未授权即给二选一）。拉起的异步回调晚于回前台通知时
@@ -132,14 +127,14 @@ extension OpenPurchaseController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let outcome = await flow.run(platform: context.platform, initial: context.data)
-            // 等待之后复核仍属本次授权（共性第 20 条）
-            guard authLive(context, gen) else { return }
+            // 等待之后复核仍属本次授权（共性第 20 条）与固定来源（iOS RC-06）
+            guard authCurrent(context, gen) else { return }
             switch outcome {
             case .bound:
                 authorized(context, gen)
             case .cancelled:
                 clearOwnPending(context.attempt)
-                showDialog(.authDeclined(platform: context.platform, failed: false))
+                showDialog(.authDeclined(platform: context.platform, failed: false), from: context.attempt)
             case .failed:
                 authFailed(context)
             case let .requestFailed(result):
@@ -150,35 +145,17 @@ extension OpenPurchaseController {
         }
     }
 
+    /// 授权流程的绑定与 30104 恢复取授权地址都带授权上下文固定的请求归属（第五次修复 RC-06 残余）：alive 检查之后才换号的，网络层零发送。
     func taobaoFlow(_ context: AuthContext, _ gen: Int) -> TaobaoAuthFlow {
         TaobaoAuthFlow(
             calls: calls, group: Self.authGroup, webCode: webCode, baichuan: baichuan, keyGenerator: keyGenerator,
-            alive: { [weak self] in self?.authLive(context, gen) ?? false },
+            expected: context.request,
+            alive: { [weak self] in
+                self.map { $0.authLive(context, gen) && $0.originCurrent(context.origin) } ?? false
+            },
             installed: { [weak self] in self?.ports.installed($0) ?? TradeConstants.installedUnknown },
             relaunchAllowed: { [weak self] in self.map { $0.authPermit && $0.foreground } ?? false }
         )
-    }
-
-    /// 授权归属仍有效（共性第 20 条）：页面没离开、世代没变、授权上下文仍是它、购买尝试仍是当前的。
-    func authLive(_ context: AuthContext, _ gen: Int) -> Bool {
-        !left && gen == authGen && authContext === context && current === context.attempt
-    }
-
-    /// 作废旧的授权归属（共性第 20 条）：新的 open 请求发出前调用。世代加 1（在途查询、授权流程的结果与延迟恢复一律丢弃），清掉授权
-    /// 上下文、「等授权回来」，以及属于旧授权上下文的授权待办（之后不会被旧查询自动执行）；先作废归属再取消在途授权请求。
-    func invalidateAuth() {
-        authGen += 1
-        let old = authContext
-        authContext = nil
-        awaitingAuthReturn = false
-        calls.cancel(group: Self.authGroup)
-        if let old {
-            dropAuthPending(old)
-        }
-        if let resume = authResume {
-            dropAuthPending(resume)
-        }
-        authResume = nil
     }
 
     /// 淘宝绑定（或 30104 后重新取授权地址）没有拿到结果：按码处理，限流、服务端故障不当成用户没授权（共性第 19 条）。
@@ -188,12 +165,18 @@ extension OpenPurchaseController {
             if code == 30151 || code == 30153 {
                 clearOwnPending(context.attempt)
                 let outcome = OpenErrorAction.map(code: code, data: object)
-                showDialog(.notice(textKey: outcome.textKey, traceId: nil, noRebate: true, contact: true, retry: false))
+                showDialog(
+                    .notice(textKey: outcome.textKey, traceId: nil, noRebate: true, contact: true, retry: false),
+                    from: context.attempt
+                )
                 return
             }
             if code == 30101 || code == 30102, TJSON.string(object["reason"]) == TradeConstants.authUnavailable {
                 clearOwnPending(context.attempt)
-                showDialog(.authUnavailable(textKey: OpenErrorAction.map(code: code, data: object).textKey))
+                showDialog(
+                    .authUnavailable(textKey: OpenErrorAction.map(code: code, data: object).textKey),
+                    from: context.attempt
+                )
                 return
             }
         }
@@ -220,25 +203,34 @@ extension OpenPurchaseController {
             trace = serverError ? traceId : nil
         }
         authContext = context
-        showDialog(.authCheckFailed(platform: context.platform, textKey: textKey, traceId: trace, afterBind: afterBind))
+        showDialog(
+            .authCheckFailed(platform: context.platform, textKey: textKey, traceId: trace, afterBind: afterBind),
+            from: context.attempt
+        )
     }
 
     /// 查询授权状态（listUnionBindings）：查询成功且该平台 active → 自动执行一次 open（新键）；查询成功但没有授权 → 删除待办，给二选一
     /// （拼多多回来：未完成授权；淘宝绑定之后：授权失败）；请求失败 → `authCheckFailed`（共性第 19 条）。
     func queryBindings(_ context: AuthContext, afterBind: Bool) {
+        // 发授权状态查询之前先比较来源（iOS RC-06）
+        guard originCurrent(context.origin) else {
+            dropStaleAuth(context)
+            return
+        }
         // 每次查询一个新世代：同一授权上下文的旧查询（重试之前的）也作废（共性第 20 条）
         authGen += 1
         let gen = authGen
         calls.cancel(group: Self.authGroup)
         Task { @MainActor [weak self] in
             guard let self else { return }
+            // 带授权上下文固定的请求归属：查询排队期间换号由网络层比较拒绝（第五次修复 RC-06 残余）
             let result = await calls.send(
                 ApiCall(operationId: TradeOperations.listUnionBindings),
-                group: Self.authGroup
+                group: Self.authGroup, expected: context.request
             )
             // 返回时核对仍属当前购买尝试与本次查询：新点击之后到达的旧查询只丢弃，不清待办、不关弹窗、不自动 open。
             // 别的页面（同一份待办记录）之后登记的待办不归本页：下面的清除、消费都先核对归属（共性第 44 条）
-            guard authLive(context, gen) else { return }
+            guard authCurrent(context, gen) else { return }
             guard case let .success(data, _, _) = result else {
                 authCheckFailed(context, result, afterBind: afterBind)
                 return
@@ -253,7 +245,7 @@ extension OpenPurchaseController {
                 authFailed(context)
             } else {
                 clearOwnPending(context.attempt)
-                showDialog(.authDeclined(platform: context.platform, failed: false))
+                showDialog(.authDeclined(platform: context.platform, failed: false), from: context.attempt)
             }
         }
     }
@@ -264,7 +256,7 @@ extension OpenPurchaseController {
     /// 有效期内（BR-ID-10，10 分钟）且仍是本页这次尝试登记的（没被别的页面的新待办取代，共性第 44 条），通过后才消费一次；过期或被
     /// 取代即放弃（过期的由待办记录自己删除，被取代的是别人的不动）。恢复用原点击的卡（报价基准与 link_id，共性第 24 条）。
     func authorized(_ context: AuthContext, _ gen: Int) {
-        guard authLive(context, gen) else { return }
+        guard authCurrent(context, gen) else { return }
         authContext = nil
         authGen += 1
         let resumeGen = authGen
@@ -291,13 +283,17 @@ extension OpenPurchaseController {
             pending.clear()
             // 授权后再发是新请求、新键（BR-ID-10 细则）；平台状态在 send 里再核对（共性第 27 条）
             guard purchasable(target, notify: true) else { return }
-            startClick(target, key: keys.resendAfterAuth(), noRebate: false, noRebateReason: nil, userAuthRetry: false)
+            // 沿用授权上下文（即原尝试）的固定来源与请求归属，不在执行时重新读当前会话（APP-09 共性第 65 条）
+            startClick(
+                target, key: keys.resendAfterAuth(), noRebate: false, noRebateReason: nil, userAuthRetry: false,
+                source: context.attempt.source
+            )
         }
     }
 
     func authFailed(_ context: AuthContext) {
         clearOwnPending(context.attempt)
-        showDialog(.authDeclined(platform: context.platform, failed: true))
+        showDialog(.authDeclined(platform: context.platform, failed: true), from: context.attempt)
     }
 }
 

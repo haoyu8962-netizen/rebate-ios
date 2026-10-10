@@ -112,6 +112,11 @@ extension ApiClient {
             if generation == expectedGeneration {
                 return (.signedOut, clearSessionLocked())
             }
+            // 撤回禁读屏障竖着（撤回同意 / 切换环境的清理期间，r3f NEW-01）：不读令牌。此时不可能已有新登录（登录保存要求凭据可读），
+            // 原会话随撤回清理删除，按已清除收尾。
+            if readBarrier {
+                return (.alreadyCleared, false)
+            }
             return readSessionLocked() == SessionRead.none ? (.alreadyCleared, false) : (.superseded, false)
         }
         if retry {

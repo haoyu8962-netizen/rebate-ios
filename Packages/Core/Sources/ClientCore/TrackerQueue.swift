@@ -197,9 +197,15 @@ public final class TrackerQueue {
     /// 采集一条事件；返回是否接受（未同意、基本模式、队列已满、条件必填字段缺失时不接受）。
     @discardableResult
     public func track(event: TrackEvent) -> Bool {
+        track(event: event, attribution: nil)
+    }
+
+    /// 采集一条带固定账号归属的事件（APP-08 iOS r3g NEW-06）：`attribution` 给出时 user_id 取它，不读当前会话；nil 同 `track(event:)`。
+    @discardableResult
+    public func track(event: TrackEvent, attribution: TrackAttribution?) -> Bool {
         guard settlePendingClear(), privacy == Self.consented, event.missingRequired.isEmpty,
               events.count < Self.capacity,
-              let packet = encode(event)
+              let packet = encode(event, attribution: attribution)
         else {
             return false
         }
@@ -309,7 +315,7 @@ public final class TrackerQueue {
         return (try? writeFile(text)) != nil
     }
 
-    private func encode(_ event: TrackEvent) -> String? {
+    private func encode(_ event: TrackEvent, attribution: TrackAttribution?) -> String? {
         var object: [String: Any] = [:]
         for (key, value) in event.fields {
             switch value {
@@ -325,7 +331,9 @@ public final class TrackerQueue {
         if let device = currentDeviceId(), !device.isEmpty {
             object["device_id"] = device
         }
-        if let user = userId(), !user.isEmpty {
+        // 带固定归属的事件只用发起时的账号（r3g NEW-06），不读当前会话
+        let user = attribution.map(\.userId) ?? userId()
+        if let user, !user.isEmpty {
             object["user_id"] = user
         }
         object["platform"] = platform

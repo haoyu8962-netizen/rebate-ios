@@ -70,22 +70,6 @@ extension ApiClient {
         }
     }
 
-    /// 调用归属在任何屏障等待之前绑定（lessons 30）：有令牌时记下会话世代与账号；之后会话变了就结束旧调用。
-    func bindOwnership(_ state: NetworkContext, _ options: inout RunOptions) {
-        guard options.boundGeneration == nil, state.privacy == PrivacyRaw.full, state.credentialsReadable else {
-            return
-        }
-        let (read, session) = lock.withLock { (readSessionLocked(), generation) }
-        let live = read.live
-        guard live?.access != nil else {
-            return
-        }
-        options.boundGeneration = session
-        if options.boundAccount == nil {
-            options.boundAccount = live?.account.flatMap { $0.isEmpty ? nil : $0 }
-        }
-    }
-
     /// 每次实际发送前重新取状态、过屏障、重新校验与组头签名；读接口超时 / 断连按策略退避重试。
     func attempt(_ call: ApiCall, _ operation: ApiOperation, _ options: inout RunOptions) async -> Attempted {
         let retry = RetryPolicy.forOperation(operation)
@@ -96,8 +80,8 @@ extension ApiClient {
                 return .finished(rejected(LocalRejectReason.callCancelled, options))
             }
             let state = await readContext()
-            bindOwnership(state, &options)
-            if let failure = await restrictedBarrierIfNeeded(state, operation, options) {
+            // 固定归属比较（RC-01）→ 绑定归属 → 受限会话屏障
+            if let failure = await bindAndPassBarrier(state, operation, &options) {
                 if case let .localReject(reason) = failure {
                     return .finished(rejected(reason, options))
                 }
@@ -114,9 +98,9 @@ extension ApiClient {
             case let .ready(value):
                 ready = value
             }
-            guard let outcome = await sendOnce(ready, timeoutMillis: retry.timeoutMillis, options) else {
-                // 登记时就已作废、请求没有写出：按本地结束（call_cancelled），与「已写出、结果未知」分开（APP-05a 共性 22）。
-                return .finished(rejected(LocalRejectReason.callCancelled, options))
+            let sent = await sendOnce(ready, timeoutMillis: retry.timeoutMillis, options)
+            guard case let .written(outcome) = sent else {
+                return .finished(rejected(sent.notWrittenReason, options))
             }
             if case let .failure(kind) = outcome,
                kind == HttpTransport.kindTimeout || kind == HttpTransport.kindDisconnect,
@@ -140,9 +124,16 @@ extension ApiClient {
         _ options: inout RunOptions,
         admitted: inout Bool
     ) -> Prepared {
-        let prepared = prepare(call, operation, state)
+        // 发送前闸门（APP-08 第 13、27 条）：每次组请求前先拦一次，不进归属；传输层写出前的最终准入另见 sendOnce（第 32 条）。
+        if let allowed = options.sendAllowed, !allowed() {
+            return .rejected(LocalRejectReason.sendBlocked)
+        }
+        let prepared = prepare(call, operation, state, options)
         guard case let .ready(ready) = prepared else {
             return prepared
+        }
+        if let reason = expectedMismatch(ready, options) {
+            return .rejected(reason)
         }
         // 会话世代：带过令牌的调用之后只在同一世代里重试、重放。
         if let bound = options.boundGeneration {
