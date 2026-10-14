@@ -212,15 +212,22 @@ public enum OpenErrorAction {
     /// 1xxxx / 3xxxx 购买业务码（登录、授权、渠道受阻、商品状态）。其余码为 nil。
     private static func purchaseOutcome(code: Int, reason: String?, key: String?) -> OpenErrorOutcome? {
         let simple: [Int: String] = [
-            10001: OpenErrorActions.login, 30111: OpenErrorActions.authJump, 30141: OpenErrorActions.error,
+            10001: OpenErrorActions.login, 30141: OpenErrorActions.error,
             30143: OpenErrorActions.research, 30144: OpenErrorActions.refetch,
         ]
         if let action = simple[code] {
             return OpenErrorOutcome(actionRaw: action, textKey: key, showTrace6: false)
         }
         switch code {
-        case 30101, 30102:
-            let action = reason == TradeConstants.authUnavailable ? OpenErrorActions.notice : OpenErrorActions.authSheet
+        case 30101, 30102, 30111:
+            // 30101 / 30102 的 auth_unavailable 只提示（BR-ID-24）；生成表按 reason 规定不能补办后重试的（sharer_auth_invalid=never，
+            // CT-LOCK-01）同样只提示：不弹授权、不登记待办、不重放、不给无返利购买（契约数据驱动，与鸿蒙 / Android 同口径；
+            // link_landing.invalid 专门展示归 APP-13b）。表里没有的 reason 与无 reason 走原授权动作
+            let promptOnly = (code != 30111 && reason == TradeConstants.authUnavailable)
+                || ErrorActionMapper.promptOnlyReason(code: code, reason: reason)
+            let action = promptOnly
+                ? OpenErrorActions.notice
+                : (code == 30111 ? OpenErrorActions.authJump : OpenErrorActions.authSheet)
             return OpenErrorOutcome(actionRaw: action, textKey: key, showTrace6: false)
         case 30103, 30151, 30153:
             return OpenErrorOutcome(

@@ -155,3 +155,32 @@ public enum AuthLevel: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.C
         self = AuthLevel(rawValue: rawValue) ?? .unknown
     }
 }
+
+/// 契约枚举 `platform_icon_key`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum PlatformIconKey: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case taobao
+    case tmall
+    case jd
+    case pdd
+    case wechat
+    case wechatPay = "wechat_pay"
+    case alipay
+    case wecom
+    case unknown = "__unknown__"
+
+    public static let allCases: [PlatformIconKey] = [
+        .taobao,
+        .tmall,
+        .jd,
+        .pdd,
+        .wechat,
+        .wechatPay,
+        .alipay,
+        .wecom,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = PlatformIconKey(rawValue: rawValue) ?? .unknown
+    }
+}

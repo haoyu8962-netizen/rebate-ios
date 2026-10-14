@@ -56,6 +56,16 @@ public enum ErrorCodes {
             retryKindByReason: [:],
             isDeprecated: false, isP1: false
         ),
+        10008: ErrorCodeInfo(
+            code: 10008, http: 401, retryKind: .never,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
+        10009: ErrorCodeInfo(
+            code: 10009, http: 403, retryKind: .later,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
         10401: ErrorCodeInfo(
             code: 10401, http: 401, retryKind: .never,
             retryKindByReason: [:],
@@ -123,7 +133,7 @@ public enum ErrorCodes {
         ),
         30102: ErrorCodeInfo(
             code: 30102, http: 422, retryKind: .afterAction,
-            retryKindByReason: ["auth_unavailable": .later],
+            retryKindByReason: ["auth_unavailable": .later, "sharer_auth_invalid": .never],
             isDeprecated: false, isP1: false
         ),
         30103: ErrorCodeInfo(
@@ -138,7 +148,7 @@ public enum ErrorCodes {
         ),
         30111: ErrorCodeInfo(
             code: 30111, http: 422, retryKind: .afterAction,
-            retryKindByReason: [:],
+            retryKindByReason: ["sharer_auth_invalid": .never],
             isDeprecated: false, isP1: false
         ),
         30121: ErrorCodeInfo(

@@ -4,10 +4,14 @@
 #   tools/ci/verify.sh          全部步骤
 #   tools/ci/verify.sh --fast   只跑到生成物检查、xcodegen 与一次 Debug 构建
 #
+# 第 1 步（CT-LOCK-01）：快照与 contract.lock 一致——按锁定提交重建逐字节比较 + lock files 哈希（tools/contracts/sync.sh --check）；
+# 取不到 rebate-platform / couli 即失败，不退化成只比哈希（只比哈希用 tools/contracts/sync.sh --check-hashes-only 单独跑）。
+#
 # 所有构建命令都不带额外参数（不带 -xcconfig、不覆盖编译条件），与开发者在命令行或 Xcode 里选配置得到的一样。
 #
 # 环境变量（可选）：
 #   COULI_DERIVED_DATA     DerivedData 路径。默认：worktree 布局下用 ../.dd/<目录名>，否则用 ./DerivedData
+#   REBATE_PLATFORM_DIR / COULI_DIR  上游契约仓库（第 1 步用）。默认按 lock 的相对路径推导，见 check_lock
 #   COULI_SIM_DESTINATION  测试用模拟器，如 "platform=iOS Simulator,id=<UDID>"；
 #                          默认自动选已有的 iOS 26.x iPhone（优先 iPhone 17），不创建、不抹掉模拟器
 # 兼容 macOS 自带 bash 3.2。
@@ -356,6 +360,58 @@ xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
 
+# CT-LOCK-01：contract.lock 与快照一致——必须按锁定提交重建、逐字节比较，并核对 lock files 哈希（tools/contracts/sync.sh --check）。
+# 取不到上游仓库或其中没有锁定提交就失败，不退化成只比哈希（与鸿蒙 / Android CT-LOCK-01 同口径）。上游仓库按顺序推导：
+#   1. 环境变量 REBATE_PLATFORM_DIR / COULI_DIR（设了就只用它，不对则失败）；
+#   2. lock 里的相对路径，相对本仓库根；
+#   3. 同一相对路径，相对主检出（git worktree 的公共 .git 所在目录；worktree 下 2 不成立时用它）；
+#   4. 本机固定位置 /Users/zhixing/我的项目/rebate-platform、/Users/zhixing/我的项目/couli。
+lock_field() {
+    python3 -c 'import json,sys
+n=json.load(open(sys.argv[1],encoding="utf-8"))
+for p in sys.argv[2].split("."): n=n[p]
+print(n)' "$ROOT/contract.lock" "$1"
+}
+
+is_git_repo() {
+    [ -n "$1" ] && [ -d "$1" ] && git -C "$1" rev-parse --git-dir >/dev/null 2>&1
+}
+
+# $1 环境变量值 $2 lock 相对路径 $3 本机固定位置；输出仓库绝对路径，取不到输出空串
+resolve_upstream() {
+    local override="$1" rel="$2" fixed="$3" main_root="" cand=""
+    if [ -n "$override" ]; then
+        if is_git_repo "$override"; then (cd "$override" && pwd); fi
+        return 0
+    fi
+    main_root="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    main_root="${main_root%/.git}"
+    for cand in "$ROOT/$rel" "${main_root:+$main_root/$rel}" "$fixed"; do
+        if is_git_repo "$cand"; then
+            (cd "$cand" && pwd)
+            return 0
+        fi
+    done
+    return 0
+}
+
+check_lock() {
+    local rp_dir dt_dir
+    rp_dir="$(resolve_upstream "${REBATE_PLATFORM_DIR:-}" "$(lock_field rebate_platform.repo)" "/Users/zhixing/我的项目/rebate-platform")"
+    dt_dir="$(resolve_upstream "${COULI_DIR:-}" "$(lock_field design_tokens.repo)" "/Users/zhixing/我的项目/couli")"
+    if [ -z "$rp_dir" ] || [ -z "$dt_dir" ]; then
+        echo "取不到上游仓库（rebate-platform：${rp_dir:-未找到}；couli：${dt_dir:-未找到}），无法按锁定提交核对快照。" >&2
+        echo "请设置 REBATE_PLATFORM_DIR=/path/to/rebate-platform COULI_DIR=/path/to/couli 后重跑；" >&2
+        echo "只想核对 lock files 哈希可单独运行 tools/contracts/sync.sh --check-hashes-only（不算完整一致性检查）。" >&2
+        return 1
+    fi
+    echo "rebate-platform：$rp_dir"
+    echo "couli：$dt_dir"
+    REBATE_PLATFORM_DIR="$rp_dir" COULI_DIR="$dt_dir" "$ROOT/tools/contracts/sync.sh" --check || return 1
+    echo "锁定提交 $(lock_field rebate_platform.commit | cut -c1-12) 重建逐字节相同、files 哈希相同"
+}
+
+step "快照与 contract.lock 一致（按锁定提交重建核对）" check_lock
 step "swiftformat --lint" swiftformat --lint .
 step "swiftlint --strict" swiftlint lint --strict --no-cache
 step "lint 违反样例必须被拦" lint_fixtures

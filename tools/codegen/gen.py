@@ -1072,6 +1072,8 @@ OPERATION_EXTENSIONS = {
     "x-auth", "x-signed", "x-idempotent", "x-step-up", "x-error-codes", "x-session-scopes",
     "x-min-version-gate", "x-implementation",
 }
+# CT-LOCK-01：后台接口（/admin/v1/*，x-auth admin / super）不给 App 生成，登记表只收客户端路径（与鸿蒙 / Android 同口径）。
+EXCLUDED_PATH_PREFIXES = ("/admin/",)
 
 
 def gen_api_operations(out: dict[str, str]):
@@ -1084,6 +1086,8 @@ def gen_api_operations(out: dict[str, str]):
     for path, item in paths.items():
         if not isinstance(item, dict):
             raise GenError(f"openapi.json paths[{path!r}] 应为对象")
+        if path.startswith(EXCLUDED_PATH_PREFIXES):
+            continue
         for method in HTTP_METHODS:
             op = item.get(method)
             if op is None:
@@ -1473,7 +1477,9 @@ def gen_device_hash_seeds(out: dict[str, str]):
 
 
 # 包内默认配置里去掉的地址类字段：示例里是 example.test 占位地址，不能进包（Release 不含非 prod 地址）。
-DEFAULT_CONFIG_DROPPED_KEYS = ["h5_base_url", "share_domains", "kf"]
+# CT-LOCK-01：platform_icons（CT-17f，替换图地址与摘要）同样不进包——包内默认配置没有替换图，客户端显示包内平台标识；
+# 下发接入归 F-X-05。
+DEFAULT_CONFIG_DROPPED_KEYS = ["h5_base_url", "share_domains", "kf", "platform_icons"]
 
 
 def gen_default_config(out: dict[str, str]):

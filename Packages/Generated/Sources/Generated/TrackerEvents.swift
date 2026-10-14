@@ -40,7 +40,7 @@ public struct TrackEvent: Swift.Sendable, Swift.Equatable {
 /// events.yaml 的事件构造函数。
 public enum TrackerEvents {
     /// events.yaml 的 version。
-    public static let version = "1"
+    public static let version = "2"
     /// 公共字段名（契约顺序）。
     public static let commonFields: [Swift.String] = ["event_id", "name", "client_at", "session_id", "device_id", "user_id", "platform", "app_version", "channel", "page", "spm", "trace_id"]
     /// 必填的公共字段名。
@@ -80,6 +80,10 @@ public enum TrackerEvents {
             case sdkInitFailed = "sdk_init_failed"
             case copied = "copied"
         }
+        public enum SdkOpenByValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
+            case url = "url"
+            case code = "code"
+        }
         public enum InstalledValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
             case `true` = "true"
             case `false` = "false"
@@ -96,6 +100,8 @@ public enum TrackerEvents {
         unionPlatform: LinkJump.UnionPlatformValue,
         step: LinkJump.StepValue,
         result: LinkJump.ResultValue,
+        sdkOpenBy: LinkJump.SdkOpenByValue? = nil,
+        sdkErrorCode: Swift.String? = nil,
         durationMs: Swift.Int? = nil,
         installed: LinkJump.InstalledValue? = nil,
         spm: Swift.String? = nil,
@@ -112,6 +118,12 @@ public enum TrackerEvents {
         fields["union_platform"] = .string(unionPlatform.rawValue)
         fields["step"] = .string(step.rawValue)
         fields["result"] = .string(result.rawValue)
+        if let sdkOpenByValue = sdkOpenBy {
+            fields["sdk_open_by"] = .string(sdkOpenByValue.rawValue)
+        }
+        if let sdkErrorCodeValue = sdkErrorCode {
+            fields["sdk_error_code"] = .string(sdkErrorCodeValue)
+        }
         if let durationMsValue = durationMs {
             fields["duration_ms"] = .integer(durationMsValue)
         }

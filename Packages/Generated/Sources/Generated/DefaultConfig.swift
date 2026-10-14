@@ -1,6 +1,6 @@
 // 生成物，禁止手改；来源 contract.lock
 // 快照：contracts/openapi.yaml GET /v1/config 200 响应示例的 data（03 §4.3 包内 default_config.json）。
-// 去掉了地址类字段（h5_base_url、share_domains、kf）并清空 link_patterns.rules：示例里是
+// 去掉了地址类字段（h5_base_url、share_domains、kf、platform_icons）并清空 link_patterns.rules：示例里是
 // example.test 占位地址，不能进包。
 // TODO(N-21): 发布构建时改为从生产配置当时的值生成（03 §4.3：features.search_status 等取生产值）。
 

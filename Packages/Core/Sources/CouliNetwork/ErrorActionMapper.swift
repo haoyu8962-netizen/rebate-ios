@@ -13,7 +13,7 @@ import Session
 /// - 10405 进强更不重放；本机版本不低于 data.min_supported_version（或它为空）而会话是 deletion_only 时只刷新；
 ///   reason=no_account 提示先更新。42901 按 Retry-After（非负整数秒；缺省或非法一律 5 秒）禁用按钮。
 /// - 带 data.reason 的取 error.<code>.<reason>，字典没有回落 error.<code>；表外码与废弃码：5xxxx 通用错误态附 trace6，
-///   其余用服务端 msg（fallbackMessage）。
+///   其余用服务端 msg（fallbackMessage）；表内无专门分支、字典也没有文案键的 1xxxx（10008 / 10009）同样回落 msg（CT-LOCK-01）。
 public enum ErrorActionMapper {
     private static let loginRoute = "Login"
     /// 20004 后回到登录页的第三方登录接口（其余，如二次验证，回到验证面板）。
@@ -205,11 +205,13 @@ public enum ErrorActionMapper {
     }
 
     /// 30101 / 30102 / 30111：平台授权（新键）；step-up 操作只引导；auth_unavailable 只提示。
+    /// 生成表按 data.reason 给的重试类别不是 after_action（如 sharer_auth_invalid=never，CT-LOCK-01）→ 只提示，
+    /// 不弹授权、不登记待办、不重放（契约数据驱动，与鸿蒙 / Android 同口径；link_landing.invalid 专门展示归 APP-13b）。
     private static func authorizeEffect(_ context: MappingContext) -> ErrorEffect? {
         guard authorizeCodes.contains(context.code) else {
             return nil
         }
-        if context.reason == "auth_unavailable" {
+        if context.reason == "auth_unavailable" || promptOnlyReason(code: context.code, reason: context.reason) {
             return context.effect(.toast)
         }
         return context.stepUpOperation
@@ -234,7 +236,25 @@ public enum ErrorActionMapper {
         if disableCodes.contains(code) {
             return context.effect(.disableButton)
         }
-        return context.isServerError ? context.withTrace(context.effect(.genericError)) : context.effect(.toast)
+        if context.isServerError {
+            return context.withTrace(context.effect(.genericError))
+        }
+        if (10000...19999).contains(code), context.textKey == nil {
+            // CT-LOCK-01：表内但用户侧字典没有文案键的 1xxxx（目前只有只出现在 /admin/v1 的 10008 / 10009）与表外 1xxxx
+            // 同一回落：用服务端 msg，不写专门分流（与鸿蒙 / Android 同口径）
+            return context.effect(.fallbackMessage, key: .some(nil))
+        }
+        return context.effect(.toast)
+    }
+
+    /// 生成错误码表按 `reason` 规定的重试类别（retry_kind_by_reason）存在且不是 after_action：这个 reason 不能靠补办前置动作后
+    /// 重试，授权类码只提示（30102 / 30111 的 sharer_auth_invalid=never；30101 / 30102 的 auth_unavailable=later 原本就只提示）。
+    /// 没有 reason 或表里没有这个 reason 时为 false（走码本身的动作）。
+    public static func promptOnlyReason(code: Int, reason: String?) -> Bool {
+        guard let reason, let kind = ErrorCodes.info(code)?.retryKindByReason[reason] else {
+            return false
+        }
+        return kind != .afterAction
     }
 
     /// 文案键：error.<code>.<reason> → error.<code> → nil（BR-TEXT-14）。

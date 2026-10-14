@@ -3,8 +3,12 @@
 /// 全部契约枚举：键为契约原名（蛇形），值为契约顺序的全部 rawValue（不含 unknown）。
 public enum ContractEnums {
     public static let all: [Swift.String: [Swift.String]] = [
+        "admin_account_status": ["active", "disabled"],
         "admin_adjust_sub_type": ["RESTORE", "RECON_FIX", "PAYOUT_RECOVERY", "ACCOUNT_CLOSED", "OTHER"],
-        "admin_permission": ["user.list", "user.lookup", "pii.reveal_phone", "pii.reveal_identity", "fund.view", "audit.view_all", "export", "content.page", "content.pool", "content.article", "content.agreement", "content.poster", "content.app_version", "content.fund_terms", "config.general", "config.risk", "config.business", "switch.all", "switch.payout", "risk.freeze", "risk.ban", "risk.blocklist", "risk.appeal", "union.binding_reset", "union.binding_disable", "union.account_auth", "union.pid", "user.level", "user.inviter", "user.realname_fix", "user.phone_change", "user.data_export", "order.view", "order.claim", "order.assign", "order.hold", "order.restore", "withdraw.review", "payout.execute", "payout.manual_entry", "settle.bill", "settle.statement_upload", "fund.adjust", "fund.writeoff", "fund.settle_adjust", "fund.recon", "fund.cash_entry", "agent.trace", "agent.report"],
+        "admin_auth_level": ["none", "admin", "super"],
+        "admin_login_step": ["totp", "change_password", "bind_totp"],
+        "admin_permission": ["user.list", "user.lookup", "pii.reveal_phone", "pii.reveal_identity", "fund.view", "audit.view_all", "export", "content.page", "content.pool", "content.article", "content.agreement", "content.poster", "content.app_version", "content.fund_terms", "content.platform_icon", "config.general", "config.risk", "config.business", "switch.all", "switch.payout", "switch.pay", "risk.freeze", "risk.ban", "risk.blocklist", "risk.appeal", "union.binding_reset", "union.binding_disable", "union.account_auth", "union.pid", "user.level", "user.inviter", "user.realname_fix", "user.phone_change", "user.data_export", "order.view", "order.claim", "order.assign", "order.hold", "order.restore", "withdraw.review", "payout.execute", "pay.view", "pay.refund", "pay.resolve", "payout.manual_entry", "settle.bill", "settle.statement_upload", "fund.adjust", "fund.writeoff", "fund.settle_adjust", "fund.recon", "fund.cash_entry", "agent.trace", "agent.report"],
+        "admin_step_up_tier": ["totp", "sms"],
         "agent_card_type": ["product_list", "rebate_quote", "order_status", "claim_draft", "handoff", "auth_required", "notice", "rule_ref", "page_guide", "earnings_summary"],
         "agent_finish_reason": ["stop", "cancelled", "limit", "budget", "error", "auth_required", "safety", "fallback", "timeout"],
         "agent_intent": ["find_by_link", "search", "refine", "order_query", "rule_qa", "handoff", "clarify", "out_of_scope", "page_guide", "earnings_query"],
@@ -68,6 +72,7 @@ public enum ContractEnums {
         "payout_method": ["alipay", "bank_card", "wechat"],
         "pid_scene": ["self_buy", "agent", "share", "taolijin", "fallback", "query"],
         "platform": ["taobao", "jd", "pdd", "meituan", "vip", "douyin", "eleme", "kuaishou", "suning"],
+        "platform_icon_key": ["taobao", "tmall", "jd", "pdd", "wechat", "wechat_pay", "alipay", "wecom"],
         "platform_search_status": ["on", "off"],
         "platform_status": ["DEPOSIT_PAID", "PAID", "RECEIVED", "SETTLED", "INVALID"],
         "realname_status": ["none", "verified", "failed"],

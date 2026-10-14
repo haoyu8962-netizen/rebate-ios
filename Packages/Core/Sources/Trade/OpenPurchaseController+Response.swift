@@ -106,7 +106,10 @@ extension OpenPurchaseController {
         case OpenErrorActions.authSheet, OpenErrorActions.authJump:
             authRequired(code: code, data: data, attempt: attempt, origin: origin)
         case OpenErrorActions.notice:
-            notice(code: code, outcome: outcome, traceId: outcome.showTrace6 ? traceId : nil, attempt: attempt)
+            notice(
+                code: code, reason: TJSON.string(data["reason"]), outcome: outcome,
+                traceId: outcome.showTrace6 ? traceId : nil, attempt: attempt
+            )
         case OpenErrorActions.error:
             blocked(code: code, outcome: outcome, traceId: traceId, attempt: attempt)
         case OpenErrorActions.retryAfter:
@@ -156,9 +159,11 @@ extension OpenPurchaseController {
     }
 
     /// 提示类：auth_unavailable 只提示；50301 按平台记下（卡片映射隐藏返利、按钮禁用，新配置到达即被覆盖，共性第 5、6 条）；
-    /// 30103 / 30121 / 30151 / 30153 带按钮。
-    private func notice(code: Int, outcome: OpenErrorOutcome, traceId: String?, attempt: PurchaseAttempt) {
-        if code == 30101 || code == 30102 {
+    /// 30103 / 30121 / 30151 / 30153 带按钮。生成表规定只提示的其他授权码 reason（sharer_auth_invalid，CT-LOCK-01）落到末尾 Toast。
+    private func notice(
+        code: Int, reason: String?, outcome: OpenErrorOutcome, traceId: String?, attempt: PurchaseAttempt
+    ) {
+        if code == 30101 || code == 30102, reason == TradeConstants.authUnavailable {
             showDialog(.authUnavailable(textKey: outcome.textKey), from: attempt)
         } else if code == 50301 {
             let status = outcome.silent ? TradeConstants.notLaunched : TradeConstants.maintenance

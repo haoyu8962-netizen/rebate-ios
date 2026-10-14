@@ -17,11 +17,13 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     case contentPoster = "content.poster"
     case contentAppVersion = "content.app_version"
     case contentFundTerms = "content.fund_terms"
+    case contentPlatformIcon = "content.platform_icon"
     case configGeneral = "config.general"
     case configRisk = "config.risk"
     case configBusiness = "config.business"
     case switchAll = "switch.all"
     case switchPayout = "switch.payout"
+    case switchPay = "switch.pay"
     case riskFreeze = "risk.freeze"
     case riskBan = "risk.ban"
     case riskBlocklist = "risk.blocklist"
@@ -42,6 +44,9 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     case orderRestore = "order.restore"
     case withdrawReview = "withdraw.review"
     case payoutExecute = "payout.execute"
+    case payView = "pay.view"
+    case payRefund = "pay.refund"
+    case payResolve = "pay.resolve"
     case payoutManualEntry = "payout.manual_entry"
     case settleBill = "settle.bill"
     case settleStatementUpload = "settle.statement_upload"
@@ -69,11 +74,13 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
         .contentPoster,
         .contentAppVersion,
         .contentFundTerms,
+        .contentPlatformIcon,
         .configGeneral,
         .configRisk,
         .configBusiness,
         .switchAll,
         .switchPayout,
+        .switchPay,
         .riskFreeze,
         .riskBan,
         .riskBlocklist,
@@ -94,6 +101,9 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
         .orderRestore,
         .withdrawReview,
         .payoutExecute,
+        .payView,
+        .payRefund,
+        .payResolve,
         .payoutManualEntry,
         .settleBill,
         .settleStatementUpload,
@@ -109,5 +119,77 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     public init(from decoder: any Swift.Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
         self = AdminPermission(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_step_up_tier`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminStepUpTier: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case totp
+    case sms
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminStepUpTier] = [
+        .totp,
+        .sms,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminStepUpTier(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_login_step`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminLoginStep: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case totp
+    case changePassword = "change_password"
+    case bindTotp = "bind_totp"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminLoginStep] = [
+        .totp,
+        .changePassword,
+        .bindTotp,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminLoginStep(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_account_status`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAccountStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case active
+    case disabled
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAccountStatus] = [
+        .active,
+        .disabled,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAccountStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_auth_level`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAuthLevel: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case none
+    case admin
+    case `super`
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAuthLevel] = [
+        .none,
+        .admin,
+        .`super`,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAuthLevel(rawValue: rawValue) ?? .unknown
     }
 }
