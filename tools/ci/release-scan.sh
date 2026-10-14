@@ -36,6 +36,8 @@
 #     （App/Sources/Debug/DebugClipboard.swift）
 #   - 订单本机假服务（APP-08）：标记 COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19、类型名 DebugFakeOrders、启动参数 CouliFakeOrders
 #     （App/Sources/Debug/DebugFakeOrders.swift）
+#   - 钱包本机假服务（APP-09）：标记 COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52、类型名 DebugFakeWallet、启动参数 CouliFakeWallet
+#     （App/Sources/Debug/DebugFakeWallet.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -131,6 +133,9 @@ HITS_LOG="$WORK/hits"
     echo "COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19"
     echo "DebugFakeOrders"
     echo "CouliFakeOrders"
+    echo "COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52"
+    echo "DebugFakeWallet"
+    echo "CouliFakeWallet"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

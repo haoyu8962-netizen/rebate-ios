@@ -70,6 +70,8 @@ struct MePlaceholderView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: CouliSpacing.s3) {
+                // APP-09：钱包冒烟入口（「我的」页本身在 APP-12）
+                WalletEntryRow()
                 AuthManageEntryRow()
                 Button {
                     router.open(RouteRequest(route: "Settings", from: .inApp))

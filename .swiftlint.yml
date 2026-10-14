@@ -9,6 +9,7 @@ excluded:
   - tools/ci/lint-fixtures       # 违反样例，verify.sh 单独证明它们会被拦
   - Packages/Core/Tests/ClipboardTests/ClipboardVectorTests.swift  # Codex 先写的向量测试（APP-07），约定不改
   - Packages/Core/Tests/OrderCoreTests/OrderVectorTests.swift  # Codex 先写的向量测试（APP-08），约定不改
+  - Packages/Core/Tests/WalletCoreTests/WalletVectorTests.swift  # Codex 先写的向量测试（APP-09），约定不改
 
 disabled_rules:
   - todo            # 占位按任务书写 TODO(APP-0x)，指向后续任务

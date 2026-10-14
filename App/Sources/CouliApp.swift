@@ -19,6 +19,7 @@ struct CouliApp: App {
     @StateObject private var search: AppSearch
     @StateObject private var clipboard: AppClipboard
     @StateObject private var orders: AppOrders
+    @StateObject private var wallet: AppWallet
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -68,7 +69,6 @@ struct CouliApp: App {
         _update = StateObject(wrappedValue: update)
         _config = StateObject(wrappedValue: config)
         let permissions = AppPermissions()
-        _permissions = StateObject(wrappedValue: permissions)
         // 两类 WebView 容器与 JSBridge（APP-04）：创建即把「作废在途桥调用」登记进撤回同意、切换环境两个注册表的第一位。
         let web = AppWeb(
             config: config, network: network, routing: routing, privacy: privacy, update: update,
@@ -77,6 +77,8 @@ struct CouliApp: App {
         let (clipboard, search) = Self.makeShopping(web: web, login: login)
         let orders = Self.makeOrders(web: web, login: login, clipboard: clipboard, search: search)
         _orders = StateObject(wrappedValue: orders)
+        _wallet = StateObject(wrappedValue: Self.makeWallet(web, login, clipboard, orders))
+        _permissions = StateObject(wrappedValue: permissions)
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
         _clipboard = StateObject(wrappedValue: clipboard)
@@ -93,6 +95,8 @@ struct CouliApp: App {
         ClipboardRecordsCleaner.register()
         // APP-08：订单断网缓存（撤回同意与切换环境都删；待清理状态在缓存目录之外，启动对账重试撤回清理时一并完成）
         OrderCacheCleaner.register()
+        // APP-09：钱包摘要缓存与提现金额草稿（同上）
+        WalletCacheCleaner.register()
     }
 
     /// 剪贴板（APP-07）、购买（APP-06b）与搜索 / 详情（APP-06a）的组装。
@@ -131,6 +135,22 @@ struct CouliApp: App {
         return orders
     }
 
+    /// 钱包（APP-09）：金额隐藏与订单页共用同一份本机偏好（AppOrders.mask）；交易流水号复制走剪贴板统一写入口；route_params_dropped 进埋点。
+    /// Debug / Staging 打开本机假服务时接上假实名、假劳务协议与测试号码（Release 没有，G01、G02、G31）。
+    private static func makeWallet(_ web: AppWeb, _ login: AppLogin, _ clipboard: AppClipboard,
+                                   _ orders: AppOrders) -> AppWallet {
+        let wallet = AppWallet(
+            network: web.network, config: web.config, routing: web.routing, login: login, mask: orders.mask
+        )
+        wallet.clipboard = clipboard
+        let tracker = web.tracker
+        wallet.track = { event in _ = tracker.track(event) }
+        #if DEBUG
+        DebugFakeWallet.install(wallet)
+        #endif
+        return wallet
+    }
+
     /// 网络核心。Debug / Staging 带启动参数 `-CouliFakeLoginServer` 时用本机假服务（URLProtocol 桩，不连任何地址；
     /// APP-04 共性 2：假登录只在调试构建编译，Release 制品扫描查标记）。
     private static func makeNetwork() -> AppNetwork {
@@ -163,6 +183,7 @@ struct CouliApp: App {
                 .environmentObject(search)
                 .environmentObject(clipboard)
                 .environmentObject(orders)
+                .environmentObject(wallet)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -193,6 +214,8 @@ struct CouliApp: App {
                         search.trade?.sceneChanged(active: false)
                     @unknown default: break
                     }
+                    // 钱包：active 之外（inactive、background）都立即作废等待中的导航与浮层许可（APP-09 iOS R2-03）
+                    wallet.scenePhaseChanged(phase)
                 }
         }
     }

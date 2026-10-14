@@ -29,6 +29,14 @@ enum RouteViewRegistry {
         "FindOrder": { AnyView(H5RouteView(destination: $0)) },
         "Ledger": { AnyView(H5RouteView(destination: $0)) },
         "Help": { AnyView(H5RouteView(destination: $0)) },
+        // APP-09：钱包、提现、提现记录、收款账号、实名、劳务协议（Features/Wallet）；收益看板是 H5（since 三端为 null，G20）。
+        "Wallet": { AnyView(WalletRouteView(destination: $0)) },
+        "Withdraw": { AnyView(WalletRouteView(destination: $0)) },
+        "WithdrawRecords": { AnyView(WalletRouteView(destination: $0)) },
+        "PayoutAccount": { AnyView(WalletRouteView(destination: $0)) },
+        "RealName": { AnyView(WalletRouteView(destination: $0)) },
+        "LaborAgreement": { AnyView(WalletRouteView(destination: $0)) },
+        "Earnings": { AnyView(H5RouteView(destination: $0)) },
     ]
 
     @ViewBuilder

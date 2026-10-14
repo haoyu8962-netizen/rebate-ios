@@ -28,6 +28,9 @@ final class AppRouting {
     var placeholders = Placeholders()
     /// 守卫的会话状态源（APP-05a：AppLogin 按 ApiClient 的会话现算：游客 / 受限 / 已绑手机）。隐私未同意时一律按游客。
     var sessionSource: (@MainActor () -> SessionState)?
+    /// 守卫的实名结论来源（APP-09：AppWallet 按 GET /v1/me 的 realname_status 给，只认本会话查到的 verified；未知按未实名，BR-ID-02）。
+    /// 没接时用占位（false）。
+    var realnameSource: (@MainActor () -> Bool)?
     /// 会话状态变化（登录、登出、会话被清）后通知（AppLogin 刷新设置页等）。
     var onSessionStateChanged: (@MainActor () -> Void)?
     /// Tab 外壳（或基本模式页）已经显示。
@@ -144,7 +147,7 @@ final class AppRouting {
             environmentSettled: environment.gate == .settled,
             appVersion: Self.appVersion,
             isDebugBuild: Self.isDebugBuild,
-            realnameVerified: placeholders.realnameVerified,
+            realnameVerified: realnameSource?() ?? placeholders.realnameVerified,
             targets: placeholders.targets
         )
     }

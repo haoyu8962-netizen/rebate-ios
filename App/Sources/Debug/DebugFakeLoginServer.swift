@@ -47,6 +47,9 @@ final class DebugFakeLoginServer: URLProtocol {
         if arguments.contains(DebugFakeTrade.loggedInArgument) {
             try? SecureSessionTokens(store: KeychainStore())
                 .save(access: "debug-at-trade", refresh: "debug-rt-trade", scope: "full", account: "debug-fake-user")
+            // APP-09（iOS R1-01）：未决记录默认保留（brief §0 第 3 条，冷启动照常恢复待确认）；只有截图 / 冒烟 UI 测试的夹具显式带
+            // `-CouliFakeWalletResetPending` 时才清假账号的未决记录与金额草稿。
+            DebugFakeWallet.prepareColdStart(arguments: arguments)
         }
         // 商品图走系统 AsyncImage（URLSession.shared）：只接管假图片主机（APP-06a 共性 22）。
         URLProtocol.registerClass(DebugFakeSearchImages.self)
@@ -74,6 +77,14 @@ final class DebugFakeLoginServer: URLProtocol {
             query[item.name] = item.value ?? ""
         }
         let body = Self.object(Self.bodyData(request))
+        // APP-09：钱包场景（DebugFakeWallet）先于其他场景；offline 与「响应丢失」按传输失败结束。
+        if let wallet = DebugFakeWallet.shared.answer(
+            method: request.httpMethod ?? "GET", path: path, query: query, body: body,
+            headers: request.allHTTPHeaderFields ?? [:]
+        ) {
+            answerWallet(wallet)
+            return
+        }
         // APP-08：订单场景（DebugFakeOrders）先于其他场景；offline 开关时按传输失败结束（断网演示）。
         if let orders = DebugFakeOrders.answer(method: request.httpMethod ?? "GET", path: path, query: query) {
             answerOrders(orders)
@@ -105,6 +116,15 @@ final class DebugFakeLoginServer: URLProtocol {
             client?.urlProtocol(self, didReceive: response ?? URLResponse(), cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(text.utf8))
             client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    private func answerWallet(_ reply: DebugFakeWallet.Reply) {
+        switch reply {
+        case .offline:
+            answerOrders(.offline)
+        case let .answer(code, data, headers):
+            answerOrders(.answer(code: code, data: data, headers: headers, delay: 0.3))
         }
     }
 

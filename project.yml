@@ -139,6 +139,7 @@ schemes:
         - package: Core/BridgeHostTests
         - package: Core/ClipboardTests
         - package: Core/OrderCoreTests
+        - package: Core/WalletCoreTests
         - package: DesignSystem/DesignSystemTests
         - package: Features/LoginTests
         - package: Features/SearchTests

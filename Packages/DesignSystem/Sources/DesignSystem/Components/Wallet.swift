@@ -230,6 +230,7 @@ public struct WalletHeroCard<Footer: View>: View {
     private let isHidden: Bool
     private let toggleHiddenLabel: String?
     private let withdrawTitle: String
+    private let withdrawEnabled: Bool
     private let recordsTitle: String?
     private let onToggleHidden: () -> Void
     private let onWithdraw: () -> Void
@@ -239,12 +240,14 @@ public struct WalletHeroCard<Footer: View>: View {
     /// - Parameters:
     ///   - toggleHiddenLabel: 眼睛按钮读屏名称（amount_mask.hide / show）；nil 时不显示眼睛。
     ///   - recordsTitle: 「提现记录」；nil 时不显示。
+    ///   - withdrawEnabled: 【提现】是否可点（APP-09 G11：withdraw_enabled=false、待抵扣、旧数据时置灰；缺省可点）。
     public init(
         title: String,
         amountFen: Int64,
         isHidden: Bool = false,
         toggleHiddenLabel: String? = nil,
         withdrawTitle: String,
+        withdrawEnabled: Bool = true,
         recordsTitle: String? = nil,
         onToggleHidden: @escaping () -> Void = {},
         onWithdraw: @escaping () -> Void,
@@ -256,6 +259,7 @@ public struct WalletHeroCard<Footer: View>: View {
         self.isHidden = isHidden
         self.toggleHiddenLabel = toggleHiddenLabel
         self.withdrawTitle = withdrawTitle
+        self.withdrawEnabled = withdrawEnabled
         self.recordsTitle = recordsTitle
         self.onToggleHidden = onToggleHidden
         self.onWithdraw = onWithdraw
@@ -300,7 +304,7 @@ public struct WalletHeroCard<Footer: View>: View {
                 AmountText(.amount(amountFen), hidden: isHidden, style: .display, weight: .couliBold)
                     .accessibilityLabel(Text(verbatim: title + PriceTerms.spokenPause
                             + AmountValue.amount(amountFen).spoken(hidden: isHidden)))
-                CouliButton(withdrawTitle, kind: .inverse, action: onWithdraw)
+                CouliButton(withdrawTitle, kind: .inverse, isEnabled: withdrawEnabled, action: onWithdraw)
                     .fixedSize()
                     .couliFlowPushTrailing(.inlineOnly)
             }

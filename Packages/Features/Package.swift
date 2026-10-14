@@ -44,6 +44,14 @@ let extraDependencies: [String: [Target.Dependency]] = [
         .product(name: "Trade", package: "Core"),
         .product(name: "ProductSearch", package: "Core"),
     ],
+    // Wallet（APP-09）：钱包、提现、二次验证、提现记录、收款账号、实名与劳务协议页面；纯逻辑与执行器在 Core 的 WalletCore（「我的」、设置页
+    // 以后也用它，Feature 之间不依赖）。金额隐藏偏好是 OrderCore 的 AmountMaskStore（与订单页同一份本机偏好）。
+    "Wallet": [
+        .product(name: "WalletCore", package: "Core"),
+        .product(name: "ClientCore", package: "Core"),
+        .product(name: "CouliNetwork", package: "Core"),
+        .product(name: "OrderCore", package: "Core"),
+    ],
 ]
 
 let package = Package(

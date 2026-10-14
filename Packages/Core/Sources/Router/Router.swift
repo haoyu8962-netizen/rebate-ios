@@ -70,6 +70,8 @@ public final class Router: ObservableObject {
     var forceUpdateConsentRequest: RouteRequest?
     /// 会话 / 环境代次：退出登录、切换账号、切换环境时递增，进行中的推送回查结果据此作废。
     private var generation: UInt64 = 0
+    /// 资金与实名页面带参数打开、参数被丢弃时调用（路由名、丢弃个数；APP-09）。App 记 route_params_dropped。没接时不记。
+    public var onParamsDropped: (@MainActor (String, Int) -> Void)?
     /// 会话归属标签来源（APP-05a 共性 25；App 接 ApiClient.sessionGeneration）：登记 pending_action、发起推送回查时记下，
     /// 登出收尾按它只清原会话归属的部分。nil = 未接（按旧口径整体清理）。
     public var sessionTag: (@MainActor () -> UInt64)?
@@ -141,16 +143,6 @@ public final class Router: ObservableObject {
             // 不打开：停在当前页（冷启动时即首页）。TODO(APP-03): 记埋点 route_entry_blocked（只带路由名与入口类别）。
             break
         }
-    }
-
-    /// 打开结论：推送兜底的 Messages 不带原请求的参数；资金与实名页面丢弃全部参数（03 §4.4）。
-    private func showOpened(_ decision: GuardDecision, for request: RouteRequest) {
-        guard let route = decision.route else { return }
-        show(RouteDestination(
-            route: route,
-            params: route == request.route ? EntryGuard.effectiveParams(request) : [:],
-            readonly: decision.kind == .openReadonly
-        ))
     }
 
     func show(_ destination: RouteDestination) {

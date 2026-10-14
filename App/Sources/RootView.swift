@@ -169,9 +169,11 @@ struct RootView: View {
                 // 登记在启动协调里，等本轮强更检查有结果或等满 5 秒）。
                 routing.shellAppeared()
                 #if DEBUG
-                // 截图用（APP-08）：`-CouliStartTab orders` 冷启动直接切到订单 Tab（窄屏截图时首页布局挡住 Tab 栏的点击）
-                if UserDefaults.standard.string(forKey: "CouliStartTab") == ShellTab.orders.rawValue {
-                    _ = routing.selectTab(.orders)
+                // 截图用（APP-08）：`-CouliStartTab orders` 冷启动直接切到订单 Tab（窄屏截图时首页布局挡住 Tab 栏的点击）；
+                // APP-09：`-CouliStartTab me` 切到「我的」占位页（钱包冒烟入口）
+                if let raw = UserDefaults.standard.string(forKey: "CouliStartTab"), let tab = ShellTab(rawValue: raw),
+                   tab == .orders || tab == .me {
+                    _ = routing.selectTab(tab)
                 }
                 #endif
             }
