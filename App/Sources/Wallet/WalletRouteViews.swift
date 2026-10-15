@@ -56,33 +56,3 @@ struct WalletRouteView: View {
         .navigationBarBackButtonHidden(true)
     }
 }
-
-/// 「我的」占位页上的【钱包】入口（APP-09 冒烟用；「我的」页本身在 APP-12，iOS I05）。
-struct WalletEntryRow: View {
-    @EnvironmentObject private var router: Router
-
-    var body: some View {
-        Button {
-            router.open(RouteRequest(route: WalletRoutes.wallet, from: .inApp))
-        } label: {
-            HStack(spacing: CouliSpacing.s3) {
-                CouliIconView(.wallet)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .accessibilityHidden(true)
-                Text(verbatim: WalletDraftTexts().text("wallet.entry.me"))
-                    .couliFont(.body)
-                    .foregroundColor(CouliColor.textPrimary)
-                Spacer(minLength: CouliSpacing.s2)
-                CouliIconView(.chevron)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, CouliSpacing.s4)
-            .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.card))
-        .couliCard(padding: 0)
-        .accessibilityIdentifier("me.wallet")
-    }
-}

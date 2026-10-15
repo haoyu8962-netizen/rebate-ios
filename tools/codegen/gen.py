@@ -1516,6 +1516,42 @@ def gen_default_config(out: dict[str, str]):
     put(out, "DefaultConfig.swift", "\n".join(lines))
 
 
+def gen_system_permissions(out: dict[str, str]):
+    """specs/system-permissions.json 的权限清单（APP-12 G26：隐私中心「系统权限」一节的条目只来自锁定清单，不手写）。"""
+    doc = load("specs/system-permissions.json")
+    rows = doc.get("permissions")
+    if not isinstance(rows, list):
+        raise GenError("system-permissions.json 缺 permissions")
+    lines = [
+        HEADER.rstrip("\n"),
+        "// 快照：specs/system-permissions.json 的 permissions（03 §4.9；APP-12 G26 隐私中心「系统权限」一节）",
+        "",
+        "/// 系统权限清单的一项（类型、端、用途文案键）。",
+        "public struct SystemPermissionEntry: Sendable, Equatable {",
+        "    public let type: Swift.String",
+        "    public let platform: Swift.String",
+        "    public let purposeKey: Swift.String?",
+        "}",
+        "",
+        "/// 锁定契约的系统权限清单（全部端；调用方按本端过滤）。",
+        "public enum SystemPermissions {",
+        "    public static let entries: [SystemPermissionEntry] = [",
+    ]
+    for i, row in enumerate(rows):
+        ctx = f"system-permissions.json permissions[{i}]"
+        if not isinstance(row, dict):
+            raise GenError(f"{ctx} 应为对象")
+        type_ = as_str(row.get("type"), ctx + ".type")
+        platform = as_str(row.get("platform"), ctx + ".platform")
+        purpose = row.get("purpose_key")
+        lines.append(
+            f"        SystemPermissionEntry(type: {swift_string(type_)}, platform: {swift_string(platform)}, "
+            f"purposeKey: {swift_optional_string(purpose)}),"
+        )
+    lines += ["    ]", "}", ""]
+    put(out, "SystemPermissions.swift", "\n".join(lines))
+
+
 # ---------- 主流程 ----------
 
 
@@ -1537,6 +1573,7 @@ def generate() -> dict[str, str]:
     gen_events(out)
     gen_device_hash_seeds(out)
     gen_default_config(out)
+    gen_system_permissions(out)
     return out
 
 

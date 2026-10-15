@@ -105,7 +105,8 @@ public struct WithdrawScreen: View {
             toast = value.toast(texts)
             flow.consumeToast(value.id)
         }
-        .onChange(of: snapshot.announceId) { _ in announce(snapshot) }
+        // 读执行器此刻的状态：iOS 16 的 onChange 闭包捕获的是上一次渲染的 `snapshot`（首次播报会丢、之后读出上一条，APP-12 R3-01 同类）
+        .onChange(of: snapshot.announceId) { _ in announce(controller.state) }
         .onChange(of: snapshot.hideKeyboardId) { _ in
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }

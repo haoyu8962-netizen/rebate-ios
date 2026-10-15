@@ -32,6 +32,8 @@ final class AppWeb: ObservableObject {
     weak var login: AppLogin?
     /// 剪贴板识别（APP-07）：桥 clipboard.write 经它的写入口、setAutoDetect 按容器实例抑制（CouliApp 创建后接上）。
     weak var clipboard: AppClipboard?
+    /// getMe 的共享读取截止时间（APP-12 MeGates.read；桥 auth.getUser 与「我的」、钱包实名查询共用）。nil = 没接。
+    var meReadGate: RetryAfterGate?
     /// 容器页随路由真正出栈 teardown（三端共性第 28 条）。
     let routeLifetimes: WebRouteLifetimes
     private let cleaner: BridgeHostsCleaner

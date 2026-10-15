@@ -20,6 +20,8 @@ public enum HeaderNames {
     /// 条件请求（03 §4.3：回前台带 ETag 拉取 /v1/config）。
     public static let ifNoneMatch = "If-None-Match"
     public static let etag = "ETag"
+    /// 个性化推荐关闭（APP-12 G03；04 / BR-ID-13 的写法，契约 openapi 未登记这个头，登记给契约线）。
+    public static let personalization = "X-Personalization"
 
     /// 不含凭据与设备标识的公共头：基本模式、撤回清理未完成时也带。
     public static let anonymous = [appId, platform, appVersion, build, channel, traceId]
@@ -163,6 +165,9 @@ public struct NetworkContext: Sendable, Equatable {
     public let update: String
     /// 当前环境的 API 基址；环境未就绪时为 nil。
     public let apiBaseURL: URL?
+    /// 个性化推荐已关闭（APP-12 G03：设备级本机偏好）：隐私结论为已同意时请求带 `X-Personalization: off`；基本模式、未决不带。
+    /// 签名不含这个头（签名只按方法、路径、查询、请求体）。
+    public var personalizationOff = false
     /// 取这份快照之前那一刻的作废世代（只由 `ApiClient.readContext` 填写，APP-08 iOS NEW-01）。凭据只在「快照允许读取」且
     /// 「作废世代仍是取快照前那一份」时才读：撤回同意、切换环境都在网络层同一把锁里推进作废世代，异步等待之前取得的
     /// `credentialsReadable` 一旦隔了一次作废就不再可信。nil = 来源不明（没经 readContext），一律按不可读。
@@ -215,6 +220,16 @@ public struct NetworkHooks: Sendable {
     public var sessionRefreshed: @Sendable (_ generation: UInt64, _ origin: SessionRefreshOrigin) async -> Void
     /// 测试探针（APP-08 iOS r3g NEW-05）：组请求时会话准入判断通过之后、读设备凭据之前调用（不持任何锁）。生产不设。
     public var afterCredentialAdmission: @Sendable () -> Void = {}
+    /// 导航票据（APP-12 G09，共性第 8、14、17 条）：每个逻辑调用开始时取一次（任意线程；App 给线程安全的读数：经 Router 的导航次数 + 进后台
+    /// 次数），重放、刷新续发沿用。nil = 不取（测试与没接导航的组合）。
+    public var navigationTicket: @Sendable () -> UInt64? = { nil }
+    /// 10006 的统一落点（APP-12 G09，只此一处）：调用仍属有效作废世代、调用方有效性仍为真时，带入口取的导航票据与调用有效性交给 App；App 在
+    /// 主线程核对票据与此刻一致、强更不在显示、栈顶不是 RiskNotice 后经 Router 打开 RiskNotice。作废接口解包出的原 10006 不经这里（只交回调用方）。
+    /// `owner` 是请求发起时绑定的归属（账号 + 登录世代 + 作废世代，APP-12 R2-01）：App 只拿它与此刻的归属比较，不一致（同栈换账号、退出、
+    /// 撤回、切环境之后）不导航、不记「因 10006 进入」。
+    public var riskNotice: @Sendable (
+        _ ticket: UInt64?, _ owner: RequestOwnership, _ stillValid: @escaping @Sendable () -> Bool
+    ) async -> Void = { _, _, _ in }
 
     public init(
         onForceUpdate: @escaping @Sendable (String?) async -> Void = { _ in },

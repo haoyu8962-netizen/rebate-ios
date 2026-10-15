@@ -89,11 +89,12 @@ extension AppWallet {
         realnameFlag?.invalidate()
         let flag = RequestFlag()
         realnameFlag = flag
-        if gates.read.active {
+        // getMe 的读取截止时间三处共用（APP-12 共性第 32、33 条：「我的」、钱包实名查询、桥 auth.getUser）：任一处的 42901 都拦住这里
+        if gates.read.active || meReadGate?.active == true {
             realnameFailed(WalletError(.gated, "error.42901"), intent)
             return
         }
-        let probe = gates.read.probe()
+        let probe = gates.read.probe(extra: meReadGate?.sendAllowed)
         let client = client
         Task { @MainActor [weak self] in
             let result = await client.send(
@@ -119,6 +120,7 @@ extension AppWallet {
         let error = WalletErrors.of(result, probe: probe)
         if error.kind == .retryAfter {
             gates.read.start(error.disableMillis)
+            meReadGate?.start(error.disableMillis)
         }
         realnameFailed(error, intent)
     }

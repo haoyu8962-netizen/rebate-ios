@@ -71,6 +71,8 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
     weak var clipboard: AppClipboard?
     /// 统一权限入口（APP-03b）。
     weak var permissions: AppPermissions?
+    /// 统一客服出口（APP-12 AppMe.cs；详情【联系客服】）。
+    var customerService: (@MainActor (String) -> Void)?
     /// 当前时刻：服务端校准后的时钟（BR-TEXT-11，共性第 34 条；ApiClient 按响应头 Date 校出的偏移）。订单相对时间、缓存时间提示、
     /// 缓存获取时刻都用它（测试注入）。
     lazy var clock: () -> Int64 = { [client] in client.calibratedNowMillis }
@@ -341,6 +343,12 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
             ))
         }
         page.helpLinks = { [weak self] in self?.helpLinks() }
+        // APP-12：详情【联系客服】（CONTACT_CS）改走统一客服出口；没接时仍打开帮助中心（onOpen 的 Help，接入前一致）
+        page.onContactService = { [weak self] in
+            guard let customerService = self?.customerService else { return false }
+            customerService("OrderDetail")
+            return true
+        }
         return page
     }
 

@@ -137,3 +137,21 @@ extension ApiClient {
         }
     }
 }
+
+extension ApiClient {
+    /// 10006 的统一落点（APP-12 G09）：调用仍属当前作废世代且调用方仍有效时才交给 App（App 再核对导航票据）。
+    /// 带上本次请求发起时绑定的归属（账号 + 登录世代 + 作废世代，APP-12 R2-01）：App 在主线程只与此刻比较，不用当前身份补作归属。
+    func deliverRiskNotice(_ effect: ErrorEffect, _ options: RunOptions, _ ready: Ready) async {
+        guard effect.kind == .navigate, effect.route == "RiskNotice" else { return }
+        let epochAtStart = options.epoch
+        let callValid = options.callValid
+        let owner = RequestOwnership(
+            account: options.boundAccount ?? ready.account,
+            generation: options.boundGeneration ?? ready.generation, epoch: epochAtStart
+        )
+        await hooks.riskNotice(options.navTicket, owner) { [weak self] in
+            guard let self, currentEpoch == epochAtStart else { return false }
+            return callValid?() ?? true
+        }
+    }
+}

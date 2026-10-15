@@ -4,25 +4,32 @@ import Router
 import SwiftUI
 
 /// 路由名 → 页面。Router 不 import 任何 Feature（03 §3.1 依赖方向）；由 App 在这里把路由名映射到各 Feature 暴露的入口视图。
-/// 本任务各 Feature 还没有页面，未登记的路由一律显示占位页。
+/// 未登记的路由一律显示占位页（协议页 Agreement 等，G21）。
 @MainActor
 enum RouteViewRegistry {
     typealias Builder = @MainActor (RouteDestination) -> AnyView
 
-    /// TODO(APP-05…APP-12): 各 Feature 实现页面后在这里登记（如 "Search": { AnyView(SearchScreen(...)) }）。
+    /// 各 Feature 实现页面后在这里登记（如 "Search": { AnyView(SearchScreen(...)) }）。
     /// APP-04：两类 WebView 容器（Features/Web，App 侧接线在 App/Sources/Web）。
     static let builders: [String: Builder] = [
         RoutePolicy.webPage: { AnyView(WebPageRouteView(destination: $0)) },
         RoutePolicy.externalPage: { AnyView(ExternalPageRouteView(destination: $0)) },
-        // APP-05a：短信登录页（Features/Login）与设置占位页上的【退出登录】。
+        // APP-05a：短信登录页（Features/Login）。
         RoutePolicy.login: { AnyView(LoginRouteView(destination: $0)) },
-        "Settings": { AnyView(SettingsPlaceholderView(destination: $0)) },
+        // APP-12：「我的」Tab 根、设置、隐私中心、关于、封禁说明与申诉（Features/Me）；消息中心、邀请好友是 H5（G04、G21）。
+        "Me": { AnyView(MeTabRouteView(destination: $0)) },
+        "Settings": { AnyView(MeRouteView(destination: $0)) },
+        "PrivacyCenter": { AnyView(MeRouteView(destination: $0)) },
+        "About": { AnyView(MeRouteView(destination: $0)) },
+        "RiskNotice": { AnyView(MeRouteView(destination: $0)) },
+        "Appeal": { AnyView(MeRouteView(destination: $0)) },
+        "Messages": { AnyView(H5RouteView(destination: $0)) },
+        "InviteShare": { AnyView(H5RouteView(destination: $0)) },
         // APP-06a：搜索（Features/Search）与商品详情（Features/Product）。
         "Search": { AnyView(SearchRouteView(destination: $0)) },
         "ProductDetail": { AnyView(ProductDetailRouteView(destination: $0)) },
-        // APP-06b：授权管理（Features/Purchase）；「我的」Tab 占位页先放授权管理与设置入口（页面本身在 APP-12）。
+        // APP-06b：授权管理（Features/Purchase）。
         "AuthManage": { AnyView(AuthManageRouteView(destination: $0)) },
-        "Me": { AnyView(MePlaceholderView(destination: $0)) },
         // APP-08：订单列表（订单 Tab 根）与详情（Features/Orders）；订单页的 H5 入口（找回、流水、帮助）接可信容器。
         "OrderList": { AnyView(OrderListRouteView(destination: $0)) },
         "OrderDetail": { AnyView(OrderDetailRouteView(destination: $0)) },

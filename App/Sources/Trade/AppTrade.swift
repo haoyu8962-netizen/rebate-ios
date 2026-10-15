@@ -56,6 +56,8 @@ final class AppTrade {
 
     /// 购买弹层出现（任一页的加载层、确认框、AuthSheet、外跳提示等，H06 同口径）：剪贴板在显示的同步出口作废（APP-07 共性第 4 条）。
     var onSensitiveOverlay: (@MainActor () -> Void)?
+    /// 统一客服出口（APP-12 AppMe.cs；授权管理页【联系客服】）。
+    var customerService: (@MainActor (String) -> Void)?
 
     init(
         network: AppNetwork, config: AppConfig, privacy: PrivacyController, routing: AppRouting, login: AppLogin,
@@ -178,7 +180,14 @@ final class AppTrade {
         let page = AuthManagePageConfig(controller: controller, texts: texts)
         let router = router
         page.onBack = { router.close(destination) }
-        page.onContact = { router.open(RouteRequest(route: AppTradeRoutes.help, from: .inApp)) }
+        // APP-12：统一客服出口（没接时打开帮助中心，与接入前一致）
+        page.onContact = { [weak self] in
+            if let customerService = self?.customerService {
+                customerService(AppTradeRoutes.authManage)
+            } else {
+                router.open(RouteRequest(route: AppTradeRoutes.help, from: .inApp))
+            }
+        }
         return page
     }
 

@@ -38,8 +38,10 @@ final class AppWallet: ObservableObject, WalletEnv {
     var track: (TrackEvent) -> Void = { _ in }
     /// 二次验证发码的号码（G31）：Release 恒为 nil（本机不保存手机号，iOS I01）；Debug 假服务给测试号。
     var phoneProvider: (String) -> String? = { _ in nil }
-    /// 统一客服出口（APP-12 接入前经 Router 打开 Help，同 APP-08 G09）。
+    /// 统一客服出口（APP-12 接上 AppMe.cs；接入前经 Router 打开 Help，同 APP-08 G09）。
     var customerService: (String) -> Void
+    /// getMe 的共享读取截止时间（APP-12 MeGates.read；实名查询与「我的」、桥 auth.getUser 共用，双向生效）。nil = 没接。
+    var meReadGate: RetryAfterGate?
     /// 撤回同意的清理已完成、会话凭据可读（生产为 `PrivacyWithdrawalCleanup.runner`；测试注入）。
     let credentialsReadable: @MainActor () -> Bool
     /// 本机时钟（测试注入）。

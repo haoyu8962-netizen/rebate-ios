@@ -66,6 +66,9 @@ extension OrderDetailScreen {
                 CouliButton(
                     texts.text(button.labelKey), kind: button.primary ? .primary : .secondary, fillsWidth: true
                 ) {
+                    if button.actionRaw == "contact_cs", config.onContactService() {
+                        return
+                    }
                     config.onOpen(RouteTarget(route: button.route, params: [:]))
                 }
                 .accessibilityIdentifier("orderDetail.action.\(button.actionRaw)")

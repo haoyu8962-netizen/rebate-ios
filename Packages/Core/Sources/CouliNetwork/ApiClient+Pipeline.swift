@@ -12,6 +12,10 @@ extension ApiClient {
 
     func run(_ call: ApiCall, _ operation: ApiOperation, isReplay: Bool, options start: RunOptions) async -> ApiResult {
         var options = start
+        if !options.navTicketTaken {
+            options.navTicketTaken = true
+            options.navTicket = hooks.navigationTicket()
+        }
         let ready: Ready
         let outcome: TransportOutcome
         switch await attempt(call, operation, &options) {
@@ -263,6 +267,7 @@ extension ApiClient {
             return .sessionCleared(effect: effect)
         }
         await hooks.onEffect(effect)
+        await deliverRiskNotice(effect, options, ready)
         return .failure(
             code: envelope.code, msg: envelope.msg, data: JSONFields.encode(envelope.data),
             traceId: envelope.traceId, effect: effect, idempotencyKey: ready.idempotencyKey

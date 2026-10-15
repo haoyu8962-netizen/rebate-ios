@@ -28,6 +28,10 @@ final class AppLogin: ObservableObject {
     weak var clipboard: AppClipboard?
     /// 第三方登录位置的占位只在 Debug / Staging 显示（APP-05b 实现前，版式比对用）。
     private let showThirdPartySlot: Bool
+    /// 真实登录成功（登录页拿到 logged_in，新会话已保存）：带此刻的会话世代通知（APP-12 推送上报只认这个信号，共性第 3 条）。
+    var onLoginCompleted: ((UInt64) -> Void)?
+    /// 统一客服出口（APP-12 AppMe.cs；没接时打开帮助中心，与接入前一致）。
+    var customerService: ((String) -> Void)?
 
     init(network: AppNetwork, routing: AppRouting, update: AppUpdate) {
         client = network.client
@@ -146,9 +150,19 @@ final class AppLogin: ObservableObject {
                 router.open(request)
             }
         }
-        // TODO(N-26)：客服入口（cs.open，/v1/config.kf，未装微信按 cs.wechat_unavailable）在客服任务实现；先打开帮助中心。
-        config.onCustomerService = { router.open(RouteRequest(route: "Help", from: .inApp)) }
-        config.onLoggedIn = { [weak self] outcome in self?.showInviteResult(outcome) }
+        // APP-12：统一客服出口（原样 kf.url；未装微信给复制链接与帮助中心，G20）
+        config.onCustomerService = { [weak self] in
+            if let customerService = self?.customerService {
+                customerService(RoutePolicy.login)
+            } else {
+                router.open(RouteRequest(route: "Help", from: .inApp))
+            }
+        }
+        config.onLoggedIn = { [weak self] outcome in
+            guard let self else { return }
+            onLoginCompleted?(client.sessionGeneration)
+            showInviteResult(outcome)
+        }
         // 剪贴板（APP-07）：邀请码行【粘贴】（受限登录不显示邀请码，也就没有【粘贴】，H07 同口径）；游客邀请确认后的预填（G16）
         if let clipboard, !restricted {
             config.invitePaste = clipboard.makeLoginInvitePaste()
@@ -185,10 +199,11 @@ final class AppLogin: ObservableObject {
     /// 设置页【退出登录】确认之后。返回 true = 已回到游客。
     /// 登出在会话级作用域里执行（共性 13）：放进 AppLogin 自己的任务，不随设置页的生命周期或调用方取消而中断；LoginService
     /// 按原会话世代完成本地清理并调用 Router.sessionEnded。
+    /// `owner`（APP-12 R1-04）：确认时固定的请求归属——发送绑定它、本地清理只按 `owner.generation`；确认之后已换成新会话则不动新会话。
     @discardableResult
-    func logout() async -> Bool {
+    func logout(owner: RequestOwnership? = nil) async -> Bool {
         let service = service
-        let task = Task { @MainActor in await service.logout() }
+        let task = Task { @MainActor in await service.logout(owner: owner) }
         return await task.value
     }
 }

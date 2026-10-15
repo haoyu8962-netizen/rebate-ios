@@ -52,7 +52,7 @@ extension ApiClient {
         if let key {
             headers[HeaderNames.idempotencyKey] = key
         }
-        headers.merge(callHeaders(call, operation, readable: readable)) { _, new in new }
+        headers.merge(callHeaders(call, operation, readable: readable, state: state)) { _, new in new }
         if decision.includeSignature {
             guard readable, let secret = credentials?.installSecret else {
                 return .rejected(LocalRejectReason.deviceNotReady)
@@ -68,9 +68,15 @@ extension ApiClient {
         ))
     }
 
-    /// 调用自带的头：step-up 操作的 X-Step-Up-Token（凭据可读时）、读接口的 If-None-Match（原样）。
-    private func callHeaders(_ call: ApiCall, _ operation: ApiOperation, readable: Bool) -> [String: String] {
+    /// 调用自带的头：step-up 操作的 X-Step-Up-Token（凭据可读时）、读接口的 If-None-Match（原样）；个性化推荐关闭时的
+    /// X-Personalization: off（APP-12 G03：只在已同意时带，基本模式、未决不带）。
+    private func callHeaders(
+        _ call: ApiCall, _ operation: ApiOperation, readable: Bool, state: NetworkContext
+    ) -> [String: String] {
         var headers: [String: String] = [:]
+        if state.privacy == PrivacyRaw.full, state.personalizationOff {
+            headers[HeaderNames.personalization] = "off"
+        }
         if readable, operation.stepUp != nil, let token = call.stepUpToken {
             headers[HeaderNames.stepUpToken] = token
         }

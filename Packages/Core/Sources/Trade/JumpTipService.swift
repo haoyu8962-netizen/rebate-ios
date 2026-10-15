@@ -15,6 +15,8 @@ public final class JumpTipService {
     private let sessionKey: @MainActor () -> String?
     private var cachedFor: String?
     private var read: Set<String>?
+    /// 缓存世代：「重新显示下单须知」成功（APP-12，鸿蒙 R1-10）时推进，在途的旧 getTips 结果不再写回（不恢复已读）。
+    private var generation = 0
 
     public init(api: TradeApi, sessionKey: @escaping @MainActor () -> String?) {
         calls = TradeCalls(api: api)
@@ -33,10 +35,11 @@ public final class JumpTipService {
         // 固定归属的账号已不是此刻会话：不查、不改缓存（调用方随后按来源比较作废方案）
         guard stillOwned(expected, key) else { return true }
         if cachedFor != key || read == nil {
+            let started = generation
             let call = ApiCall(operationId: TradeOperations.getTips)
             let result = await calls.send(call, group: "tips", expected: expected)
-            // 等待期间换了账号：结果不写缓存（缓存只属于发起查询的那个会话）
-            guard sessionKey() == key else { return true }
+            // 等待期间换了账号、或已读被重置（重新显示下单须知）：结果不写缓存
+            guard sessionKey() == key, generation == started else { return true }
             cachedFor = key
             if case let .success(data, _, _) = result, let object = TJSON.parse(data) {
                 let tips = TJSON.object(object["jump_tip"]) ?? [:]
@@ -68,6 +71,13 @@ public final class JumpTipService {
             guard expected == nil || sessionKey() == expected?.account else { return }
             _ = await calls.send(call, group: "tips", expected: expected)
         }
+    }
+
+    /// 「重新显示下单须知」成功（APP-12 resetTip jump_tip）：清掉已读缓存并推进世代，在途的旧 getTips 结果不再写回。
+    public func reset() {
+        generation += 1
+        cachedFor = nil
+        read = nil
     }
 
     /// 测试核对：此刻缓存属于哪个会话、记了哪些平台已读。

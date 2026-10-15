@@ -77,16 +77,7 @@ final class AppNetwork {
             device: device ?? registry,
             tokens: tokens,
             pendingKeys: PendingKeyStore(backend: pendingBackend, clock: PendingActionStore.wallClockMillis),
-            hooks: NetworkHooks(
-                onForceUpdate: { minimum in await source.forceUpdate(minimum) },
-                // 会话 Effect 的归属由网络层在清理发生的同一同步区里定下、随 Effect 传出（APP-05a 共性 26）。
-                onEffect: { effect in await source.sessionEffect(effect) },
-                reRegisterDevice: { rejected, isValid in
-                    await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
-                },
-                deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) },
-                sessionRefreshed: { generation, origin in await source.sessionRefreshed(generation, origin: origin) }
-            ),
+            hooks: Self.hooks(source: source, registry: registry),
             configuration: configuration
         )
         registry.bind(client: client)
@@ -98,6 +89,31 @@ final class AppNetwork {
         PrivacyWithdrawalCleanup.replaceCredentialCleaner(
             deviceCleaner, withdrawal: withdrawalRegistry, environmentSwitch: environmentRegistry
         )
+    }
+
+    /// 此刻的请求归属（账号 + 会话世代 + 作废世代，受凭据可读性约束的一次读取）：只拿来固定与比较（桥读取的限流结算等，APP-12 R1-02）。
+    func ownershipNow() -> RequestOwnership {
+        client.currentOwnership(credentialsReadable: source.credentialsReadableNow)
+    }
+
+    private static func hooks(source: NetworkContextSource, registry: DeviceRegistry) -> NetworkHooks {
+        var hooks = NetworkHooks(
+            onForceUpdate: { minimum in await source.forceUpdate(minimum) },
+            // 会话 Effect 的归属由网络层在清理发生的同一同步区里定下、随 Effect 传出（APP-05a 共性 26）。
+            onEffect: { effect in await source.sessionEffect(effect) },
+            reRegisterDevice: { rejected, isValid in
+                await registry.reRegister(rejectedDeviceId: rejected, isValid: isValid)
+            },
+            deviceRejected: { rejected in registry.deviceRejected(rejectedDeviceId: rejected) },
+            sessionRefreshed: { generation, origin in await source.sessionRefreshed(generation, origin: origin) }
+        )
+        // APP-12 G09：每个逻辑调用开始时取导航票据（线程安全的读数），10006 经 App 一处落到 RiskNotice
+        let tickets = source.tickets
+        hooks.navigationTicket = { tickets.value }
+        hooks.riskNotice = { ticket, owner, stillValid in
+            await source.riskNotice(ticket, owner: owner, stillValid: stillValid)
+        }
+        return hooks
     }
 
     /// PrivacyGate 的设备注册步骤（同意后第一步，03 §4.1）：完成时在主线程回调是否已有凭据；失败由闸门退避重试。
@@ -169,9 +185,20 @@ final class NetworkContextSource {
     weak var privacy: PrivacyController?
     weak var update: AppUpdate?
     private let credentialsReadable: @MainActor () -> Bool
+    /// 导航票据（APP-12 G09）：经 Router 的导航次数 + 进后台次数，AppMe 在主线程推进；网络层任意线程读。
+    let tickets = NavigationTickets()
+    /// 个性化推荐已关闭（APP-12 G03，设备级本机偏好；AppMe 接上）。
+    var personalizationOff: (@MainActor () -> Bool)?
+    /// 10006 的统一落点（APP-12 G09；AppMe 接上）。
+    var onRiskNotice: (@MainActor (UInt64?, RequestOwnership, @escaping @Sendable () -> Bool) -> Void)?
 
     init(credentialsReadable: @escaping @MainActor () -> Bool) {
         self.credentialsReadable = credentialsReadable
+    }
+
+    /// 此刻撤回清理是否已完成（凭据可读）。
+    var credentialsReadableNow: Bool {
+        credentialsReadable()
     }
 
     func snapshot() -> NetworkContext {
@@ -183,13 +210,20 @@ final class NetworkContextSource {
         }
         // 切换环境的清理与提交期间按未就绪：不发任何请求（含设备注册；APP-03b 共性 10）。
         let settled = environment.gate == .settled && !environment.switching
-        return NetworkContext(
+        var context = NetworkContext(
             privacy: Self.privacyRaw(privacy.routerPrivacy),
             environmentSettled: settled,
             credentialsReadable: credentialsReadable(),
             update: AppNetwork.networkUpdate(update.routerStatus),
             apiBaseURL: settled ? environment.current.endpoints.apiBaseURL : nil
         )
+        context.personalizationOff = personalizationOff?() ?? false
+        return context
+    }
+
+    /// 网络层的 10006（已切到主线程）：交给 AppMe 一处处理。
+    func riskNotice(_ ticket: UInt64?, owner: RequestOwnership, stillValid: @escaping @Sendable () -> Bool) {
+        onRiskNotice?(ticket, owner, stillValid)
     }
 
     /// 会话被清的 Effect（clear_session_login / clear_session_stay_force_update）：原样（类型不合并）连同它的归属世代
@@ -224,5 +258,20 @@ final class NetworkContextSource {
         case .basicMode: PrivacyRaw.basic
         case .notDecided: PrivacyRaw.undecided
         }
+    }
+}
+
+/// 导航票据（APP-12 G09，共性第 8、14、17 条）：经 Router 的每次导航（栈变化、切 Tab）与每次离开前台都加一。网络层在每个逻辑调用开始时读一次，
+/// 10006 回来时与此刻比较：不一致（发起之后用户又导航过、退到后台过）就不导航，旧请求不覆盖用户后续导航。线程安全。
+final class NavigationTickets: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: UInt64 = 1
+
+    var value: UInt64 {
+        lock.withLock { current }
+    }
+
+    func advance() {
+        lock.withLock { current &+= 1 }
     }
 }

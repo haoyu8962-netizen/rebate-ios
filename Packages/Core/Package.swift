@@ -6,13 +6,12 @@
 // ClientCore（设备注册 DeviceRegistry、ConfigStore + LKG、Tracker、PermissionRequester，APP-03b）、
 // BridgeHost（桥协议、BridgeHost、第三方页导航判定，APP-04）、ProductSearch（搜索与商品详情，APP-06a）、
 // TradeJump（联盟 SDK 适配层：接口 + 不可用实现，APP-06b）与 Trade（open 购买、跳转方案执行、授权、授权管理，APP-06b）、
-// Clipboard（剪贴板识别，APP-07）、OrderCore（订单与待跟单卡，APP-08）、WalletCore（钱包与提现，APP-09）；
+// Clipboard（剪贴板识别，APP-07）、OrderCore（订单与待跟单卡，APP-08）、WalletCore（钱包与提现，APP-09）、
+// MeCore（「我的」、设置、隐私中心、关于、封禁说明与申诉、客服出口，APP-12）与 Push（推送令牌上报，APP-12）；
 // 其余模块为占位骨架，由后续任务填充。依赖方向：Core → Generated。
 import PackageDescription
 
-let placeholderModules = [
-    "Push",
-]
+let placeholderModules: [String] = []
 
 let generated: Target.Dependency = .product(name: "Generated", package: "Generated")
 
@@ -83,6 +82,27 @@ let coreTargets: [Target] = [
         name: "WalletCoreTests",
         dependencies: ["WalletCore", "CouliNetwork", "OrderCore", "Session", generated]
     ),
+    // APP-12：「我的」、设置、隐私中心、关于、封禁说明与申诉、统一客服出口的纯逻辑（Me 解析、显示规则、设置条目、隐私中心分节、个性化、
+    // 撤回同意、昵称、RiskNotice、申诉、客服决策、诊断信息、10006 落点、推送上报策略，向量 specs/me-vectors.json）与执行器（Me 快照、
+    // 各页执行器、撤回 / 退出交给 App 的协调器）。时间文本不依赖 DesignSystem（Core 无 UI）：按 CouliFormat 同一写法在本模块实现，
+    // 向量测试逐字比对（鸿蒙 H02 同口径）。复用 APP-09 的 WalletCore（WithdrawalText、错误分类、FieldErrorCue）。
+    .target(
+        name: "MeCore",
+        dependencies: ["CouliNetwork", "ClientCore", "Config", "WalletCore", generated]
+    ),
+    // Codex 先写的向量测试（`@testable import MeCore`，另 import DesignSystem 比对恢复时间写法）与执行器测试。
+    .testTarget(
+        name: "MeCoreTests",
+        dependencies: [
+            "MeCore", "CouliNetwork", "Session", generated,
+            .product(name: "DesignSystem", package: "DesignSystem"),
+        ],
+        // Codex 的测试在 XCTContext.runActivity 的闭包里用非 Sendable 的 [String: Any]（实现前测试，未按 Swift 6 严格并发写）；
+        // 测试不改，只把本测试 target 的语言模式降到 Swift 5（生产 target 仍是 Swift 6）。rule-gaps I 段登记。
+        swiftSettings: [.swiftLanguageMode(.v5)]
+    ),
+    // APP-12：推送令牌上报（PushTokenSource 接口、Release 无令牌实现、会话级上报执行器、登录 / 冷启动区分）。不接入任何推送 SDK（G17）。
+    .target(name: "Push", dependencies: ["MeCore", "CouliNetwork", generated]),
 ]
 
 let placeholderTargets: [Target] = placeholderModules.map {
@@ -105,6 +125,8 @@ let coreProducts: [Product] = [
     .library(name: "Clipboard", targets: ["Clipboard"]),
     .library(name: "OrderCore", targets: ["OrderCore"]),
     .library(name: "WalletCore", targets: ["WalletCore"]),
+    .library(name: "MeCore", targets: ["MeCore"]),
+    .library(name: "Push", targets: ["Push"]),
 ]
 
 let placeholderProducts: [Product] = placeholderModules.map { .library(name: $0, targets: [$0]) }
@@ -115,6 +137,8 @@ let package = Package(
     products: coreProducts + placeholderProducts,
     dependencies: [
         .package(path: "../Generated"),
+        // 只给 MeCoreTests（Codex 向量测试比对 CouliFormat.timeListFuture）；Core 的生产 target 不依赖 DesignSystem。
+        .package(path: "../DesignSystem"),
     ],
     targets: coreTargets + placeholderTargets,
     swiftLanguageModes: [.v6]

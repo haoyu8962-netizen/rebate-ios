@@ -77,6 +77,11 @@ final class DebugFakeLoginServer: URLProtocol {
             query[item.name] = item.value ?? ""
         }
         let body = Self.object(Self.bodyData(request))
+        // APP-12：「我的」场景（DebugFakeMe）先于其他场景：Me、申诉、同意记录、推送令牌、配置（kf 与 AI 公示），封禁场景下白名单外回 10006。
+        if let me = DebugFakeMe.shared.answer(method: request.httpMethod ?? "GET", path: path, body: body) {
+            answerOrders(.answer(code: me.code, data: me.data, headers: [:], delay: 0.3))
+            return
+        }
         // APP-09：钱包场景（DebugFakeWallet）先于其他场景；offline 与「响应丢失」按传输失败结束。
         if let wallet = DebugFakeWallet.shared.answer(
             method: request.httpMethod ?? "GET", path: path, query: query, body: body,

@@ -12,6 +12,8 @@ public final class OrderDetailPageConfig: ObservableObject {
     public var onBack: () -> Void = {}
     /// 经 Router 打开一个目标（详情按钮、「查看说明」、「查看商品」、【查看申诉进度】；路由名都在 routes.json）。
     public var onOpen: (_ target: RouteTarget) -> Void = { _ in }
+    /// 【联系客服】（CONTACT_CS）走统一客服出口（APP-12）：返回 true = 已交给客服出口；false（没接）时照旧经 `onOpen` 打开 Help。
+    public var onContactService: () -> Bool = { false }
     /// /v1/config.help_links（「查看说明」的目标；未配置为 nil）。
     public var helpLinks: () -> [String: Any]? = { nil }
     public var now: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }

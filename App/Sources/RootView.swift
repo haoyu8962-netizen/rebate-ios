@@ -20,6 +20,7 @@ struct RootView: View {
     @EnvironmentObject private var login: AppLogin
     @EnvironmentObject private var search: AppSearch
     @EnvironmentObject private var clipboard: AppClipboard
+    @EnvironmentObject private var me: AppMe
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -86,6 +87,8 @@ struct RootView: View {
             .couliToast($login.toast)
             // 剪贴板 parse 的多卡弹层（APP-07 G09）：盖在发起页上，发起页离开即消失
             .clipboardCardSheet(clipboard)
+            // APP-12：统一客服出口的半屏、「撤回没有生效」提示（应用级，盖在当前可见界面上）
+            .modifier(MeOverlays(cs: me.cs, withdraw: me.deps.withdraw, me: me))
     }
 
     /// 隐私弹窗显示条件（R1-01，判定见 `AppRouting.privacyDialogVisible`）；读发布值，界面随之刷新。
@@ -170,7 +173,7 @@ struct RootView: View {
                 routing.shellAppeared()
                 #if DEBUG
                 // 截图用（APP-08）：`-CouliStartTab orders` 冷启动直接切到订单 Tab（窄屏截图时首页布局挡住 Tab 栏的点击）；
-                // APP-09：`-CouliStartTab me` 切到「我的」占位页（钱包冒烟入口）
+                // APP-09：`-CouliStartTab me` 切到「我的」（钱包冒烟入口：「我的」宫格的【钱包】）
                 if let raw = UserDefaults.standard.string(forKey: "CouliStartTab"), let tab = ShellTab(rawValue: raw),
                    tab == .orders || tab == .me {
                     _ = routing.selectTab(tab)

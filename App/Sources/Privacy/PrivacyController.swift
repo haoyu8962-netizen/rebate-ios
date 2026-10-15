@@ -37,15 +37,19 @@ final class PrivacyController: ObservableObject {
 
     private let gate: PrivacyGate
     private let clock: () -> Int64
+    private let store: any PrivacyStore
 
+    /// - Parameter pushStart: 推送初始化步骤（APP-12 G17：只启动 PushTokenSource，Release 为空操作）；不改初始化顺序。
     init(
         store: any PrivacyStore = UserDefaultsPrivacyStore(),
         clock: @escaping () -> Int64 = PendingActionStore.wallClockMillis,
         bundledPolicyVersion: String = BundledLegal.privacyPolicyVersion,
         withdrawalRunner: WithdrawalCleanupRunner = PrivacyWithdrawalCleanup.runner,
-        deviceRegistration: ((@escaping (Bool) -> Void) -> Void)? = nil
+        deviceRegistration: ((@escaping (Bool) -> Void) -> Void)? = nil,
+        pushStart: @escaping @MainActor () -> Void = {}
     ) {
         self.clock = clock
+        self.store = store
         gate = PrivacyGate(store: store, clock: clock, bundledPolicyVersion: bundledPolicyVersion)
         // 撤回记录写不进去时（F-ALL-05）闸门与清理执行器共用同一个内存标记：立即按基本模式、凭据不可读，持续重试写入。
         gate.withdrawalWriteGuard = withdrawalRunner.writeGuard
@@ -59,7 +63,7 @@ final class PrivacyController: ObservableObject {
         gate.raiseWithdrawalReadBarriers = {
             MainActor.assumeIsolated { withdrawalRunner.raiseReadBarriers() }
         }
-        Self.registerInitSteps(on: gate)
+        Self.registerInitSteps(on: gate, pushStart: pushStart)
         if let deviceRegistration {
             // 设备注册（APP-03b，AppNetwork.registerDevice → DeviceRegistry）：异步完成，失败按闸门的退避重试。
             gate.registerDeviceRegistration(deviceRegistration)
@@ -72,13 +76,16 @@ final class PrivacyController: ObservableObject {
 
     /// 唯一的初始化入口登记处：顺序由 `PrivacyInitStep.order` 决定（设备注册 → 推送 → 联盟 → 崩溃 → 微信）。
     /// 本任务各步骤都是空实现；SDK 的初始化调用只能写在 Core 的 PrivacyGate.swift 允许的位置，经这里登记。
-    private static func registerInitSteps(on gate: PrivacyGate) {
+    private static func registerInitSteps(on gate: PrivacyGate, pushStart: @escaping @MainActor () -> Void) {
         // 设备注册（POST /v1/devices）由 init 的 deviceRegistration 登记（APP-03b，异步，失败按退避重试）；
         // 没有接线时（单测）是空步骤。
         // TODO(APP-12): 设备注册成功后上报本地同意记录（client_at = 点击时间）与推送 token。
         gate.registerInitStep(name: PrivacyInitStep.deviceRegister) {}
-        // TODO(APP-推送任务): MobPush 初始化与隐私授权接口（03 §3.5）。
-        gate.registerInitStep(name: PrivacyInitStep.push) {}
+        // APP-12（G17）：推送步骤只启动 PushTokenSource（Release 为空操作；Debug 假来源此后才给测试令牌）。
+        // TODO(N-33): MobPush 初始化与隐私授权接口（03 §3.5）随 SDK 接入任务，AppKey 等未提供。
+        gate.registerInitStep(name: PrivacyInitStep.push) {
+            MainActor.assumeIsolated { pushStart() }
+        }
         // APP-06b：百川等联盟 SDK（03 §3.5）。本包没有 SDK（不可用实现，AppKey 占位，TODO(N-28)）：初始化失败即 phase=startup
         // 上报 sdk_init_failed（BR-ATTR-27 淘宝行），下一次 sdk 步骤前重试 1 次。
         gate.registerInitStep(name: PrivacyInitStep.union) {
@@ -142,7 +149,12 @@ final class PrivacyController: ObservableObject {
         observer(state)
     }
 
-    /// 隐私中心【撤回同意】（页面在 APP-12）。
+    /// 本机已同意的隐私政策版本（撤回记录的 version，APP-12 H12）；没有或不是整数为 nil。
+    var consentedVersion: Int? {
+        store.consentedVersion.flatMap { Int($0) }
+    }
+
+    /// 隐私中心【撤回同意】（APP-12 经应用级协调器 AppMe.withdrawConsent 调用）。
     func withdraw() {
         gate.withdraw(now: clock())
         publish(.withdraw)

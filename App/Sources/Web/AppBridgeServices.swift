@@ -42,8 +42,35 @@ final class AppBridgeServices: BridgeServices {
     }
 
     func user(validity: BridgeCallValidity) async -> BridgeOutcome {
-        guard let client = web?.network.client else { return .fail(BridgeCode.nativeError) }
-        let result = await client.send(ApiCall(operationId: "getMe"), isValid: { validity.isValid })
+        guard let web else { return .fail(BridgeCode.nativeError) }
+        let network = web.network
+        return await Self.user(
+            client: network.client, gate: web.meReadGate, owner: { [weak network] in network?.ownershipNow() },
+            validity: validity
+        )
+    }
+
+    /// auth.getUser：getMe 的读取截止时间与「我的」、钱包实名查询共用（APP-12 共性第 32、33 条）：发送前核对；42901 写回同一个截止时间之前
+    /// （R1-02，共性第 34 条）复核调用仍有效、发起时固定的账号 / 会话世代 / 作废世代（环境、撤回）与此刻一致——网络结果已返回、主线程结算之前
+    /// 换了账号 / 会话 / 环境的旧结果不得限流新会话（即使应答随后被丢弃，也不能先写闸门）。`owner` 在主线程现取此刻的归属（nil = 已释放）。
+    static func user(
+        client: ApiClient, gate: RetryAfterGate?, owner: @MainActor () -> RequestOwnership?,
+        validity: BridgeCallValidity
+    ) async -> BridgeOutcome {
+        let origin = owner()
+        var allowed: @Sendable () -> Bool = { true }
+        if let gate {
+            allowed = gate.sendAllowed
+        }
+        let result = await client.send(
+            ApiCall(operationId: "getMe"),
+            isValid: { validity.isValid },
+            sendAllowed: allowed
+        )
+        if case let .failure(code, _, _, _, effect, _) = result, code == 42901, validity.isValid,
+           let origin, owner() == origin {
+            gate?.start(effect.disableMillis ?? 5000)
+        }
         guard case let .success(data, _, _) = result else { return Self.failure(result) }
         guard let me = data.flatMap({ (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any] }) else {
             return .fail(BridgeCode.nativeError)

@@ -297,6 +297,9 @@ public final class ApiClient: @unchecked Sendable {
         /// 登录响应的会话保存成功时，在保存所用的同一把锁里回调保存后的会话世代（APP-04 共性 68：桥 auth.login 绑定本次登录
         /// 保存的会话）。nil = 不需要。
         var onSessionSaved: (@Sendable (UInt64) -> Void)?
+        /// 逻辑调用开始时取的导航票据（APP-12 G09）：只在第一次 `run` 取一次，重放、续发沿用。
+        var navTicket: UInt64?
+        var navTicketTaken = false
     }
 
     struct Ready {

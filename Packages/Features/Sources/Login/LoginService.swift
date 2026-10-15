@@ -218,13 +218,25 @@ public final class LoginService {
 
     /// 登出（settings.logout）：返回 true = 本机已回到游客。logout 请求失败（断网等）照样清本机会话
     /// （TODO(N-26) INTEGRATION-02：服务端会话只能等过期，规则未写失败时是否提示）。
-    public func logout() async -> Bool {
+    ///
+    /// `owner`（APP-12 R1-04，共性第 30 条）：调用方在【退出登录】确认时一次取得的请求归属，之后只比较——logout 请求带它发送（会话世代 / 账号 /
+    /// 作废世代不一致零发送），本地清理只按 `owner.generation`；确认之后、执行之前已保存了新会话时不作废新会话的登录尝试、不发、不清新会话
+    /// （`superseded` → false）。nil = 原有行为（按此刻的会话世代）。
+    public func logout(owner: RequestOwnership? = nil) async -> Bool {
         guard !loggingOut else { return false }
-        invalidateAttempt()
-        let generation = client.sessionGeneration
+        let generation = owner?.generation ?? client.sessionGeneration
+        if client.sessionGeneration == generation {
+            invalidateAttempt()
+        }
         loggingOut = true
         if client.isolatedSessionScope != nil {
-            _ = await client.send(ApiCall(operationId: "logout"))
+            if let owner {
+                _ = await client.send(
+                    ApiCall(operationId: "logout"), isValid: { true }, sendAllowed: { true }, expected: owner
+                )
+            } else {
+                _ = await client.send(ApiCall(operationId: "logout"))
+            }
         }
         loggingOut = false
         // 共性 3、23：核对世代与删除会话在 ApiClient 保存登录会话的同一把锁里完成（不先读世代、再另行删除）。

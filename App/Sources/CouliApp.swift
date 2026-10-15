@@ -1,6 +1,8 @@
 import ClientCore
 import Config
+import MeCore
 import Privacy
+import Push
 import Router
 import SwiftUI
 import Update
@@ -20,6 +22,7 @@ struct CouliApp: App {
     @StateObject private var clipboard: AppClipboard
     @StateObject private var orders: AppOrders
     @StateObject private var wallet: AppWallet
+    @StateObject private var me: AppMe
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -44,8 +47,8 @@ struct CouliApp: App {
             makeEnvironment: BuildInfo.makeEnvironmentStore
         )
         let environment = launch.environment
-        // 同意后的第一步：设备注册（APP-03b，DeviceRegistry；失败按闸门的退避重试）。
-        let privacy = PrivacyController(deviceRegistration: { done in network.registerDevice(done: done) })
+        // 同意后的第一步：设备注册（APP-03b，DeviceRegistry；失败按闸门的退避重试）；推送步骤只启动 PushTokenSource（APP-12 G17）。
+        let (privacy, pushSource) = Self.makePrivacy(network)
         let update = Self.makeUpdate()
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
         // 短信登录（APP-05a）：守卫的会话状态源、会话 Effect 与刷新通知的接收方、登录页配置、登出。在 attach 之前接上：
@@ -77,7 +80,8 @@ struct CouliApp: App {
         let (clipboard, search) = Self.makeShopping(web: web, login: login)
         let orders = Self.makeOrders(web: web, login: login, clipboard: clipboard, search: search)
         _orders = StateObject(wrappedValue: orders)
-        _wallet = StateObject(wrappedValue: Self.makeWallet(web, login, clipboard, orders))
+        let account = Self.makeAccount(web, login, update, MeShopModules(clipboard, search, orders), pushSource)
+        (_wallet, _me) = (StateObject(wrappedValue: account.wallet), StateObject(wrappedValue: account.me))
         _permissions = StateObject(wrappedValue: permissions)
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
@@ -97,6 +101,58 @@ struct CouliApp: App {
         OrderCacheCleaner.register()
         // APP-09：钱包摘要缓存与提现金额草稿（同上）
         WalletCacheCleaner.register()
+        // APP-12：设备级本机偏好 couli_me_prefs（引导条关闭时刻、个性化开关；只进撤回同意的注册表，切换环境不清，G29）
+        MeLocalCleaner.register(withdrawal: PrivacyWithdrawalCleanup.registry)
+    }
+
+    /// 隐私闸门（APP-02b）与推送令牌来源（APP-12 G17：Release 恒为无令牌；Debug 带 `-CouliFakePushToken` 时给测试令牌）。
+    private static func makePrivacy(_ network: AppNetwork) -> (PrivacyController, PushTokenSource) {
+        let pushSource = makePushSource()
+        let privacy = PrivacyController(
+            deviceRegistration: { done in network.registerDevice(done: done) }, pushStart: { pushSource.start() }
+        )
+        return (privacy, pushSource)
+    }
+
+    /// 推送令牌来源（APP-12 G17）：Release 恒为无令牌（不初始化任何推送 SDK、不上报）；Debug / Staging 带启动参数时用假来源。
+    private static func makePushSource() -> PushTokenSource {
+        #if DEBUG
+        if let fake = DebugPushTokenSource.fromLaunchArguments() {
+            return fake
+        }
+        #endif
+        return NoPushTokenSource()
+    }
+
+    /// 「我的」、设置、隐私中心、关于、封禁说明与申诉、推送上报、统一客服出口（APP-12）：金额隐藏与订单、钱包页共用同一份本机偏好；复制只走剪贴板
+    /// 统一写入口；统一客服出口替换登录页、授权管理、订单详情、钱包的「联系客服 → Help」占位；getMe 的读取截止时间与钱包实名查询、桥 auth.getUser
+    /// 共用。Debug / Staging 打开本机假服务时接上改昵称、通知设置的假后端（Release 没有，G01、G02）。
+    private static func makeAccount(
+        _ web: AppWeb, _ login: AppLogin, _ update: AppUpdate, _ shop: MeShopModules, _ pushSource: PushTokenSource
+    ) -> (wallet: AppWallet, me: AppMe) {
+        let wallet = makeWallet(web, login, shop.clipboard, shop.orders)
+        var system: MeSystemPorts = IOSMeSystem(permissions: web.permissions)
+        var backends: (nickname: NicknameBackend?, notify: NotifyBackend?) = (nil, nil)
+        #if DEBUG
+        system = DebugMeSystem.wrap(system)
+        backends = DebugFakeMe.backends()
+        #endif
+        let me = AppMe(
+            network: web.network, routing: web.routing, config: web.config, login: login, update: update,
+            system: system, mask: shop.orders.mask, pushSource: pushSource, nickname: backends.nickname,
+            notify: backends.notify
+        )
+        me.clipboard = shop.clipboard
+        let open: @MainActor (String) -> Void = { [weak me] route in me?.cs.open(from: route) }
+        wallet.customerService = open
+        wallet.meReadGate = me.gates.read
+        web.meReadGate = me.gates.read
+        shop.orders.customerService = open
+        shop.search.trade?.customerService = open
+        if let tips = shop.search.trade?.tips {
+            me.onTipsReset = { tips.reset() }
+        }
+        return (wallet, me)
     }
 
     /// 剪贴板（APP-07）、购买（APP-06b）与搜索 / 详情（APP-06a）的组装。
@@ -184,6 +240,7 @@ struct CouliApp: App {
                 .environmentObject(clipboard)
                 .environmentObject(orders)
                 .environmentObject(wallet)
+                .environmentObject(me)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -216,7 +273,23 @@ struct CouliApp: App {
                     }
                     // 钱包：active 之外（inactive、background）都立即作废等待中的导航与浮层许可（APP-09 iOS R2-03）
                     wallet.scenePhaseChanged(phase)
+                    // 「我的」：同样作废导航许可（10006 票据），回前台按新的一次进入取 Me（G36）
+                    me.scenePhaseChanged(phase)
                 }
         }
+    }
+}
+
+/// 「我的」要接上的购物、订单模块（统一客服出口、剪贴板写入口、下单须知已读缓存）。
+@MainActor
+struct MeShopModules {
+    let clipboard: AppClipboard
+    let search: AppSearch
+    let orders: AppOrders
+
+    init(_ clipboard: AppClipboard, _ search: AppSearch, _ orders: AppOrders) {
+        self.clipboard = clipboard
+        self.search = search
+        self.orders = orders
     }
 }

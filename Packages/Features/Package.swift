@@ -52,6 +52,14 @@ let extraDependencies: [String: [Target.Dependency]] = [
         .product(name: "CouliNetwork", package: "Core"),
         .product(name: "OrderCore", package: "Core"),
     ],
+    // Me（APP-12）：「我的」、设置（修改昵称、通知设置子页）、隐私中心、关于、封禁说明、申诉与客服半屏的页面；纯逻辑与执行器在 Core 的 MeCore
+    // （Feature 之间不依赖）。错误分类、提示与字段错误定位复用 APP-09 的 WalletCore；金额隐藏偏好是 ClientCore 的 AmountMaskStore。
+    "Me": [
+        .product(name: "MeCore", package: "Core"),
+        .product(name: "WalletCore", package: "Core"),
+        .product(name: "ClientCore", package: "Core"),
+        .product(name: "CouliNetwork", package: "Core"),
+    ],
 ]
 
 let package = Package(

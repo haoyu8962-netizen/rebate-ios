@@ -30,6 +30,8 @@ final class AppPermissions: ObservableObject {
 
     private var requester: PermissionRequester?
     private var rationaleContinuation: CheckedContinuation<Void, Never>?
+    /// 系统状态的只读查询（测试替身注入）。
+    var statusReader: (String) async -> String = PermissionSystem.status
 
     init(file: ClientFile = ClientFile(name: AppPermissions.fileName)) {
         requester = PermissionRequester(
@@ -62,6 +64,16 @@ final class AppPermissions: ObservableObject {
             permission: permission, fromSettingsEntry: fromSettingsEntry, purposeShown: purposeShown,
             isValid: isValid
         )
+    }
+
+    /// 某项权限此刻的系统状态（只查不申请、不改节流；APP-12 隐私中心「系统权限」一节、通知引导条与通知设置用）。
+    func status(_ permission: String) async -> String {
+        await statusReader(permission)
+    }
+
+    /// PermissionRequester 记下的最近被拒时刻（只读；G28）。
+    func deniedAt(_ permission: String) -> Int64? {
+        requester?.deniedAt(permission)
     }
 
     /// 说明页点【继续】。
