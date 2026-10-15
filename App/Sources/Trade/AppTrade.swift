@@ -97,6 +97,22 @@ final class AppTrade {
         router.$path.sink { [weak self] path in
             MainActor.assumeIsolated { self?.refreshVisibility(path: path) }
         }.store(in: &subscriptions)
+        observeLoginResume(router: router, login: login)
+        // 补同意完成：本页登记的购买待办恢复一次（原点击的卡与报价基准，共性第 24 条）
+        privacy.observeState { [weak self] state in
+            guard state.decision == .consented else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                for page in pages.values {
+                    page.purchase?.resumeAfterConsent()
+                }
+            }
+        }
+    }
+
+    /// 登录后的购买待办恢复：会话变为已登录时本页登记的登录待办自动重放一次（发起页不在前台时等回到前台）；待办暂缓明确释放
+    /// （APP-05b R1-01）：暂缓期间 resumeAfterLogin 只保留记录，释放后通知原购买页重新核对归属、前置与页面许可，再恢复一次。
+    private func observeLoginResume(router: Router, login: AppLogin) {
         // 会话变为已登录：本页登记的登录待办自动重放一次（发起页不在前台时等回到前台）
         login.$sessionVersion.dropFirst().sink { [weak self] _ in
             MainActor.assumeIsolated {
@@ -111,16 +127,15 @@ final class AppTrade {
                 }
             }
         }.store(in: &subscriptions)
-        // 补同意完成：本页登记的购买待办恢复一次（原点击的卡与报价基准，共性第 24 条）
-        privacy.observeState { [weak self] state in
-            guard state.decision == .consented else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                for page in pages.values {
-                    page.purchase?.resumeAfterConsent()
+        // 待办暂缓明确释放（APP-05b R1-01）
+        router.pendingHoldReleased.sink { [weak self, weak login] _ in
+            MainActor.assumeIsolated {
+                guard let self, login?.loggedIn == true else { return }
+                for page in self.pages.values {
+                    page.purchase?.resumeAfterLogin()
                 }
             }
-        }
+        }.store(in: &subscriptions)
     }
 
     private static func makeWebCode() -> WebCodeAuthorizer {
@@ -324,6 +339,10 @@ final class RouterPurchasePending: PurchasePending {
 
     func peek() -> TradeObject? {
         router.pendingAction(PurchasePendingKeys.action)
+    }
+
+    var held: Bool {
+        router.pendingHeld
     }
 
     func stepDone() {

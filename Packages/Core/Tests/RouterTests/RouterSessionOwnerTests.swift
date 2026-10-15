@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Generated
 import XCTest
@@ -84,6 +85,27 @@ final class RouterSessionOwnerTests: XCTestCase {
         await newGate.open(with: .found(route: "Messages", params: [:]))
         await fresh.value
         XCTAssertEqual(router.path.map(\.route), ["Messages"], "原会话结束之后发起的回查照常")
+    }
+
+    /// APP-05b 第 1 轮 R1-01：发起页自己执行的待办（购买 open_link）在暂缓期间保留；明确释放时经 pendingHoldReleased 通知一次，
+    /// 别的会话的迟到释放不通知。
+    func testHoldReleaseNotifiesInitiatorPages() {
+        let backend = MemoryPendingBackend()
+        let router = makeRouter(backend)
+        guardState.session = .loggedIn
+        XCTAssertTrue(router.registerAction("open_link", params: ["kind": "login", "link_id": "l1"]))
+        var released: [UInt64] = []
+        let token = router.pendingHoldReleased.sink { released.append($0) }
+        defer { token.cancel() }
+        router.holdPending(session: 5)
+        XCTAssertTrue(router.pendingHeld)
+        router.releasePendingHold(.resumeOnly, session: 4)
+        XCTAssertTrue(released.isEmpty, "旧会话的释放不通知")
+        XCTAssertTrue(router.pendingHeld)
+        router.releasePendingHold(.resumeOnly, session: 5)
+        XCTAssertFalse(router.pendingHeld)
+        XCTAssertEqual(released, [5])
+        XCTAssertNotNil(router.pendingAction("open_link"), "Router 不执行也不删除发起页的待办")
     }
 }
 

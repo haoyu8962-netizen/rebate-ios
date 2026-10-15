@@ -66,6 +66,33 @@ enum LoginDraftTexts {
         "login.invite_failed.rate_limited": "尝试次数过多，请明天再试",
         "login.invite_failed.ok": "知道了",
         "login.invite_failed.backfill": "去补填",
+        // ---- APP-05b：第三方登录区（Login 画板「其他登录方式」）、provider 名（{provider_name}）
+        "login.wechat": "微信登录",
+        "login.wechat.short": "微信",
+        "login.provider.wechat": "微信",
+        "login.provider.apple": "Apple",
+        // ---- APP-05b：LoginBindPhoneGuide 按钮（标题、正文用契约 invite.bind_phone_guide.*）
+        "invite.bind_phone_guide.skip": "暂不",
+        "invite.bind_phone_guide.go": "去绑定",
+        // ---- APP-05b：BindPhone / BindPhoneMerge（说明条用契约 invite.bind_phone_guide.body，并号正文用契约 error.30411.mergeable）
+        "bind_phone.title": "绑定手机号",
+        "bind_phone.code.placeholder": "6 位验证码",
+        "bind_phone.countdown": "{sec} 秒后重新获取",
+        "bind_phone.submit": "绑定",
+        "bind_phone.done": "手机号已绑定",
+        // 倒计时结束、可以重新获取时的读屏播报（设计稿与契约都没有这句，共性第 11 条）
+        "bind_phone.can_resend": "可以重新获取验证码",
+        "bind_phone.merge.title": "并入原账号",
+        "bind_phone.merge.into": "并入到",
+        "bind_phone.merge.account": "手机号账号 {phone}",
+        "bind_phone.merge.cancel": "取消",
+        "bind_phone.merge.ok": "并入",
+        // 锁定契约没有并号接口（TODO(N-29) MERGE-SUCCESS），确认后不发请求，提示暂不可用（与 Android / 鸿蒙同句）
+        "bind_phone.merge.unavailable": "暂时无法并入原账号，请稍后再试，或退出后用手机号登录",
+        // ---- APP-05b：BindPhone 待确认卡（APP-13a G07：版式照 PhoneChangePendingConfirm；首次绑定没有「当前手机号」一行）
+        "bind_phone.pending.phone_label": "提交的手机号",
+        "bind_phone.pending.time_label": "提交时间",
+        "bind_phone.pending_hint": "结果确认前不能再次绑定手机号",
         // 设置页·退出登录（BR-TEXT-14 表 C settings.logout.*，契约快照未同步）
         "settings.logout": "退出登录",
         "settings.logout.confirm": "确定退出登录？",

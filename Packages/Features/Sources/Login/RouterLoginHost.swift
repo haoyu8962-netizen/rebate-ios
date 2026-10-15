@@ -61,12 +61,15 @@ public final class RouterLoginHost: LoginHost {
         return !before.isSubset(of: after)
     }
 
-    /// 守卫用的会话状态：按 ApiClient 经过会话隔离判断的会话现算：没有 → 游客；deletion_only → 受限；其余 → 已绑手机
-    /// （短信登录的账号一定有手机号；TODO(APP-05b)：第三方登录的会话按 getMe.phone_bound 区分）。
+    /// 守卫用的会话状态（只有短信登录的组合用，如 APP-05a 的登录集成测试：短信登录的账号一定有手机号）：没有 → 游客；deletion_only →
+    /// 受限；其余 → 已绑手机。App 用 `SessionGuardState.of(scope:phoneBound:)`（APP-05b：full 会话只有确认已绑才算已绑手机）。
     public nonisolated static func sessionState(scope: String?) -> SessionState {
         guard let scope else { return .guest }
         return scope == Session.SessionScope.deletionOnly ? .restricted : .phoneBound
     }
+
+    /// 第三方新号登录成功（APP-05b）：盖在恢复页上弹 LoginBindPhoneGuide（App 接）。参数：登录保存后的会话世代、provider。
+    public var onBindGuide: ((UInt64, String) -> Void)?
 
     public func updateState() -> String {
         switch update() {
@@ -116,5 +119,24 @@ public final class RouterLoginHost: LoginHost {
 
     public func bindSessionTag(_ tag: @escaping @MainActor () -> UInt64) {
         router.sessionTag = tag
+    }
+}
+
+/// 第三方登录（APP-05b）用到的 Router 出口：待办暂缓与绑手机引导。
+extension RouterLoginHost: OAuthHost {
+    public func holdPending(session: UInt64) {
+        router.holdPending(session: session)
+    }
+
+    public func releasePendingHold(_ mode: PendingHoldRelease, session: UInt64) {
+        router.releasePendingHold(mode, session: session)
+    }
+
+    public func dropPendingHold(session: UInt64) {
+        router.dropPendingHold(session: session)
+    }
+
+    public func presentBindGuide(session: UInt64, provider: String) {
+        onBindGuide?(session, provider)
     }
 }

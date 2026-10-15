@@ -34,3 +34,35 @@ enum InviteFailedDialog {
         )
     }
 }
+
+/// 路由 BindPhone（APP-05b）：Features/Login 的绑手机页。一个导航实例一份执行器（AppLogin 按 RouteDestination.id 缓存，出栈、会话换代时
+/// 在同步出口作废）。用自己的顶栏，系统导航栏隐藏。
+struct BindPhoneRouteView: View {
+    let destination: RouteDestination
+    @EnvironmentObject private var login: AppLogin
+
+    var body: some View {
+        BindPhoneScreen(entry: login.bindEntry(for: destination), texts: login.texts)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarBackButtonHidden(true)
+            .debugRouteMarker(destination)
+    }
+}
+
+/// 第三方新号的绑手机引导（LoginBindPhoneGuide；BR-INV-03 细则 ①）：标题、正文用契约 invite.bind_phone_guide.*；【暂不】/【去绑定】。
+/// 点遮罩不关闭（按钮关闭）。首次购买前的提示句（body_before_buy）要识别购买类待办与已读状态，未做（rule-gaps 21 同口径，iOS I06）。
+@MainActor
+enum BindGuideDialog {
+    static func make(_ login: AppLogin, guide: BindGuide) -> CouliDialog {
+        CouliDialog(
+            title: LoginDraftTexts.text("invite.bind_phone_guide.title"),
+            message: LoginDraftTexts.text("invite.bind_phone_guide.body"),
+            primary: CouliDialogAction(LoginDraftTexts.text("invite.bind_phone_guide.go")) {
+                login.goBindPhone(guide.id)
+            },
+            secondary: CouliDialogAction(LoginDraftTexts.text("invite.bind_phone_guide.skip")) {
+                login.skipBindGuide(guide.id)
+            }
+        )
+    }
+}

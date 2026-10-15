@@ -146,6 +146,9 @@ struct CouliApp: App {
         let open: @MainActor (String) -> Void = { [weak me] route in me?.cs.open(from: route) }
         wallet.customerService = open
         wallet.meReadGate = me.gates.read
+        // APP-05b：手机号绑定状态的 getMe 与「我的」、钱包实名查询、桥 auth.getUser 共用读取截止时间；绑定成功清全部 action 的 step-up token
+        login.phoneSync.readGate = me.gates.read
+        login.connect(wallet: wallet)
         web.meReadGate = me.gates.read
         shop.orders.customerService = open
         shop.search.trade?.customerService = open
@@ -275,6 +278,8 @@ struct CouliApp: App {
                     wallet.scenePhaseChanged(phase)
                     // 「我的」：同样作废导航许可（10006 票据），回前台按新的一次进入取 Me（G36）
                     me.scenePhaseChanged(phase)
+                    // 绑手机页：active 之外都作废导航与弹窗许可（APP-05b，APP-09 共性第 77 条）
+                    login.scenePhaseChanged(active: phase == .active)
                 }
         }
     }

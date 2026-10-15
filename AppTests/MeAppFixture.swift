@@ -72,7 +72,7 @@ struct MeAppFixture {
     static func make(
         suiteName: String, defaults: UserDefaults, account: String? = "user-a", scope: String = "full",
         decision: String = "consented", pushToken: String? = nil, registered: Bool = true,
-        update checker: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok))
+        update checker: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)), phoneKnown: Bool = true
     ) -> MeAppFixture {
         let (tokens, privacyStore) = session(account: account, scope: scope, decision: decision)
         let withdrawal = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
@@ -97,6 +97,7 @@ struct MeAppFixture {
         )
         let login = AppLogin(network: network, routing: routing, update: update)
         network.attach(environment: environment, privacy: privacy, update: update)
+        seedPhoneBound(login, network.client, when: account != nil && phoneKnown)
         routing.shellAppeared()
         let localFile = FlakyMeFile(ClientFile(name: MeLocalStore.fileName, baseDirectory: localDirectory(suiteName)))
         let local = MeLocalStore(file: localFile, pending: localFile.sibling(MeLocalStore.pendingFileName))
@@ -124,6 +125,13 @@ struct MeAppFixture {
         )
     }
 
+    /// 已登录的是短信登录的账号（一定绑了手机号）：守卫按已绑手机（APP-05b：phone_bound 未知按未绑，共性第 13 条）。
+    private static func seedPhoneBound(_ login: AppLogin, _ client: ApiClient, when seeded: Bool) {
+        if seeded {
+            login.phone.record(true, generation: client.sessionGeneration)
+        }
+    }
+
     /// 本用例的设备级偏好目录（每个用例独立，tearDown 删除）。
     nonisolated static func localDirectory(_ suiteName: String) -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("me-prefs-" + suiteName, isDirectory: true)
@@ -139,6 +147,7 @@ struct MeAppFixture {
     func switchAccount(to account: String) throws {
         client.signOut()
         try tokens.save(access: "at-\(account)", refresh: "rt-\(account)", scope: "full", account: account)
+        login.phone.record(true, generation: client.sessionGeneration)
         routing.sessionStateChanged(resumePending: false)
     }
 
@@ -146,6 +155,7 @@ struct MeAppFixture {
     func loginCompleted(as account: String) throws {
         client.signOut()
         try tokens.save(access: "at-\(account)", refresh: "rt-\(account)", scope: "full", account: account)
+        login.phone.record(true, generation: client.sessionGeneration)
         routing.sessionStateChanged(resumePending: true)
         login.onLoginCompleted?(client.sessionGeneration)
     }
@@ -250,9 +260,10 @@ class MeTestCase: XCTestCase {
 
     func make(account: String? = "user-a", scope: String = "full", decision: String = "consented",
               pushToken: String? = nil, registered: Bool = true,
-              update: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok))) -> MeAppFixture {
+              update: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)),
+              phoneKnown: Bool = true) -> MeAppFixture {
         MeAppFixture.make(suiteName: suiteName, defaults: defaults, account: account, scope: scope, decision: decision,
-                          pushToken: pushToken, registered: registered, update: update)
+                          pushToken: pushToken, registered: registered, update: update, phoneKnown: phoneKnown)
     }
 
     func requests(_ method: String, _ path: String) -> [WalletStubProtocol.Recorded] {

@@ -83,6 +83,10 @@ struct RootView: View {
             .couliDialog(isPresented: login.inviteFailedKey != nil) {
                 InviteFailedDialog.make(login, bodyKey: login.inviteFailedKey ?? "login.invite_failed.body")
             }
+            // APP-05b：第三方新号的绑手机引导（登录页关闭后盖在恢复页上；登录页还在栈顶时先让出）
+            .couliDialog(isPresented: login.bindGuide != nil && router.path.last?.route != RoutePolicy.login) {
+                BindGuideDialog.make(login, guide: login.bindGuide ?? BindGuide(session: 0, provider: "", id: 0))
+            }
             .couliToast($update.toast)
             .couliToast($login.toast)
             // 剪贴板 parse 的多卡弹层（APP-07 G09）：盖在发起页上，发起页离开即消失

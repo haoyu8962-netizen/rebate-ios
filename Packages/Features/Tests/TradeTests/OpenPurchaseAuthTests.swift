@@ -33,6 +33,29 @@ final class OpenPurchaseAuthTests: XCTestCase {
         XCTAssertEqual(rig.opens().count, 2)
     }
 
+    /// APP-05b 第 1 轮 R1-01：第三方新号登录后待办暂缓——resumeAfterLogin 不读取、不清除、不重放，记录原样保留；释放后再调一次
+    /// 才按原尝试重放一次（原键）。
+    func testResumeAfterLoginKeepsPendingWhileHeldThenReplaysOnceAfterRelease() async {
+        let rig = PurchaseHarness()
+        rig.env.isLoggedIn = false
+        rig.controller.buy(rig.env.card, spm: "ProductDetail.bottom.buy")
+        await eventually { rig.opens().count == 1 }
+        rig.replyOpen(0, TradeFixtures.fail(10001))
+        await eventually { rig.env.opened.last?.0 == "Login" }
+        rig.env.isLoggedIn = true
+        rig.pending.held = true
+        rig.controller.resumeAfterLogin()
+        rig.controller.onForeground()
+        await settle()
+        XCTAssertEqual(rig.opens().count, 1, "暂缓中不重发购买请求")
+        XCTAssertEqual(TJSON.string(rig.pending.peek()?["idempotency_key"]), "key-1", "暂缓中记录原样保留")
+        rig.pending.held = false
+        rig.controller.resumeAfterLogin()
+        await eventually { rig.opens().count == 2 }
+        XCTAssertEqual(rig.opens()[1].idempotencyKey, "key-1", "释放后按原尝试恢复一次")
+        XCTAssertNil(rig.pending.peek())
+    }
+
     func testAbandonedLoginClearsPendingOnReturn() async {
         let rig = PurchaseHarness()
         rig.env.isLoggedIn = false

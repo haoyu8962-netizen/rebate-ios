@@ -109,6 +109,14 @@ public protocol PurchasePending: AnyObject {
     func stepDone()
     /// 删除（执行前、放弃、页面出栈）。
     func clear()
+    /// 待办此刻处于暂缓（APP-05b：第三方新号登录后、绑手机引导结束前）：自动恢复只保留记录，等释放通知再恢复（R1-01）。
+    var held: Bool { get }
+}
+
+public extension PurchasePending {
+    var held: Bool {
+        false
+    }
 }
 
 public enum PurchasePendingKeys {
@@ -125,6 +133,8 @@ public enum PurchasePendingKeys {
 /// 内存实现（测试、没有持久化的场合）。
 @MainActor
 public final class MemoryPurchasePending: PurchasePending {
+    /// 暂缓（测试与没有 Router 的组合用）。
+    public var held = false
     private var params: TradeObject?
     private var startedAt: Int64 = 0
     private let clock: () -> Int64

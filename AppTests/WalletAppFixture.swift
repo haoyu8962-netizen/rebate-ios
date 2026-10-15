@@ -68,6 +68,8 @@ struct WalletAppFixture {
         )
         let login = AppLogin(network: network, routing: routing, update: update)
         network.attach(environment: environment, privacy: privacy, update: update)
+        // 已登录的是短信登录的账号（一定绑了手机号）：守卫按已绑手机（APP-05b：phone_bound 未知按未绑，共性第 13 条）
+        login.phone.record(true, generation: network.client.sessionGeneration)
         routing.shellAppeared()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(suiteName)
             .appendingPathComponent("wallet")
@@ -94,6 +96,7 @@ struct WalletAppFixture {
     func switchAccount(to account: String) throws {
         network.client.signOut()
         try tokens.save(access: "at-\(account)", refresh: "rt-\(account)", scope: "full", account: account)
+        login.phone.record(true, generation: network.client.sessionGeneration)
         routing.sessionStateChanged(resumePending: false)
     }
 
@@ -101,6 +104,7 @@ struct WalletAppFixture {
     func swapTokensSilently(to account: String) throws {
         network.client.signOut()
         try tokens.save(access: "at-\(account)", refresh: "rt-\(account)", scope: "full", account: account)
+        login.phone.record(true, generation: network.client.sessionGeneration)
     }
 
     /// 打开一个路由并取到页面（经真实 Router 与 RouteViewRegistry 同一个入口）。

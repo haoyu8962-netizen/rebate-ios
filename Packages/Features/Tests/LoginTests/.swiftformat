@@ -1,2 +1,2 @@
-# LoginVectorTests.swift 是 Codex 按任务书先写的向量测试（APP-05a 任务书 §4，不改不删）：不参与格式化。
---exclude LoginVectorTests.swift
+# LoginVectorTests.swift（APP-05a）与 OAuthLoginVectorTests.swift（APP-05b）是 Codex 按任务书先写的向量测试（任务书 §4，不改不删）：不参与格式化。
+--exclude LoginVectorTests.swift,OAuthLoginVectorTests.swift

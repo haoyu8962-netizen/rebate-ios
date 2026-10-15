@@ -133,6 +133,11 @@ public struct SmsSendDeadlines {
         sentAt[phone] = now
     }
 
+    /// 这个号码记下的截止时刻（不论是否已过）。
+    func until(_ phone: String) -> Int64? {
+        byPhone[phone]?.untilMillis
+    }
+
     func active(_ phone: String, now: Int64) -> Deadline? {
         guard let found = byPhone[phone], now < found.untilMillis else { return nil }
         return found

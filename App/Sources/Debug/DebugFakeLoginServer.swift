@@ -7,7 +7,7 @@ import Session
 
 /// 本机假服务（APP-05a 截图、冒烟与设计稿比对用；只在 Debug / Staging 编译，APP-04 共性 2）：URLProtocol 桩，
 /// 全部请求在本机回答，不连任何地址。启动参数 `-CouliFakeLoginServer` 打开时才接管 ApiClient 的会话配置。
-/// Release 制品扫描查 `marker` 与类名（tools/ci/release-scan.sh）。
+/// Release 制品扫描查 `marker` 与类名（tools/ci/release-scan.sh）。第三方登录与绑手机见 `DebugFakeOAuth`（APP-05b）。
 ///
 /// 场景按输入值选：
 /// - 发码：13900000000 → 42901（Retry-After 120）；13700000000 第一次成功、之后 42901（Retry-After 3600，共性 12 演示）；
@@ -80,6 +80,12 @@ final class DebugFakeLoginServer: URLProtocol {
         // APP-12：「我的」场景（DebugFakeMe）先于其他场景：Me、申诉、同意记录、推送令牌、配置（kf 与 AI 公示），封禁场景下白名单外回 10006。
         if let me = DebugFakeMe.shared.answer(method: request.httpMethod ?? "GET", path: path, body: body) {
             answerOrders(.answer(code: me.code, data: me.data, headers: [:], delay: 0.3))
+            return
+        }
+        // APP-05b：第三方登录与绑手机（DebugFakeOAuth）；「响应丢失」按传输失败结束（结果未知 → 待确认）。
+        if let oauth = DebugFakeOAuth.shared.answer(method: request.httpMethod ?? "GET", path: path, body: body) {
+            answerOrders(oauth.lost ? .offline : .answer(code: oauth.code, data: oauth.data, headers: oauth.headers,
+                                                         delay: 0.3))
             return
         }
         // APP-09：钱包场景（DebugFakeWallet）先于其他场景；offline 与「响应丢失」按传输失败结束。

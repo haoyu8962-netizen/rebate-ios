@@ -5,8 +5,10 @@ import Foundation
 import Login
 import Router
 
-/// App 侧的登录（APP-05a）：组合 LoginService（ApiClient、生产出口 RouterLoginHost），给登录页配置，给守卫会话状态，登出。
-/// - 守卫的会话状态由 `ApiClient.isolatedSessionScope` 现算（游客 / 受限 / 已绑手机，RouterLoginHost.sessionState）；
+/// App 侧的登录（APP-05a、APP-05b）：组合 LoginService、第三方登录 OAuthLoginService、绑手机 BindPhoneService（ApiClient、生产出口
+/// RouterLoginHost），给登录页与绑手机页配置，给守卫会话状态，登出。
+/// - 守卫的会话状态由 `ApiClient.isolatedSessionScope` 与本会话的手机号绑定状态现算（游客 / 受限 / 已登录未绑手机 / 已绑手机；
+///   phone_bound 未知按未绑，SessionGuardState，APP-05b 共性第 13 条）；
 /// - Tracker 的 user_id 本来就由 `ApiClient.isolatedAccount` 现读（AppTracker），登录 / 登出后自动跟上，不另发通知；
 /// - 会话失效（clear_session_login）：经 Router 打开登录页并提示 error.10404（LoginSessionExpired）；强更场景保持强更页。
 @MainActor
@@ -20,14 +22,32 @@ final class AppLogin: ObservableObject {
 
     let service: LoginService
     let host: RouterLoginHost
-    private let client: ApiClient
-    private let routing: AppRouting
-    private let texts = AppLoginTexts()
+    let client: ApiClient
+    let routing: AppRouting
+    let texts = AppLoginTexts()
     private var sessionExpiredPending = false
     /// 剪贴板识别（APP-07）：邀请码【粘贴】与游客邀请预填（CouliApp 创建后接上）。
     weak var clipboard: AppClipboard?
-    /// 第三方登录位置的占位只在 Debug / Staging 显示（APP-05b 实现前，版式比对用）。
-    private let showThirdPartySlot: Bool
+    /// 手机号绑定状态与查询、第三方登录、绑手机（APP-05b）。
+    let phone: PhoneBindingStore
+    let phoneSync: PhoneBindingSync
+    let oauth: OAuthLoginService
+    let bind: BindPhoneService
+    /// 第三方新号的绑手机引导（LoginBindPhoneGuide）：盖在恢复页上；nil = 不显示。
+    @Published var bindGuide: BindGuide?
+    /// 绑手机页的导航实例（按 RouteDestination.id）。
+    var bindEntries: [UUID: BindPhoneEntry] = [:]
+    /// 绑定成功的共享结算出口（CouliApp 接：清钱包里全部 action 的 step-up token，APP-13a 共性第 9 条）。
+    var onPhoneBound: ((BindPhoneOwner) -> Void)?
+    /// 绑定成功后刷新共享 Me 资料（AppMe 接：按固定归属发新一轮 getMe，R1-02）。
+    var onBoundRefresh: ((BindPhoneOwner) -> Void)?
+    /// 场景在前台（scenePhase active）。
+    var sceneActive = true
+    var guideSerial = 0
+    /// 手机号状态查询失败的会话世代：之后只在会话状态变化、进绑手机页时再查（不在每次启动协调里重试）。
+    var phoneQueryFailed: UInt64?
+    let network: AppNetwork
+    var pathWatch: AnyCancellable?
     /// 真实登录成功（登录页拿到 logged_in，新会话已保存）：带此刻的会话世代通知（APP-12 推送上报只认这个信号，共性第 3 条）。
     var onLoginCompleted: ((UInt64) -> Void)?
     /// 统一客服出口（APP-12 AppMe.cs；没接时打开帮助中心，与接入前一致）。
@@ -35,12 +55,8 @@ final class AppLogin: ObservableObject {
 
     init(network: AppNetwork, routing: AppRouting, update: AppUpdate) {
         client = network.client
+        self.network = network
         self.routing = routing
-        #if DEBUG
-        showThirdPartySlot = true
-        #else
-        showThirdPartySlot = false
-        #endif
         host = RouterLoginHost(
             router: routing.router,
             update: { Self.loginUpdate(update.routerStatus) },
@@ -51,10 +67,34 @@ final class AppLogin: ObservableObject {
         // 共性 9：登录页确定出栈的同步出口立即作废本次尝试。
         host.watchLoginPage(service)
         let client = network.client
-        routing.sessionSource = { RouterLoginHost.sessionState(scope: client.isolatedSessionScope) }
+        let phone = PhoneBindingStore()
+        self.phone = phone
+        service.phoneBinding = phone
+        phoneSync = PhoneBindingSync(client: client, store: phone)
+        phoneSync.ownership = { [network] in network.ownershipNow() }
+        oauth = OAuthLoginService(login: service, host: host, phone: phoneSync, authorizers: Self.authorizers())
+        oauth.ownership = { [network] in network.ownershipNow() }
+        bind = BindPhoneService(client: client, sync: phoneSync)
+        bind.identity = { [network, client] in
+            BindPhoneOwner(request: network.ownershipNow(), scope: client.isolatedSessionScope)
+        }
+        routing.sessionSource = {
+            SessionGuardState.of(
+                scope: client.isolatedSessionScope, phoneBound: phone.bound(generation: client.sessionGeneration)
+            )
+        }
         routing.onSessionStateChanged = { [weak self] in
             self?.sessionVersion &+= 1
+            self?.sessionStateSynced()
         }
+        routing.beforeLaunchCoordination = { [weak self] in
+            self?.ensurePhoneBindingKnown()
+        }
+        wireBindPhone()
+        #if DEBUG
+        // 本机假服务的「已登录假账号」（-CouliFakeTradeLoggedIn）是短信登录的账号：守卫按已绑手机（假 getMe 同样回 phone_bound=true）
+        DebugFakeOAuth.seedLoggedInPhone(self, arguments: ProcessInfo.processInfo.arguments)
+        #endif
         network.source.onSessionEffect = { [weak self] effect, generation in
             self?.sessionEffect(effect, generation: generation)
         }
@@ -136,7 +176,8 @@ final class AppLogin: ObservableObject {
         config.restricted = restricted
         config.sessionExpired = sessionExpiredPending
         sessionExpiredPending = false
-        config.showThirdPartySlot = showThirdPartySlot
+        // 第三方登录（APP-05b）：按钮是否显示由适配器决定（正式微信恒不可用；Apple 的 entitlement 开关，rule-gaps iOS I01）
+        config.oauth = oauth
         let router = routing.router
         config.onClose = { router.removeRoute(RoutePolicy.login) }
         config.onSettings = { router.open(RouteRequest(route: "Settings", from: .inApp)) }

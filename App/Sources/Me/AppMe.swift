@@ -5,6 +5,7 @@ import Config
 import CouliNetwork
 import Foundation
 import Generated
+import Login
 import MeCore
 import Privacy
 import Push
@@ -85,6 +86,8 @@ final class AppMe: ObservableObject {
     /// 撤回清理重试（生产为 `PrivacyWithdrawalCleanup.runner.retryIfPending`；测试注入）。
     var retryWithdrawal: () -> Bool = { PrivacyWithdrawalCleanup.runner.retryIfPending() }
     private var subscriptions: Set<AnyCancellable> = []
+    /// 绑定后 getMe 的会话级发起方（不随页面离开；身份变化由 MeRepository 按身份核对作废）。
+    private let boundReader = MeSessionReader()
 
     init(
         network: AppNetwork, routing: AppRouting, config: AppConfig, login: AppLogin, update: AppUpdate,
@@ -139,6 +142,7 @@ final class AppMe: ObservableObject {
             }
         login.onLoginCompleted = { [weak self] generation in self?.pushTracker.loginCompleted(generation) }
         login.customerService = { [weak self] route in self?.cs.open(from: route) }
+        login.onBoundRefresh = { [weak self] owner in self?.refreshAfterBind(owner) }
         login.$sessionVersion.dropFirst().sink { [weak self] _ in
             Task { @MainActor [weak self] in self?.syncIdentity() }
         }.store(in: &subscriptions)
@@ -155,6 +159,19 @@ final class AppMe: ObservableObject {
             MainActor.assumeIsolated { self?.tabRootChanged(root) }
         }.store(in: &subscriptions)
         MeLocalCleaner.shared.onCleared = { [weak self] in self?.objectWillChange.send() }
+    }
+
+    // MARK: - 绑定手机号之后
+
+    /// 绑定成功的共享结算（APP-05b R1-02，APP-13a 共性第 25 条）：按绑定请求的固定归属发新一轮 getMe，更新「我的」与设置共用的 Me 快照。
+    /// - 只在此刻身份仍是该归属（同账号、同会话世代与作废世代）时发；换了会话的不动新会话；
+    /// - 遵守 getMe 的共享读取限流（MeGates.read 禁用期内不发，不另写错误态）；
+    /// - 新发一次（不并入绑定前已在途的读取，它们按读取序号被取代、结果不再结算），发起方是会话级读取者（页面在不在都结算）。
+    func refreshAfterBind(_ owner: BindPhoneOwner) {
+        syncIdentity()
+        let identity = currentIdentity
+        guard identity.member, identity.request == owner.request, !gates.read.active else { return }
+        deps.repo.refresh(identity, page: boundReader)
     }
 
     // MARK: - 身份
@@ -283,5 +300,13 @@ final class AppMe: ObservableObject {
     /// 推送令牌来源变化后（Debug 假来源）重新同步一次（测试用）。
     func pushStateChanged() {
         pushTracker.sync()
+    }
+}
+
+/// 会话级的 Me 读取发起方（绑定手机号后的刷新，R1-02）：不属于任何页面，始终可读；结果仍按身份与读取序号核对。
+@MainActor
+final class MeSessionReader: MeReader {
+    var reading: Bool {
+        true
     }
 }

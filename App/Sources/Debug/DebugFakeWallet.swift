@@ -167,7 +167,8 @@ final class DebugFakeWallet: @unchecked Sendable {
 
     func me(_ state: [String: String]) -> [String: Any] {
         [
-            "user_id": "debug-user", "realname_status": realname(state) ? "verified" : "none", "phone_bound": true,
+            "user_id": "debug-user", "realname_status": realname(state) ? "verified" : "none",
+            "phone_bound": DebugFakeOAuth.shared.phoneBound,
             "risk": ["state": "normal"], "need_reconsent": false,
         ]
     }

@@ -83,7 +83,7 @@ final class DebugFakeMe: @unchecked Sendable {
             "user_id": "debug-user", "nickname": nickname, "avatar_url": "https://example.invalid/default.png",
             "invite_code": scenario == "minor" ? NSNull() : "K7M3QX", "inviter_bound": scenario != "unbound",
             "invite_backfill": ["eligible": false, "deadline_at": NSNull()], "identity_level": "phone",
-            "phone_bound": true,
+            "phone_bound": DebugFakeOAuth.shared.phoneBound,
             "balance": ["available_fen": 1234, "withdrawable_fen": 1234, "estimated_total_fen": 5678],
             "union_bindings": [], "realname_status": realname ? "verified" : "none", "need_reconsent": false,
             "risk": ["state": riskState, "reason_category": reason, "frozen_until": until],

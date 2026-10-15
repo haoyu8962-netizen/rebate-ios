@@ -146,6 +146,25 @@ public extension ApiClient {
         return await run(call, operation, isReplay: false, options: options)
     }
 
+    /// 第三方登录的发送（APP-05b 共性第 1 条）：同上，另带授权流程开始时固定的请求归属 `expected`——首次绑定前、组请求后、实际写出前都只
+    /// 比较（会话世代、作废世代、账号），授权等待期间别处保存了另一会话时零发送（session_changed），之后保存会话时核对的也是这一份世代，
+    /// 不会把旧授权的登录写进新会话之上。
+    func send(
+        _ call: ApiCall,
+        isValid: @escaping @Sendable () -> Bool,
+        onSessionSaved: @escaping @Sendable (UInt64) -> Void,
+        expected: RequestOwnership
+    ) async -> ApiResult {
+        guard let operation = ApiOperations.byId(call.operationId) else {
+            return .localReject(reason: LocalRejectReason.invalidCall)
+        }
+        var options = RunOptions(epoch: expected.epoch)
+        options.callValid = isValid
+        options.onSessionSaved = onSessionSaved
+        options.expected = expected
+        return await run(call, operation, isReplay: false, options: options)
+    }
+
     /// 在保存登录会话所用的同一同步区里执行 `body`（APP-05a 共性 24）：登录尝试的作废经它完成，保证不会插在「核对尝试仍有效」
     /// 与「写入令牌」之间。`body` 只改调用方自己的状态，不得再调用 ApiClient（锁不可重入）。
     func withLoginCommitLock<T>(_ body: () -> T) -> T {

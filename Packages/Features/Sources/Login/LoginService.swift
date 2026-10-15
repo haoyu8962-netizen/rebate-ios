@@ -15,10 +15,10 @@ import Session
 public final class LoginService {
     let client: ApiClient
     let host: LoginHost
-    private let legal: LegalVersions
-    private let clock: () -> Int64
-    public private(set) var deadlines = SmsSendDeadlines()
-    private var owner = AttemptOwner()
+    let legal: LegalVersions
+    let clock: () -> Int64
+    public internal(set) var deadlines = SmsSendDeadlines()
+    var owner = AttemptOwner()
     private var tasks: [UUID: () -> Void] = [:]
     private var sending = false
     private var loggingIn = false
@@ -26,6 +26,10 @@ public final class LoginService {
     /// 最近一次成功保存了会话的登录（APP-04 共性 68：桥 auth.login 绑定本次登录保存的会话世代）。
     public private(set) var lastCommit: LoginCommit?
     private var commitSerial: UInt64 = 0
+    /// 手机号绑定状态（APP-05b）：短信登录保存会话时记为已绑（短信登录的账号一定有手机号）。nil = 没接。
+    public var phoneBinding: PhoneBindingStore?
+    /// 本次尝试作废时（换号、取消、登录页出栈、登出）同步调用（APP-05b：第三方授权的等待随之终止）。
+    var onAttemptInvalidated: [() -> Void] = []
 
     public init(
         client: ApiClient,
@@ -69,22 +73,11 @@ public final class LoginService {
         let cancels = tasks.values
         tasks = [:]
         cancels.forEach { $0() }
-    }
-
-    /// 这个号码（任意写法）距可以再发码还有几秒；0 = 可以发。
-    public func resendRemainingSec(_ rawPhone: String) -> Int {
-        guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return 0 }
-        return deadlines.remainingSec(phone, now: clock())
-    }
-
-    /// 这个号码在验证码有效期内收到过码（共性 12：发码限流期间仍可进验证码步继续输入）。
-    public func hasReceivedCode(_ rawPhone: String) -> Bool {
-        guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return false }
-        return deadlines.hasReceivedCode(phone, now: clock())
+        onAttemptInvalidated.forEach { $0() }
     }
 
     /// 在可取消的 Task 里运行一次网络调用；invalidateAttempt 时取消。
-    private func run<T: Sendable>(_ body: @escaping @Sendable () async -> T) async -> T {
+    func run<T: Sendable>(_ body: @escaping @Sendable () async -> T) async -> T {
         let id = UUID()
         let task = Task { await body() }
         tasks[id] = { task.cancel() }
@@ -201,7 +194,8 @@ public final class LoginService {
                               isValid: { attempt.isValid }, onSessionSaved: { saved.record($0) })
         }
         loggingIn = false
-        recordCommit(saved.value)
+        // APP-05b：短信登录的账号一定绑了手机号（守卫按已绑手机，共性第 13 条「本次短信登录完成」）
+        recordCommit(saved.value, phoneBound: true)
         switch result {
         case let .success(data, _, _):
             return await loggedIn(Self.object(data), attempt: attempt, restricted: restricted)
@@ -266,13 +260,16 @@ public final class LoginService {
     // MARK: - 登录成功
 
     /// 会话确已由这次登录保存（不论之后是否被作废）：记下保存后的世代，先于关闭登录页（APP-04 共性 68）。
-    private func recordCommit(_ generation: UInt64?) {
+    func recordCommit(_ generation: UInt64?, phoneBound: Bool? = nil) {
         guard let generation else { return }
+        if let phoneBound {
+            phoneBinding?.record(phoneBound, generation: generation)
+        }
         commitSerial &+= 1
         lastCommit = LoginCommit(serial: commitSerial, generation: generation)
     }
 
-    private func loggedIn(_ data: [String: Any], attempt: AttemptOwner, restricted: Bool) async -> LoginOutcome {
+    func loggedIn(_ data: [String: Any], attempt: AttemptOwner, restricted: Bool) async -> LoginOutcome {
         guard attempt.isValid else {
             // 保存之后、这里之前被作废：会话确已建立，只同步会话状态，不关页、不恢复待办（共性 10）。
             host.sessionSynced()

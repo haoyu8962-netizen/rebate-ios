@@ -304,6 +304,9 @@ public extension OpenPurchaseController {
     /// 10001 不写幂等记录，BR-ID-10 细则）。外跳类动作恢复执行仍视为用户点击触发；页面不在前台（登录页还盖着）时等回到前台再执行。
     func resumeAfterLogin() {
         guard !left else { return }
+        // 暂缓中（第三方新号登录后、引导未结束，APP-05b 共性第 3、9 条）：不读取、不清除、不重放，记录原样保留；释放时 App 经
+        // Router.pendingHoldReleased 再调一次，届时重新核对归属、前置与页面许可（R1-01）
+        guard !pending.held else { return }
         guard foreground else {
             deferred[.login] = { [weak self] in self?.resumeAfterLogin() }
             return
@@ -326,6 +329,7 @@ public extension OpenPurchaseController {
     /// 报价基准与 link_id 都是原点击的，共性第 24 条）；不在前台时等回到前台。仍不同意时 Router 删除待办，这里什么都不做。
     func resumeAfterConsent() {
         guard !left else { return }
+        guard !pending.held else { return }
         guard foreground else {
             deferred[.consent] = { [weak self] in self?.resumeAfterConsent() }
             return

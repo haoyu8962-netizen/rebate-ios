@@ -16,6 +16,8 @@ enum RouteViewRegistry {
         RoutePolicy.externalPage: { AnyView(ExternalPageRouteView(destination: $0)) },
         // APP-05a：短信登录页（Features/Login）。
         RoutePolicy.login: { AnyView(LoginRouteView(destination: $0)) },
+        // APP-05b：绑手机页（Features/Login；首次绑定、并号确认、待确认）。
+        RoutePolicy.bindPhone: { AnyView(BindPhoneRouteView(destination: $0)) },
         // APP-12：「我的」Tab 根、设置、隐私中心、关于、封禁说明与申诉（Features/Me）；消息中心、邀请好友是 H5（G04、G21）。
         "Me": { AnyView(MeTabRouteView(destination: $0)) },
         "Settings": { AnyView(MeRouteView(destination: $0)) },

@@ -157,34 +157,6 @@ extension LoginView {
                 .accessibilityIdentifier("login.inviteNotice")
         }
     }
-
-    /// 第三方登录的位置（Login 画板「其他登录方式」）。TODO(APP-05b)：微信 / Apple 登录在 APP-05b 实现；本机未装微信时不显示
-    /// 微信入口（BR-ID-04 细则）——安装检测随 APP-05b 接入，这里先不放微信。实现前 Release 不显示本区（不放点不动的按钮）。
-    var thirdPartySlot: some View {
-        VStack(spacing: CouliSpacing.s4) {
-            HStack(spacing: CouliSpacing.s3) {
-                Rectangle().fill(CouliColor.borderSubtle).frame(height: 1).accessibilityHidden(true)
-                Text(verbatim: text(LoginKeys.otherMethods))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize()
-                    .accessibilityAddTraits(.isHeader)
-                Rectangle().fill(CouliColor.borderSubtle).frame(height: 1).accessibilityHidden(true)
-            }
-            Button {} label: {
-                Text(verbatim: text(LoginKeys.apple))
-                    .couliFont(.body, weight: .couliSemibold)
-                    .foregroundColor(CouliColor.textInverse)
-                    .frame(maxWidth: .infinity, minHeight: CouliComponentMetric.buttonMinHeight)
-                    .background(
-                        RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                            .fill(CouliColor.textPrimary)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("login.apple")
-        }
-    }
 }
 
 /// 邀请码行【粘贴】（APP-07，LoginCodeInvite）：系统粘贴控件（文字与读屏名由系统给），用户点了才读；只抽码填入，抽不到轻提示、不清空已有

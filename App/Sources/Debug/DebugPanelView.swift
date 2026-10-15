@@ -108,7 +108,8 @@ struct DebugPanelView: View {
                     Text(verbatim: "Login (APP-05a)")
                 } footer: {
                     Text(verbatim: DebugFakeLoginServer.marker + " · " + DebugFakeSearch.marker + " · " + DebugFakeTrade
-                        .marker + " · " + DebugFakeOrders.marker + " · " + DebugFakeWallet.marker)
+                        .marker + " · " + DebugFakeOrders.marker + " · " + DebugFakeWallet.marker + " · "
+                        + DebugFakeOAuth.marker)
                 }
                 Section {
                     NavigationLink {

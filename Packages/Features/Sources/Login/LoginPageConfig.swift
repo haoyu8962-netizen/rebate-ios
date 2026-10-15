@@ -23,6 +23,14 @@ public enum LoginKeys {
     public static let inviteEntry = "login.invite.entry"
     public static let otherMethods = "login.other_methods"
     public static let apple = "login.apple"
+    /// 微信按钮的读屏名称（「微信登录」）与按钮下方的短名（「微信」）。
+    public static let wechat = "login.wechat"
+    public static let wechatShort = "login.wechat.short"
+    /// {provider_name} 的取值（error.50305、error.30411.mergeable）。
+    public static func providerName(_ provider: String) -> String {
+        "login.provider.\(provider)"
+    }
+
     public static let confirmTitle = "login.agree_confirm.title"
     public static let confirmBodyPrefix = "login.agree_confirm.body_prefix"
     public static let confirmBodySuffix = "login.agree_confirm.body_suffix"
@@ -68,8 +76,8 @@ public final class LoginPageConfig {
     public var restricted = false
     /// 刷新失败清会话后进入（LoginSessionExpired）：进入时提示 error.10404。
     public var sessionExpired = false
-    /// 第三方登录的位置：APP-05b 实现前只在 Debug / Staging 构建显示占位（版式比对用），Release 不显示。
-    public var showThirdPartySlot = false
+    /// 第三方登录（APP-05b）：nil = 不显示第三方区。按钮是否显示由它按适配器与平台判定（正式微信恒不可用 → 不显示）。
+    public var oauth: OAuthLoginService?
     public var onClose: () -> Void = {}
     public var onSettings: () -> Void = {}
     public var onHelp: () -> Void = {}
@@ -120,5 +128,7 @@ public enum LoginDialog: Equatable {
     case agreeConfirm
     /// LoginCodeBlocked（标题键）。
     case blocked(String)
+    /// 第三方登录 44001（risk_blocked）：标题键；不套用短信注册专用说明（APP-05b 共性第 5 条），只给【知道了】与【联系客服申诉】。
+    case oauthBlocked(String)
     case deletionProcessing
 }

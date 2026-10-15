@@ -14,8 +14,9 @@ let features: [(name: String, task: String)] = [
 /// Web（APP-04）：两类 WebView 容器用 BridgeHost 的协议判定、BridgeHost 分派与第三方页导航判定。
 let extraDependencies: [String: [Target.Dependency]] = [
     "Web": [.product(name: "BridgeHost", package: "Core")],
-    // Login（APP-05a）：短信登录主链路的纯逻辑（LoginFlow）与执行器（LoginService）经 ApiClient 发码、登录、登出，
-    // 读会话作用域；页面在同一 target。模块名不与任何系统框架同名（Login 不是 SDK 里的框架名）。
+    // Login（APP-05a、APP-05b）：短信登录主链路的纯逻辑（LoginFlow）与执行器（LoginService）经 ApiClient 发码、登录、登出，
+    // 读会话作用域；第三方登录（OAuthLoginService，Apple 用系统框架 AuthenticationServices）、绑手机与并号确认（BindPhoneService）；
+    // 页面在同一 target。模块名不与任何系统框架同名（Login 不是 SDK 里的框架名）。
     "Login": [
         .product(name: "CouliNetwork", package: "Core"),
         .product(name: "Session", package: "Core"),
@@ -81,7 +82,8 @@ let package = Package(
             ] + (extraDependencies[$0.name] ?? [])
         )
     } + [
-        // Codex 先写的向量测试（specs/login-vectors.json）与登录集成测试（本地 URLProtocol 假服务）。
+        // Codex 先写的向量测试（specs/login-vectors.json、specs/oauth-login-vectors.json）与登录、第三方登录、绑手机集成测试
+        // （本地 URLProtocol 假服务）。
         .testTarget(
             name: "LoginTests",
             dependencies: [
@@ -90,6 +92,7 @@ let package = Package(
                 .product(name: "CouliNetwork", package: "Core"),
                 .product(name: "Session", package: "Core"),
                 .product(name: "Generated", package: "Generated"),
+                .product(name: "DesignSystem", package: "DesignSystem"),
             ]
         ),
         // Codex 先写的向量测试（specs/search-product-vectors.json）与搜索 / 详情集成测试（本地 URLProtocol 假服务）。

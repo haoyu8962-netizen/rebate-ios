@@ -139,8 +139,8 @@ public struct LoginView: View {
                 }
             }
             Spacer(minLength: CouliSpacing.s8)
-            if model.config.showThirdPartySlot, !restricted {
-                thirdPartySlot
+            if !model.providers.isEmpty {
+                ThirdPartyArea(model: model)
             }
             helpEntry
         }

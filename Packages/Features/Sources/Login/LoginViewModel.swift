@@ -27,6 +27,8 @@ public final class LoginViewModel: ObservableObject {
     @Published public internal(set) var now: Int64 = 0
     @Published public var dialog: LoginDialog?
     @Published public var toast: CouliToastMessage?
+    /// 正在进行的第三方登录（provider；APP-05b）。
+    @Published public internal(set) var oauthProvider: String?
 
     public let config: LoginPageConfig
     var agreement: AgreementState
@@ -102,7 +104,7 @@ public final class LoginViewModel: ObservableObject {
 
     /// 还有没走完的倒计时（当前号码的发码截止或登录限流）。
     var countdownActive: Bool {
-        resendCountdown > 0 || limits.loginBlocked(now: now)
+        resendCountdown > 0 || limits.loginBlocked(now: now) || oauthLimitedAny
     }
 
     /// 页面消失（兜底）：停计时、作废本次尝试。确定出栈的同步出口在 RouterLoginHost.watchLoginPage（共性 9）。

@@ -215,7 +215,9 @@ final class LoginReviewR1Tests: XCTestCase {
 
         XCTAssertEqual(recheck, .full)
         XCTAssertNotEqual(fixture.login.sessionVersion, changes, "会话状态已同步")
-        XCTAssertEqual(fixture.routing.guardState.session, .phoneBound)
+        // APP-05b：会话来自预置令牌、本进程没有查清 phone_bound → 按「已登录未绑手机」（未知不当已绑，共性第 13 条）；本用例关心的是
+        // 「会话状态已同步为 full、不借刷新恢复待办」，不是手机号
+        XCTAssertEqual(fixture.routing.guardState.session, .loggedIn)
         XCTAssertNotNil(UserDefaultsPendingBackend().read(), "不借刷新通知恢复待办")
         XCTAssertNotEqual(fixture.routing.router.tabRoot.route, "OrderList")
     }

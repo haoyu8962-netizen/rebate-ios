@@ -79,6 +79,12 @@ public final class Router: ObservableObject {
     var pendingTag: (record: PendingAction, tag: UInt64)?
     /// 已结束的会话标签上界：发起时标签不大于它的推送回查结果丢弃（`sessionEnded(throughSession:)`）。
     var endedSessionTag: UInt64?
+    /// 待办暂缓（APP-05b 共性第 3、9 条）：第三方登录成功之后、绑手机引导结束或手机号查清之前，所有自动恢复入口（启动协调、会话同步、
+    /// 版本检查完成、完成前置）都只保留记录。值是暂缓时的会话标签；会话换代、登出、切换环境后自动失效。只在内存（`Router+Hold`）。
+    var pendingHoldTag: UInt64?
+    /// 暂缓明确释放之后（APP-05b 第 1 轮 R1-01）：发起页自己执行的待办（购买 open_link）在暂缓期间只保留记录，释放时经这里通知
+    /// 原发起页重新核对归属、前置与页面许可后恢复一次。值是释放所属的会话标签。
+    public let pendingHoldReleased = PassthroughSubject<UInt64, Never>()
 
     public init(
         routes: [String: RouteSpec] = Routes.all,
@@ -202,7 +208,8 @@ public final class Router: ObservableObject {
     /// - `entersPrerequisite`：还缺前置时是否进前置页。用户刚完成一个前置步骤时为 true（继续下一个前置）；
     ///   冷启动与条件变化时为 false——前置未满足（登录、绑手机、实名、隐私同意）一律保留记录、不自动拉起前置页（F-IOS-08）。
     func resumePending(state current: GuardState, entersPrerequisite: Bool) {
-        guard let pending = pendingStore.load(now: pendingStore.now) else { return }
+        // 暂缓期间（APP-05b 共性第 9 条）：任何自动恢复都只保留记录，等引导结束或手机号查清时明确释放
+        guard !pendingHeld, let pending = pendingStore.load(now: pendingStore.now) else { return }
         // 不是「打开路由」的待办（APP-06b 购买 open_link）由登记它的发起页自己执行一次（Router 只负责同一份本地记录的计时与清除）：
         // 这里既不执行也不删除（H02 同口径）。记录损坏（open_route 却没有路由名）仍删除。
         guard pending.action == Self.openRouteAction else { return }
@@ -253,12 +260,14 @@ public final class Router: ObservableObject {
     /// 退出登录、切换账号：清除 pending_action（BR-ID-10），并作废进行中的推送回查（R1-01）。
     public func sessionEnded() {
         pendingStore.clear()
+        pendingHoldTag = nil
         generation &+= 1
     }
 
     /// 切换环境：作废进行中的推送回查与排队的启动意图（pending_action 随命名空间清理一并删除）。
     public func environmentChanged() {
         pendingStore.clear()
+        pendingHoldTag = nil
         launchQueue = LaunchQueue()
         queuedPushLanding = nil
         generation &+= 1

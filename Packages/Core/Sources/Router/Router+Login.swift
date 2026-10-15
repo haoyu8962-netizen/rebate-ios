@@ -7,6 +7,14 @@ public extension Router {
         pendingStore.load(now: pendingStore.now) != nil
     }
 
+    /// 未过期的 pending_action 要打开的路由名（只读，不重置计时；APP-05b：恢复手机号级待办前先查 phone_bound）。
+    var pendingRouteName: String? {
+        guard let pending = pendingStore.load(now: pendingStore.now), pending.action == Self.openRouteAction else {
+            return nil
+        }
+        return pending.paramValues["route"]?.stringValue
+    }
+
     /// 删除 pending_action，不执行（登录拿到受限会话且强更结论低于 / 未知、正常会话但强更低于，BR-ID-10）。
     func discardPendingAction() {
         pendingStore.clear()
@@ -34,6 +42,9 @@ public extension Router {
             return
         }
         endedSessionTag = max(endedSessionTag ?? throughSession, throughSession)
+        if let held = pendingHoldTag, held <= throughSession {
+            pendingHoldTag = nil
+        }
         guard let current = pendingStore.load(now: pendingStore.now) else {
             pendingTag = nil
             return

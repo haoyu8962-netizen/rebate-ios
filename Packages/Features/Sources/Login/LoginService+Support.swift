@@ -89,6 +89,18 @@ extension LoginService {
 
 /// 页面读的发码截止（APP-05a 共性 21）：一律按规范化号码，从 `deadlines` 读。
 public extension LoginService {
+    /// 这个号码（任意写法）距可以再发码还有几秒；0 = 可以发。
+    func resendRemainingSec(_ rawPhone: String) -> Int {
+        guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return 0 }
+        return deadlines.remainingSec(phone, now: clock())
+    }
+
+    /// 这个号码在验证码有效期内收到过码（共性 12：发码限流期间仍可进验证码步继续输入）。
+    func hasReceivedCode(_ rawPhone: String) -> Bool {
+        guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return false }
+        return deadlines.hasReceivedCode(phone, now: clock())
+    }
+
     /// 页面显示用（共性 21）：这个号码（任意写法）在给定时刻距可以再发码还有几秒——成功发码的倒计时或 42901 禁用期。
     func sendRemainingSec(_ rawPhone: String, now: Int64) -> Int {
         guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return 0 }
@@ -99,5 +111,18 @@ public extension LoginService {
     func sendRateLimited(_ rawPhone: String, now: Int64) -> Bool {
         guard let phone = PhoneNumber.normalize(rawPhone).normalized else { return false }
         return deadlines.active(phone, now: now)?.kind == SmsCountdown.stateRateLimited
+    }
+}
+
+/// 第三方登录（APP-05b）共用的登录尝试与协议版本。
+extension LoginService {
+    /// 本次登录尝试的归属（第三方登录与短信登录共用：登录页出栈、换号、取消时一起作废）。
+    var attemptOwner: AttemptOwner {
+        owner
+    }
+
+    /// 登录请求上送的协议版本（第三方登录与短信登录同一份）。
+    var legalVersions: LegalVersions {
+        legal
     }
 }

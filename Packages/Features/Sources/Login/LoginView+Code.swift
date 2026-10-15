@@ -92,6 +92,16 @@ extension LoginView {
                     model.config.onCustomerService()
                 }
             )
+        case let .oauthBlocked(titleKey):
+            // 第三方登录 44001（共性第 5 条）：对应文案 + 统一客服出口的申诉入口；不套用短信注册的专用说明句
+            CouliDialog(
+                title: text(titleKey),
+                primary: CouliDialogAction(text(LoginKeys.riskBlockedOK)) { model.dialog = nil },
+                secondary: CouliDialogAction(text(LoginKeys.appeal)) {
+                    model.dialog = nil
+                    model.config.onCustomerService()
+                }
+            )
         case .deletionProcessing:
             CouliDialog(
                 title: text(LoginKeys.deletionTitle),

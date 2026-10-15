@@ -33,6 +33,8 @@ final class AppRouting {
     var realnameSource: (@MainActor () -> Bool)?
     /// 会话状态变化（登录、登出、会话被清）后通知（AppLogin 刷新设置页等）。
     var onSessionStateChanged: (@MainActor () -> Void)?
+    /// 每次启动协调之前（APP-05b 共性第 8 条）：AppLogin 在会话有效、手机号状态未知且有手机号级待办时先查一次当前会话的 getMe。
+    var beforeLaunchCoordination: (@MainActor () -> Void)?
     /// Tab 外壳（或基本模式页）已经显示。
     private(set) var shellReady = false
     /// 等启动协调的自动动作（APP-06a R2-03：进程回收后的页面恢复）。它们和启动意图、pending_action 一样属于「自动执行的
@@ -320,6 +322,7 @@ final class AppRouting {
     /// 状态变化（环境就绪、隐私结论、强更结果、外壳就绪、会话变化）后调用：
     /// 恢复 pending_action、放行排队的启动意图（Router.launchConditionsChanged，F-IOS-08）。
     func launchConditionsChanged() {
+        beforeLaunchCoordination?()
         let readiness = readiness
         let now = PendingActionStore.wallClockMillis()
         router.launchConditionsChanged(readiness: readiness, shellReady: shellReady, now: now)
