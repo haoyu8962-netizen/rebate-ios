@@ -21,6 +21,10 @@ struct MeAppFixture {
     let me: AppMe
     let routing: AppRouting
     let tokens: MemorySessionTokens
+    /// 网络层实际用的令牌存储（包着 `tokens`，记读取次数；FU-IOS-0713 用它让某一次 / 某次起的读取暂时失败）。
+    let store: CountingSessionTokens
+    /// 「我的」读取入口的透明计数（FU-IOS-0713：生产 `AppMe(api:)` 注入）。
+    let api: CountingMeApi
     let network: AppNetwork
     let login: AppLogin
     let config: AppConfig
@@ -79,8 +83,9 @@ struct MeAppFixture {
         let environmentSwitch = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
         let runner = WithdrawalCleanupRunner(store: privacyStore, registry: withdrawal)
         let push = TestPushSource(token: pushToken)
+        let store = CountingSessionTokens(tokens)
         let network = AppNetwork(
-            tokens: tokens, pendingBackend: MemoryPendingKeyBackend(), device: Device(), withdrawalRegistry: withdrawal,
+            tokens: store, pendingBackend: MemoryPendingKeyBackend(), device: Device(), withdrawalRegistry: withdrawal,
             environmentRegistry: environmentSwitch, credentialsReadable: { runner.credentialsReadable },
             configuration: WalletStubProtocol.configuration()
         )
@@ -104,24 +109,23 @@ struct MeAppFixture {
         let cleaner = MeLocalCleaner(store: local)
         MeLocalCleaner.register(cleaner, withdrawal: withdrawal)
         let system = FakeMeSystem()
-        let nickname = TestNicknameBackend()
-        let notify = TestNotifyBackend()
+        let (nickname, notify, api) = (TestNicknameBackend(), TestNotifyBackend(), CountingMeApi(network.client))
         let me = AppMe(
             network: network, routing: routing, config: config, login: login, update: update, system: system,
             mask: AmountMaskStore(defaults: defaults), local: local, pushSource: push, nickname: nickname,
             notify: notify,
             credentialsReadable: { runner.credentialsReadable }, withdrawalRegistry: withdrawal,
-            environmentRegistry: environmentSwitch
+            environmentRegistry: environmentSwitch, api: api
         )
         me.deviceId = registered ? { "device-fixture-0001" } : { nil }
         let clipboard = RecordingClipboard()
         let ledgerStore = MemoryClipboardHashStore()
         me.writer = ClipboardWriter(system: clipboard, ledger: ClipboardWriteLedger(store: ledgerStore))
         return MeAppFixture(
-            me: me, routing: routing, tokens: tokens, network: network, login: login, config: config, update: update,
-            privacyStore: privacyStore, runner: runner, withdrawal: withdrawal, environmentSwitch: environmentSwitch,
-            system: system, push: push, clipboard: clipboard, ledgerStore: ledgerStore, local: local,
-            localFile: localFile, nickname: nickname, notify: notify
+            me: me, routing: routing, tokens: tokens, store: store, api: api, network: network, login: login,
+            config: config, update: update, privacyStore: privacyStore, runner: runner, withdrawal: withdrawal,
+            environmentSwitch: environmentSwitch, system: system, push: push, clipboard: clipboard,
+            ledgerStore: ledgerStore, local: local, localFile: localFile, nickname: nickname, notify: notify
         )
     }
 

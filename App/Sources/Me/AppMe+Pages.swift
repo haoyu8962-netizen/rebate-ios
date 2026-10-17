@@ -122,8 +122,9 @@ extension AppMe {
     func enterTab() {
         guard tabVisible, !tabEntered else { return }
         tabEntered = true
-        if tabHost.controller.hasLeft || tabHost.controller.identity != computeIdentity() {
-            tabHost.replace(MeTabController(deps: deps, identity: computeIdentity()))
+        let identity = computeIdentity()
+        if tabHost.controller.hasLeft || tabHost.controller.identity != identity {
+            tabHost.replace(MeTabController(deps: deps, identity: identity))
         }
         tabHost.controller.refresh()
         tabHost.controller.checkGuideBar()

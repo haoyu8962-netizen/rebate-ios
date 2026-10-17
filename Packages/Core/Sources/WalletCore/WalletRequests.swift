@@ -22,6 +22,7 @@ public final class RequestFlag: @unchecked Sendable {
 @MainActor
 final class WalletRequests {
     private var entries: [Int: (flag: RequestFlag, task: Task<Void, Never>)] = [:]
+    let settling = SettlingTasks()
     private var next = 0
 
     /// 发出一次读调用。`probe` 是本请求的发送前闸门（共享禁用期）；`expected` 是执行器固定的网络归属。返回请求编号（单独作废用）。
@@ -34,7 +35,10 @@ final class WalletRequests {
         let id = next
         let flag = RequestFlag()
         let allowed = probe.allowed
+        let settling = settling
+        settling.begin()
         let task = Task { @MainActor [weak self] in
+            defer { settling.end() }
             let result = await api.send(call, isValid: { flag.isValid }, sendAllowed: allowed, expected: expected)
             self?.entries[id] = nil
             guard flag.isValid else { return }

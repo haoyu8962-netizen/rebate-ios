@@ -23,6 +23,8 @@ struct WalletAppFixture {
     let tokens: MemorySessionTokens
     /// 网络层实际用的令牌存储（包着 `tokens`，记读取次数；末轮窄修二用 `failRead(nth:)` 让某一次读取暂时失败）。
     let store: CountingSessionTokens
+    /// 钱包调用入口的透明计数（FU-IOS-0713：生产 `AppWallet(api:)` 注入，先计数再转给真实 ApiClient）。
+    let api: CountingWalletApi
     let network: AppNetwork
     let login: AppLogin
     let runner: WithdrawalCleanupRunner
@@ -86,10 +88,10 @@ struct WalletAppFixture {
         WalletCacheCleaner.register(cleaner, withdrawal: withdrawal, environmentSwitch: environmentSwitch)
         // FU-IOS-0712 末轮 R3-02：生产初始化时 Keychain 暂时读失败（身份暂时未知），初始化之后恢复
         tokens.failReads = unknownIdentityAtInit ? .readFailed : nil
-        let wallet = AppWallet(
-            network: network, config: config, routing: routing, login: login, mask: AmountMaskStore(defaults: defaults),
-            cleaner: cleaner, credentialsReadable: { runner.credentialsReadable }
-        )
+        let api = CountingWalletApi(network.client)
+        let wallet = AppWallet(network: network, config: config, routing: routing, login: login,
+                               mask: AmountMaskStore(defaults: defaults), cleaner: cleaner,
+                               credentialsReadable: { runner.credentialsReadable }, api: api)
         tokens.failReads = nil
         let system = RecordingClipboard()
         let ledgerStore = MemoryClipboardHashStore()
@@ -98,7 +100,7 @@ struct WalletAppFixture {
         wallet.track = { tracked.events.append($0) }
         wallet.phoneProvider = { _ in "13800005678" }
         return WalletAppFixture(
-            wallet: wallet, routing: routing, tokens: tokens, store: store, network: network, login: login,
+            wallet: wallet, routing: routing, tokens: tokens, store: store, api: api, network: network, login: login,
             runner: runner, withdrawal: withdrawal, environmentSwitch: environmentSwitch, cleaner: cleaner,
             pendingBackend: pending, system: system, ledgerStore: ledgerStore, tracked: tracked
         )

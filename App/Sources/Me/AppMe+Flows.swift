@@ -91,7 +91,7 @@ extension AppMe {
     /// R1-04（共性第 30 条）：确认时固定的请求归属（账号 + 会话世代 + 作废世代）一路传进 AppLogin / LoginService：logout 请求只按它发送，本地
     /// signOut 只清这一世代的会话；异步任务开始后不再取「此刻的会话」——确认之后、任务执行之前已保存了 B 会话时不退出 B。
     func logout(_ identity: MeIdentity, from page: UUID?) {
-        guard let login, !loggingOutNow, isCurrent(identity), identity.member, let owner = identity.request else {
+        guard let login, !loggingOutNow, check(identity) != .stale, identity.member, let owner = identity.request else {
             return
         }
         loggingOutNow = true

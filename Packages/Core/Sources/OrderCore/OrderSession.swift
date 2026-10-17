@@ -34,6 +34,7 @@ final class OrderRequestOwner: @unchecked Sendable {
 @MainActor
 final class OrderInFlight {
     private var entries: [Int: (owner: OrderRequestOwner, cancel: () -> Void)] = [:]
+    let settling = SettlingTasks()
     private var next = 0
 
     /// 发出一次调用；结果在主线程交给 `settle`（调用方先复核轮次与会话）。
@@ -47,7 +48,10 @@ final class OrderInFlight {
         let allowed = gate.sendAllowed
         // 执行器固定的网络归属（RC-01）：排队到 Task 执行前会话换代的，网络层比较不一致即零发送，不重新绑定当前会话
         let expected = fixed.request
+        let settling = settling
+        settling.begin()
         let task = Task { @MainActor [weak self] in
+            defer { settling.end() }
             let result = await api.send(call, isValid: { owner.isValid }, sendAllowed: allowed, expected: expected)
             self?.entries[id] = nil
             guard owner.isValid else { return }

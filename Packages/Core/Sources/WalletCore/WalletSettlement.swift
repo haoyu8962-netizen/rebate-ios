@@ -77,6 +77,20 @@ public final class WalletSettlement {
         }
     }
 
+    /// 短信结果占住原槽位直到确认；截止时间取响应到达时刻，关闭面板也不丢结算。
+    func settleSms(_ arrival: SmsArrival, owner: WalletOwner, sms: SmsDeadlines, gate: RetryAfterGate) {
+        let (slot, ticket, deadline) = (arrival.slot, arrival.ticket, arrival.deadline)
+        settle(owner, slot: "sms", gate: gate) { _ in
+            if let deadline {
+                sms.start(slot, deadline: deadline)
+            }
+            sms.release(slot, ticket: ticket)
+        }
+        if sms.busy(slot) {
+            sms.waitForIdentity(slot, ticket: ticket)
+        }
+    }
+
     // MARK: - 身份暂时未知（FU-IOS-0712 重理后补修 RW-02）
 
     /// 按点击时的身份核对后结算（三态）：仍是当前 → 立即结算；暂时未知 → 由本会话级服务保留固定归属、结果与到达时刻，身份确认后

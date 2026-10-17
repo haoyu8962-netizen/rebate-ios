@@ -12,6 +12,7 @@ public struct RealNameActions {
     public let toggleConsent: () -> Void
     public let agree: () -> Void
     public let decline: () -> Void
+    public let recheck: () -> Void
 
     public static func make(_ controller: RealNameController, _ snapshot: RealNameSnapshot) -> RealNameActions {
         let owner = snapshot.owner
@@ -22,7 +23,8 @@ public struct RealNameActions {
             submit: { [weak controller] in controller?.submit(owner: owner) },
             toggleConsent: { [weak controller] in controller?.toggleConsent(consent: consent, owner: owner) },
             agree: { [weak controller] in controller?.agreeAndSubmit(consent: consent, owner: owner) },
-            decline: { [weak controller] in controller?.declineConsent(consent: consent) }
+            decline: { [weak controller] in controller?.declineConsent(consent: consent) },
+            recheck: { [weak controller] in controller?.recheckIdentity() }
         )
     }
 }
@@ -72,13 +74,16 @@ public struct RealNameScreen: View {
             }
         } bottom: {
             VStack(spacing: CouliSpacing.s2) {
+                if snapshot.showsRecheck {
+                    CouliButton(texts.text("wallet.retry"), kind: .text, action: actions.recheck)
+                }
                 if !controller.available {
                     Text(verbatim: texts.text("realname.unavailable"))
                         .couliFont(.footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .accessibilityIdentifier("realname.unavailable")
                 }
-                CouliButton(texts.text("realname.submit"), isLoading: snapshot.submitting,
+                CouliButton(texts.text("realname.submit"), isLoading: snapshot.showsSubmitting,
                             isEnabled: controller.submitEnabled && !gate.blocked, fillsWidth: true,
                             action: actions.submit)
                     .accessibilityFocused($submitFocused)

@@ -1,3 +1,4 @@
+import CouliNetwork
 import Foundation
 import OrderCore
 import Orders
@@ -8,10 +9,16 @@ import Trade
 
 /// 发起购买的页面上的待跟单卡（AppOrders 的一部分；G07 ②，共性第 43 条，iOS RC-06）。
 extension AppOrders {
+    func connect(search: AppSearch) {
+        search.orders = self
+        search.trade?.onPageForeground = { [weak self] id in self?.pageForeground(id) }
+    }
+
     /// 商品详情 / 搜索页的待跟单卡：外跳（拉起 App、交浏览器、复制口令）之后，回到前台时拉一次，只显示同平台那一张；页面出栈时作废。
     func pendingSlot(for destination: RouteDestination, purchase: OpenPurchaseController?,
                      trade: AppTrade?) -> AnyView {
-        let service = PendingTrackService(api: api, hub: hub, env: self)
+        let snapshot = identity.snapshot()
+        let service = PendingTrackService(api: api, hub: hub, env: self, owner: owner(for: snapshot))
         let host = PendingTrackSlotHost(service: service)
         let id = destination.id
         slotSerial += 1
@@ -61,11 +68,27 @@ extension AppOrders {
 
     /// 发起页回到前台（AppTrade：场景在前台且是栈顶）。等待期间来源变了（会话换代、换执行器）的不拉。
     func pageForeground(_ id: UUID) {
-        guard let slot = slots[id], let awaiting = slot.awaiting else { return }
+        guard slots[id]?.awaiting != nil else { return }
+        resumePendingSlot(id, snapshot: identity.snapshot())
+    }
+
+    private func resumePendingSlot(_ id: UUID, snapshot: IdentitySnapshot) {
+        guard let slot = slots[id], let awaiting = slot.awaiting, snapshot.known else { return }
         slots[id]?.awaiting = nil
-        guard jumpOrigin(id) == awaiting.origin else { return }
+        guard awaiting.origin == "\(owner(for: snapshot).key)#slot\(slot.serial)" else { return }
         refreshNotificationStatus()
         slot.service.refresh(onlyPlatform: awaiting.platform)
+    }
+
+    func confirmPendingSlots(_ snapshot: IdentitySnapshot) {
+        let confirmed = owner(for: snapshot)
+        listConfig?.pendingTrack?.identityConfirmed(confirmed)
+        for (id, slot) in slots {
+            slot.service.identityConfirmed(confirmed)
+            if sceneActive, router.path.last?.id == id {
+                resumePendingSlot(id, snapshot: snapshot)
+            }
+        }
     }
 
     /// 发起页的待跟单卡执行器（测试核对）。

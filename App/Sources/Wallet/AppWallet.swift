@@ -22,6 +22,7 @@ import WalletCore
 @MainActor
 final class AppWallet: ObservableObject, WalletEnv {
     let client: ApiClient
+    let api: WalletApi
     let router: Router
     let routing: AppRouting
     let config: AppConfig
@@ -69,9 +70,11 @@ final class AppWallet: ObservableObject, WalletEnv {
     init(
         network: AppNetwork, config: AppConfig, routing: AppRouting, login: AppLogin, mask: AmountMaskStore,
         cleaner: WalletCacheCleaner = .shared,
-        credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable }
+        credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable },
+        api: WalletApi? = nil
     ) {
         client = network.client
+        self.api = api ?? network.client
         router = routing.router
         self.routing = routing
         self.config = config
@@ -88,7 +91,7 @@ final class AppWallet: ObservableObject, WalletEnv {
         let router = routing.router
         customerService = { _ in router.open(RouteRequest(route: WalletRoutes.help, from: .inApp)) }
         deps = WalletDeps(
-            api: network.client, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: nil, labor: nil
+            api: self.api, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: nil, labor: nil
         )
         // 摘要与金额草稿按「账号 + 持久化登录世代」分区（FU-IOS-0712）：世代与会话可用性同口径，未知不读不写；世代只取执行器构造时
         // 固定的那一份（WalletOwner.loginEpoch，R1-01），存储不读当前世代
@@ -108,7 +111,7 @@ final class AppWallet: ObservableObject, WalletEnv {
     /// Debug 假服务的实名与劳务协议后端（G01、G02；Release 为 nil）。
     func installBackends(realname: RealNameBackend?, labor: LaborBackend?) {
         let fresh = WalletDeps(
-            api: client, env: self, gates: gates, cache: cache, mask: mask, realname: realname, labor: labor
+            api: api, env: self, gates: gates, cache: cache, mask: mask, realname: realname, labor: labor
         )
         fresh.newKey = deps.newKey
         deps = fresh

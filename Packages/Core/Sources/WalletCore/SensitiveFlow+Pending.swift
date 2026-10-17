@@ -65,7 +65,10 @@ public extension SensitiveFlow {
         // 离页不取消已发出的作废，共享结算由任务持有的固定依据直接完成（共性第 40、66 条）
         let ticket = writeTicket(intent.owner)
         let settlement = deps.settlement
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self, deps, operationId, outcomeOp] in
+            defer { tasks.end() }
             let result = await api.abandonPending(operationId: operationId, target: target)
             let outcome = Self.isLocal(result) ? nil : SensitiveOutcome.of(
                 op: outcomeOp, phase: SensitiveOutcome.abandon, keyEverUnknown: true,
@@ -88,7 +91,10 @@ public extension SensitiveFlow {
         refreshSerial += 1
         let serial = refreshSerial
         let api = deps.api
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self, operationId] in
+            defer { tasks.end() }
             let lookup = await api.pendingStatus(operationId: operationId)
             guard let self, alive(), serial == refreshSerial, state.owner == owner, admitRefresh(deps.env.check(owner))
             else { return }
@@ -148,7 +154,11 @@ extension SensitiveFlow {
 
     func runConfirm(_ intent: PendingIntent, token: String?) {
         // 二次验证之后续发：页面、会话与账号仍是点击时的才发（共性第 14 条）
-        guard alive(), !state.awaitingIdentity, deps.env.isCurrent(intent.owner) else { return }
+        guard alive(), !state.awaitingIdentity else { return }
+        guard deferral.admit(deps.env.check(intent.owner), slot: "confirm", resume: { [weak self] in
+            self?.state.awaitingIdentity = false
+            self?.runConfirm(intent, token: token)
+        }, settle: { state.awaitingIdentity = true }) else { return }
         let version = state.pendingVersion
         sentViewGen = visibility.generation
         markInFlight(true)
@@ -156,7 +166,10 @@ extension SensitiveFlow {
         let api = deps.api
         let ticket = writeTicket(intent.owner)
         let settlement = deps.settlement
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self, deps, operationId, outcomeOp] in
+            defer { tasks.end() }
             let result = await api.confirmPending(operationId: operationId, stepUpToken: token, target: target)
             let outcome = Self.isLocal(result) ? nil : SensitiveOutcome.of(
                 op: outcomeOp, phase: SensitiveOutcome.confirm, keyEverUnknown: true,

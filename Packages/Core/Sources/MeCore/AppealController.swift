@@ -35,7 +35,7 @@ public struct AppealState {
 ///   不新开页）；20001 字段旁提示；42901 申诉提交禁用期（执行层 + 页面）；表外码走统一错误消息函数（G13）；
 /// - 不显示处理时限或截止时刻。离开页面：输入与进度清空；已发出的提交不取消，响应不改已出栈的页面。
 @MainActor
-public final class AppealController: ObservableObject {
+public final class AppealController: ObservableObject, IdentityResumable {
     public static let route = "Appeal"
     public static let submitOperation = "submitAppeal"
     public static let wallet = "Wallet"
@@ -51,6 +51,7 @@ public final class AppealController: ObservableObject {
     private var seq = 0
     private var ids = 0
     private let requests = MeRequests()
+    private let deferral = IdentityDeferral()
 
     public init(deps: MeDeps, identity: MeIdentity, page: UUID?) {
         self.deps = deps
@@ -104,7 +105,13 @@ public final class AppealController: ObservableObject {
 
     /// 进入、【重试】、回到本页。
     public func load() {
-        guard alive, identity.member else { return }
+        guard !left, identity.member else { return }
+        guard admitRead() else {
+            if deferral.isPending {
+                deps.env.recheckIdentity()
+            }
+            return
+        }
         if readGate.active {
             failed(MeNotice(MeCodes.rateKey, id: nextId()))
             return
@@ -169,7 +176,7 @@ public final class AppealController: ObservableObject {
     }
 
     private func current(_ request: Int) -> Bool {
-        !left && seq == request && deps.env.isCurrent(identity)
+        !left && seq == request && admitRead()
     }
 
     /// 申诉说明输入（渲染时的执行器）。
@@ -305,6 +312,7 @@ public final class AppealController: ObservableObject {
     public func leave() {
         guard !left else { return }
         left = true
+        deferral.reset()
         seq += 1
         requests.cancelAll()
         state = AppealState()
@@ -312,5 +320,23 @@ public final class AppealController: ObservableObject {
 
     public var hasLeft: Bool {
         left
+    }
+}
+
+extension AppealController {
+    private func settleUnknown() {
+        state.phase = state.risk == nil ? .error : .content
+        state.loadError = MeNotice(MeNotice.unfinishedKey, id: nextId())
+    }
+
+    private func admitRead() -> Bool {
+        deferral.admit(deps.env.check(identity), slot: "read", resume: { [weak self] in self?.load() }, settle: {
+            settleUnknown()
+        })
+    }
+
+    public func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
     }
 }

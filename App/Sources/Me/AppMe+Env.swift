@@ -15,7 +15,23 @@ extension AppMe: MeEnv, CustomerServicePorts, PushReportState {
     }
 
     func isCurrent(_ identity: MeIdentity) -> Bool {
-        computeIdentity() == identity
+        check(identity) == .current
+    }
+
+    func check(_ identity: MeIdentity) -> IdentityCheck {
+        let snapshot = client.identitySnapshot(credentialsReadable: credentialsReadable())
+        guard snapshot.readable, privacy.routerPrivacy == .consented else {
+            return self.identity(from: snapshot) == identity ? .current : .stale
+        }
+        guard snapshot.request.generation == identity.request?.generation,
+              snapshot.request.epoch == identity.request?.epoch,
+              identity.key.hasSuffix("|\(clearedCount)") else { return .stale }
+        guard snapshot.known else { return .unknown }
+        return self.identity(from: snapshot) == identity ? .current : .stale
+    }
+
+    func recheckIdentity() {
+        syncIdentity()
     }
 
     /// 经 Router 以 App 内来源打开。`page` 是发起页：只在它仍在栈顶时打开（出栈、被覆盖之后的旧回调不导航）。强更受限上下文里的协议、

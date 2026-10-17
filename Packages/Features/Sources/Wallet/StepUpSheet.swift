@@ -9,6 +9,7 @@ public struct StepUpActions {
     public let resend: () -> Void
     public let verify: () -> Void
     public let close: () -> Void
+    public let recheck: () -> Void
 
     public static func make(_ controller: StepUpController, _ state: StepUpUiState) -> StepUpActions {
         let instance = state.instance
@@ -16,7 +17,8 @@ public struct StepUpActions {
             code: { [weak controller] text in controller?.onCodeChange(text, instance: instance) },
             resend: { [weak controller] in controller?.resend(instance: instance) },
             verify: { [weak controller] in controller?.verify(instance: instance) },
-            close: { [weak controller] in controller?.close(instance: instance) }
+            close: { [weak controller] in controller?.close(instance: instance) },
+            recheck: { [weak controller] in controller?.recheckIdentity(instance: instance) }
         )
     }
 }
@@ -183,7 +185,10 @@ struct StepUpSheetBody: View {
 
     func footer(_ state: StepUpUiState, _ actions: StepUpActions) -> some View {
         VStack(spacing: CouliSpacing.s3) {
-            if state.phase == .sending {
+            if state.showsRecheck {
+                CouliButton(texts.text("wallet.retry"), kind: .text, action: actions.recheck)
+            }
+            if state.showsSending {
                 Text(verbatim: texts.text("step_up.sending"))
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.textSecondary)
@@ -197,12 +202,13 @@ struct StepUpSheetBody: View {
                         .accessibilityIdentifier("stepUp.countdown")
                 } else {
                     CouliButton(texts.text("step_up.resend"), kind: .text, size: .compact,
-                                isEnabled: !smsBlocked && state.phase == .ready, action: actions.resend)
+                                isEnabled: !smsBlocked && !state.awaitingIdentity && state.phase == .ready,
+                                action: actions.resend)
                         .accessibilityIdentifier("stepUp.resend")
                 }
             }
             CouliButton(
-                texts.text("step_up.submit"), isLoading: state.phase == .verifying,
+                texts.text("step_up.submit"), isLoading: state.showsVerifying,
                 isEnabled: state.canVerify && !verifyBlocked, fillsWidth: true, action: actions.verify
             )
             .accessibilityIdentifier("stepUp.submit")

@@ -1,4 +1,5 @@
 import Combine
+import CouliNetwork
 import Foundation
 
 /// 「我的」Tab 的执行器（brief §2.2；G04、G05、G06、G28、G31、G36）。构造时固定身份（APP-09 第 65 条）；每一次进入 Tab 建一个（Android R1-03、
@@ -41,6 +42,11 @@ public final class MeTabController: ObservableObject, MeReader {
     public func refresh(pull: Bool = false) -> Bool {
         guard alive, identity.member else { return false }
         return deps.repo.refresh(identity, page: self, pull: pull)
+    }
+
+    public func resumeAfterIdentityConfirmed() {
+        guard !left, deps.repo.state.me == nil, deps.repo.inFlight == 0 else { return }
+        refresh()
     }
 
     /// 页面显示的规则（MeView）。只用本执行器身份的快照。

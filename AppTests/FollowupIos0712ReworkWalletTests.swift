@@ -127,7 +127,8 @@ final class FollowupIos0712ReworkWalletTests: WalletFlowTestCase {
         await waitUntil("提交结果没有到达") { controller.deferral.isPending }
         fixture.store.stopFailing()
         let held = controller.state
-        XCTAssertTrue(held.submitting, "身份未知：不采用，提交中保持")
+        // FU-IOS-0713 起口径（RW-03 / F-X-22）：结果已到等身份确认时不再要求「提交中」转圈，只要求提交仍锁住
+        XCTAssertFalse(controller.submitEnabled, "身份未知：不采用，提交仍锁住")
         XCTAssertNil(held.done)
         XCTAssertEqual(fixture.router.path.last?.route, WalletRoutes.realName, "身份未知：不出栈")
         fixture.wallet.checkSession()

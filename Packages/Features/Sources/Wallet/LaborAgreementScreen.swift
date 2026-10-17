@@ -9,13 +9,15 @@ public struct LaborActions {
     public let toggle: () -> Void
     public let sign: () -> Void
     public let retry: () -> Void
+    public let recheck: () -> Void
 
     public static func make(_ controller: LaborAgreementController, _ snapshot: LaborSnapshot) -> LaborActions {
         let owner = snapshot.owner
         return LaborActions(
             toggle: { [weak controller] in controller?.toggle(owner: owner) },
             sign: { [weak controller] in controller?.sign(owner: owner) },
-            retry: { [weak controller] in controller?.retry() }
+            retry: { [weak controller] in controller?.retry() },
+            recheck: { [weak controller] in controller?.recheckIdentity() }
         )
     }
 }
@@ -62,10 +64,13 @@ public struct LaborAgreementScreen: View {
             }
         } bottom: {
             VStack(spacing: CouliSpacing.s2) {
+                if snapshot.showsRecheck {
+                    CouliButton(texts.text("wallet.retry"), kind: .text, action: actions.recheck)
+                }
                 CheckRow(title: texts.text("labor.check"), checked: snapshot.checked, action: actions.toggle,
                          identifier: "labor.check")
                     .disabled(snapshot.phase != .content)
-                CouliButton(texts.text("labor.sign"), isLoading: snapshot.signing,
+                CouliButton(texts.text("labor.sign"), isLoading: snapshot.showsSigning,
                             isEnabled: controller.signEnabled && !gate.blocked, fillsWidth: true, action: actions.sign)
                     .accessibilityIdentifier("labor.sign")
             }

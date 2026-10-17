@@ -203,6 +203,7 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
     func sessionChanged(_ snapshot: IdentitySnapshot) {
         clearDisplays()
         reconcileCache(snapshot)
+        confirmPendingSlots(snapshot)
         sessionEpoch += 1
     }
 
@@ -250,16 +251,7 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
     }
 
     /// 回前台：刷新系统通知状态（通知行按新状态重算）。
-    func sceneBecameActive() {
-        refreshNotificationStatus()
-        checkSession()
-    }
-
-    /// 进后台：先核对会话（换代了就先清空、换掉旧页面），再保存一次订单 Tab 的恢复记录（只认仍有效的页面，iOS RC-02）。
-    func sceneEnteredBackground() {
-        checkSession()
-        persist()
-    }
+    var sceneActive = true
 
     // MARK: - 订单列表
 

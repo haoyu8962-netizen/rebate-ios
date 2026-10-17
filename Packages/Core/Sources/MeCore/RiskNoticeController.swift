@@ -53,7 +53,7 @@ public struct RiskState {
 /// - 读取失败：没有内容 → 错误态 + trace6 +【重试】；已有内容 → 保留并标示「没有刷新」（A34）；banned 场景下【退出登录】与联系客服始终可用。
 /// 构造时固定身份与「本次运行是否因 10006 进入」；出栈在同步出口作废读请求（`leave`）；会话换代时整页由 App 移出导航栈。
 @MainActor
-public final class RiskNoticeController: ObservableObject {
+public final class RiskNoticeController: ObservableObject, IdentityResumable {
     public static let route = "RiskNotice"
     public static let appeal = "Appeal"
     public static let home = "Home"
@@ -74,6 +74,7 @@ public final class RiskNoticeController: ObservableObject {
     private var withdrawalSeq = 0
     private var ids = 0
     private let requests = MeRequests()
+    private let deferral = IdentityDeferral()
 
     public init(deps: MeDeps, identity: MeIdentity, page: UUID?) {
         self.deps = deps
@@ -111,7 +112,13 @@ public final class RiskNoticeController: ObservableObject {
 
     /// 进入、【重试】、回到本页（提交申诉后返回时重取，brief §2.11）。
     public func load() {
-        guard alive, identity.member else { return }
+        guard !left, identity.member else { return }
+        guard admitRead() else {
+            if deferral.isPending {
+                deps.env.recheckIdentity()
+            }
+            return
+        }
         if readGate.active {
             refreshFailed(MeNotice(MeCodes.rateKey, id: nextId()))
             return
@@ -155,7 +162,7 @@ public final class RiskNoticeController: ObservableObject {
     }
 
     private func current(_ request: Int) -> Bool {
-        !left && seq == request && deps.env.isCurrent(identity)
+        !left && seq == request && admitRead()
     }
 
     /// 附加读取可以发：页面有效、已有非 normal 的说明内容。
@@ -177,7 +184,20 @@ public final class RiskNoticeController: ObservableObject {
         }
     }
 
+    private func admitSection(_ slot: String, resume: @escaping @MainActor () -> Void) -> Bool {
+        deferral.admit(deps.env.check(identity), slot: slot, resume: resume, settle: {
+            let notice = MeNotice(MeNotice.unfinishedKey, id: nextId())
+            if slot == "appeals" {
+                state.appealsError = notice
+            } else {
+                state.withdrawalsError = notice
+            }
+        })
+    }
+
     private func loadAppeals(_ request: Int) {
+        guard !left, seq == request,
+              admitSection("appeals", resume: { [weak self] in self?.loadAppeals(request) }) else { return }
         appealSeq += 1
         let mine = appealSeq
         if readGate.active {
@@ -190,7 +210,8 @@ public final class RiskNoticeController: ObservableObject {
         let probe = readGate.probe()
         requests.send(deps.api, ApiCall(operationId: Self.listAppeals), probe: probe,
                       expected: identity.request) { [weak self] result in
-            guard let self, current(request), appealSeq == mine else { return }
+            guard let self, !left, seq == request, appealSeq == mine,
+                  admitSection("appeals", resume: { [weak self] in self?.loadAppeals(request) }) else { return }
             if case let .success(data, _, _) = result, let list = MeJson.appealList(MeJson.object(data)) {
                 state.latestAppeal = AppealView.latestAccount(list.items)
                 state.appealsError = nil
@@ -205,6 +226,8 @@ public final class RiskNoticeController: ObservableObject {
     }
 
     private func loadWithdrawals(_ request: Int) {
+        guard !left, seq == request,
+              admitSection("withdrawals", resume: { [weak self] in self?.loadWithdrawals(request) }) else { return }
         withdrawalSeq += 1
         let mine = withdrawalSeq
         if readGate.active {
@@ -217,7 +240,8 @@ public final class RiskNoticeController: ObservableObject {
         let probe = readGate.probe()
         requests.send(deps.api, ApiCall(operationId: Self.listWithdrawals), probe: probe,
                       expected: identity.request) { [weak self] result in
-            guard let self, current(request), withdrawalSeq == mine else { return }
+            guard let self, !left, seq == request, withdrawalSeq == mine,
+                  admitSection("withdrawals", resume: { [weak self] in self?.loadWithdrawals(request) }) else { return }
             if case let .success(data, _, _) = result, let list = WalletJSON.withdrawalList(WalletJSON.parse(data)) {
                 // 状态标题 + 副文案都保留（R2-03）：与提现记录页同一个 WithdrawalText.of、同一份 SLA 来源与文案表
                 let sla = slaText()
@@ -265,12 +289,12 @@ public final class RiskNoticeController: ObservableObject {
     }
 
     public func contactCs() {
-        guard alive else { return }
+        guard !left, deps.env.check(identity) != .stale else { return }
         deps.env.customerService(from: Self.route)
     }
 
     public func askLogout() {
-        guard alive else { return }
+        guard !left, deps.env.check(identity) != .stale else { return }
         ids += 1
         state.logoutDialog = ids
     }
@@ -286,7 +310,7 @@ public final class RiskNoticeController: ObservableObject {
     public func confirmLogout(_ dialog: Int) {
         guard state.logoutDialog == dialog else { return }
         state.logoutDialog = nil
-        guard alive else { return }
+        guard !left, deps.env.check(identity) != .stale else { return }
         deps.env.logout(identity, from: page)
     }
 
@@ -294,6 +318,7 @@ public final class RiskNoticeController: ObservableObject {
     public func leave() {
         guard !left else { return }
         left = true
+        deferral.reset()
         seq += 1
         requests.cancelAll()
         state = RiskState()
@@ -301,5 +326,33 @@ public final class RiskNoticeController: ObservableObject {
 
     public var hasLeft: Bool {
         left
+    }
+}
+
+public extension RiskNoticeController {
+    func whenIdle() async {
+        await requests.settling.whenIdle()
+    }
+
+    var showsBack: Bool {
+        if state.phase == .error, state.risk == nil {
+            return true
+        }
+        return model()?.showBack ?? !enteredBy10006
+    }
+
+    private func settleUnknown() {
+        refreshFailed(MeNotice(MeNotice.unfinishedKey, id: nextId()))
+    }
+
+    private func admitRead() -> Bool {
+        deferral.admit(deps.env.check(identity), slot: "read", resume: { [weak self] in self?.load() }, settle: {
+            settleUnknown()
+        })
+    }
+
+    func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
     }
 }

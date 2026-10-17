@@ -468,6 +468,7 @@ step "swiftlint --strict" swiftlint lint --strict --no-cache
 step "lint 违反样例必须被拦" lint_fixtures
 step "Feature 之间无依赖（依赖图 + import 检查自测 + 源码）" feature_isolation
 step "check-feature-imports 违反样例必须被拦（含扫不完整退出 4）" feature_import_fixtures
+step "身份未知展示接线（FU-IOS-0713：漏接样例自测 + 源码）" bash -c 'python3 tools/ci/check-identity-wiring.py --self-test && python3 tools/ci/check-identity-wiring.py'
 step "gen.py --check" python3 tools/codegen/gen.py --check
 step "gen.py 命名冲突探针（test_gen.py）" python3 tools/codegen/test_gen.py
 step "xcodegen generate" xcodegen generate

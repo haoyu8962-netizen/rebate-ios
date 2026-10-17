@@ -13,6 +13,15 @@ public struct LaborSnapshot: Equatable, Sendable {
     public var sha256: String?
     public var checked = false
     public var signing = false
+    public var awaitingIdentity = false
+    public var showsSigning: Bool {
+        signing && !awaitingIdentity
+    }
+
+    public var showsRecheck: Bool {
+        awaitingIdentity
+    }
+
     public var error: Notice?
     /// 这份协议内容所属的身份（共性第 52 条）：读取时绑定，【同意并签署】回调带上它。
     public var owner: WalletOwner
@@ -24,6 +33,7 @@ public struct LaborSnapshot: Equatable, Sendable {
 @MainActor
 public final class LaborAgreementController: ObservableObject, IdentityResumable {
     @Published public private(set) var state: LaborSnapshot
+    let tasks = SettlingTasks()
     let deps: WalletDeps
     public var page: UUID?
     public let visibility = PageVisibility()
@@ -31,6 +41,7 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
     private var serial = 0
     private var loadSeq = 0
     private var deferredBack = false
+    private var completed = false
     /// 因身份暂时未知中止的读取与签署结果（FU-IOS-0712 整体重理：与各资金页同一套机制；签署不重放，只在身份确认后采用已到的结果）。
     public let deferral = IdentityDeferral()
 
@@ -45,11 +56,12 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
     }
 
     public var signEnabled: Bool {
-        state.phase == .content && state.checked && !state.signing && !deps.gates.labor.active
+        state.phase == .content && state.checked && !state.signing && !state.awaitingIdentity && !completed && !deps
+            .gates.labor.active
     }
 
     public func load() {
-        guard let backend = deps.labor, !left else { return }
+        guard let backend = deps.labor, !left, !state.signing, !state.awaitingIdentity, !completed else { return }
         let owner = state.owner
         // 当前会话已不是本页身份：不读，内容不绑到别的账号；身份暂时未知：记待补取并结算为可重试的失败态
         guard admitLoad(deps.env.check(owner)) else { return }
@@ -64,7 +76,10 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
         let request = loadSeq
         state.phase = .loading
         state.error = nil
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self] in
+            defer { tasks.end() }
             let result = await backend.current(owner: owner.request)
             guard let self, !left, loadSeq == request, state.owner == owner, admitLoad(deps.env.check(owner)) else {
                 return
@@ -81,7 +96,16 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
         }
     }
 
-    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的读取、采用身份未知时到达的签署结果。
+    /// 本页重试只核对身份，不重发签署。
+    public func recheckIdentity() {
+        guard !left, state.awaitingIdentity else { return }
+        deps.env.recheckIdentity()
+    }
+
+    public func whenIdle() async {
+        await tasks.whenIdle()
+    }
+
     public func resumeAfterIdentityConfirmed() {
         guard !left else { return }
         deferral.resume()
@@ -132,7 +156,10 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
         else { return }
         state.signing = true
         state.error = nil
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self] in
+            defer { tasks.end() }
             let result = await backend.sign(version: version, textSha256: sha, owner: owner.request)
             self?.signArrived(result, owner: owner)
         }
@@ -143,13 +170,15 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
         guard !left, state.owner == owner else { return }
         guard deferral.admit(deps.env.check(owner), slot: "sign", resume: { [weak self] in
             self?.signArrived(result, owner: owner)
-        }) else { return }
+        }, settle: { state.awaitingIdentity = true }) else { return }
+        state.awaitingIdentity = false
         signed(result)
     }
 
     private func signed(_ result: ApiResult) {
         state.signing = false
         if case .success = result {
+            completed = true
             // 出栈回 Withdraw 是导航：页面此刻不可见时留到回到可见再做（共性第 37、41 条）
             back()
             return
@@ -180,6 +209,7 @@ public final class LaborAgreementController: ObservableObject, IdentityResumable
     public func sessionChanged(_ owner: WalletOwner) {
         guard !left else { return }
         deferredBack = false
+        completed = false
         loadSeq += 1
         deferral.reset()
         state = LaborSnapshot(phase: deps.labor == nil ? .unavailable : .loading, owner: owner)

@@ -7,6 +7,7 @@ import WalletCore
 @MainActor
 public final class MeRequests {
     private var entries: [Int: (flag: RequestFlag, task: Task<Void, Never>)] = [:]
+    let settling = SettlingTasks()
     private var next = 0
 
     public init() {}
@@ -21,7 +22,10 @@ public final class MeRequests {
         let id = next
         let flag = RequestFlag()
         let allowed = probe.allowed
+        let settling = settling
+        settling.begin()
         let task = Task { @MainActor [weak self] in
+            defer { settling.end() }
             let result = await api.send(call, isValid: { flag.isValid }, sendAllowed: allowed, expected: expected)
             self?.entries[id] = nil
             guard flag.isValid else { return }

@@ -193,8 +193,7 @@ struct CouliApp: App {
         let orders = AppOrders(network: web.network, config: web.config, routing: web.routing, login: login)
         orders.clipboard = clipboard
         orders.permissions = web.permissions
-        search.orders = orders
-        search.trade?.onPageForeground = { [weak orders] id in orders?.pageForeground(id) }
+        orders.connect(search: search)
         return orders
     }
 
@@ -257,40 +256,10 @@ struct CouliApp: App {
                     tracker.startIfReady()
                 }
                 .onChange(of: scenePhase) { phase in
-                    switch phase {
-                    case .background:
-                        routing.sceneEnteredBackground()
-                        config.enteredBackground()
-                        let searchCommitted = search.restoration.sceneEnteredBackground()
-                        search.trade?.sceneChanged(active: false)
-                        clipboard.sceneBackground()
-                        orders.sceneEnteredBackground()
-                        #if DEBUG
-                        // 进后台的同步保存都执行完、搜索恢复内容与后台标记已提交并核对（UI 测试的显式完成信号，FU-IOS-0712 R1-05）；
-                        // 提交失败或没完成不发
-                        DebugUITestSignals.backgroundSaveFinished(committed: searchCommitted)
-                        #else
-                        _ = searchCommitted
-                        #endif
-                    case .active:
-                        routing.sceneBecameActive()
-                        config.enteredForeground()
-                        search.restoration.sceneBecameActive()
-                        search.trade?.sceneChanged(active: true)
-                        // 剪贴板：冷启动第一次与进过后台之后的那一次才判定（下拉通知等 inactive → active 不算，共性第 1 条）
-                        clipboard.sceneActive()
-                        orders.sceneBecameActive()
-                    case .inactive:
-                        // 系统弹窗、切换 App 的过渡：同样作废续执行许可（03 §4.5「进入后台不外跳」，保守）
-                        search.trade?.sceneChanged(active: false)
-                    @unknown default: break
-                    }
-                    // 钱包：active 之外（inactive、background）都立即作废等待中的导航与浮层许可（APP-09 iOS R2-03）
-                    wallet.scenePhaseChanged(phase)
-                    // 「我的」：同样作废导航许可（10006 票据），回前台按新的一次进入取 Me（G36）
-                    me.scenePhaseChanged(phase)
-                    // 绑手机页：active 之外都作废导航与弹窗许可（APP-05b，APP-09 共性第 77 条）
-                    login.scenePhaseChanged(active: phase == .active)
+                    AppScenePhases.apply(phase, AppScenePhases.Targets(
+                        routing: routing, config: config, search: search, clipboard: clipboard,
+                        orders: orders, wallet: wallet, me: me, login: login
+                    ))
                 }
         }
     }

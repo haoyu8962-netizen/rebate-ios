@@ -112,6 +112,7 @@ public protocol FlowHost: AnyObject {
 @MainActor
 public final class SensitiveFlow: ObservableObject {
     @Published public internal(set) var state: FlowState
+    let tasks = SettlingTasks()
     let deps: WalletDeps
     /// openapi operationId：createWithdrawal / savePayoutAccount。
     public let operationId: String
@@ -227,13 +228,10 @@ public final class SensitiveFlow: ObservableObject {
         // 还有待身份确认的写结果（RV-01）：不发任何新的写请求（页面保持等待，出口是身份核对）
         guard !state.awaitingIdentity else { return }
         // 发送前核对：会话已换（二次验证期间、排队期间）的不发，键不用了
-        guard deps.env.isCurrent(click), let account = click.account else {
-            reuseKey = nil
-            if alive() {
-                state.phase = .editing
-            }
-            return
-        }
+        guard deferral.admit(deps.env.check(click), slot: "send", resume: { [weak self] in
+            self?.state.awaitingIdentity = false
+            self?.send(click: click, payload: payload, token: token, replayed: replayed)
+        }, settle: { state.awaitingIdentity = true }), let account = click.account else { return }
         sentViewGen = visibility.generation
         let probe = gate.probe()
         let call = ApiCall(
@@ -244,7 +242,10 @@ public final class SensitiveFlow: ObservableObject {
         // 共享结算由任务持有的固定依据直接完成（共性第 66 条）：页面执行器释放后迟到的成功、42901 照常结算
         let ticket = writeTicket(click)
         let settlement = deps.settlement
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self, deps, operationId, outcomeOp] in
+            defer { tasks.end() }
             let result = await api.send(call, isValid: { true }, sendAllowed: probe.allowed, expected: click.request)
             let outcome = Self.isLocal(result) ? nil : SensitiveOutcome.of(
                 op: outcomeOp, phase: SensitiveOutcome.submit, keyEverUnknown: false,
@@ -302,9 +303,14 @@ public final class SensitiveFlow: ObservableObject {
         deps.env.recheckIdentity()
     }
 
-    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的待确认记录读取、采用身份未知时到达的结果。
+    /// 等本执行器已排队的请求与回包结算完成（不含面板倒计时）。
+    public func whenIdle() async {
+        await tasks.whenIdle()
+    }
+
     public func resumeAfterIdentityConfirmed() {
         guard alive() else { return }
+        stepUp.resumeAfterIdentityConfirmed()
         deferral.resume()
     }
 

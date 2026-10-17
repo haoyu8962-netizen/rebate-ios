@@ -89,6 +89,9 @@ final class CountingSessionTokens: SessionTokens, @unchecked Sendable {
     private var count = 0
     /// 第几次读取（按 `reads` 计数）抛读取失败（FU-IOS-0712 R3-01：只让某一次读取暂时失败）。
     private var failAt: Int?
+    /// FU-IOS-0713：从第几次读取起改读另一份会话（`redirectTo`；nil 存储 = 读到「没有会话」），直到 `disarm()`。
+    private var redirectFrom: Int?
+    private var redirectTo: MemorySessionTokens?
     /// 从第几次读取起持续失败（含），直到 `stopFailing()`（末轮窄修二 RC-03：换代识别那次之后的读取全部暂时失败，与读取次数无关）。
     private var failFrom: Int?
 
@@ -114,13 +117,35 @@ final class CountingSessionTokens: SessionTokens, @unchecked Sendable {
         lock.withLock { failFrom = nil }
     }
 
+    /// FU-IOS-0713：撤掉全部故障（含还没轮到的「仅第 n 次」与改读），故障窗口之外的读取一律照常。
+    func disarm() {
+        lock.withLock {
+            failAt = nil
+            failFrom = nil
+            redirectFrom = nil
+            redirectTo = nil
+        }
+    }
+
+    /// FU-IOS-0713：从现在起的第 `nth` 次读取开始改读 `other`（另一会话；空存储 = 没有会话），直到 `disarm()`。
+    func redirect(fromNth nth: Int, to other: MemorySessionTokens) {
+        lock.withLock {
+            redirectFrom = count + nth
+            redirectTo = other
+        }
+    }
+
     func readSession() throws -> SessionSnapshot? {
-        let fail = lock.withLock { () -> Bool in
+        let (fail, other) = lock.withLock { () -> (Bool, MemorySessionTokens?) in
             count += 1
-            return count == failAt || failFrom.map { count >= $0 } == true
+            let redirected = redirectFrom.map { count >= $0 } == true ? redirectTo : nil
+            return (count == failAt || failFrom.map { count >= $0 } == true, redirected)
         }
         if fail {
             throw SessionReadError.readFailed
+        }
+        if let other {
+            return try other.readSession()
         }
         return try inner.readSession()
     }

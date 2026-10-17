@@ -52,7 +52,7 @@ public struct RiskNoticeScreen: View {
         let state = controller.state
         let actions = RiskNoticeActions.make(controller, state)
         let model = controller.model()
-        let showBack = model?.showBack ?? !controller.enteredBy10006
+        let showBack = controller.showsBack
         Group {
             switch state.phase {
             case .loading:

@@ -231,6 +231,7 @@ public final class SmsDeadlines {
 
     private var until: [String: Int64] = [:]
     private var sending: [String: Int] = [:]
+    private var awaiting: Set<String> = []
     private var tickets = 0
     public let changes = WalletSignal<Void>()
 
@@ -255,9 +256,20 @@ public final class SmsDeadlines {
     }
 
     /// 释放本次请求的占用：槽位已被清空（会话换代）或换成别的请求占用的，不动它。
+    func awaitingIdentity(_ slot: Slot) -> Bool {
+        awaiting.contains(slot.id)
+    }
+
+    func waitForIdentity(_ slot: Slot, ticket: Int) {
+        guard sending[slot.id] == ticket else { return }
+        awaiting.insert(slot.id)
+        changes.send(())
+    }
+
     public func release(_ slot: Slot, ticket: Int) {
         guard sending[slot.id] == ticket else { return }
         sending[slot.id] = nil
+        awaiting.remove(slot.id)
         changes.send(())
     }
 
@@ -268,6 +280,7 @@ public final class SmsDeadlines {
     public func clear() {
         until = [:]
         sending = [:]
+        awaiting = []
         changes.send(())
     }
 }

@@ -38,8 +38,6 @@ public struct PendingTrackState: Equatable {
 }
 
 /// 待跟单卡执行器（订单列表自购子 Tab 顶部、发起购买的页面外跳回前台后，G07）。一个显示位置一份，只在主线程使用。
-/// - 拉取 `GET /v1/orders/pending-tracks`：不缓存到磁盘，不显示 jumped_at 推算出的任何时长；`platform` 不为 nil 时只显示同平台那一张；
-/// - 归属：会话世代（hub.sessionEpoch 变化即作废）+ 页面仍在 + 本位置最新一次拉取；迟到的只丢弃；
 /// - 关闭：按渲染时的卡片项（不取「当前最新」的卡）；在途时各位置按钮忙碌、不重复发；成功的尝试记进 hub（迟到的旧快照不得复活它，
 ///   同一 link 的新 attempt_id 照常显示）；20001 重拉；传输失败保留并轻提示网络错误；5xxxx 轻提示对应错误文案 + trace6；42901 进共享禁用期；
 ///   10405 由网络层的强更分流处理（不另写强更逻辑）；
@@ -57,6 +55,9 @@ public final class PendingTrackService: ObservableObject {
     weak var env: PendingTrackEnv?
     private let fetches = OrderInFlight()
     private let closes = OrderInFlight()
+    private let tasks = SettlingTasks()
+    private let deferral = IdentityDeferral()
+    private var needsBinding = false
     private var items: [PendingTrack] = []
     var left = false
     private var fetchSeq = 0
@@ -68,7 +69,7 @@ public final class PendingTrackService: ObservableObject {
     /// 卡内【开启通知】的待执行申请（页面出栈、会话换代、离开显示位置时同步取消，共性第 31 条）。
     var pushTask: Task<Void, Never>?
     private var subscriptions: Set<AnyCancellable> = []
-    /// 固定身份（构造时一次性取得；会话换代通知里随清空一起重建，APP-09 共性第 65 条）：拉取结算、票据、通知行的登录判断都只用它。
+    /// 固定身份（构造时一次性取得；换代清空后用调用方确认的快照重绑，APP-09 共性第 65 条）：拉取结算、票据、通知行的登录判断都只用它。
     public private(set) var owner: OrderOwner
     /// 固定身份对应的会话世代（与 `owner` 同时取得、同时重建）；票据只用它，不在渲染时读 hub 的当前世代。
     var boundEpoch: Int
@@ -79,12 +80,18 @@ public final class PendingTrackService: ObservableObject {
     var displayCount = 0
     var everDisplayed = false
 
-    public init(api: OrderApi, hub: OrderSessionHub, env: PendingTrackEnv, platform: String? = nil) {
+    public init(
+        api: OrderApi,
+        hub: OrderSessionHub,
+        env: PendingTrackEnv,
+        platform: String? = nil,
+        owner: OrderOwner? = nil
+    ) {
         self.api = api
         self.hub = hub
         self.env = env
         self.platform = platform
-        owner = env.currentOwner()
+        self.owner = owner ?? env.currentOwner()
         boundEpoch = hub.sessionEpoch
         state.blocked = hub.gate.blocked
         hub.gate.$blocked.dropFirst().sink { [weak self] blocked in
@@ -109,10 +116,11 @@ public final class PendingTrackService: ObservableObject {
 
     /// 拉一次（`onlyPlatform` 只给发起购买的页面：外跳回到前台后，只显示同平台那一张；nil 沿用上次）。
     public func refresh(onlyPlatform: String? = nil) {
-        guard !left, ownerCurrent else { return }
+        guard !left else { return }
         if let onlyPlatform {
             platform = onlyPlatform
         }
+        guard admitFetch() else { return }
         // 42901 禁用期内不发（执行层拦截；会话级共享，重进页面也一样）；期满补拉一次
         guard !hub.gate.active else {
             deferredFetch = true
@@ -124,41 +132,18 @@ public final class PendingTrackService: ObservableObject {
         fetches.cancelAll()
         fetches
             .send(api, ApiCall(operationId: Self.listOperation), gate: hub.gate, owner: owner) { [weak self] result in
-                guard let self, !left, ownerCurrent, seq == fetchSeq else { return }
-                switch result {
-                case let .success(data, _, _):
-                    guard let parsed = OrderJSON.pendingTracks(JSONPick.parse(data)) else { return }
-                    items = parsed
-                    publish()
-                case .failure:
-                    hub.gate.start(OrderErrorAction.disableMillis(result))
-                    if OrderErrorAction.disableMillis(result) > 0 {
-                        deferredFetch = true
-                    }
-                case let .localReject(reason) where reason == LocalRejectReason.sendBlocked:
-                    deferredFetch = true
-                default:
-                    // 拉不到时保持原样（不清掉已显示的卡，也不显示推算出的卡）
-                    break
-                }
+                guard let self, !left, seq == fetchSeq, admitFetch() else { return }
+                fetched(result)
             }
-    }
-
-    /// 通知权限或会话变了（回到前台、申请结束）：按新状态重算通知行。
-    public func recompute() {
-        guard !left else { return }
-        publish()
-    }
-
-    func republishSoon() {
-        guard !left else { return }
-        // @Published 在 willSet 时发出：等这一轮赋值完成后再读 hub 的新值
-        Task { @MainActor [weak self] in self?.recompute() }
     }
 
     private func currentCards() -> [PendingTrackCardView] {
         // 固定身份已不是当前会话：不显示（App 的换代通知随后清空并重建）
-        guard ownerCurrent else { return [] }
+        switch env?.check(owner) ?? .stale {
+        case .unknown: return state.cards
+        case .stale: return []
+        case .current: break
+        }
         let requested = hub.pushRowUsed || (env?.requestedBefore ?? true)
         let all = PendingTrackCards.cards(
             items, session: owner.member ? PendingTrackRaw.member : PendingTrackRaw.guest,
@@ -305,9 +290,9 @@ public final class PendingTrackService: ObservableObject {
         items = []
         cardLives = [:]
         deferredFetch = false
-        guard !left, let env else { return }
-        // 随清空一起为新会话重建固定身份（A 类：换代通知里一次读取）
-        owner = env.currentOwner()
+        deferral.reset()
+        guard !left else { return }
+        needsBinding = true
         boundEpoch = epoch
         state = PendingTrackState()
         state.blocked = hub.gate.blocked
@@ -336,6 +321,7 @@ public final class PendingTrackService: ObservableObject {
     public func leave() {
         guard !left else { return }
         left = true
+        deferral.reset()
         generation += 1
         pushTask?.cancel()
         pushTask = nil
@@ -346,5 +332,69 @@ public final class PendingTrackService: ObservableObject {
         }
         ownDismissing = []
         subscriptions.removeAll()
+    }
+}
+
+public extension PendingTrackService {
+    private func admitFetch() -> Bool {
+        deferral.admit(env?.check(owner) ?? .stale, slot: "fetch", resume: { [weak self] in self?.refresh() })
+    }
+
+    /// 重绑只接收调用方本次已确认的快照，不在换代通知里另读身份。
+    func identityConfirmed(_ confirmed: OrderOwner) {
+        guard !left, confirmed.identityKnown else { return }
+        if needsBinding || !owner.identityKnown || (owner.account == nil && confirmed.account != nil) {
+            owner = confirmed
+            boundEpoch = hub.sessionEpoch
+            needsBinding = false
+        }
+        deferral.resume()
+        publish()
+    }
+
+    func whenIdle() async {
+        repeat {
+            await fetches.settling.whenIdle()
+            await closes.settling.whenIdle()
+            await tasks.whenIdle()
+        } while !fetches.settling.isIdle || !closes.settling.isIdle || !tasks.isIdle
+    }
+}
+
+extension PendingTrackService {
+    private func fetched(_ result: ApiResult) {
+        switch result {
+        case let .success(data, _, _):
+            guard let parsed = OrderJSON.pendingTracks(JSONPick.parse(data)) else { return }
+            items = parsed
+            publish()
+        case .failure:
+            hub.gate.start(OrderErrorAction.disableMillis(result))
+            if OrderErrorAction.disableMillis(result) > 0 {
+                deferredFetch = true
+            }
+        case let .localReject(reason) where reason == LocalRejectReason.sendBlocked:
+            deferredFetch = true
+        default:
+            // 拉不到时保持原样（不清掉已显示的卡，也不显示推算出的卡）
+            break
+        }
+    }
+
+    /// 通知权限或会话变了（回到前台、申请结束）：按新状态重算通知行。
+    public func recompute() {
+        guard !left else { return }
+        publish()
+    }
+
+    func republishSoon() {
+        guard !left else { return }
+        // @Published 在 willSet 时发出：等这一轮赋值完成后再读 hub 的新值
+        let tasks = tasks
+        tasks.begin()
+        Task { @MainActor [weak self] in
+            defer { tasks.end() }
+            self?.recompute()
+        }
     }
 }

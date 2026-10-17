@@ -10,6 +10,15 @@ public struct RealNameSnapshot: Equatable, Sendable, CustomStringConvertible {
     public var consentId: Int?
     public var consentChecked = false
     public var submitting = false
+    public var awaitingIdentity = false
+    public var showsSubmitting: Bool {
+        submitting && !awaitingIdentity
+    }
+
+    public var showsRecheck: Bool {
+        awaitingIdentity
+    }
+
     public var error: Notice?
     public var fieldErrors: [String] = []
     /// 字段错误事件编号（共性第 24 条）。
@@ -34,12 +43,14 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     public static let fieldId = "id_no"
 
     @Published public private(set) var state: RealNameSnapshot
+    let tasks = SettlingTasks()
     let deps: WalletDeps
     public var page: UUID?
     public let visibility = PageVisibility()
     private var left = false
     private var serial = 0
     private var deferredBack = false
+    private var completed = false
     /// 身份暂时未知时到达的提交结果（FU-IOS-0712 整体重理：与各资金页同一套机制；不重放提交，身份确认后仍是本表单身份才采用）。
     public let deferral = IdentityDeferral()
 
@@ -55,7 +66,8 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     }
 
     public var submitEnabled: Bool {
-        available && !state.lockedToday && !state.submitting && !deps.gates.realname.active
+        available && !state.lockedToday && !state.submitting && !state.awaitingIdentity && !completed && !deps.gates
+            .realname.active
             && RealNameForm.normalize(name: state.name, idNo: state.idNo).submitEnabled
     }
 
@@ -117,7 +129,10 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         state.error = nil
         deps.env.sensitiveOverlay(false)
         let key = deps.newKey()
+        let tasks = tasks
+        tasks.begin()
         Task { @MainActor [weak self] in
+            defer { tasks.end() }
             // 发送前核对：会话已换的不发（共性第 39、52 条）；后端实现也按固定身份核对
             guard let self, deps.env.isCurrent(owner) else {
                 self?.state.submitting = false
@@ -129,16 +144,26 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         }
     }
 
-    /// 提交结果的身份核对：暂时未知 → 不采用、记下（提交中保持，身份确认后仍是本表单身份才采用）；已换代 → 丢弃。
+    /// 提交结果的身份核对：暂时未知 → 不采用、记下（结束忙碌展示但保持提交锁，身份确认后仍是本表单身份才采用）；已换代 → 丢弃。
     private func submitArrived(_ result: ApiResult, owner: WalletOwner) {
         guard !left, state.owner == owner else { return }
         guard deferral.admit(deps.env.check(owner), slot: "submit", resume: { [weak self] in
             self?.submitArrived(result, owner: owner)
-        }) else { return }
+        }, settle: { state.awaitingIdentity = true }) else { return }
+        state.awaitingIdentity = false
         onResult(result)
     }
 
-    /// 身份确认之后（App 的会话核对，判据相同也调）：采用身份未知时到达的提交结果。
+    /// 本页重试只核对身份，不重发提交。
+    public func recheckIdentity() {
+        guard !left, state.awaitingIdentity else { return }
+        deps.env.recheckIdentity()
+    }
+
+    public func whenIdle() async {
+        await tasks.whenIdle()
+    }
+
     public func resumeAfterIdentityConfirmed() {
         guard !left else { return }
         deferral.resume()
@@ -146,6 +171,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
 
     private func onResult(_ result: ApiResult) {
         if case .success = result {
+            completed = true
             // 实名完成：清掉已填的姓名与身份证号，刷新 realname_status，出栈回发起页
             serial += 1
             state = RealNameSnapshot(done: Notice("realname.done", id: serial, assertive: false), owner: state.owner)
@@ -209,6 +235,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     public func sessionChanged(_ owner: WalletOwner) {
         guard !left else { return }
         deferredBack = false
+        completed = false
         deferral.reset()
         if state.consentId != nil {
             deps.env.sensitiveOverlay(false)

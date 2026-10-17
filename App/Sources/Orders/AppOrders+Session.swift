@@ -89,6 +89,7 @@ extension AppOrders {
             listConfig = nil
             rebuildRoot()
         }
+        confirmPendingSlots(snapshot)
         let confirmed = owner(for: snapshot)
         let live = details.values.compactMap(\.controller)
         for controller in live {
@@ -111,5 +112,20 @@ extension AppOrders {
         _ = cache.completePendingClear()
         guard snapshot.known else { return }
         cache.reconcileOwner(account: snapshot.account, loginEpoch: snapshot.loginEpoch)
+    }
+}
+
+extension AppOrders {
+    func sceneBecameActive() {
+        sceneActive = true
+        refreshNotificationStatus()
+        checkSession()
+    }
+
+    /// 进后台：先核对会话（换代了就先清空、换掉旧页面），再保存一次订单 Tab 的恢复记录（只认仍有效的页面，iOS RC-02）。
+    func sceneEnteredBackground() {
+        sceneActive = false
+        checkSession()
+        persist()
     }
 }

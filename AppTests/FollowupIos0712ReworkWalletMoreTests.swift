@@ -59,8 +59,9 @@ final class FollowupIos0712ReworkWalletMoreTests: WalletFlowTestCase {
         backend.release()
         await waitUntil("签署结果没有到达") { controller.deferral.isPending }
         fixture.store.stopFailing()
-        let signing = controller.state.signing
-        XCTAssertTrue(signing, "身份未知：不采用")
+        // FU-IOS-0713 起口径（RW-03 / F-X-22）：结果已到等身份确认时不再要求「签署中」转圈，只要求签署仍锁住
+        let locked = !controller.signEnabled
+        XCTAssertTrue(locked, "身份未知：不采用，签署仍锁住")
         XCTAssertEqual(fixture.router.path.last?.route, WalletRoutes.laborAgreement, "不出栈")
         fixture.wallet.checkSession()
         await waitUntil("确认后签署结果没有采用") { fixture.router.path.last?.route != WalletRoutes.laborAgreement }

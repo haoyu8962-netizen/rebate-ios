@@ -15,6 +15,19 @@ public struct StepUpUiState: Equatable, Sendable {
     public var code = ""
     public var resendLeftSec: Int64 = 0
     public var error: Notice?
+    public var awaitingIdentity = false
+    public var showsSending: Bool {
+        phase == .sending && !awaitingIdentity
+    }
+
+    public var showsVerifying: Bool {
+        phase == .verifying && !awaitingIdentity
+    }
+
+    public var showsRecheck: Bool {
+        awaitingIdentity
+    }
+
     /// 面板实例编号（每次打开换新）：面板上的回调带渲染时的编号，执行时核对（APP-11 第 28 条）。
     public let instance: Int
     /// 打开面板的提交 / 确认所属的身份（APP-09 共性第 60 条）：发码、重新获取、验证、读取手机号、占用发码槽位、发包前都核对它仍是当前会话，
@@ -22,7 +35,7 @@ public struct StepUpUiState: Equatable, Sendable {
     public let owner: WalletOwner
 
     public var canVerify: Bool {
-        phase == .ready && code.count == Self.codeLength
+        !awaitingIdentity && phase == .ready && code.count == Self.codeLength
     }
 }
 
@@ -47,6 +60,8 @@ public final class StepUpController: ObservableObject {
     var ticker: Task<Void, Never>?
     var resendUntil: Int64 = 0
     let requests = WalletRequests()
+    let tasks = SettlingTasks()
+    let deferral = IdentityDeferral()
     var waitOther: (() -> Void)?
 
     init(deps: WalletDeps, alive: @escaping () -> Bool) {
@@ -70,7 +85,7 @@ public final class StepUpController: ObservableObject {
 
     /// 面板上的回调都带渲染时面板的实例与身份（共性第 60、63 条）：不是这个面板的、或已不是当前会话的不受理。
     func owns(_ current: StepUpUiState, instance: Int) -> Bool {
-        current.instance == instance && deps.env.isCurrent(current.owner)
+        current.instance == instance && !current.awaitingIdentity && deps.env.isCurrent(current.owner)
     }
 
     /// 输入回调（渲染时的面板实例）：只留数字，最多 6 位。
@@ -91,7 +106,7 @@ public final class StepUpController: ObservableObject {
     /// 【验证并提交】。
     public func verify(instance: Int) {
         guard var current = state, owns(current, instance: instance), current.canVerify,
-              let account = current.owner.account
+              current.owner.account != nil
         else { return }
         if deps.gates.verify.active {
             current.error = notice("error.42901")
@@ -105,15 +120,49 @@ public final class StepUpController: ObservableObject {
         let body = WalletJSON.text(["action": current.action, "code": current.code])
         let probe = deps.gates.verify.probe()
         let panel = instance
-        let action = current.action
         let deps = deps
         requests.send(deps.api, ApiCall(operationId: Self.verifyOperation, body: body), probe: probe,
                       expected: owner.request) { [weak self] result in
             // 42901 先按归属写入共享禁用期（会话级，不依赖面板存活），再看面板是否有效（共性第 27、40、66 条）
             deps.settlement.settleRetryAfter(result, gate: deps.gates.verify, owner: owner)
-            guard let self, valid(panel, owner) else { return }
-            onVerified(result, account: account, action: action, probe: probe)
+            self?.verifiedArrived(result, panel: panel, current: current, probe: probe)
         }
+    }
+
+    func verifiedArrived(_ result: ApiResult, panel: Int, current: StepUpUiState, probe: SendProbe) {
+        guard let account = current.owner.account, admit(panel, current.owner, resume: { [weak self] in
+            self?.verifiedArrived(result, panel: panel, current: current, probe: probe)
+        }) else { return }
+        onVerified(result, account: account, action: current.action, probe: probe)
+    }
+
+    /// 固定面板的结果只延后采用；重试只请 App 核对身份。
+    func admit(_ panel: Int, _ owner: WalletOwner, waiting: Bool = false,
+               resume: @escaping @MainActor () -> Void) -> Bool {
+        guard alive(), panel == instance, state != nil else { return false }
+        let check = waiting ? IdentityCheck.unknown : deps.env.check(owner)
+        guard deferral.admit(check, slot: "panel", resume: resume, settle: {
+            state?.awaitingIdentity = true
+            state?.error = nil
+        }) else { return false }
+        state?.awaitingIdentity = false
+        return true
+    }
+
+    public func recheckIdentity(instance: Int) {
+        guard state?.instance == instance, state?.awaitingIdentity == true else { return }
+        deps.env.recheckIdentity()
+    }
+
+    public func resumeAfterIdentityConfirmed() {
+        deferral.resume()
+    }
+
+    public func whenIdle() async {
+        repeat {
+            await tasks.whenIdle()
+            await requests.settling.whenIdle()
+        } while !tasks.isIdle || !requests.settling.isIdle
     }
 
     func onVerified(_ result: ApiResult, account: String, action: String, probe: SendProbe) {
@@ -151,6 +200,7 @@ public final class StepUpController: ObservableObject {
 
     /// 收起面板（拿到 token、会话换代、离页）：在途的验证作废，迟到的结果只丢弃；已发出的发码照常结算共享倒计时（共性第 40 条）。
     func dismiss() {
+        deferral.reset()
         instance += 1
         ticker?.cancel()
         ticker = nil
@@ -163,10 +213,6 @@ public final class StepUpController: ObservableObject {
         state = nil
         onToken = nil
         onClosed = nil
-    }
-
-    func valid(_ panel: Int, _ owner: WalletOwner) -> Bool {
-        alive() && panel == instance && state != nil && deps.env.isCurrent(owner)
     }
 
     func notice(_ key: String) -> Notice {

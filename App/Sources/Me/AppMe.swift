@@ -95,7 +95,8 @@ final class AppMe: ObservableObject {
         pushSource: PushTokenSource, nickname: NicknameBackend? = nil, notify: NotifyBackend? = nil,
         credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable },
         withdrawalRegistry: EnvironmentSwitchCleanerRegistry = PrivacyWithdrawalCleanup.registry,
-        environmentRegistry: EnvironmentSwitchCleanerRegistry = .shared
+        environmentRegistry: EnvironmentSwitchCleanerRegistry = .shared,
+        api: MeApi? = nil
     ) {
         client = network.client
         router = routing.router
@@ -116,7 +117,7 @@ final class AppMe: ObservableObject {
         deviceId = { registry.deviceId }
         currentIdentity = .none
         deps = MeDeps(
-            api: network.client, env: self, gates: gates, texts: AppMeTexts(), local: local, mask: mask,
+            api: api ?? network.client, env: self, gates: gates, texts: AppMeTexts(), local: local, mask: mask,
             nickname: nickname, notify: notify
         )
         cs = CustomerServiceEntry(ports: self)
@@ -178,24 +179,27 @@ final class AppMe: ObservableObject {
 
     /// 此刻的身份（现算，一次读取）。
     func computeIdentity() -> MeIdentity {
-        let readable = credentialsReadable()
-        let network = client.currentOwnership(credentialsReadable: readable)
-        let level: String = if privacy.routerPrivacy != .consented || !readable {
-            MeLevel.basic
-        } else if network.account == nil || client.isolatedSessionScope == nil {
-            MeLevel.guest
-        } else {
-            MeLevel.member
+        identity(from: client.identitySnapshot(credentialsReadable: credentialsReadable()))
+    }
+
+    func identity(from snapshot: IdentitySnapshot) -> MeIdentity {
+        // 未知时继续保留上一次已确认的身份档；是否可执行必须另走 check 三态。
+        if !snapshot.known, snapshot.readable, privacy.routerPrivacy == .consented {
+            return currentIdentity
         }
-        let account = level == MeLevel.member ? network.account : nil
-        let key = "\(level)|\(account ?? "-")|\(network.generation)|\(network.epoch)|\(clearedCount)"
-        return MeIdentity(level: level, account: account, request: network, key: key)
+        let level = privacy.routerPrivacy != .consented || !snapshot.readable
+            ? MeLevel.basic : (snapshot.member ? MeLevel.member : MeLevel.guest)
+        let account = level == MeLevel.member ? snapshot.account : nil
+        let key = "\(level)|\(account ?? "-")|\(snapshot.generation)|\(snapshot.epoch)|\(clearedCount)"
+        return MeIdentity(level: level, account: account, request: snapshot.request, key: key)
     }
 
     /// 会话、隐私、环境、版本状态变化后同步：身份变了 → 账号或会话世代变了就清空 Me 快照、重置禁用期、移出只能登录访问的页面；页面按新身份
     /// 重建执行器；推送会话跟踪同步。
     func syncIdentity() {
-        let next = computeIdentity()
+        let snapshot = client.identitySnapshot(credentialsReadable: credentialsReadable())
+        guard snapshot.known || !snapshot.readable || privacy.routerPrivacy != .consented else { return }
+        let next = identity(from: snapshot)
         let previous = currentIdentity
         if next != previous {
             currentIdentity = next
@@ -214,6 +218,12 @@ final class AppMe: ObservableObject {
             }
             rebuildPages(next)
             objectWillChange.send()
+        }
+        for entry in Array(pages.values) {
+            (entry.controller() as? IdentityResumable)?.resumeAfterIdentityConfirmed()
+        }
+        if tabEntered {
+            tabHost.controller.resumeAfterIdentityConfirmed()
         }
         pushTracker.sync()
     }
