@@ -31,7 +31,7 @@ public struct PayoutActions {
             bank: { [weak controller] in controller?.onBankChange($0, owner: owner) },
             payee: { [weak controller] in controller?.onPayeeChange($0, owner: owner) },
             save: { [weak controller] in controller?.save(owner: owner) },
-            retry: { [weak controller] in controller?.load() },
+            retry: { [weak controller] in controller?.retry() },
             appeal: { [weak controller] in controller?.appeal(dialog: dialog) },
             openGuide: { [weak controller] in controller?.openGuide(owner: owner) }
         )

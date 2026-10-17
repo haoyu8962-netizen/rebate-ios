@@ -93,6 +93,8 @@ final class FakeParseApi: ParseApi, @unchecked Sendable {
         case inline(code: Int)
         case failure(code: Int)
         case rateLimited(millis: Int64)
+        /// 整体失败，Effect 种类给定（FU-IOS-0712 R1-03：整体 10405 的强更 / 非强更对照）。
+        case whole(code: Int, kind: ErrorEffectKind)
     }
 
     private let lock = NSLock()
@@ -146,6 +148,9 @@ final class FakeParseApi: ParseApi, @unchecked Sendable {
         case let .failure(code):
             return .failure(code: code, msg: "", data: nil, traceId: trace,
                             effect: ErrorEffect(code: code, kind: .toast), idempotencyKey: nil)
+        case let .whole(code, kind):
+            return .failure(code: code, msg: "", data: Data(#"{"min_supported_version":"9.9.9"}"#.utf8), traceId: trace,
+                            effect: ErrorEffect(code: code, kind: kind), idempotencyKey: nil)
         case let .rateLimited(millis):
             var effect = ErrorEffect(code: 42901, kind: .disableButton)
             effect.disableMillis = millis

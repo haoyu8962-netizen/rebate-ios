@@ -1,0 +1,6 @@
+import SwiftUI
+#if NEVER_DEFINED
+@testable/* */import/**/Search
+#endif
+
+enum GluedCommentImport {}

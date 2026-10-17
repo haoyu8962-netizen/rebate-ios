@@ -31,7 +31,7 @@ public struct RecordsSnapshot: Equatable, Sendable {
 /// - 金额不受隐藏开关影响（G23）。
 /// 请求绑定页面与固定身份；出栈后作废。只在主线程使用。
 @MainActor
-public final class WithdrawRecordsController: ObservableObject {
+public final class WithdrawRecordsController: ObservableObject, IdentityResumable {
     static let listOperation = "listWithdrawals"
     static let detailOperation = "getWithdrawal"
     public static let pageSize = 20
@@ -47,6 +47,17 @@ public final class WithdrawRecordsController: ObservableObject {
     let requests = WalletRequests()
     /// 新一轮第一页还没回来（共性第 20、35 条）：期间禁止翻页与再次刷新，旧游标不得以新一轮的名义发出。
     public internal(set) var firstPagePending = false
+    /// 因身份暂时未知中止、等身份确认后补做的读取（新一轮第一页与定位单、翻页、展开详情；FU-IOS-0712 整体重理：与钱包摘要、各资金页
+    /// 同一套机制）。补做时路由定位参数（withdrawal_id）照旧带上。
+    public let deferral = IdentityDeferral()
+    static let roundSlot = "round"
+    static let moreSlot = "more"
+
+    /// 有因身份暂时未知中止、还没补取的读取。
+    public var loadPending: Bool {
+        deferral.isPending
+    }
+
     /// 每张单最新一次详情请求的序号与请求编号（共性第 20、54 条）：同一 withdrawal_id 只收最新请求的响应。
     var detailCounter = 0
     var detailSeq: [String: Int] = [:]
@@ -79,7 +90,8 @@ public final class WithdrawRecordsController: ObservableObject {
     /// 新一轮（进入、下拉、回到本页）：第一页 + 带 withdrawal_id 时的那张单。
     public func load(refresh: Bool = false) {
         let owner = state.owner
-        guard !left, owner.account != nil, deps.env.isCurrent(owner) else { return }
+        // 已确认没有会话的页面不读；身份暂时未知时构造的页面照常核对（结算为可重试，身份确认后由 App 换上身份）
+        guard !left, owner.account != nil || !owner.identityKnown, admitRound(deps.env.check(owner)) else { return }
         if deps.gates.read.active {
             gated()
             return
@@ -101,7 +113,7 @@ public final class WithdrawRecordsController: ObservableObject {
         let probe = deps.gates.read.probe()
         let call = ApiCall(operationId: Self.listOperation, query: "limit=\(Self.pageSize)")
         requests.send(deps.api, call, probe: probe, expected: owner.request) { [weak self] result in
-            guard let self, !left, round == current, deps.env.isCurrent(owner) else { return }
+            guard let self, !left, round == current, admitRound(deps.env.check(owner)) else { return }
             // 每个请求回来先按身份结算限流等共享副作用，再决定是否发下一个（共性第 42 条）
             settleShared(result)
             listArrived(result, probe: probe, round: current, owner: owner)
@@ -130,11 +142,35 @@ public final class WithdrawRecordsController: ObservableObject {
         let focusProbe = deps.gates.read.probe()
         let call = detailCall(focusId)
         requests.send(deps.api, call, probe: focusProbe, expected: owner.request) { [weak self] focused in
-            guard let self, !left, round == current, deps.env.isCurrent(owner) else { return }
+            guard let self, !left, round == current, admitRound(deps.env.check(owner)) else { return }
             settleShared(focused)
             firstPagePending = false
             onFirstPage(result, listed: listed, focus: FocusRead(id: focusId, request: request, result: focused),
                         probe: focusProbe)
+        }
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：补做因身份暂时未知中止的一轮、翻页与详情（固定身份校验与禁用期照旧）。
+    public func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
+    }
+
+    /// 新一轮的身份核对（发送前、第一页与定位单响应时同一入口）：暂时未知 → 记待补取（身份确认后重开一轮）并结算；已换代 → 丢弃。
+    func admitRound(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Self.roundSlot, resume: { [weak self] in self?.load() }, settle: {
+            identityAborted()
+        })
+    }
+
+    /// 新一轮因身份暂时未知中止（RC-05）：结清在途标记（否则刷新、回前台都被拒）；没有列表时结算为可重试的失败态，已有旧列表保留显示。
+    func identityAborted() {
+        firstPagePending = false
+        state.refreshing = false
+        if state.items.isEmpty {
+            state.phase = .error
+            state.error = nil
+            state.version += 1
         }
     }
 

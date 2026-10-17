@@ -141,6 +141,8 @@ final class OrderCacheAndRestoreTests: XCTestCase {
         snapshot.nextCursor = "c2"
         XCTAssertEqual(keeper.step(snapshot), .loadMore, "目标未加载时不丢弃任务，继续翻页")
         snapshot.items.append(summary("o7"))
+        // FU-IOS-0712 第 1 轮修复（F-X-19 实走）：目标之后不够一屏且还能翻页时先翻页；这里让列表到底，保持本例「目标出现即对齐一次」的原意
+        snapshot.nextCursor = nil
         guard case let .align(id, task) = keeper.step(snapshot) else {
             return XCTFail("目标出现后安排一次对齐")
         }

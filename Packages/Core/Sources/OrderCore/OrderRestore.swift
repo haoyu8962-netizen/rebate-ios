@@ -122,16 +122,36 @@ public final class OrderPageRestorer {
     /// 上一次删除没确认成功：禁止恢复与写入，下一次决策 / 清除时重试。
     public private(set) var eraseOutstanding = false
 
+    /// 恢复记录绑定的分区（FU-IOS-0712，跨端教训 11）：没绑（还没决策、决策时没有账号、会话换代清除之后）/ 决策时登录世代读不出（未知：
+    /// 之后一律不写，不用此刻的世代补绑）/ 已知分区键。
+    public enum LoginBinding: Equatable, Sendable {
+        case unbound
+        case unknown
+        case known(String)
+    }
+
+    public private(set) var binding = LoginBinding.unbound
+    /// 分区键算法（账号 + 登录世代 → 键，世代未知为 nil；只按传入的身份算，R1-01）。缺省只按账号哈希；App 接 `OrderCacheStore.partitionKey`。
+    public var partitionKey: @MainActor (String?, String?) -> String? = { account, _ in
+        account.flatMap { $0.isEmpty ? nil : OrderCacheStore.hash($0) }
+    }
+
     public init(file: OrderPageStateFile, unit: OrderCleanupUnit? = nil) {
         self.file = file
         self.unit = unit
     }
 
     /// 读取并校验恢复记录（只做一次）：同一账号的返回记录，否则删除并返回 nil。旧 UserDefaults 记录一律作废；
-    /// 删不掉（或之前的删除没确认，含持久清理单元里上次没完成的清理）不恢复。
-    public func decide(account: String?) -> OrderPageRecord? {
-        guard !decided else { return nil }
+    /// 删不掉（或之前的删除没确认，含持久清理单元里上次没完成的清理）不恢复。`account` / `loginEpoch` 是页面执行器构造时固定的身份。
+    public func decide(account: String?, loginEpoch: String?) -> OrderPageRecord? {
+        guard !decided else {
+            if binding == .unbound {
+                binding = bind(account, loginEpoch)
+            }
+            return nil
+        }
         decided = true
+        binding = bind(account, loginEpoch)
         // 持久清理单元里还有没完成的清理（上次进程删不掉、旧记录没确认写盘）：先完成，本次一律不恢复
         if let unit, unit.isPendingClear {
             eraseOutstanding = !unit.completePendingClear()
@@ -146,6 +166,8 @@ public final class OrderPageRestorer {
             markOutstanding()
             return nil
         }
+        // 登录世代读不出：不读记录（也不删，世代可能只是暂时读不了）
+        guard binding != .unknown else { return nil }
         let data: Data?
         do {
             data = try file.load()
@@ -155,7 +177,7 @@ public final class OrderPageRestorer {
         }
         guard let data else { return nil }
         guard let record = try? JSONDecoder().decode(OrderPageRecord.self, from: data),
-              let account, record.owner == OrderCacheStore.hash(account)
+              case let .known(key) = binding, record.owner == key
         else {
             discard()
             return nil
@@ -164,8 +186,14 @@ public final class OrderPageRestorer {
     }
 
     /// 保存（决策完成后才写；没有会话不写；之前的删除没确认时先重试删除，仍删不掉不写）。写不进只记日志（下次照常保存）。
-    public func persist(conditions: OrderConditions, anchor: String?, account: String?) {
+    /// `account` / `loginEpoch` 是页面执行器构造时固定的身份（随页面带到写入点，不读当前会话补绑，R1-01）。
+    public func persist(conditions: OrderConditions, anchor: String?, account: String?, loginEpoch: String?) {
         guard decided, let account else { return }
+        if binding == .unbound {
+            binding = bind(account, loginEpoch)
+        }
+        // 写入必须带已知的分区键且与页面固定身份的一致（未知即拒写，FU-IOS-0712）
+        guard case let .known(key) = binding, partitionKey(account, loginEpoch) == key else { return }
         if let unit, eraseOutstanding || unit.isPendingClear {
             eraseOutstanding = !unit.completePendingClear()
             guard !eraseOutstanding else { return }
@@ -173,7 +201,7 @@ public final class OrderPageRestorer {
             discard()
             guard !eraseOutstanding else { return }
         }
-        let record = OrderPageRecord(owner: OrderCacheStore.hash(account), conditions: conditions, anchor: anchor)
+        let record = OrderPageRecord(owner: key, conditions: conditions, anchor: anchor)
         guard let data = try? JSONEncoder().encode(record) else { return }
         do {
             try file.save(data)
@@ -194,7 +222,13 @@ public final class OrderPageRestorer {
     public func clear() -> Bool {
         discard()
         decided = true
+        binding = .unbound
         return !eraseOutstanding
+    }
+
+    private func bind(_ account: String?, _ loginEpoch: String?) -> LoginBinding {
+        guard let account, !account.isEmpty else { return .unbound }
+        return partitionKey(account, loginEpoch).map(LoginBinding.known) ?? .unknown
     }
 
     private func discard() {
@@ -228,7 +262,7 @@ public final class OrderAnchorKeeper {
     public private(set) var target: String?
     public private(set) var boundRound: Int?
     public private(set) var taskId = 0
-    public private(set) var aligning = false
+    public internal(set) var aligning = false
     /// 已记录的锚点（视口顶部那张卡；恢复期间不更新）。
     public private(set) var recorded: String?
     /// 挪动次数（测试核对「每个任务至多一次」）。
@@ -239,6 +273,8 @@ public final class OrderAnchorKeeper {
     public private(set) var lastOffset: Double?
     /// 位置偏离基准多少点以上算「被移动过」（排版取整的误差以内不算）。
     public static let moveTolerance = 1.0
+    /// 目标卡之后至少还要加载多少张卡（能翻页时），免得内容太短、目标卡顶不到视口顶部。
+    public static let tailCards = 6
 
     public init() {}
 
@@ -294,15 +330,16 @@ public final class OrderAnchorKeeper {
         switch snapshot.phase {
         case .idle, .loading:
             return .none
+        case .error where snapshot.identityPending: // 身份暂时未知中止：等同一轮次补取，不放弃（整体重理）
+            return .none
         case .error, .empty, .stale:
             cancel()
             return .giveUp
         case .content:
             break
         }
-        if snapshot.items.contains(where: { $0.orderId == target }) {
-            aligning = true
-            return .align(id: target, task: taskId)
+        if let index = snapshot.items.firstIndex(where: { $0.orderId == target }) {
+            return stepOnLoadedTarget(target, at: index, snapshot)
         }
         if snapshot.loadingMore || snapshot.refreshing {
             return .none
@@ -312,6 +349,20 @@ public final class OrderAnchorKeeper {
         }
         cancel()
         return .giveUp
+    }
+
+    /// 目标已在列表里：目标之后不够一屏且还能翻页时先翻页（翻页在途时等），否则安排一次对齐。
+    private func stepOnLoadedTarget(_ target: String, at index: Int, _ snapshot: OrderListSnapshot) -> Step {
+        // 目标之后不够撑满一屏（能翻页时）：先翻页，免得目标卡被列表底部截住、顶不到视口顶部（FU-IOS-0712 第 1 轮修复 F-X-19 实走
+        // 发现：冷启动只有第一页时目标停在倒数，恢复落到前两张；搜索页同口径，SearchScrollTracker.tailCards）
+        if snapshot.loadingMore || snapshot.refreshing {
+            return .none
+        }
+        if snapshot.items.count - 1 - index < Self.tailCards, snapshot.canLoadMore {
+            return .loadMore
+        }
+        aligning = true
+        return .align(id: target, task: taskId)
     }
 
     /// 延迟回调执行前复核（共性第 24、39 条）：任务编号、轮次都还对、且最近报告的位置没偏离基准（用实际滚动偏移判断，不看顶部条目，

@@ -7,7 +7,7 @@ public extension WithdrawRecordsController {
     func loadMore() {
         let owner = state.owner
         guard let cursor = state.nextCursor, !left, !firstPagePending, !state.loadingMore, !deps.gates.read.active,
-              deps.env.isCurrent(owner)
+              admitMore(deps.env.check(owner))
         else { return }
         let current = round
         state.loadingMore = true
@@ -16,10 +16,17 @@ public extension WithdrawRecordsController {
         let encoded = cursor.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? cursor
         let call = ApiCall(operationId: Self.listOperation, query: "cursor=\(encoded)&limit=\(Self.pageSize)")
         requests.send(deps.api, call, probe: probe, expected: owner.request) { [weak self] result in
-            guard let self, !left, round == current, deps.env.isCurrent(owner) else { return }
+            guard let self, !left, round == current, admitMore(deps.env.check(owner)) else { return }
             settleShared(result)
             moreArrived(result, probe: probe)
         }
+    }
+
+    /// 翻页的身份核对：暂时未知 → 翻页在途标记复位、记待补做（身份确认后再翻这一页）；已换代 → 丢弃。
+    internal func admitMore(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Self.moreSlot, resume: { [weak self] in self?.loadMore() }, settle: {
+            state.loadingMore = false
+        })
     }
 
     /// 下拉、【重试】与回到本页：刷新在途时不再受理（共性第 35 条）；共享限流中也按限流结算（共性第 55 条）。
@@ -31,6 +38,10 @@ public extension WithdrawRecordsController {
             return false
         }
         load(refresh: true)
+        // 用户刷新时身份暂时未知：请 App 立即核对一次（确认了就换上身份并补取）
+        if deferral.isPending {
+            deps.env.recheckIdentity()
+        }
         return true
     }
 
@@ -98,6 +109,7 @@ public extension WithdrawRecordsController {
         roundDetails = [:]
         focusAwaiting = nil
         firstPagePending = false
+        deferral.reset()
         state = RecordsSnapshot(version: state.version + 1, owner: owner)
         load()
     }
@@ -107,6 +119,7 @@ public extension WithdrawRecordsController {
         left = true
         round += 1
         requests.cancelAll()
+        deferral.reset()
     }
 }
 
@@ -256,8 +269,12 @@ extension WithdrawRecordsController {
         let probe = deps.gates.read.probe()
         let call = detailCall(id)
         let sent = requests.send(deps.api, call, probe: probe, expected: owner.request) { [weak self] result in
-            guard let self, !left, round == current, deps.env.isCurrent(owner), detailSeq[id] == request else { return }
+            guard let self, !left, round == current, detailSeq[id] == request else { return }
             detailRequests[id] = nil
+            // 身份暂时未知：不采用，记待补做（身份确认后这张单仍展开且没有详情时重取）
+            guard deferral.admit(deps.env.check(owner), slot: "detail#" + id, resume: { [weak self] in
+                self?.fetchMissingDetails([id])
+            }) else { return }
             settleShared(result)
             detailArrived(result, id: id, probe: probe)
         }

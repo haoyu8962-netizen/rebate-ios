@@ -78,6 +78,7 @@ public extension PayoutAccountController {
         deferredSaved = nil
         guideOwner = nil
         requests.cancelAll()
+        deferral.reset()
         state = PayoutSnapshot(version: state.version + 1)
         flow.sessionChanged(owner)
         start()
@@ -89,6 +90,7 @@ public extension PayoutAccountController {
         left = true
         seq += 1
         requests.cancelAll()
+        deferral.reset()
         flow.leave()
         state.form = PayoutForm()
     }

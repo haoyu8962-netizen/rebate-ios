@@ -17,7 +17,7 @@ public struct ParseOutcome: @unchecked Sendable {
 /// `POST /v1/inputs/parse`（brief §2.6）：scene=clipboard（SearchTyping 的粘贴入口同样用 clipboard）；请求体只有本地抽出的片段（G04），
 /// 原文不上传。parse 没有幂等键，不做自动重试（读接口的网络层重试另算）。
 /// 整体 10405：请求声明 `forceUpdateByCaller`，网络层不替它进强更；结果带 networkForced 与最低版本交回执行层，执行层在主线程复核
-/// 请求归属后才进强更（共性第 29 条，迟到或已失效的响应不跳强更、不落盘）。
+/// 请求归属后才进强更（共性第 29 条，迟到或已失效的响应不跳强更、不落盘）。整体非强更 10405 按统一错误（`NonForcedUpdate`）。
 /// 整体 30132：预填用请求前本地抽出的「」标题（`title`，随本次请求绑定），不读契约外的 data.raw，不保存原文（共性第 30 条）。
 public final class ParseInputService: Sendable {
     public static let operationId = "parseInput"
@@ -57,7 +57,10 @@ public final class ParseInputService: Sendable {
                 action: ParseResultAction.map(response: envelope, errorCode: nil, retryAfter: nil, traceId: traceId),
                 dropped: false
             )
-        case let .failure(code, _, data, traceId, effect, _):
+        case let .failure(rawCode, _, data, traceId, effect, _):
+            // 整体非强更 10405（refresh_only，及其后刷新暂时失败 / 被拒；FU-IOS-0712 R1-03）：进按码分流表之前换成统一错误码
+            // （error.50001 + trace6，提示后可再次粘贴 / 识别），不进强更；真强更与行内 10405（成功外壳里的行）照旧
+            let code = NonForcedUpdate.pageCode(code: rawCode, effect: effect)
             var action = ParseResultAction.map(response: nil, errorCode: code, retryAfter: nil, traceId: traceId)
             if code == ParseResultAction.rateLimited {
                 // Retry-After 由网络层解析进 ErrorEffect.disableMillis（缺省 5 秒）；0 也按 5 秒（A11）

@@ -32,7 +32,8 @@ extension WithdrawScreen {
             abandonTitle: texts.text("pending_confirm.withdraw.abandon"),
             confirmTitle: texts.text("pending_confirm.withdraw.action"),
             note: texts.text("pending_confirm.withdraw.note"), notice: flowState.pendingNotice,
-            blocked: gate.blocked, actions: flowActions,
+            blocked: gate.blocked, busy: flowState.pendingCardBusy, actionsEnabled: flowState.pendingActionsEnabled,
+            actions: flowActions,
             link: PendingCard.Link(title: texts.text("pending_confirm.withdraw.records"), action: actions.records)
         )
     }
@@ -65,6 +66,13 @@ extension WithdrawScreen {
         }
         if let route = flowState.guideRoute {
             GuideEntry(texts: texts, route: route, action: flowActions.openGuide)
+        }
+        // 写请求已结束、身份暂时未知（RW-03）：不再转圈，给【重试】核对身份
+        if flowState.awaitingIdentity {
+            NoticeBar(
+                text: texts.text("pending_confirm.retry_later"), noticeId: -1, retryTitle: texts.text("wallet.retry"),
+                retry: flowActions.recheck, identifier: "withdraw.awaitingIdentity"
+            )
         }
     }
 

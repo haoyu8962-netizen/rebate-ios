@@ -52,6 +52,10 @@ public final class WalletCacheStore {
     private var pendingClear = false
     /// 写入世代：每次 `clearAll` 加一。
     public private(set) var generation = 0
+    /// 按持久化登录世代分区（FU-IOS-0712 R1-01，口径同 `OrderCacheStore.partitionedByLoginEpoch`）：true 时摘要与金额草稿按「账号 + 登录世代」
+    /// 分区，世代未知不读不写；世代一律由调用方传入执行器构造时固定的那一份（`WalletOwner.loginEpoch`），本存储不读当前会话的世代。
+    /// 清理计数 `ticket` 只防「期间清理过」，不代替固定世代。false = 只按账号的旧口径；App 在 AppWallet 构造时置 true。
+    public var partitionedByLoginEpoch = false
 
     public init(root: URL, flag: OrderPendingClearFlag? = nil) {
         self.root = root
@@ -69,8 +73,8 @@ public final class WalletCacheStore {
 
     // MARK: - 摘要
 
-    public func read(account: String?) -> CachedWalletSummary? {
-        guard let dir = accountDir(account) else { return nil }
+    public func read(account: String?, loginEpoch: String?) -> CachedWalletSummary? {
+        guard let dir = accountDir(account, loginEpoch) else { return nil }
         let file = dir.appendingPathComponent(Self.summaryFile)
         guard let object = read(file) else { return nil }
         guard let summary = WalletJSON.summary(object["data"]), let at = WalletJSON.int64(object["fetched_at"]) else {
@@ -80,9 +84,9 @@ public final class WalletCacheStore {
         return CachedWalletSummary(summary: summary, fetchedAt: at)
     }
 
-    /// 写摘要：`ticket` 是发起读取时的 `generation`（之后清理过就不写）。
-    public func write(account: String?, summary: WalletSummary, fetchedAt: Int64, ticket: Int) {
-        guard ticket == generation, let dir = ownedDir(account) else { return }
+    /// 写摘要：`ticket` 是发起读取时的 `generation`（之后清理过就不写）；分区只按传入的固定身份。
+    public func write(account: String?, loginEpoch: String?, summary: WalletSummary, fetchedAt: Int64, ticket: Int) {
+        guard ticket == generation, let dir = ownedDir(account, loginEpoch) else { return }
         write(
             dir.appendingPathComponent(Self.summaryFile),
             ["fetched_at": fetchedAt, "data": WalletJSON.encode(summary)]
@@ -92,13 +96,13 @@ public final class WalletCacheStore {
     // MARK: - 提现金额草稿（iOS I06）
 
     /// 账号相同才给（不恢复估算）；没有为 nil。
-    public func readDraft(account: String?) -> String? {
-        guard let dir = accountDir(account) else { return nil }
+    public func readDraft(account: String?, loginEpoch: String?) -> String? {
+        guard let dir = accountDir(account, loginEpoch) else { return nil }
         return read(dir.appendingPathComponent(Self.draftFile))?["amount"] as? String
     }
 
-    public func writeDraft(account: String?, amount: String, ticket: Int) {
-        guard ticket == generation, let dir = ownedDir(account) else { return }
+    public func writeDraft(account: String?, loginEpoch: String?, amount: String, ticket: Int) {
+        guard ticket == generation, let dir = ownedDir(account, loginEpoch) else { return }
         let file = dir.appendingPathComponent(Self.draftFile)
         if amount.isEmpty {
             discard(file)
@@ -107,15 +111,16 @@ public final class WalletCacheStore {
         }
     }
 
-    public func deleteDraft(account: String?) {
-        guard let dir = accountDir(account) else { return }
+    public func deleteDraft(account: String?, loginEpoch: String?) {
+        guard let dir = accountDir(account, loginEpoch) else { return }
         discard(dir.appendingPathComponent(Self.draftFile))
     }
 
     // MARK: - 归属与清理
 
-    /// 当前会话的账号（nil = 没有会话）与缓存的归属不一致（登出、换账号、会话失效）：全部删除。
-    public func reconcileOwner(account: String?) {
+    /// 给定身份（启动、会话换代时调用方一次读出的当前会话；写入前是执行器固定的身份）的账号（nil = 没有会话）与缓存的归属不一致（登出、
+    /// 换账号、会话失效、同账号重新登录换了登录世代）：全部删除。
+    public func reconcileOwner(account: String?, loginEpoch: String?) {
         guard cleaned() else { return }
         let ownerURL = root.appendingPathComponent(Self.ownerFile)
         let owner: String?
@@ -126,7 +131,11 @@ public final class WalletCacheStore {
             // 归属记录读不出不能当成「没有归属」：按不一致全部删除
             owner = Self.unreadableOwner
         }
-        if let owner, owner != account.map(Self.hash) {
+        // 有账号但登录世代未知：判断不了归属，不删（此时也不读不写）
+        if let account, !account.isEmpty, partitionKey(account: account, loginEpoch: loginEpoch) == nil {
+            return
+        }
+        if let owner, owner != partitionKey(account: account, loginEpoch: loginEpoch) {
             try? clearAll()
         }
     }
@@ -180,26 +189,46 @@ public final class WalletCacheStore {
             || FileManager.default.fileExists(atPath: root.appendingPathComponent(Self.marker).path)
     }
 
+    /// 完成待清理：没有待清理直接返回 true；否则全部删除并确认（末轮 R3-02：与身份无关，启动与换代时先做）。
+    @discardableResult
+    public func completePendingClear() -> Bool {
+        cleaned()
+    }
+
     private func cleaned() -> Bool {
         guard isPendingClear else { return true }
         return (try? clearAll()) != nil
     }
 
-    private func accountDir(_ account: String?) -> URL? {
-        guard let account, !account.isEmpty, cleaned() else { return nil }
-        return root.appendingPathComponent(Self.hash(account), isDirectory: true)
+    /// 分区键（FU-IOS-0712）：只按传入的身份算，不读任何当前状态。账号的哈希；按登录世代分区时是「账号 + 登录世代」的哈希，世代未知为 nil
+    /// （不读不写）。
+    public func partitionKey(account: String?, loginEpoch: String?) -> String? {
+        guard let account, !account.isEmpty else { return nil }
+        guard partitionedByLoginEpoch else { return Self.hash(account) }
+        guard let loginEpoch, !loginEpoch.isEmpty else { return nil }
+        return Self.hash(account + "\u{1F}" + loginEpoch)
     }
 
-    private func ownedDir(_ account: String?) -> URL? {
-        reconcileOwner(account: account)
-        guard let account, let dir = accountDir(account) else { return nil }
+    private func accountDir(_ account: String?, _ loginEpoch: String?) -> URL? {
+        // 待清理先完成，再看分区（末轮 R3-02：世代未知的读取也不跳过已登记的清理）
+        guard cleaned(), let key = partitionKey(account: account, loginEpoch: loginEpoch) else { return nil }
+        return root.appendingPathComponent(key, isDirectory: true)
+    }
+
+    private func ownedDir(_ account: String?, _ loginEpoch: String?) -> URL? {
+        reconcileOwner(account: account, loginEpoch: loginEpoch)
+        guard let key = partitionKey(account: account, loginEpoch: loginEpoch), let dir = accountDir(
+            account,
+            loginEpoch
+        )
+        else { return nil }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             var target = root
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
             try? target.setResourceValues(values)
-            try Data(Self.hash(account).utf8).write(to: root.appendingPathComponent(Self.ownerFile), options: .atomic)
+            try Data(key.utf8).write(to: root.appendingPathComponent(Self.ownerFile), options: .atomic)
             return dir
         } catch {
             WalletLog.warn("wallet: cache owner not written")

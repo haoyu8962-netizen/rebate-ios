@@ -40,7 +40,21 @@ final class SearchRound2Tests: XCTestCase {
         }
         field.typeText(keyword)
         app.buttons["search.submit"].tap()
-        XCTAssertTrue(element(app, id).waitForExistence(timeout: 15), "没有出现 \(id)")
+        // F-IOS-06：上限 30 秒（只用来判失败）；waitForExistence 本身就是条件等待
+        XCTAssertTrue(element(app, id).waitForExistence(timeout: 30), "没有出现 \(id)")
+    }
+
+    /// 换平台 / 排序之后：等新条件的结果真正就位（选中态已变、首屏加载结束、首卡在），不拿换条件之前就在的旧卡片当完成信号（F-IOS-02）。
+    private func waitForResults(
+        _ app: XCUIApplication,
+        selected id: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        UIWait.until("\(id) 的结果就位", file: file, line: line) {
+            element(app, id).isSelected && !element(app, "search.loading").exists && element(app, "search.card.0")
+                .exists
+        }
     }
 
     private func pause(_ seconds: Double = 0.6) {
@@ -71,24 +85,27 @@ final class SearchRound2Tests: XCTestCase {
         let app = launch()
         search(app, "milk")
         element(app, "search.tab.jd").tap()
-        XCTAssertTrue(element(app, "search.card.0").waitForExistence(timeout: 10))
+        waitForResults(app, selected: "search.tab.jd")
+        XCTAssertTrue(element(app, "search.card.0").exists)
         element(app, "search.sort.final_price_asc").tap()
-        XCTAssertTrue(element(app, "search.card.0").waitForExistence(timeout: 10))
+        waitForResults(app, selected: "search.sort.final_price_asc")
+        XCTAssertTrue(element(app, "search.card.0").exists)
         for _ in 0..<3 {
             app.swipeUp()
         }
-        XCTAssertTrue(element(app, "search.card.3").waitForExistence(timeout: 10), "翻到第二页")
-        pause()
+        XCTAssertTrue(element(app, "search.card.3").waitForExistence(timeout: 30), "翻到第二页")
+        // 等滚动停下、首卡移出可点区域（替代固定 0.6 秒）
+        UIWait.until("列表滚下去") { !element(app, "search.card.0").isHittable }
         XCTAssertFalse(element(app, "search.card.0").isHittable, "已经滚下去")
         save(app, "Restore-1-before-kill-list")
         element(app, "search.filter.price").tap()
         XCTAssertTrue(element(app, "search.price.min").waitForExistence(timeout: 5))
         element(app, "search.price.min").tap()
         element(app, "search.price.min").typeText("10")
-        pause()
+        UIWait.until("草稿已输入") { element(app, "search.price.min").value as? String == "10" }
         save(app, "Restore-2-before-kill-draft")
-        XCUIDevice.shared.press(.home)
-        pause(2)
+        // 等进后台的同步保存执行完（App 发出的显式信号）再结束进程，替代固定 2 秒（F-IOS-02 偶发「价格面板与草稿恢复」失败的原因）
+        UIWait.pressHomeAndWaitForBackgroundSave(app)
         app.terminate()
 
         let restored = launch(waitForShell: false)
@@ -101,15 +118,15 @@ final class SearchRound2Tests: XCTestCase {
         XCTAssertEqual(restored.textFields["search.field"].value as? String, "milk")
         XCTAssertTrue(element(restored, "search.tab.jd").isSelected, "平台恢复")
         XCTAssertTrue(element(restored, "search.sort.final_price_asc").isSelected, "排序恢复")
-        XCTAssertTrue(element(restored, "search.card.3").waitForExistence(timeout: 15), "结果按条件重新加载到锚点")
-        pause(1)
+        XCTAssertTrue(element(restored, "search.card.3").waitForExistence(timeout: 30), "结果按条件重新加载到锚点")
+        // 等锚点对齐完成（首卡移出可点区域）再断言，替代固定 1 秒
+        UIWait.until("回到锚点") { !element(restored, "search.card.0").isHittable }
         XCTAssertFalse(element(restored, "search.card.0").isHittable, "回到原来的滚动位置，不是列表顶部")
         save(restored, "Restore-4-after-relaunch-list")
         // 返回首页（出栈）后保存内容删除：再次在后台结束也不会恢复。
         restored.buttons["search.back"].firstMatch.tap()
-        XCTAssertTrue(element(restored, "home.search").waitForExistence(timeout: 10))
-        XCUIDevice.shared.press(.home)
-        pause(1)
+        XCTAssertTrue(element(restored, "home.search").waitForExistence(timeout: 30))
+        UIWait.pressHomeAndWaitForBackgroundSave(restored)
         restored.terminate()
         let fresh = launch()
         XCTAssertFalse(fresh.textFields["search.field"].waitForExistence(timeout: 3), "出栈后不再恢复")

@@ -205,12 +205,17 @@ final class BridgeHostBehaviorTests: XCTestCase {
         XCTAssertEqual(check?(), false)
     }
 
-    func testAsyncTimeoutEndsWith90003() async throws {
+    func testAsyncTimeoutEndsWith90003() async {
         let gate = Gate()
         services.pushGate = gate
         let host = makeHost()
+        let deadlines = ManualDeadlines() // FU-IOS-0712（F-IOS-10）：注入计时器，不再固定睡 5.3 秒
+        host.deadlineTimer = deadlines.timer
         let reply = call(host, id: "slow", method: "perm.getPushStatus")
-        try await Task.sleep(nanoseconds: 5_300_000_000)
+        await waitFor("截止计时已按契约时长登记") { deadlines.armed.count == 1 }
+        XCTAssertEqual(deadlines.armed, [contractTimeout("perm.getPushStatus")], "按契约 timeout_ms 计时")
+        deadlines.fireAll()
+        await waitFor("到期后结算") { reply.code != nil }
         XCTAssertEqual(reply.code, 90003)
         gate.open()
         await settle()
@@ -222,10 +227,12 @@ final class BridgeHostBehaviorTests: XCTestCase {
     func testDeadlineCoversUpdateWaitAndCancelsTheCall() async throws {
         let updateGate = Gate()
         services.userGate = Gate()
+        let deadlines = ManualDeadlines()
         let waiting = makeHost(awaitUpdate: {
             await updateGate.wait()
             return BridgeUpdateState.supported
         })
+        waiting.deadlineTimer = deadlines.timer
         state = BridgeCallerState(
             privacy: BridgePrivacy.consented, accountKey: "u1#1", update: BridgeUpdateState.checking
         )
@@ -234,11 +241,17 @@ final class BridgeHostBehaviorTests: XCTestCase {
             privacy: BridgePrivacy.consented, accountKey: "u1#1", update: BridgeUpdateState.supported
         )
         let running = makeHost()
+        running.deadlineTimer = deadlines.timer
         let stuckInRequest = call(running, id: "r", method: "auth.getUser")
         await settle()
         let validity = try XCTUnwrap(services.validities.first)
         XCTAssertEqual(services.validities.count, 1, "强更等待中的那次还没执行")
-        try await Task.sleep(nanoseconds: 10_300_000_000)
+        // FU-IOS-0712（F-IOS-10）：截止计时在调用登记时按契约时长起算（含强更等待中的那次），到期由注入的计时器触发
+        let timeout = contractTimeout("auth.getUser")
+        XCTAssertEqual(deadlines.armed, [timeout, timeout], "截止时间从调用开始算，强更等待也在预算内")
+        XCTAssertTrue(stuckInUpdate.code == nil && stuckInRequest.code == nil)
+        deadlines.fireAll()
+        await waitFor("到期后两次都结算") { stuckInUpdate.code != nil && stuckInRequest.code != nil }
         XCTAssertEqual(stuckInUpdate.code, 90003, "强更等待算在截止时间内")
         XCTAssertEqual(stuckInRequest.code, 90003)
         XCTAssertFalse(validity.isValid, "到期立即撤销有效性")
@@ -269,23 +282,6 @@ private final class Reply {
               let body = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
         else { return nil }
         return body["code"] as? Int
-    }
-}
-
-@MainActor
-private final class Gate {
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-    private var opened = false
-
-    func wait() async {
-        guard !opened else { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-
-    func open() {
-        opened = true
-        waiters.forEach { $0.resume() }
-        waiters = []
     }
 }
 

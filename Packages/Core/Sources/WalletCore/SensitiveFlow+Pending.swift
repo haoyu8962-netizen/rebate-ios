@@ -22,7 +22,7 @@ public extension SensitiveFlow {
     func confirm(key: String, owner: WalletOwner) {
         guard let intent = intentFor(key: key, owner: owner) else { return }
         clearGuide()
-        if gate.active {
+        if !sharedSettled() || gate.active {
             state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
         }
@@ -34,7 +34,8 @@ public extension SensitiveFlow {
 
     /// 【放弃上一笔】：先弹二次确认（绑定点击时的键）。
     func askAbandon(key: String, owner: WalletOwner) {
-        guard let pending = state.pending, pending.key == key, !pending.inFlight, owns(owner) else { return }
+        guard let pending = state.pending, pending.key == key, !pending.inFlight, !state.awaitingIdentity, owns(owner)
+        else { return }
         if gate.active {
             state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
@@ -52,7 +53,7 @@ public extension SensitiveFlow {
         state.abandonConfirmKey = nil
         guard let intent = intentFor(key: key, owner: owner) else { return }
         clearGuide()
-        if gate.active {
+        if !sharedSettled() || gate.active {
             state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
         }
@@ -83,16 +84,21 @@ public extension SensitiveFlow {
     func refreshPending() {
         guard alive() else { return }
         let owner = state.owner
-        guard deps.env.isCurrent(owner), let account = owner.account else { return }
+        guard admitRefresh(deps.env.check(owner)), let account = owner.account else { return }
         refreshSerial += 1
         let serial = refreshSerial
         let api = deps.api
         Task { @MainActor [weak self, operationId] in
             let lookup = await api.pendingStatus(operationId: operationId)
-            guard let self, alive(), serial == refreshSerial, state.owner == owner, deps.env.isCurrent(owner)
+            guard let self, alive(), serial == refreshSerial, state.owner == owner, admitRefresh(deps.env.check(owner))
             else { return }
             applyLookup(lookup, account: account)
         }
+    }
+
+    /// 待确认记录读取的身份核对：暂时未知 → 记待补做（身份确认后重读）；已换代 → 丢弃。
+    internal func admitRefresh(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: "pending", resume: { [weak self] in self?.refreshPending() })
     }
 
     /// 用户在页面上点了引导的手动入口【去实名认证】等：页面此刻可见、会话仍是记下引导时的才打开；用过即清。
@@ -127,8 +133,8 @@ public extension SensitiveFlow {
 extension SensitiveFlow {
     /// 点击处的那条记录（身份、原键都取自本页渲染的待确认卡）；不是当前会话的、不是这张卡的键都不受理。
     func intentFor(key: String, owner: WalletOwner) -> PendingIntent? {
-        guard let pending = state.pending, pending.key == key, alive(), !pending.inFlight, owns(owner),
-              let account = owner.account
+        guard let pending = state.pending, pending.key == key, alive(), !pending.inFlight, !state.awaitingIdentity,
+              owns(owner), let account = owner.account
         else { return nil }
         return PendingIntent(owner: owner, account: account, key: key)
     }
@@ -142,7 +148,7 @@ extension SensitiveFlow {
 
     func runConfirm(_ intent: PendingIntent, token: String?) {
         // 二次验证之后续发：页面、会话与账号仍是点击时的才发（共性第 14 条）
-        guard alive(), deps.env.isCurrent(intent.owner) else { return }
+        guard alive(), !state.awaitingIdentity, deps.env.isCurrent(intent.owner) else { return }
         let version = state.pendingVersion
         sentViewGen = visibility.generation
         markInFlight(true)
@@ -165,9 +171,23 @@ extension SensitiveFlow {
     /// 确认 / 放弃的结果：页面已出栈或会话已换不改页面；键已经结束（别的在途请求先回来）的只用于核对。
     func afterPendingCall(_ result: ApiResult, _ outcome: Outcome?, version: Int, intent: PendingIntent,
                           abandon: Bool) {
-        guard alive(), deps.env.isCurrent(intent.owner), intent.owner == state.owner else { return }
-        guard state.pendingVersion == version else {
+        guard alive(), intent.owner == state.owner else { return }
+        // 身份暂时未知：不采用、记下（按钮保持忙碌；身份确认后仍是本表单身份才采用，不重放）
+        guard deferral.admit(deps.env.check(intent.owner), slot: "pendingCall", resume: { [weak self] in
+            self?.afterPendingCall(result, outcome, version: version, intent: intent, abandon: abandon)
+        }, settle: {
+            state.awaitingIdentity = true
+            // 结果已到：不再显示「正在处理」（RV-04），按钮仍禁用
+            state.pendingNotice = nil
+        }) else { return }
+        state.awaitingIdentity = false
+        defer {
+            // 操作锁期间没让本机未决记录改页面（RV-01）：结果采用后再按记录同步一次
             refreshPending()
+        }
+        guard state.pendingVersion == version else {
+            // 版本只会因换代 / 别的键结束而变（操作锁期间记录同步不推进版本）：结束本页操作锁，按记录同步
+            localBusy = false
             return
         }
         markInFlight(false)
@@ -207,6 +227,9 @@ extension SensitiveFlow {
 
     /// 按记录重建：没有记录 → 退出待确认；本次首次提交还在发送 → 不打断；有记录 → 待确认（换了键版本加一，本进程在途的保持在途）。
     func reconcile(_ view: PendingView?) {
+        // 操作锁（RV-01，补修三）：从确认 / 放弃发起（localBusy）到结果采用、以及结果待身份确认期间，本机未决记录（可能已被网络层
+        // 结束、读到 none）不改页面——不清待确认、不推进版本、不解除提交锁；结果按固定身份与原键采用后，页面再按记录同步
+        guard !localBusy, !state.awaitingIdentity else { return }
         var next = state
         next.pendingUnreadable = false
         guard let view else {
@@ -272,6 +295,7 @@ extension SensitiveFlow {
         stepUp.dismiss()
         localBusy = false
         refreshSerial += 1
+        deferral.reset()
         state = FlowState(pendingVersion: state.pendingVersion + 1, owner: owner)
         if owner.account != nil {
             refreshPending()
@@ -280,6 +304,7 @@ extension SensitiveFlow {
 
     func leave() {
         stepUp.dismiss()
+        deferral.reset()
         unsubscribe?()
         unsubscribe = nil
     }

@@ -68,6 +68,11 @@ final class AppLogin: ObservableObject {
         host.watchLoginPage(service)
         let client = network.client
         let phone = PhoneBindingStore()
+        // phone_bound 另按持久化登录世代分区（FU-IOS-0712）：与会话可用性同口径，凭据不可读 / 隔离 / 读不出时为未知；按调用方固定的
+        // 会话世代取那一代的登录世代（R1-01：会话已换代即未知，不取新登录的世代）
+        phone.loginEpoch = { [network, client] generation in
+            client.loginEpoch(ifGeneration: generation, credentialsReadable: network.source.credentialsReadableNow)
+        }
         self.phone = phone
         service.phoneBinding = phone
         phoneSync = PhoneBindingSync(client: client, store: phone)

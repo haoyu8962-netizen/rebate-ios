@@ -125,8 +125,10 @@ public final class AuthManageController: ObservableObject {
                 state.phase = .content
                 state.errorKey = nil
                 state.errorTraceId = nil
-            case let .failure(code, _, data, traceId, _, _):
-                // 按实际错误码选文案（共性第 23 条）：42901 用 error.42901 并按 Retry-After 禁用；5xxxx 用对应文案并带 trace6
+            case let .failure(rawCode, _, data, traceId, effect, _):
+                // 按实际错误码选文案（共性第 23 条）：42901 用 error.42901 并按 Retry-After 禁用；5xxxx 用对应文案并带 trace6。
+                // 非强更的 10405 按 50001（F-X-09，FU-IOS-0712）
+                let code = NonForcedUpdate.pageCode(code: rawCode, effect: effect)
                 state.errorKey = OpenErrorAction.map(code: code, data: TJSON.parse(data) ?? [:]).textKey ?? Self
                     .genericKey
                 state.errorTraceId = (50000...59999).contains(code) ? traceId : nil
@@ -272,7 +274,8 @@ public final class AuthManageController: ObservableObject {
     }
 
     private func failed(_ platform: String, _ result: ApiResult) {
-        guard case let .failure(code, _, data, traceId, _, _) = result else { return }
+        guard case let .failure(rawCode, _, data, traceId, effect, _) = result else { return }
+        let code = NonForcedUpdate.pageCode(code: rawCode, effect: effect)
         let outcome = OpenErrorAction.map(code: code, data: TJSON.parse(data) ?? [:])
         rateLimit(result)
         if code == 30153 {

@@ -157,12 +157,27 @@ public struct OrderOwner: Equatable, Sendable {
     public let member: Bool
     /// 网络归属（账号、会话世代、环境票据；与上面几项同一次读取）。订单请求原样交给网络层比较（iOS RC-01）；nil = 不比较。
     public let request: RequestOwnership?
+    /// 持久化登录世代（FU-IOS-0712 R1-01；与账号同一次读取，`ApiClient.currentIdentity`）：断网缓存与恢复记录按「账号 + 这一份世代」
+    /// 分区读写，写入时不再读当前世代。nil = 未知（不读不写）。
+    public let loginEpoch: String?
+    /// 构造时这一次读取身份是否已确认（R3-01：与账号、登录世代同一次读取）。false = 身份暂时未知（凭据暂不可读、Keychain 暂时读失败、
+    /// 屏障竖着）：恢复决策延后（不读不删不写），身份恢复后页面重建。
+    public let identityKnown: Bool
 
-    public init(account: String?, key: String, member: Bool, request: RequestOwnership? = nil) {
+    public init(
+        account: String?,
+        key: String,
+        member: Bool,
+        request: RequestOwnership? = nil,
+        loginEpoch: String? = nil,
+        identityKnown: Bool = true
+    ) {
         self.account = account
         self.key = key
         self.member = member
         self.request = request
+        self.loginEpoch = loginEpoch
+        self.identityKnown = identityKnown
     }
 }
 
@@ -173,6 +188,19 @@ public protocol OrderOwnerSource: AnyObject {
     func currentOwner() -> OrderOwner
     /// 固定身份仍是当前会话（且撤回清理不在进行中）。
     func isCurrent(_ owner: OrderOwner) -> Bool
+    /// 固定身份与此刻身份的核对结论（一次读取；FU-IOS-0712 整体重理）：`isCurrent` 等价于结论为 `.current`；`.unknown` = 身份暂时未知
+    /// （或页面构造时身份未确认、还没换上），页面记待补做、身份确认后由 App 统一补做。
+    func check(_ owner: OrderOwner) -> IdentityCheck
+    /// 页面在身份暂时未知时被用户点了【重试】：请 App 立即核对一次身份（确认了就换上未知期间构造的页面并补做）。
+    func recheckIdentity()
+}
+
+public extension OrderOwnerSource {
+    func check(_ owner: OrderOwner) -> IdentityCheck {
+        isCurrent(owner) ? .current : .stale
+    }
+
+    func recheckIdentity() {}
 }
 
 /// 订单页面的一条轻提示：`key` 为文案键；`error` 不为 nil 时正文按统一的错误消息生成（带 trace6，共性第 8 条）。`id` 每次递增。

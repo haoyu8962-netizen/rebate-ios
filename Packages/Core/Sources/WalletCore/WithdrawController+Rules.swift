@@ -34,6 +34,28 @@ public extension WithdrawController {
         guard !left, !deps.gates.read.active else { return }
         fetchRules(amount: state.inputFen, initial: true, form: flow.owner)
         fetchPayout()
+        // 身份暂时未知：请 App 立即核对一次（确认了就换上身份并补取）
+        if deferral.isPending {
+            deps.env.recheckIdentity()
+        }
+    }
+
+    /// 有因身份暂时未知中止、还没补取的读取。
+    var loadPending: Bool {
+        deferral.isPending
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的 rules / 收款账号读取（带上当前合法金额；不重放提交，已填金额保留）。
+    func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
+        flow.resumeAfterIdentityConfirmed()
+    }
+
+    /// 构造时身份未确认的表单，在身份确认后换上这一次的身份（App 给），并按它恢复金额草稿、重取（禁用期等共享状态不动）。
+    func identityConfirmed(_ owner: WalletOwner, restored: String) {
+        guard !left, !flow.owner.identityKnown || flow.owner.account == nil, owner.identityKnown else { return }
+        sessionChanged(owner, restored: restored)
     }
 }
 
@@ -73,9 +95,9 @@ extension WithdrawController {
     /// 取 rules；带金额（估算）时整次请求绑定这张表单的身份 `form`（共性第 64 条）：发出前核对它仍是本表单身份且仍是当前会话，网络层按
     /// expected 在读取凭据前再核对，迟到响应也按它核对。不带金额的页头读取同样只用本表单的固定身份（共性第 65 条）。
     func fetchRules(amount: Int64?, initial: Bool, form: WalletOwner) {
-        guard !left, form.account != nil else { return }
-        guard ownsForm(form) else {
-            // 带金额的读取而身份已不是本表单当前的（共性第 64 条）：不发，这次「计算中」收起
+        guard !left, form.account != nil || !form.identityKnown else { return }
+        guard form == flow.owner, admitRules(deps.env.check(form)) else {
+            // 带金额的读取而身份已不是本表单当前的（共性第 64 条）或暂时未知：不发，这次「计算中」收起
             if amount != nil, state.estimate == .calculating {
                 state.estimate = .hidden
             }
@@ -94,9 +116,29 @@ extension WithdrawController {
         let probe = deps.gates.read.probe()
         let call = ApiCall(operationId: Self.rulesOperation, query: amount.map { "amount_fen=\($0)" })
         requests.send(deps.api, call, probe: probe, expected: form.request) { [weak self] result in
-            guard let self, !left, ownsForm(form) else { return }
+            guard let self, !left else { return }
+            guard form == flow.owner, admitRules(deps.env.check(form)) else {
+                if let amount, amount == state.inputFen, state.estimate == .calculating {
+                    state.estimate = .hidden
+                }
+                return
+            }
             onRules(result, request: request, account: form.account, amount: amount, probe: probe)
         }
+    }
+
+    /// rules 读取的身份核对（发送前、响应时同一入口）：暂时未知 → 记待补取（身份确认后带当前合法金额重取）、没有页头时结算为可重试的
+    /// 失败态（已有页头保留）；已换代 → 丢弃（换代另有重建）。
+    func admitRules(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Self.rulesOperation, resume: { [weak self] in
+            guard let self else { return }
+            fetchRules(amount: state.inputFen, initial: state.rules == nil, form: flow.owner)
+        }, settle: {
+            if state.rules == nil {
+                state.phase = .error
+                state.loadError = nil
+            }
+        })
     }
 
     /// rules / 估算被本地限流拦下（共性第 45、56 条）：同样结算本次读取——没有页头的进加载失败态，已有页头的页内提示 42901 与【重试】；
@@ -184,6 +226,11 @@ extension WithdrawController {
     /// 金额草稿（进程回收后恢复，iOS I06）：只按本表单固定身份写，身份不是当前会话的不写；写入带清理世代。
     func saveDraft(_ owner: WalletOwner) {
         guard ownsForm(owner), let cache = deps.cache else { return }
-        cache.writeDraft(account: owner.account, amount: state.amountText, ticket: cache.generation)
+        cache.writeDraft(
+            account: owner.account,
+            loginEpoch: owner.loginEpoch,
+            amount: state.amountText,
+            ticket: cache.generation
+        )
     }
 }

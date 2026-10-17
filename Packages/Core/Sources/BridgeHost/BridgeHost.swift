@@ -143,6 +143,8 @@ public final class BridgeHost {
     /// 正在同步执行导航（nav.open 经 Router）的那次调用的有效性（三端共性第 43 条）。导航本身可能让本容器出栈
     /// （nav.open(Home) 清栈 → teardown → `invalidate`），这次调用不在作废之列，导航完成后按自己的结果结算。
     private var navigating: ObjectIdentifier?
+    /// 异步方法统一截止时间的计时（毫秒，返回即到期；调用登记时起算）。生产 `Task.sleep`，测试注入可控计时（FU-IOS-0712 F-IOS-10）。
+    var deadlineTimer: @MainActor (UInt64) async -> Void = { try? await Task.sleep(nanoseconds: $0 * 1_000_000) }
 
     public init(
         protocol protocolProvider: @escaping @MainActor () -> BridgeProtocol,
@@ -288,8 +290,9 @@ public final class BridgeHost {
             settle(id: id, token: token, outcome: outcome)
         }
         if contract.model == BridgeMethodContract.asyncModel, let timeout = contract.timeoutMs {
+            let timer = deadlineTimer
             call.timer = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(timeout) * 1_000_000)
+                await timer(UInt64(max(timeout, 0)))
                 guard !Task.isCancelled else { return }
                 self?.settle(id: id, token: token, outcome: .fail(BridgeCode.timeout))
             }

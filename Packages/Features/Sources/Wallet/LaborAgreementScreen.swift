@@ -15,7 +15,7 @@ public struct LaborActions {
         return LaborActions(
             toggle: { [weak controller] in controller?.toggle(owner: owner) },
             sign: { [weak controller] in controller?.sign(owner: owner) },
-            retry: { [weak controller] in controller?.load() }
+            retry: { [weak controller] in controller?.retry() }
         )
     }
 }

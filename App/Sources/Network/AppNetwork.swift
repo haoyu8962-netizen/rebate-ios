@@ -34,7 +34,7 @@ final class AppNetwork {
     private var subscriptions: Set<AnyCancellable> = []
 
     init(
-        tokens: any SessionTokens = SecureSessionTokens(store: KeychainStore()),
+        tokens: any SessionTokens = SecureSessionTokens.production(),
         pendingBackend: any PendingKeyBackend = SecurePendingKeyBackend(store: KeychainStore()),
         device: (any DeviceCredentials)? = nil,
         deviceStore: DeviceIdentityStore = DeviceIdentityStore(store: KeychainStore()),

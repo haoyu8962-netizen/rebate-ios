@@ -53,6 +53,11 @@ public extension WithdrawController {
     /// 会话换代（App 在会话通知里同步调用）：同步清空已输入的金额、估算、rules 与收款账号行，作废在途读请求；新身份由 App 在同一处一次性取得后
     /// 传入（共性第 65 条），再按新身份重取；未决记录按新账号重读。
     func sessionChanged(_ owner: WalletOwner) {
+        sessionChanged(owner, restored: "")
+    }
+
+    /// 换上新身份（会话换代清空；构造时身份未确认的表单换上已确认身份时带上按它读到的金额草稿）。
+    internal func sessionChanged(_ owner: WalletOwner, restored: String) {
         guard !left else { return }
         deferredSuccess = nil
         seq += 1
@@ -61,7 +66,10 @@ public extension WithdrawController {
         estimateTask?.cancel()
         requests.cancelAll()
         payoutRequests.cancelAll()
-        state = WithdrawSnapshot(version: state.version + 1)
+        deferral.reset()
+        state = WithdrawSnapshot(
+            amountText: WithdrawAmountInput.accept(current: "", next: restored), version: state.version + 1
+        )
         flow.sessionChanged(owner)
         start()
     }
@@ -71,7 +79,7 @@ public extension WithdrawController {
         guard !left else { return }
         let owner = flow.owner
         if deps.env.isCurrent(owner) {
-            deps.cache?.deleteDraft(account: owner.account)
+            deps.cache?.deleteDraft(account: owner.account, loginEpoch: owner.loginEpoch)
         }
         left = true
         seq += 1
@@ -79,6 +87,7 @@ public extension WithdrawController {
         estimateTask?.cancel()
         requests.cancelAll()
         payoutRequests.cancelAll()
+        deferral.reset()
         flow.leave()
     }
 }
@@ -97,7 +106,7 @@ extension WithdrawController {
         payoutRequests.cancelAll()
         state.payout = nil
         let form = flow.owner
-        guard !left, form.account != nil, ownsForm(form) else { return }
+        guard !left, form.account != nil || !form.identityKnown, admitPayout(deps.env.check(form)) else { return }
         if deps.gates.read.active {
             state.payoutError = nextNotice("error.42901")
             return
@@ -105,9 +114,16 @@ extension WithdrawController {
         let probe = deps.gates.read.probe()
         payoutRequests.send(deps.api, ApiCall(operationId: Self.payoutOperation), probe: probe,
                             expected: form.request) { [weak self] result in
-            guard let self, !left, payoutSeq == request, ownsForm(form) else { return }
+            guard let self, !left, payoutSeq == request, form == flow.owner, admitPayout(deps.env.check(form)) else {
+                return
+            }
             onPayout(result, probe: probe)
         }
+    }
+
+    /// 收款账号行读取的身份核对：暂时未知 → 记待补取（收款账号行保持未显示）；已换代 → 丢弃。
+    func admitPayout(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Self.payoutOperation, resume: { [weak self] in self?.fetchPayout() })
     }
 
     func onPayout(_ result: ApiResult, probe: SendProbe) {
@@ -146,7 +162,7 @@ extension WithdrawController {
         state.successPending = false
         let owner = flow.owner
         if deps.env.isCurrent(owner) {
-            deps.cache?.deleteDraft(account: owner.account)
+            deps.cache?.deleteDraft(account: owner.account, loginEpoch: owner.loginEpoch)
         }
         guard let page else { return }
         _ = deps.env.replace(

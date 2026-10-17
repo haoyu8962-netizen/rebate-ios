@@ -29,7 +29,7 @@ public struct RealNameSnapshot: Equatable, Sendable, CustomStringConvertible {
 /// 单独同意（默认不勾选，点遮罩不关闭）。实名提交接口契约没有（G01）：只由 Debug 假服务实现（`RealNameBackend`）；Release 为 nil，【提交认证】
 /// 置灰，显示「实名认证暂未开放」，不发任何请求。成功后刷新 realname_status、出栈回发起页（G05，不重放）。只在主线程使用。
 @MainActor
-public final class RealNameController: ObservableObject {
+public final class RealNameController: ObservableObject, IdentityResumable {
     public static let fieldName = "name"
     public static let fieldId = "id_no"
 
@@ -40,6 +40,8 @@ public final class RealNameController: ObservableObject {
     private var left = false
     private var serial = 0
     private var deferredBack = false
+    /// 身份暂时未知时到达的提交结果（FU-IOS-0712 整体重理：与各资金页同一套机制；不重放提交，身份确认后仍是本表单身份才采用）。
+    public let deferral = IdentityDeferral()
 
     public init(deps: WalletDeps) {
         self.deps = deps
@@ -123,9 +125,23 @@ public final class RealNameController: ObservableObject {
             }
             let result = await backend.submit(name: input.name, idNo: input.idNo, idempotencyKey: key,
                                               owner: owner.request)
-            guard !left, state.owner == owner, deps.env.isCurrent(owner) else { return }
-            onResult(result)
+            submitArrived(result, owner: owner)
         }
+    }
+
+    /// 提交结果的身份核对：暂时未知 → 不采用、记下（提交中保持，身份确认后仍是本表单身份才采用）；已换代 → 丢弃。
+    private func submitArrived(_ result: ApiResult, owner: WalletOwner) {
+        guard !left, state.owner == owner else { return }
+        guard deferral.admit(deps.env.check(owner), slot: "submit", resume: { [weak self] in
+            self?.submitArrived(result, owner: owner)
+        }) else { return }
+        onResult(result)
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：采用身份未知时到达的提交结果。
+    public func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
     }
 
     private func onResult(_ result: ApiResult) {
@@ -193,6 +209,7 @@ public final class RealNameController: ObservableObject {
     public func sessionChanged(_ owner: WalletOwner) {
         guard !left else { return }
         deferredBack = false
+        deferral.reset()
         if state.consentId != nil {
             deps.env.sensitiveOverlay(false)
         }
@@ -202,6 +219,7 @@ public final class RealNameController: ObservableObject {
     public func leave() {
         guard !left else { return }
         left = true
+        deferral.reset()
         if state.consentId != nil {
             deps.env.sensitiveOverlay(false)
         }

@@ -169,8 +169,14 @@ public enum SearchResults {
         switch result {
         case let .success(data, traceId, _):
             ["code": 0, "msg": "", "data": JSON.parse(data) ?? [:], "trace_id": traceId ?? ""]
-        case let .failure(code, msg, data, traceId, _, _):
-            ["code": code, "msg": msg, "data": JSON.parse(data) ?? [:], "trace_id": traceId ?? ""]
+        case let .failure(code, msg, data, traceId, effect, _):
+            // 非强更的 10405 按统一错误文案（error.50001 + trace6，错误态可重试；F-X-09，FU-IOS-0712）
+            [
+                "code": NonForcedUpdate.pageCode(code: code, effect: effect),
+                "msg": msg,
+                "data": JSON.parse(data) ?? [:],
+                "trace_id": traceId ?? "",
+            ]
         default:
             nil
         }

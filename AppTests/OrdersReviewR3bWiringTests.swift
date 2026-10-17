@@ -56,7 +56,10 @@ final class OrdersReviewR3bWiringTests: XCTestCase {
         list.controller.updateSearchText(Self.fullOrderNo)
         list.controller.submitSearch()
         fixture.orders.persist()
-        XCTAssertEqual(fixture.orders.restorer.stored?.owner, OrderCacheStore.hash("user-a"), "前提：A 的记录")
+        // FU-IOS-0712：记录归属是「账号 + 持久化登录世代」的分区键（原来只按账号哈希）；R1-01：分区键按页面固定身份的登录世代算
+        let ownerA = fixture.orders.cache.partitionKey(account: "user-a", loginEpoch: list.controller.owner.loginEpoch)
+        XCTAssertNotNil(ownerA)
+        XCTAssertEqual(fixture.orders.restorer.stored?.owner, ownerA, "前提：A 的记录")
         let ownerFile = fixture.orders.cache.root.appendingPathComponent("owner")
         XCTAssertFalse(FileManager.default.fileExists(atPath: ownerFile.path), "前提：没有缓存 owner 文件")
 
@@ -64,12 +67,14 @@ final class OrdersReviewR3bWiringTests: XCTestCase {
         // 后台保存抢在会话通知之前（保存入口本身）
         fixture.orders.persist()
         XCTAssertEqual(
-            fixture.orders.restorer.stored?.owner, OrderCacheStore.hash("user-a"), "不以当前会话 B 重写 A 的搜索词"
+            fixture.orders.restorer.stored?.owner, ownerA, "不以当前会话 B 重写 A 的搜索词"
         )
         // 进程在这里结束 → 以 B 重启：同一份文件上的新恢复器
         let file = OrderPageStateFile(url: fixture.orders.cache.pageState.url)
         let restarted = OrderPageRestorer(file: file, unit: OrderCacheStore(root: fixture.orders.cache.root))
-        XCTAssertNil(restarted.decide(account: "user-b"), "B 不恢复 A 的搜索词")
+        XCTAssertNil(
+            restarted.decide(account: "user-b", loginEpoch: fixture.tokens.loginEpoch), "B 不恢复 A 的搜索词"
+        )
     }
 
     /// 进后台的保存入口：先核对会话（换代即清空、删除旧记录），旧页面不再保存。

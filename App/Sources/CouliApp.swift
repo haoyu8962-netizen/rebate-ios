@@ -179,6 +179,10 @@ struct CouliApp: App {
         clipboard.overlaySource = { [weak trade] in trade?.sensitiveOverlay }
         // 搜索与商品详情（APP-06a）：搜索页订阅配置变化（search_status），路由出栈时作废在途请求。
         let search = AppSearch(network: network, config: config, privacy: privacy, routing: routing, trade: trade)
+        #if DEBUG
+        // 「挂住提交」开关（UI 测试用，FU-IOS-0712 R1-05）
+        DebugUITestSignals.installHold(on: search.restoration)
+        #endif
         search.clipboard = clipboard
         return (clipboard, search)
     }
@@ -257,10 +261,17 @@ struct CouliApp: App {
                     case .background:
                         routing.sceneEnteredBackground()
                         config.enteredBackground()
-                        search.restoration.sceneEnteredBackground()
+                        let searchCommitted = search.restoration.sceneEnteredBackground()
                         search.trade?.sceneChanged(active: false)
                         clipboard.sceneBackground()
                         orders.sceneEnteredBackground()
+                        #if DEBUG
+                        // 进后台的同步保存都执行完、搜索恢复内容与后台标记已提交并核对（UI 测试的显式完成信号，FU-IOS-0712 R1-05）；
+                        // 提交失败或没完成不发
+                        DebugUITestSignals.backgroundSaveFinished(committed: searchCommitted)
+                        #else
+                        _ = searchCommitted
+                        #endif
                     case .active:
                         routing.sceneBecameActive()
                         config.enteredForeground()

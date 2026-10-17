@@ -1,0 +1,5 @@
+/* #if note */
+#if NEVER_DEFINED
+import Search
+#endif
+// */

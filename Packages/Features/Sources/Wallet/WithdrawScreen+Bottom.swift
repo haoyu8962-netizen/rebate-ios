@@ -56,7 +56,7 @@ extension WithdrawScreen {
         let display = snapshot.display(slaDefault: texts)
         let enabled = (display?.submitEnabled ?? false) && flowState.canSubmit && !snapshot.serverBlocked
             && !snapshot.successPending && !gate.blocked
-        let submitting = flowState.phase == .submitting
+        let submitting = flowState.phase == .submitting && !flowState.awaitingIdentity
         return VStack(spacing: CouliSpacing.s2) {
             CouliButton(
                 texts.text(submitting ? "withdraw.submitting" : "withdraw.submit"), isLoading: submitting,

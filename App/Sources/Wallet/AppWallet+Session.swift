@@ -16,38 +16,79 @@ struct WalletOpenIntent {
 
 /// 会话换代、撤回 / 切环境、实名状态与带实名前置的打开。
 extension AppWallet {
-    /// 会话可能变了（AppLogin 的会话版本变化、页面打开、回前台）：账号或会话世代不同即换代。
-    func currentSessionKey() -> String {
-        let owner = currentOwner()
-        return "\(owner.account ?? "-")#\(owner.request?.generation ?? 0)#\(owner.request?.epoch ?? 0)"
+    /// 换代判据（测试核对用的视图；判定只在 `SessionReconciler`）："" = 还没有已确认判据（启动时身份暂时未知，RC-04）。
+    var sessionKey: String {
+        guard let mark = reconciler.confirmed else { return "" }
+        return "\(mark.account ?? "-")#\(mark.generation)#\(mark.epoch)#\(mark.loginEpoch ?? "-")"
     }
 
+    /// 会话可能变了（AppLogin 的会话版本变化、页面打开、回前台、用户重试）。一次快照，结论只由 `SessionReconciler` 给出（与订单同一套）：
+    /// - 待清理与身份无关，先完成（R3-02）；
+    /// - 暂时未知：世代没变什么都不做（不删、不写、不更新判据，RC-01）；世代变了只作废内存（共享状态清空、各页换成未确认身份），不对账；
+    /// - 已确认且相同：换上未知期间构造的页面（RC-02 / G54），各页统一补做中止的读取与迟到结果（RC-02 / G53 / RC-05）；
+    /// - 启动态落定：按本次身份对账后同上；
+    /// - 已知换代（含首次确认没有会话 RC-04、同账号换登录世代 R3-03）：共享状态清空、按本次身份对账（不另读，RC-03）、各页换上新身份重取。
     func checkSession() {
-        let key = currentSessionKey()
-        guard key != sessionKey else { return }
-        sessionKey = key
-        rebuild()
+        let snapshot = identity.snapshot()
+        cache.completePendingClear()
+        switch reconciler.observe(snapshot) {
+        case .deferred:
+            return
+        case .invalidated:
+            rebuild(snapshot, reconcile: false)
+        case .same:
+            identityConfirmed(snapshot)
+        case .settled:
+            reconcileCache(snapshot)
+            identityConfirmed(snapshot)
+        case .changed:
+            rebuild(snapshot)
+        }
     }
 
-    /// 撤回同意 / 切换环境（WalletCacheCleaner 删了缓存，删除失败时同样回调）：内存里的钱包显示全部作废。
+    /// 身份已确认（判据相同或启动态落定）：未知期间构造（或没有账号时构造、此刻已有账号）的页面换上这一次的身份并重取（不重置禁用期、
+    /// 发码倒计时、实名结论，G49）；之后各页统一补做因身份暂时未知中止的读取与迟到结果。
+    func identityConfirmed(_ snapshot: IdentitySnapshot) {
+        // 会话级共享结算先补（禁用期按原截止、token、钱包刷新；RW-02），页面再采用各自留着的结果
+        deps.settlement.resumeAfterIdentityConfirmed()
+        let owner = owner(for: snapshot)
+        let entries = Array(pages.values)
+        for entry in entries where !entry.owner.identityKnown || (entry.owner.account == nil && owner.account != nil) {
+            entry.context.openError = nil
+            entry.owner = owner
+            entry.identityConfirmed(owner)
+        }
+        for entry in entries {
+            entry.resumable?.resumeAfterIdentityConfirmed()
+        }
+    }
+
+    /// 撤回同意 / 切换环境（WalletCacheCleaner 删了缓存，删除失败时同样回调）：内存里的钱包显示全部作废，各页按此刻快照重建
+    /// （判据随之更新；未知时只记世代，确认后按换代处理）。
     func cacheCleared() {
         clearedCount += 1
-        sessionKey = currentSessionKey()
-        rebuild()
+        let snapshot = identity.snapshot()
+        reconciler.adopt(snapshot)
+        rebuild(snapshot)
     }
 
-    /// 同步出口：共享状态清空，各页清掉旧会话的数据并换上同一次读取的新身份（共性第 13、65 条）。
-    private func rebuild() {
+    /// 同步出口：共享状态清空，各页清掉旧会话的数据并换上同一次读取的新身份（共性第 13、65 条）。`reconcile` = false：身份暂时未知而世代
+    /// 已变，只作废内存，不对账。
+    private func rebuild(_ snapshot: IdentitySnapshot, reconcile: Bool = true) {
+        deps.settlement.sessionChanged()
         gates.reset()
         deps.tokens.onSessionChanged()
         deps.sms.clear()
         realnameState = nil
         realnameFlag?.invalidate()
         realnameFlag = nil
-        let owner = currentOwner()
-        cache.reconcileOwner(account: owner.account)
+        let owner = owner(for: snapshot)
+        if reconcile {
+            reconcileCache(snapshot)
+        }
         for entry in pages.values {
             entry.context.openError = nil
+            entry.owner = owner
             entry.sessionChanged(owner)
         }
         if owner.account != nil {

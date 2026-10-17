@@ -113,6 +113,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.uitests
         GENERATE_INFOPLIST_FILE: YES
+        # FU-IOS-0712（F-IOS-10）：包载入时登记每用例总上限（UITests/UITestWaits.swift 的 UITestTimeouts）
+        INFOPLIST_KEY_NSPrincipalClass: CouliUITestTimeouts
     dependencies:
       - target: Couli
 

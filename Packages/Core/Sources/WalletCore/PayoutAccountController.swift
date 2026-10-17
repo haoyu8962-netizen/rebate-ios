@@ -28,7 +28,7 @@ public struct PayoutSnapshot: Equatable, Sendable {
 /// action=payout_account_change，首次绑定也要二次验证），未决键规则与提现相同；待确认摘要本机按 BR-ID-33 细则脱敏（G15）。成功后显示服务端
 /// 返回的脱敏串，清空表单与内存中的完整输入，再按 App 的判断出栈回发起页（从 Withdraw 进来）或停在本页。只在主线程使用。
 @MainActor
-public final class PayoutAccountController: ObservableObject {
+public final class PayoutAccountController: ObservableObject, IdentityResumable {
     public static let operation = "savePayoutAccount"
     public static let action = "payout_account_change"
     static let getOperation = "getPayoutAccount"
@@ -39,6 +39,14 @@ public final class PayoutAccountController: ObservableObject {
     public var page: UUID?
     var left = false
     var seq = 0
+    /// 读取因身份暂时未知中止、等身份确认后补做（FU-IOS-0712 整体重理：与钱包摘要、各资金页同一套机制）。
+    public let deferral = IdentityDeferral()
+
+    /// 有因身份暂时未知中止、还没补取的读取。
+    public var loadPending: Bool {
+        deferral.isPending
+    }
+
     var serial = 0
     let requests = WalletRequests()
     var deferredSaved: Bool?
@@ -68,7 +76,8 @@ public final class PayoutAccountController: ObservableObject {
     }
 
     public func start() {
-        guard !left, flow.owner.account != nil else { return }
+        // 已确认没有会话的表单不读；身份暂时未知时构造的表单照常核对（结算为可重试，身份确认后由 App 换上身份）
+        guard !left, flow.owner.account != nil || !flow.owner.identityKnown else { return }
         let api = deps.api
         Task { @MainActor [weak self] in
             await api.restorePending()
@@ -94,7 +103,7 @@ public final class PayoutAccountController: ObservableObject {
     /// 读取（进入、回流、【重试】）：绑定本表单的固定身份（共性第 65 条）；本地限流拦下也结算（共性第 30、45、56 条）。
     public func load() {
         let form = flow.owner
-        guard !left, form.account != nil, ownsForm(form) else { return }
+        guard !left, form.account != nil || !form.identityKnown, admitLoad(deps.env.check(form)) else { return }
         if deps.gates.read.active {
             gatedLoad()
             return
@@ -109,9 +118,40 @@ public final class PayoutAccountController: ObservableObject {
         let probe = deps.gates.read.probe()
         let call = ApiCall(operationId: Self.getOperation)
         requests.send(deps.api, call, probe: probe, expected: form.request) { [weak self] result in
-            guard let self, !left, seq == request, ownsForm(form) else { return }
+            guard let self, !left, seq == request, form == flow.owner, admitLoad(deps.env.check(form)) else { return }
             onLoaded(result, navTicket: navTicket, probe: probe)
         }
+    }
+
+    /// 读取的身份核对（发送前、响应时同一入口）：暂时未知 → 记待补取；还没有账号时结算为可重试的失败态，已显示的账号与已填内容保留。
+    func admitLoad(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Self.getOperation, resume: { [weak self] in self?.load() }, settle: {
+            if state.account == nil {
+                state.phase = .error
+                state.loadError = nil
+            }
+        })
+    }
+
+    /// 页面【重试】：照常读取；身份暂时未知时请 App 立即核对一次（确认了就换上身份并补取）。
+    public func retry() {
+        load()
+        if deferral.isPending {
+            deps.env.recheckIdentity()
+        }
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的读取与待确认记录（固定身份校验与禁用期照旧；不重放保存）。
+    public func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
+        flow.resumeAfterIdentityConfirmed()
+    }
+
+    /// 构造时身份未确认的表单，在身份确认后换上这一次的身份（App 给）并重取（禁用期等共享状态不动）。
+    public func identityConfirmed(_ owner: WalletOwner) {
+        guard !left, !flow.owner.identityKnown || flow.owner.account == nil, owner.identityKnown else { return }
+        sessionChanged(owner)
     }
 
     func gatedLoad() {

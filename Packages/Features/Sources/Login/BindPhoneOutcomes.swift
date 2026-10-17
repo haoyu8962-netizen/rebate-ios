@@ -20,8 +20,10 @@ enum BindOutcomes {
         switch result {
         case .success:
             return (.done, .done)
-        case let .failure(code, _, data, traceId, effect, _):
+        case let .failure(rawCode, _, data, traceId, effect, _):
             let object = LoginService.object(data)
+            // 非强更的 10405 按 5xxxx（F-X-09，FU-IOS-0712）：首次提交统一错误 + trace6，确认 / 放弃保留待确认「稍后再试」
+            let code = NonForcedUpdate.pageCode(code: rawCode, effect: effect)
             switch phase {
             case .submit:
                 return submitFailure(code, object, traceId, effect)
@@ -145,7 +147,8 @@ enum BindOutcomes {
             }
             return (.navigate(route: route), .other)
         case 10405:
-            // 网络层已按 Effect 进强更分流（APP-13a 共性第 12 条：只消费网络层结论，页面不按码重判）
+            // 网络层已按 Effect 进强更分流（APP-13a 共性第 12 条：只消费网络层结论，页面不按码重判）；非强更的 10405 在 map 里
+            // 已换成 50001，走不到这里
             return (.silent, .other)
         default:
             break
@@ -161,7 +164,9 @@ enum BindOutcomes {
         if code == 44001 {
             return (.risk(titleKey: effect.textKey ?? "error.44001"), .ended)
         }
-        let trace = code / 10000 == 5 || effect.includeTrace6 ? LoginService.trace6(traceId) : ""
+        // 除法单独一行（FU-IOS-0712 R1-02：扫描器对「裸 / 之后同行还有引号」按无法确认边界拒绝）
+        let serverFailure = code / 10000 == 5
+        let trace = serverFailure || effect.includeTrace6 ? LoginService.trace6(traceId) : ""
         return (.notice(textKey: effect.textKey ?? LoginService.genericKey, trace6: trace), .other)
     }
 }

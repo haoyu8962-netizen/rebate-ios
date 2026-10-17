@@ -46,6 +46,9 @@ final class SearchRouteRestoration: ObservableObject, LaunchAutoAction {
     private var pathObservation: AnyCancellable?
     /// 守卫此刻的状态（App 的 AppRouting.guardState）；接上启动协调前为 nil（只在测试里直接调用 replay 时出现）。
     private var guardState: (@MainActor () -> GuardState)?
+    /// 进后台写完之后的显式提交（FU-IOS-0712 R1-05）：UserDefaults 的 `set` 之后异步持久化，这里同步提交一次（`synchronize`），返回是否
+    /// 提交成功。测试与 Debug 的「挂住提交」开关替换它。
+    var commit: @MainActor (UserDefaults) -> Bool = { $0.synchronize() }
 
     init(router: Router, defaults: UserDefaults = .standard) {
         self.router = router
@@ -81,8 +84,10 @@ final class SearchRouteRestoration: ObservableObject, LaunchAutoAction {
     }
 
     /// 进后台：先让各页面取消延迟保存、同步交出最新状态（R3F-03），再记下标记（进程若在后台被结束，下次启动恢复），
-    /// 并确保当前内容已写入。
-    func sceneEnteredBackground() {
+    /// 并确保当前内容已写入。返回恢复内容与后台标记是否**已提交并核对**（R1-05：显式提交成功、读回与刚写的一致）；false = 提交失败
+    /// 或没完成（Debug 的进后台保存完成信号据此不发）。
+    @discardableResult
+    func sceneEnteredBackground() -> Bool {
         for flush in flushers.values {
             flush()
         }
@@ -92,10 +97,24 @@ final class SearchRouteRestoration: ObservableObject, LaunchAutoAction {
             if previousEndedInBackground {
                 defaults.set(true, forKey: Self.backgroundKey)
             }
-            return
+            return committed(background: previousEndedInBackground, data: nil)
         }
         defaults.set(true, forKey: Self.backgroundKey)
         store()
+        return committed(background: true, data: encoded)
+    }
+
+    /// 显式提交并核对：提交成功，且读回的后台标记（`background` 为 true 时）与恢复内容（`data` 非 nil 时；空 = 已删除）与刚写的一致。
+    private func committed(background: Bool, data: Data?) -> Bool {
+        guard commit(defaults) else { return false }
+        if background, !defaults.bool(forKey: Self.backgroundKey) {
+            return false
+        }
+        if let data {
+            let stored = defaults.data(forKey: Self.dataKey)
+            guard data.isEmpty ? stored == nil : stored == data else { return false }
+        }
+        return true
     }
 
     /// 回到前台：清掉标记。

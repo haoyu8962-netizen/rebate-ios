@@ -28,7 +28,8 @@ extension PayoutAccountScreen {
             texts: texts, pending: pending, desc: desc, abandonTitle: texts.text("pending_confirm.abandon"),
             confirmTitle: texts.text("pending_confirm.payout_account.action"),
             note: texts.text("pending_confirm.payout_account.note"), notice: flowState.pendingNotice,
-            blocked: gate.blocked, actions: flowActions, extra: AnyView(extra)
+            blocked: gate.blocked, busy: flowState.pendingCardBusy, actionsEnabled: flowState.pendingActionsEnabled,
+            actions: flowActions, extra: AnyView(extra)
         )
     }
 
@@ -54,6 +55,13 @@ extension PayoutAccountScreen {
         }
         if let route = flowState.guideRoute {
             GuideEntry(texts: texts, route: route, action: flowActions.openGuide)
+        }
+        // 写请求已结束、身份暂时未知（RW-03）：不再转圈，给【重试】核对身份
+        if flowState.awaitingIdentity {
+            NoticeBar(
+                text: texts.text("pending_confirm.retry_later"), noticeId: -1, retryTitle: texts.text("wallet.retry"),
+                retry: flowActions.recheck, identifier: "payout.awaitingIdentity"
+            )
         }
     }
 
@@ -126,7 +134,7 @@ extension PayoutAccountScreen {
     }
 
     func saveBar(_ flowState: FlowState, _ actions: PayoutActions) -> some View {
-        let saving = flowState.phase == .submitting
+        let saving = flowState.phase == .submitting && !flowState.awaitingIdentity
         return CouliButton(
             texts.text(saving ? "payout.saving" : "payout.save"), isLoading: saving,
             isEnabled: flowState.canSubmit && !gate.blocked, fillsWidth: true, action: actions.save

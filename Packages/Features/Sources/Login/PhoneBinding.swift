@@ -9,16 +9,28 @@ import Session
 ///   「未知」，守卫按「已登录未绑手机」处理（未知不当已绑，主动打开与待办恢复同一口径）；
 /// - 绑定状态有自己的更新世代 `epoch`：绑定成功时推进；getMe 发起时取 `ticket`，返回时世代没变才应用——绑定前发出的旧查询不能覆盖
 ///   绑定结果（鸿蒙 R3-01、Android R1-02）；
-/// - 不落盘：进程重启后一律未知（iOS 没有持久化登录世代，rule-gaps iOS I05）。只在主线程使用。
+/// - 不落盘：进程重启后一律未知。FU-IOS-0712：另按持久化登录世代分区（`loginEpoch` 接上之后，记下时取**调用方固定的那一代会话**的
+///   登录世代——按会话世代取，会话已不是那一代即为未知、不记，不取之后新登录的世代（R1-01）；读时世代必须相同；世代未知不记、读为未知）。
+///   只在主线程使用。
 @MainActor
 public final class PhoneBindingStore: ObservableObject {
-    /// 一次 getMe 查询发起时的依据：会话世代与绑定状态的更新世代。
+    /// 一次 getMe 查询发起时的依据：会话世代、绑定状态的更新世代，以及发起时固定的那一代会话的登录世代（R1-01：结果只记在这一份下）。
     public struct Ticket: Equatable, Sendable {
         public let generation: UInt64
         public let epoch: UInt64
+        public let loginEpoch: String?
     }
 
-    private var entry: (generation: UInt64, bound: Bool)?
+    private struct Entry {
+        let generation: UInt64
+        let loginEpoch: String?
+        let bound: Bool
+    }
+
+    private var entry: Entry?
+    /// 给定会话世代那一代会话的持久化登录世代（App 接 `ApiClient.loginEpoch(ifGeneration:)`：会话世代已不是它、凭据不可读、隔离、读不出
+    /// → nil）；nil 来源 = 没接，只按会话世代。记下时只在固定点取一次，读时只拿来比较。
+    public var loginEpoch: (@MainActor (UInt64) -> String?)?
     /// 绑定状态的更新世代（绑定成功时 +1）。
     public private(set) var epoch: UInt64 = 0
     /// 状态每变一次加一（页面与守卫据此刷新）。
@@ -29,12 +41,26 @@ public final class PhoneBindingStore: ObservableObject {
     /// `generation` 这一代会话的绑定状态；nil = 未知（没查清，或已换代）。
     public func bound(generation: UInt64) -> Bool? {
         guard let entry, entry.generation == generation else { return nil }
+        if let loginEpoch {
+            guard let now = loginEpoch(generation), now == entry.loginEpoch else { return nil }
+        }
         return entry.bound
     }
 
-    /// 本次登录直接给出的结论（短信登录 = 已绑；第三方新号 = 未绑）。
+    /// 本次登录直接给出的结论（短信登录 = 已绑；第三方新号 = 未绑）：`generation` 是这次登录保存后的会话世代，登录世代按它一次取得
+    /// （会话已不是这一代 → 未知）。接了登录世代来源而世代未知：不记（仍为未知）。
     public func record(_ bound: Bool, generation: UInt64) {
-        entry = (generation, bound)
+        record(bound, generation: generation, loginEpoch: loginEpoch?(generation))
+    }
+
+    /// 记下（登录世代由调用方在固定点取得后传入，这里不再读）。
+    private func record(_ bound: Bool, generation: UInt64, loginEpoch epoch: String?) {
+        if loginEpoch != nil, epoch == nil {
+            entry = nil
+            version &+= 1
+            return
+        }
+        entry = Entry(generation: generation, loginEpoch: loginEpoch == nil ? nil : epoch, bound: bound)
         version &+= 1
     }
 
@@ -44,16 +70,16 @@ public final class PhoneBindingStore: ObservableObject {
         record(true, generation: generation)
     }
 
-    /// getMe 发起时取一次。
+    /// getMe 发起时取一次（登录世代也在这里按发起时的会话世代固定）。
     public func ticket(generation: UInt64) -> Ticket {
-        Ticket(generation: generation, epoch: epoch)
+        Ticket(generation: generation, epoch: epoch, loginEpoch: loginEpoch?(generation))
     }
 
-    /// getMe 查清：更新世代没变才应用（调用方另外核对会话世代仍是发起时那一代）。返回是否应用。
+    /// getMe 查清：更新世代没变才应用（调用方另外核对会话世代仍是发起时那一代）；记在发起时固定的登录世代下。返回是否应用。
     @discardableResult
     public func apply(_ bound: Bool, ticket: Ticket) -> Bool {
         guard ticket.epoch == epoch else { return false }
-        record(bound, generation: ticket.generation)
+        record(bound, generation: ticket.generation, loginEpoch: ticket.loginEpoch)
         return true
     }
 }

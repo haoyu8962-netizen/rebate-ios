@@ -1,3 +1,4 @@
+import CouliNetwork
 import OrderCore
 import SwiftUI
 
@@ -25,6 +26,9 @@ public final class OrderListPageConfig: ObservableObject {
     public var now: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     /// 页面仍有效（App 给：仍是当前会话的那一份，会话 / 隐私 / 环境版本没变）。延迟回调执行前复核（共性第 24、35 条）。
     public var isCurrent: () -> Bool = { true }
+    /// 页面身份核对的三态（App 给：仍是当前这一份 + 执行器固定身份一次读取的核对；FU-IOS-0712 整体重理——恢复任务只在页面确定作废时
+    /// 取消，身份暂时未知时等待）。nil = 按执行器固定身份核对并合上 `isCurrent`。
+    public var identityCheck: (() -> IdentityCheck)?
     /// 放到下一轮主循环执行（默认 DispatchQueue.main.async；测试替换以在回调前插入会话换代、用户滚动等）。
     public var nextLoop: (@escaping @MainActor () -> Void) -> Void = { work in
         DispatchQueue.main.async { MainActor.assumeIsolated { work() } }
@@ -53,8 +57,14 @@ public final class OrderListPageConfig: ObservableObject {
     /// 进程恢复的一次性顶对齐（共性第 10、17、21、24、35 条）：目标未加载时翻页等待；对齐放到下一轮主循环，执行前复核页面有效、
     /// 会话与环境版本（`isCurrent`）、查询轮次与任务编号；任一失效即取消恢复，不滚动、不记录。
     public func restoreStep(scroll: @escaping @MainActor (_ orderId: String) -> Void) {
-        guard live else {
+        let check = pageCheck()
+        guard check != .stale else {
             anchor.cancel()
+            return
+        }
+        guard check == .current else {
+            // 身份暂时未知：不滚动、不放弃，身份确认后由执行器的统一补做再走一次（FU-IOS-0712 整体重理）
+            holdRestore(scroll)
             return
         }
         switch anchor.step(controller.snapshot) {
@@ -64,24 +74,51 @@ public final class OrderListPageConfig: ObservableObject {
             controller.loadMore()
         case let .align(id, task):
             nextLoop { [weak self] in
-                guard let self, alignStillValid(task) else { return }
+                guard let self, alignStillValid(task, scroll: scroll) else { return }
                 scroll(id)
             }
         }
     }
 
-    /// 延迟对齐执行前的复核。页面已失效时同时取消恢复任务。
-    func alignStillValid(_ task: Int) -> Bool {
-        guard live else {
+    /// 延迟对齐执行前的复核。页面已失效时同时取消恢复任务；身份暂时未知时这次不挪动、不取消，身份确认后重新安排。
+    func alignStillValid(_ task: Int, scroll: @escaping @MainActor (_ orderId: String) -> Void) -> Bool {
+        let check = pageCheck()
+        guard check != .stale else {
             anchor.cancel()
+            return false
+        }
+        guard check == .current else {
+            if task == anchor.taskId, anchor.aligning {
+                anchor.deferAlign()
+            }
+            holdRestore(scroll)
             return false
         }
         return anchor.confirm(task: task, round: controller.snapshot.query.round)
     }
 
-    /// 列表滚动位置变化（内容顶边在视口里的纵坐标）：恢复进行中被本任务以外的原因移动即取消（APP-06a 第 38、41 条）。
+    /// 恢复任务因身份暂时未知暂停：登记进执行器的待补做（与读取补取同一套，App 在身份确认时统一补做）。
+    private func holdRestore(_ scroll: @escaping @MainActor (_ orderId: String) -> Void) {
+        guard anchor.restoring else { return }
+        controller.deferral.hold(OrderListController.anchorSlot) { [weak self] in
+            self?.restoreStep(scroll: scroll)
+        }
+    }
+
+    /// 页面与固定身份的核对（一次读取）：页面已失效 / 执行器已离开 / App 已换掉这一份 → 已作废；否则按执行器固定身份核对。
+    func pageCheck() -> IdentityCheck {
+        guard !invalidated, !controller.isLeft else { return .stale }
+        if let identityCheck {
+            return identityCheck()
+        }
+        let check = controller.ownerCheck
+        return check == .current && !isCurrent() ? .stale : check
+    }
+
+    /// 列表滚动位置变化（内容顶边在视口里的纵坐标）：恢复进行中被本任务以外的原因移动即取消（APP-06a 第 38、41 条）。身份暂时未知时
+    /// 照样观察（用户滚动仍要取消恢复）。
     public func scrolled(offset: Double) {
-        guard live else { return }
+        guard pageCheck() != .stale else { return }
         anchor.observe(offset: offset)
     }
 
@@ -100,7 +137,7 @@ public final class OrderListPageConfig: ObservableObject {
     /// 同一套判定与复核（轮次、任务编号、页面有效、用户滚动即取消）。被详情盖住、前后台切换不重建视图，不走这里。
     public func viewMounted() {
         mounts += 1
-        guard mounts > 1, live, !anchor.restoring else { return }
+        guard mounts > 1, pageCheck() != .stale, !anchor.restoring else { return }
         anchor.begin(target: anchor.recorded)
     }
 

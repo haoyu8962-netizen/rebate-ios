@@ -1,0 +1,6 @@
+import SwiftUI
+/* note */ #if NEVER_DEFINED
+import Search
+#endif
+
+enum InlineCommentThenIf {}

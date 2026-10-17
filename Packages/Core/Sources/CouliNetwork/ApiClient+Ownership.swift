@@ -20,6 +20,16 @@ public struct RequestOwnership: Equatable, Sendable {
     }
 }
 
+/// 一次读出的会话身份（`ApiClient.currentIdentity`）：请求归属、持久化登录世代、身份是否已确认、是否有可带的会话（member），
+/// 都出自同一次会话读取。
+public struct SessionIdentity: Equatable, Sendable {
+    public let ownership: RequestOwnership
+    public let loginEpoch: String?
+    public let identityKnown: Bool
+    /// 有可带的会话（有 access；与 `isolatedSessionScope != nil` 同口径，FU-IOS-0712 整体重理：订单「已登录」也取这一次读取）。
+    public var member = false
+}
+
 public extension ApiClient {
     /// 此刻的请求归属：受凭据可读性约束的原子快照（APP-08 iOS NEW-01）。同一把锁里一次读出会话世代与作废世代；
     /// `credentialsReadable` 为 false（撤回同意的清理未完成）时**只读内存里的世代**，不调用令牌存储，账号为 nil；为 true 时才在同一把锁里
@@ -31,6 +41,42 @@ public extension ApiClient {
                     ? readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 } : nil,
                 generation: generation, epoch: epoch
             )
+        }
+    }
+
+    /// 此刻的请求归属与持久化登录世代（FU-IOS-0712 R1-01）：与 `currentOwnership` 同一口径、**同一把锁、同一次会话读取**里一并取出世代
+    /// （世代口径同 `sessionLoginEpoch`：屏障竖着、凭据不可读、隔离、读不出、损坏、被撤销、没有令牌、升级前没有世代 → nil）。
+    /// 执行器构造时一次性取得，按「账号 + 登录世代」分区的本机数据的读写只用这一份；之后只拿来比较，写入时不再读当前世代补绑。
+    /// `identityKnown`（第 2 轮修复 R2-01）：此刻身份是否**已确认**——凭据可读、禁读屏障没竖着、会话读取有结论（读到会话，或确认没有会话）
+    /// 为 true；凭据暂不可读、屏障竖着、Keychain 暂时读失败为 false（身份暂时未知：调用方延后归属删除与恢复决策，不删不写）。
+    func currentIdentity(credentialsReadable: Bool) -> SessionIdentity {
+        lock.withLock {
+            let read = credentialsReadable && !readBarrier ? readSessionLocked() : SessionRead.unreadable
+            let live = read.live
+            let account = live?.account.flatMap { $0.isEmpty ? nil : $0 }
+            let loginEpoch = live.flatMap { $0.access != nil && $0.refresh != nil ? $0.loginEpoch : nil }
+            return SessionIdentity(
+                ownership: RequestOwnership(account: account, generation: generation, epoch: epoch),
+                loginEpoch: loginEpoch, identityKnown: read != .unreadable, member: live?.access != nil
+            )
+        }
+    }
+
+    /// 订单、钱包与各资金页的**唯一**身份快照入口（FU-IOS-0712 整体重理）：凭据可读性与会话在同一时刻一次取得，判据、对账、页面固定身份
+    /// 与页面核对都只用这一份。
+    func identitySnapshot(credentialsReadable: Bool) -> IdentitySnapshot {
+        let identity = currentIdentity(credentialsReadable: credentialsReadable)
+        return IdentitySnapshot(identity: identity, readable: credentialsReadable)
+    }
+
+    /// 会话世代仍是 `generation` 时这一代会话的持久化登录世代（同一把锁里先比较世代、再取；不是这一代 → nil）。给只按会话世代固定身份的
+    /// 内存状态（phone_bound）在**固定时**取一次用：取得的是固定那一代的世代，不会取到之后新登录的世代。
+    func loginEpoch(ifGeneration value: UInt64, credentialsReadable: Bool) -> String? {
+        lock.withLock {
+            guard generation == value, credentialsReadable, !readBarrier, let live = readSessionLocked().live,
+                  live.access != nil, live.refresh != nil
+            else { return nil }
+            return live.loginEpoch
         }
     }
 

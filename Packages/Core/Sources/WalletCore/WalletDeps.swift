@@ -27,11 +27,21 @@ public struct WalletOwner: Equatable, Sendable {
     public let key: String
     /// 网络归属（与上面几项同一次读取）。
     public let request: RequestOwnership?
+    /// 持久化登录世代（FU-IOS-0712 R1-01；与账号同一次读取）：摘要与金额草稿按「账号 + 这一份世代」分区读写，写入时不再读当前世代。
+    /// nil = 未知（不读不写）。
+    public let loginEpoch: String?
+    /// 构造时那一次读取身份是否已确认（FU-IOS-0712 整体重理，同 `OrderOwner.identityKnown`）。false = 身份暂时未知时构造：页面不加载、
+    /// 不写，身份确认后由 App 换上已确认的身份。
+    public let identityKnown: Bool
 
-    public init(account: String?, key: String, request: RequestOwnership?) {
+    public init(
+        account: String?, key: String, request: RequestOwnership?, loginEpoch: String? = nil, identityKnown: Bool = true
+    ) {
         self.account = account
         self.key = key
         self.request = request
+        self.loginEpoch = loginEpoch
+        self.identityKnown = identityKnown
     }
 
     /// 测试与占位：不属于任何会话（永远不是当前）。
@@ -61,6 +71,11 @@ public protocol WalletEnv: AnyObject {
     func currentOwner() -> WalletOwner
     /// 固定身份仍是当前会话（只比较；撤回清理进行中一律不是）。
     func isCurrent(_ owner: WalletOwner) -> Bool
+    /// 固定身份与此刻身份的核对结论（一次读取；FU-IOS-0712 整体重理）：`isCurrent` 等价于 `.current`；`.unknown` = 身份暂时未知（或页面
+    /// 构造时身份未确认、还没换上）——页面记待补做、身份确认后由 App 统一补做。
+    func check(_ owner: WalletOwner) -> IdentityCheck
+    /// 页面在身份暂时未知时被用户点了【重试】：请 App 立即核对一次身份。
+    func recheckIdentity()
     /// /v1/config 的 texts 里的一项（生效配置）；没有为 nil。
     func configText(_ key: String) -> String?
     /// /v1/config.help_links。
@@ -255,4 +270,12 @@ public final class SmsDeadlines {
         sending = [:]
         changes.send(())
     }
+}
+
+public extension WalletEnv {
+    func check(_ owner: WalletOwner) -> IdentityCheck {
+        isCurrent(owner) ? .current : .stale
+    }
+
+    func recheckIdentity() {}
 }

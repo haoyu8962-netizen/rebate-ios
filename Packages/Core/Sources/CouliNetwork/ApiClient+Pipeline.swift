@@ -256,6 +256,11 @@ extension ApiClient {
         case let .transient(kind):
             // 等待中的刷新暂时失败：不清会话，原请求不再发出，按网络错误结束（lessons 31）。
             settleHeld(options, kind: PendingKeyStore.envelopeKind(envelope.code))
+            // 非强更 10405 之后的刷新暂时失败（R1-04）：带原 10405 的码与 trace（通用错误 Effect），页面按统一错误，不是网络错误
+            if mapped.kind == .refreshOnly {
+                let generic = ErrorEffect(code: envelope.code, kind: .genericError, includeTrace6: true)
+                return Self.refreshFailed10405(envelope, effect: generic, idempotencyKey: ready.idempotencyKey)
+            }
             return .transportFailure(
                 kind: kind, httpStatus: nil, idempotencyKey: ready.idempotencyKey,
                 pendingKeyUnknown: options.held.map(isUnknown) ?? false
@@ -264,7 +269,10 @@ extension ApiClient {
         effect = settledEffect(effect, envelope.code, options)
         if cleared {
             // 会话 Effect 已由刷新窗口（或复用的那次失败）发过一次，这里只把结果交给调用方。
-            return .sessionCleared(effect: effect)
+            // 非强更 10405 之后的刷新被拒（R1-04）：清会话与登录引导已照旧执行；结果带原 10405 的码、trace 与清会话 Effect
+            return mapped.kind == .refreshOnly
+                ? Self.refreshFailed10405(envelope, effect: effect, idempotencyKey: ready.idempotencyKey)
+                : .sessionCleared(effect: effect)
         }
         await hooks.onEffect(effect)
         await deliverRiskNotice(effect, options, ready)

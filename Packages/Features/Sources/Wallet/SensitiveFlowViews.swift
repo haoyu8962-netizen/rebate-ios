@@ -11,6 +11,8 @@ public struct FlowActions {
     public let cancelAbandon: () -> Void
     public let dismissRisk: () -> Void
     public let openGuide: () -> Void
+    /// 写请求已结束、等身份确认时的【重试】（RW-03）。
+    public let recheck: () -> Void
 
     public static func make(_ flow: SensitiveFlow, _ state: FlowState) -> FlowActions {
         let key = state.pending?.key ?? ""
@@ -23,7 +25,8 @@ public struct FlowActions {
             abandon: { [weak flow] in flow?.abandon(key: confirmKey, owner: owner) },
             cancelAbandon: { [weak flow] in flow?.cancelAbandon() },
             dismissRisk: { [weak flow] in flow?.dismissRisk(risk) },
-            openGuide: { [weak flow] in flow?.openGuide(owner: owner) }
+            openGuide: { [weak flow] in flow?.openGuide(owner: owner) },
+            recheck: { [weak flow] in flow?.recheckIdentity() }
         )
     }
 }
@@ -38,6 +41,10 @@ struct PendingCard: View {
     let note: String
     let notice: Notice?
     let blocked: Bool
+    /// 确认 / 放弃请求仍在途（转圈）；结果已到、待身份确认时为假（RV-04）。
+    let busy: Bool
+    /// 【确认上一笔】/【放弃】可用（不在途、没有待身份确认的结果）。
+    let actionsEnabled: Bool
     let actions: FlowActions
     var extra: AnyView?
     /// 说明行右侧的链接（提现：【查看提现记录 ›】）。
@@ -122,15 +129,21 @@ struct PendingCard: View {
     }
 
     var abandonButton: some View {
-        CouliButton(abandonTitle, kind: .secondary, isEnabled: !pending.inFlight && !blocked, fillsWidth: true,
+        CouliButton(abandonTitle, kind: .secondary, isEnabled: actionsEnabled && !blocked, fillsWidth: true,
                     action: actions.askAbandon)
             .accessibilityIdentifier("pending.abandon")
     }
 
     var confirmButton: some View {
-        CouliButton(confirmTitle, kind: .primary, isLoading: pending.inFlight, isEnabled: !blocked, fillsWidth: true,
-                    action: actions.confirm)
-            .accessibilityIdentifier("pending.confirm")
+        CouliButton(
+            confirmTitle,
+            kind: .primary,
+            isLoading: busy,
+            isEnabled: actionsEnabled && !blocked,
+            fillsWidth: true,
+            action: actions.confirm
+        )
+        .accessibilityIdentifier("pending.confirm")
     }
 }
 

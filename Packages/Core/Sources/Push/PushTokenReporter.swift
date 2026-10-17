@@ -82,14 +82,25 @@ public final class PushTokenReporter {
     /// 禁用期内被拦下、到期后要补一次的触发所属的会话（nil = 没有）。
     private var deferredSession: String?
     private var deferTask: Task<Void, Never>?
+    /// 限流轮次（FU-IOS-0712，F-X-08 ②，跨端教训 19）：每次**实际接纳**的 42901（策略接纳 + 仍是发起时的策略实例 + 当前会话 + 没停报）
+    /// 开始一轮禁用期就加一，只增不减（会话换代也不回退）。延后的补发带着开始时的轮次，到期时轮次、策略实例、会话都对得上才补发。
+    public private(set) var limitRound = 0
+    /// 延后补发的计时（毫秒；生产是 Task.sleep，测试注入可控计时）。
+    private let deferSleep: @MainActor (UInt64) async -> Void
     /// 发出的条数（测试与诊断用；不含令牌）。
     public private(set) var sent = 0
 
-    public init(source: PushTokenSource, state: PushReportState, api: MeApi, gate: RetryAfterGate = RetryAfterGate()) {
+    public init(
+        source: PushTokenSource, state: PushReportState, api: MeApi, gate: RetryAfterGate = RetryAfterGate(),
+        deferSleep: @escaping @MainActor (UInt64) async -> Void = { millis in
+            try? await Task.sleep(nanoseconds: millis * 1_000_000)
+        }
+    ) {
         self.source = source
         self.state = state
         self.api = api
         self.gate = gate
+        self.deferSleep = deferSleep
         unsubscribe = source.subscribe { [weak self] in self?.tokenChanged() }
     }
 
@@ -233,9 +244,14 @@ public final class PushTokenReporter {
         deferredSession = session
         deferTask?.cancel()
         let wait = UInt64(max(1, gate.remainingMillis))
+        let round = limitRound
+        let sleep = deferSleep
         deferTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: wait * 1_000_000)
-            guard !Task.isCancelled, let self, deferredSession == session, policy.instance == sending else { return }
+            await sleep(wait)
+            // 到期时核对：仍是这一轮禁用期（期间开始了新一轮就由新一轮的计时负责）、同一策略实例、同一会话
+            guard !Task.isCancelled, let self, deferredSession == session, policy.instance == sending,
+                  limitRound == round
+            else { return }
             deferredSession = nil
             deferTask = nil
             guard !gate.active, !coldStartHeld, !halted, sessionKey == session else { return }
@@ -296,11 +312,15 @@ public final class PushTokenReporter {
                     reportedSession = session
                 }
                 event = PushEvent.responseOk
-            case let .failure(code, _, _, _, _, _) where code == 10405:
+            case let .failure(code, _, _, _, effect, _) where code == 10405 && effect.kind == .forceUpdate:
+                // 只有确需强更的 10405 才交强更分流；非强更的 10405 按普通失败（不进强更、失败不自动重试，F-X-09）
                 event = PushEvent.response10405
             case let .failure(code, _, _, _, effect, _) where code == 42901:
-                // 先结算限流再决定补发待报（共性第 22、33 条）；只认仍属发起会话的结果（共性第 34 条）
-                if policy.instance == sending, !halted, sessionKey == session {
+                // 先结算限流再决定补发待报（共性第 22、33 条）。计时绑定「当前会话 + 实际接纳该响应的那一轮」（F-X-08 ②，教训 19）：
+                // 策略接纳（在途那条的会话）、仍是发起时的策略实例、发起会话就是当前会话、没停报，才开始新一轮；旧会话迟到的 42901
+                // 不开始、不取消、不缩短新会话的计时（闸门只延长不缩短，会话换代时已清零）
+                if policy.instance == sending, !halted, sessionKey == session, policy.accepts(responseFrom: session) {
+                    limitRound += 1
                     gate.start(effect.disableMillis ?? MeCodes.defaultRetryMillis)
                 }
                 event = PushEvent.responseError

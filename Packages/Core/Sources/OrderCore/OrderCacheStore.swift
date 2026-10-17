@@ -103,6 +103,11 @@ public final class OrderCacheStore: OrderCleanupUnit {
     /// 订单 Tab 根恢复记录的落盘文件（与缓存根目录同级；OrderPageRestorer 读写它，清理单元删除并确认，共性第 40 条）。
     public let pageState: OrderPageStateFile
     private var pendingClear = false
+    /// 按持久化登录世代分区（FU-IOS-0712，跨端教训 7、9–11；R1-01）：true 时缓存按「账号 + 登录世代」分区（目录名是两者合起来的哈希），
+    /// 世代未知不读不写；同账号重新登录换新世代，旧登录的缓存读不回。**世代一律由调用方传入执行器构造时固定的那一份**（`OrderOwner.loginEpoch`），
+    /// 本存储不读当前会话的世代（旧响应迟到写入只会落进它自己那一代的分区）。false = 只按账号分区的旧口径（执行层单测用）；App 在
+    /// AppOrders 构造时置 true。
+    public var partitionedByLoginEpoch = false
 
     /// - Parameter legacyPageStateDefaults: 旧版本把恢复记录放在这里的 UserDefaults（只删不读）；nil = 不管旧记录。
     public init(root: URL, flag: OrderPendingClearFlag? = nil, legacyPageStateDefaults: UserDefaults? = nil) {
@@ -126,8 +131,8 @@ public final class OrderCacheStore: OrderCleanupUnit {
 
     // MARK: - 列表
 
-    public func readList(account: String?, scope: String) -> CachedOrderList? {
-        guard let dir = accountDir(account) else { return nil }
+    public func readList(account: String?, loginEpoch: String?, scope: String) -> CachedOrderList? {
+        guard let dir = accountDir(account, loginEpoch) else { return nil }
         let file = dir.appendingPathComponent(listFile(scope))
         guard let object = read(file) else { return nil }
         guard let data = OrderJSON.listData(object["data"]), let at = JSONPick.int64(object["fetched_at"]) else {
@@ -140,15 +145,15 @@ public final class OrderCacheStore: OrderCleanupUnit {
     }
 
     /// 写 scope 的列表缓存（调用方保证是默认视图的第一页）。
-    public func writeList(account: String?, scope: String, data: OrderListData, fetchedAt: Int64) {
-        guard let dir = ownedDir(account) else { return }
+    public func writeList(account: String?, loginEpoch: String?, scope: String, data: OrderListData, fetchedAt: Int64) {
+        guard let dir = ownedDir(account, loginEpoch) else { return }
         write(dir.appendingPathComponent(listFile(scope)), ["fetched_at": fetchedAt, "data": OrderJSON.encode(data)])
     }
 
     // MARK: - 详情
 
-    public func readDetail(account: String?, orderId: String) -> CachedOrderDetail? {
-        guard let dir = accountDir(account) else { return nil }
+    public func readDetail(account: String?, loginEpoch: String?, orderId: String) -> CachedOrderDetail? {
+        guard let dir = accountDir(account, loginEpoch) else { return nil }
         let entries = details(dir)
         guard let entry = entries.first(where: { ($0["order_id"] as? String) == orderId }),
               let object = entry["detail"] as? [String: Any], let detail = OrderJSON.detail(object),
@@ -158,8 +163,8 @@ public final class OrderCacheStore: OrderCleanupUnit {
     }
 
     /// 写一条详情；超过 30 条按最近使用淘汰（这条排到最新）。
-    public func writeDetail(account: String?, detail: OrderDetail, fetchedAt: Int64) {
-        guard let dir = ownedDir(account) else { return }
+    public func writeDetail(account: String?, loginEpoch: String?, detail: OrderDetail, fetchedAt: Int64) {
+        guard let dir = ownedDir(account, loginEpoch) else { return }
         let id = detail.summary.orderId
         var entries = details(dir).filter { ($0["order_id"] as? String) != id }
         entries.append(["order_id": id, "fetched_at": fetchedAt, "detail": OrderJSON.encode(detail)])
@@ -171,8 +176,9 @@ public final class OrderCacheStore: OrderCleanupUnit {
 
     // MARK: - 归属与清理
 
-    /// 当前会话的账号（nil = 没有会话）与缓存的归属不一致（登出、换账号、会话失效）：全部删除。启动时也调一次。
-    public func reconcileOwner(account: String?) {
+    /// 给定身份（启动、会话换代时调用方一次读出的当前会话；写入前是执行器固定的身份）的账号（nil = 没有会话）与缓存的归属不一致（登出、
+    /// 换账号、会话失效、同账号重新登录换了登录世代）：全部删除。启动时也调一次。
+    public func reconcileOwner(account: String?, loginEpoch: String?) {
         guard cleaned() else { return }
         let ownerURL = root.appendingPathComponent(Self.ownerFile)
         let owner: String?
@@ -183,7 +189,11 @@ public final class OrderCacheStore: OrderCleanupUnit {
             // 归属记录读不出（I/O 故障）不能当成「没有归属」：按不一致全部删除（共性第 20 条）
             owner = Self.unreadableOwner
         }
-        let current = account.map(Self.hash)
+        // 有账号但登录世代未知：判断不了归属，不删（此时也不读不写）
+        if let account, !account.isEmpty, partitionKey(account: account, loginEpoch: loginEpoch) == nil {
+            return
+        }
+        let current = partitionKey(account: account, loginEpoch: loginEpoch)
         if let owner, owner != current {
             try? clearAll()
         }
@@ -269,19 +279,33 @@ public final class OrderCacheStore: OrderCleanupUnit {
         return (try? clearAll()) != nil
     }
 
-    private func accountDir(_ account: String?) -> URL? {
-        guard let account, !account.isEmpty, cleaned() else { return nil }
-        return root.appendingPathComponent(Self.hash(account), isDirectory: true)
+    /// 分区键（FU-IOS-0712）：只按传入的身份算，不读任何当前状态。账号的哈希；按登录世代分区时是「账号 + 登录世代」的哈希，世代未知为 nil
+    /// （不读不写）。订单恢复记录的归属用同一个键。
+    public func partitionKey(account: String?, loginEpoch: String?) -> String? {
+        guard let account, !account.isEmpty else { return nil }
+        guard partitionedByLoginEpoch else { return Self.hash(account) }
+        guard let loginEpoch, !loginEpoch.isEmpty else { return nil }
+        return Self.hash(account + "\u{1F}" + loginEpoch)
     }
 
-    /// 写入前确保归属：别的账号的缓存先全部删掉（删不掉就不写）。
-    private func ownedDir(_ account: String?) -> URL? {
-        reconcileOwner(account: account)
-        guard let account, let dir = accountDir(account) else { return nil }
+    private func accountDir(_ account: String?, _ loginEpoch: String?) -> URL? {
+        // 待清理先完成，再看分区（末轮 R3-02：世代未知的读取也不跳过已登记的清理）
+        guard cleaned(), let key = partitionKey(account: account, loginEpoch: loginEpoch) else { return nil }
+        return root.appendingPathComponent(key, isDirectory: true)
+    }
+
+    /// 写入前确保归属：别的账号（或同账号别的登录世代）的缓存先全部删掉（删不掉就不写）。归属只用调用方固定的身份。
+    private func ownedDir(_ account: String?, _ loginEpoch: String?) -> URL? {
+        reconcileOwner(account: account, loginEpoch: loginEpoch)
+        guard let key = partitionKey(account: account, loginEpoch: loginEpoch), let dir = accountDir(
+            account,
+            loginEpoch
+        )
+        else { return nil }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             excludeFromBackup(root)
-            try Data(Self.hash(account).utf8).write(to: root.appendingPathComponent(Self.ownerFile), options: .atomic)
+            try Data(key.utf8).write(to: root.appendingPathComponent(Self.ownerFile), options: .atomic)
             return dir
         } catch {
             OrderLog.warn("orders: cache owner not written")

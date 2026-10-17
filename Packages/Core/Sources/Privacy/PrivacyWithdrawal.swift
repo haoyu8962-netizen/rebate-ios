@@ -23,7 +23,7 @@ public enum PrivacyWithdrawalCleanup {
     /// ApiClient 的一方（App 的 AppNetwork）用 `registerFirst` 登记到两个注册表的第一位、在允许任何请求之前。
     public static let credentialCleaners: [any EnvironmentSwitchCleaning] = [
         // 会话令牌（access_token、refresh_token、session_scope、user_id，一个 Keychain 条目；APP-03a）。
-        SessionTokensCleaner(tokens: SecureSessionTokens(store: KeychainStore())),
+        SessionTokensCleaner(tokens: SecureSessionTokens.production()),
         // TODO(APP-05): h5_token 实现后换成会话模块自己的清理器。
         KeychainAccountsCleaner(name: "H5Token", accounts: CredentialAccount.h5Token),
         // 设备凭据（device_id、install_secret，一个 Keychain 条目；APP-03b）。App 用 `replaceCredentialCleaner`

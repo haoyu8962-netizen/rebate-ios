@@ -130,9 +130,11 @@ public enum OrderErrorAction {
     /// 服务端错误结果 → 动作（页面与待跟单卡共用；42901 的时长取网络层 Effect，缺省 5 秒）。
     public static func view(target: String, result: ApiResult, hasCache: Bool, filtered: Bool) -> OrderErrorView {
         switch result {
-        case let .failure(code, _, _, traceId, _, _):
+        case let .failure(code, _, _, traceId, effect, _):
+            // 非强更的 10405 按统一错误（F-X-09，FU-IOS-0712）；强更照旧
             view(
-                target: target, code: code, transport: false, disableMs: disableMillis(result), traceId: traceId,
+                target: target, code: NonForcedUpdate.pageCode(code: code, effect: effect), transport: false,
+                disableMs: disableMillis(result), traceId: traceId,
                 hasCache: hasCache, filtered: filtered
             )
         default:

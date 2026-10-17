@@ -45,6 +45,8 @@ final class ClipboardWiringTests: XCTestCase {
         var epoch: UInt64 = 1
         var config = #"{"share_domains":["share.example.test"]}"#
         var forced = 0
+        /// 整体 10405 由执行层进强更的次数与最低版本（FU-IOS-0712 R1-03 对照）。
+        var networkForced: [String?] = []
         var overlay: String?
     }
 
@@ -70,7 +72,8 @@ final class ClipboardWiringTests: XCTestCase {
                 privacy: { state.privacy }, privacyPrompting: { false }, forceUpdate: { false },
                 configJson: { state.config }, guest: { state.guest },
                 sessionGeneration: { state.session }, networkEpoch: { state.epoch },
-                serverForced: { state.forced += 1 }
+                serverForced: { state.forced += 1 },
+                networkForced: { state.networkForced.append($0) }
             ),
             clock: clock ?? { Int64(Date().timeIntervalSince1970 * 1000) }
         )

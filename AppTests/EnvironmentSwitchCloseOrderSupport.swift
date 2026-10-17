@@ -48,6 +48,11 @@ final class CloseOrderCountingTokens: SessionTokens, @unchecked Sendable {
         try inner.save(access: access, refresh: refresh, scope: scope, account: account)
     }
 
+    /// FU-IOS-0712：带登录世代的写入原样转给内层（刷新沿用世代）。
+    func save(access: String, refresh: String, scope: String, account: String?, loginEpoch: String?) throws {
+        try inner.save(access: access, refresh: refresh, scope: scope, account: account, loginEpoch: loginEpoch)
+    }
+
     func clear() throws {
         try inner.clear()
     }

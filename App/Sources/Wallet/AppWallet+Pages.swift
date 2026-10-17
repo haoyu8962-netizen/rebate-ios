@@ -1,3 +1,4 @@
+import CouliNetwork
 import Foundation
 import Router
 import SwiftUI
@@ -14,6 +15,17 @@ final class WalletPageEntry {
     let sessionChanged: (WalletOwner) -> Void
     let leave: () -> Void
     let screen: () -> AnyView
+    /// 页面此刻绑定的固定身份（构造时那一次快照；换上身份、换代重建时更新）。
+    var owner = WalletOwner.none
+    /// 构造时身份未确认的页面在身份确认后换上身份（缺省同换代：清空并按新身份重取；提现页另按新身份恢复金额草稿）。
+    lazy var identityConfirmed: (WalletOwner) -> Void = self.sessionChanged
+    /// 身份确认后统一补做中止读取与迟到结果的执行器（FU-IOS-0712 整体重理：钱包摘要、提现、提现记录、收款账号、实名、劳务协议都接）。
+    weak var resumable: IdentityResumable?
+
+    /// 构造时（或最近一次换上身份时）那一次身份读取是否已确认（RC-02）。
+    var identityKnown: Bool {
+        owner.identityKnown
+    }
 
     init(route: String, context: WalletPageContext, controller: AnyObject, setVisible: @escaping (Bool) -> Void,
          sessionChanged: @escaping (WalletOwner) -> Void, leave: @escaping () -> Void,
@@ -36,7 +48,11 @@ extension AppWallet {
         if let existing = pages[destination.id] {
             return existing
         }
-        guard let route = destination.route, let made = makeEntry(route, destination) else { return nil }
+        guard let route = destination.route else { return nil }
+        // 执行器的固定身份与「是否已确认」出自同一次读取（RC-02）：建页期间钉住这一份快照
+        let snapshot = identity.snapshot()
+        guard let made = identity.pinning(snapshot, { makeEntry(route, destination) }) else { return nil }
+        made.owner = owner(for: snapshot)
         pages[destination.id] = made
         let id = destination.id
         lifetimes.register(destination) { [weak self] in
@@ -80,7 +96,7 @@ extension AppWallet {
         let controller = WalletController(deps: deps)
         controller.page = destination.id
         let mask = mask
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.wallet, context: context, controller: controller,
             setVisible: { [weak controller] shown in
                 guard let controller else { return }
@@ -94,22 +110,32 @@ extension AppWallet {
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(WalletScreen(controller: controller, mask: mask, context: context)) }
         )
+        entry.resumable = controller
+        return entry
     }
 
     private func withdrawEntry(_ destination: RouteDestination, _ context: WalletPageContext) -> WalletPageEntry {
         // 固定身份与恢复的金额草稿来自同一次读取（共性第 65 条）：按这份身份的账号读草稿（账号相同才恢复，不恢复估算）
         let owner = currentOwner()
-        let restored = owner.account.flatMap { cache.readDraft(account: $0) } ?? ""
+        let restored = cache.readDraft(account: owner.account, loginEpoch: owner.loginEpoch) ?? ""
         let controller = WithdrawController(deps: deps, owner: owner, restored: restored)
         controller.page = destination.id
         let gates = gates
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.withdraw, context: context, controller: controller,
             setVisible: { [weak controller] in controller?.setVisible($0) },
             sessionChanged: { [weak controller] in controller?.sessionChanged($0) },
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(WithdrawScreen(controller: controller, gates: gates, context: context)) }
         )
+        entry.resumable = controller
+        // 构造时身份未确认：换上已确认身份时按它恢复金额草稿（共性第 65 条：草稿与身份同一份）
+        let cache = cache
+        entry.identityConfirmed = { [weak controller] owner in
+            let restored = cache.readDraft(account: owner.account, loginEpoch: owner.loginEpoch) ?? ""
+            controller?.identityConfirmed(owner, restored: restored)
+        }
+        return entry
     }
 
     private func recordsEntry(_ destination: RouteDestination, _ context: WalletPageContext) -> WalletPageEntry {
@@ -118,50 +144,59 @@ extension AppWallet {
         )
         controller.page = destination.id
         let sla = configText("withdraw.sla_text")
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.withdrawRecords, context: context, controller: controller,
             setVisible: { [weak controller] in controller?.setVisible($0) },
             sessionChanged: { [weak controller] in controller?.sessionChanged($0) },
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(WithdrawRecordsScreen(controller: controller, context: context, slaText: sla)) }
         )
+        entry.resumable = controller
+        return entry
     }
 
     private func payoutEntry(_ destination: RouteDestination, _ context: WalletPageContext) -> WalletPageEntry {
         let controller = PayoutAccountController(deps: deps, owner: currentOwner())
         controller.page = destination.id
         let gates = gates
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.payoutAccount, context: context, controller: controller,
             setVisible: { [weak controller] in controller?.setVisible($0) },
             sessionChanged: { [weak controller] in controller?.sessionChanged($0) },
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(PayoutAccountScreen(controller: controller, gates: gates, context: context)) }
         )
+        entry.resumable = controller
+        entry.identityConfirmed = { [weak controller] in controller?.identityConfirmed($0) }
+        return entry
     }
 
     private func realnameEntry(_ destination: RouteDestination, _ context: WalletPageContext) -> WalletPageEntry {
         let controller = RealNameController(deps: deps)
         controller.page = destination.id
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.realName, context: context, controller: controller,
             setVisible: { [weak controller] in controller?.setVisible($0) },
             sessionChanged: { [weak controller] in controller?.sessionChanged($0) },
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(RealNameScreen(controller: controller, context: context)) }
         )
+        entry.resumable = controller
+        return entry
     }
 
     private func laborEntry(_ destination: RouteDestination, _ context: WalletPageContext) -> WalletPageEntry {
         let controller = LaborAgreementController(deps: deps)
         controller.page = destination.id
-        return WalletPageEntry(
+        let entry = WalletPageEntry(
             route: WalletRoutes.laborAgreement, context: context, controller: controller,
             setVisible: { [weak controller] in controller?.setVisible($0) },
             sessionChanged: { [weak controller] in controller?.sessionChanged($0) },
             leave: { [weak controller] in controller?.leave() },
             screen: { AnyView(LaborAgreementScreen(controller: controller, context: context)) }
         )
+        entry.resumable = controller
+        return entry
     }
 
     // MARK: - 可见性与导航

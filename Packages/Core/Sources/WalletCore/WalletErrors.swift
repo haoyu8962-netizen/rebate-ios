@@ -103,8 +103,12 @@ public enum WalletErrors {
                 disable: effect.disableMillis ?? SensitiveOutcome.defaultRetryMillis
             )
         }
-        if code == 10405 || effect.kind == .forceUpdate {
+        // 只按网络层 Effect 进强更；非强更的 10405 按统一错误文案 + trace6 + 可重试（F-X-09，FU-IOS-0712）
+        if effect.kind == .forceUpdate {
             return WalletError(.forceUpdate, "error.10405")
+        }
+        if NonForcedUpdate.applies(code: code, effect: effect) {
+            return WalletError(.server, NonForcedUpdate.unifiedKey, traceId: traceId, trace6: true)
         }
         if code == notFoundCode {
             return WalletError(.notFound, "error.30701")
@@ -128,7 +132,9 @@ public enum WalletErrors {
         switch result {
         case .success:
             return OutcomeInput(OutcomeInput.okKind)
-        case let .failure(code, _, data, _, _, _):
+        case let .failure(rawCode, _, data, _, effect, _):
+            // 非强更的 10405 按 5xxxx 交结局表（首次提交：统一错误 + trace6、键结束可重试；确认 / 放弃：稍后再试、保留待确认）
+            let code = NonForcedUpdate.pageCode(code: rawCode, effect: effect)
             let object = WalletJSON.parse(data) as? [String: Any] ?? [:]
             var strings: [String: String] = [:]
             for (key, value) in object {

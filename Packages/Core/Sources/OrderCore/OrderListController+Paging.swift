@@ -6,8 +6,8 @@ public extension OrderListController {
     /// 末行出现：翻下一页（绑定查询轮次）。返回是否发出。
     @discardableResult
     func loadMore() -> Bool {
-        guard !left, ownerCurrent, !gate.active, snapshot.canLoadMore,
-              let cursor = snapshot.nextCursor else { return false }
+        guard !left, !gate.active, snapshot.canLoadMore, let cursor = snapshot.nextCursor,
+              admitMore(ownerCheck) else { return false }
         var query = snapshot.query
         query.nextPage(cursor)
         guard query.sendsRequest() else { return false }
@@ -15,10 +15,19 @@ public extension OrderListController {
         snapshot.loadingMore = true
         let call = ApiCall(operationId: Self.operation, query: query.queryString())
         requests.send(api, call, gate: gate, owner: owner) { [weak self] result in
-            guard let self, !left, ownerCurrent, snapshot.query.round == round, snapshot.loadingMore else { return }
+            guard let self, !left, snapshot.query.round == round, snapshot.loadingMore, admitMore(ownerCheck) else {
+                return
+            }
             settleNext(result)
         }
         return true
+    }
+
+    /// 翻页的身份核对：暂时未知 → 翻页在途标记复位、记待补做（身份确认后再翻这一页）；已换代 → 不放行。
+    internal func admitMore(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: Slot.more, resume: { [weak self] in self?.loadMore() }, settle: {
+            snapshot.loadingMore = false
+        })
     }
 
     /// 翻页失败后的【重试】（stale 状态下是整页刷新）。

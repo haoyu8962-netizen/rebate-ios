@@ -39,7 +39,7 @@ public struct OrderDetailSnapshot: Equatable {
 public final class OrderDetailController: ObservableObject {
     public static let operation = "getOrder"
 
-    @Published public private(set) var snapshot = OrderDetailSnapshot() {
+    @Published public internal(set) var snapshot = OrderDetailSnapshot() {
         didSet {
             if snapshot.detail != oldValue.detail {
                 detailRevision += 1
@@ -52,13 +52,13 @@ public final class OrderDetailController: ObservableObject {
     public let orderId: String
     public let gate: OrderRateGate
     private let api: OrderApi
-    private weak var env: OrderListEnv?
+    weak var env: OrderListEnv?
     private let cache: OrderCacheStore?
-    private let requests = OrderInFlight()
-    private var left = false
-    private var cleared = false
-    private var started = false
-    private var seq = 0
+    let requests = OrderInFlight()
+    var left = false
+    var cleared = false
+    var started = false
+    var seq = 0
     private var toastSeq = 0
     private var subscriptions: Set<AnyCancellable> = []
     /// 本页详情请求成功（列表替换那一行，G17）。
@@ -66,7 +66,11 @@ public final class OrderDetailController: ObservableObject {
     /// 订单号写剪贴板（App 接统一写入口）；返回 false = 记 hash 失败没写。
     public var copy: ((String) -> Bool)?
     /// 固定身份（构造时一次性取得，APP-09 共性第 65 条，iOS RC-01）：详情、【复制】票据、缓存读写都只用它；之后只与当前会话比较。
-    public let owner: OrderOwner
+    /// 只有构造时身份未确认（`identityKnown == false`）的页面，才在身份确认后由 App 换上一次（`identityConfirmed`）。
+    public internal(set) var owner: OrderOwner
+    /// 因身份暂时未知中止、等身份确认后补做的读取（FU-IOS-0712 整体重理：与列表、钱包、各资金页同一套机制）。
+    public let deferral = IdentityDeferral()
+    static let loadSlot = "detail"
 
     public init(api: OrderApi, orderId: String, gate: OrderRateGate, env: OrderListEnv, cache: OrderCacheStore?) {
         self.api = api
@@ -94,21 +98,23 @@ public final class OrderDetailController: ObservableObject {
 
     /// 固定身份仍是当前会话（只比较）。会话已换代而 App 还没清空这一页时：不发请求、不结算、不读写缓存、不出【复制】票据。
     public var ownerCurrent: Bool {
-        guard let env else { return false }
-        return env.isCurrent(owner)
+        ownerCheck == .current
     }
 
-    /// 页面出现：只在第一次加载（被盖住再回来不重载）。
+    /// 页面出现：只在第一次加载（被盖住再回来不重载）。身份暂时未知：记待补取并结算为可重试的失败态。
     public func start() {
-        guard !started, !left, !cleared, ownerCurrent else { return }
+        guard !started, !left, !cleared else { return }
+        let check = ownerCheck
+        guard check != .stale else { return }
         started = true
+        guard admitLoad(check) else { return }
         load(keep: false)
     }
 
     /// 错误态的【重试】（30701 不给重试）。
     @discardableResult
     public func retry() -> Bool {
-        guard !left, !cleared, ownerCurrent, !gate.active, snapshot.phase == .error else { return false }
+        guard !left, !cleared, !gate.active, snapshot.phase == .error, admitUser() else { return false }
         load(keep: false)
         return true
     }
@@ -116,7 +122,7 @@ public final class OrderDetailController: ObservableObject {
     /// 缓存态的【重试】与下拉刷新（共性第 26 条）：遵守共享禁用期；成功后更新内容与缓存、提示条消失。
     @discardableResult
     public func refresh() -> Bool {
-        guard !left, !cleared, ownerCurrent, !gate.active, [.content, .stale].contains(snapshot.phase) else {
+        guard !left, !cleared, !gate.active, [.content, .stale].contains(snapshot.phase), admitUser() else {
             return false
         }
         load(keep: true)
@@ -142,8 +148,9 @@ public final class OrderDetailController: ObservableObject {
         !Task.isCancelled && !left && !cleared && seq == round && snapshot.refreshing
     }
 
-    private func load(keep: Bool) {
+    func load(keep: Bool) {
         requests.cancelAll()
+        deferral.drop(Self.loadSlot)
         seq += 1
         let current = seq
         snapshot.toast = nil
@@ -158,8 +165,9 @@ public final class OrderDetailController: ObservableObject {
             return
         }
         let call = ApiCall(operationId: Self.operation, pathParams: ["order_id": orderId])
+        let owner = owner
         requests.send(api, call, gate: gate, owner: owner) { [weak self] result in
-            guard let self, !left, !cleared, ownerCurrent, current == seq else { return }
+            guard let self, !left, !cleared, current == seq, self.owner == owner, admitLoad(ownerCheck) else { return }
             settle(result, keep: keep)
         }
     }
@@ -202,14 +210,20 @@ public final class OrderDetailController: ObservableObject {
         snapshot.error = nil
         snapshot.phase = .content
         if let env, ownerCurrent {
-            cache?.writeDetail(account: owner.account, detail: detail, fetchedAt: env.now())
+            cache?.writeDetail(
+                account: owner.account,
+                loginEpoch: owner.loginEpoch,
+                detail: detail,
+                fetchedAt: env.now()
+            )
         }
         onLoaded?(detail)
     }
 
     /// 服务端错误或传输失败：30701 空态；42901 进共享禁用期；传输失败有缓存时显示缓存（stale）；其余错误态（带 trace6）。
     private func failed(_ result: ApiResult, keep: Bool) {
-        let cached = ownerCurrent ? cache?.readDetail(account: owner.account, orderId: orderId) : nil
+        let cached = ownerCurrent ? cache?
+            .readDetail(account: owner.account, loginEpoch: owner.loginEpoch, orderId: orderId) : nil
         let view = OrderErrorAction.view(
             target: OrderErrorAction.detail, result: result, hasCache: cached != nil, filtered: false
         )
@@ -297,6 +311,7 @@ public final class OrderDetailController: ObservableObject {
         cleared = true
         requests.cancelAll()
         seq += 1
+        deferral.reset()
         snapshot = OrderDetailSnapshot()
         snapshot.phase = .cleared
     }
@@ -309,6 +324,7 @@ public final class OrderDetailController: ObservableObject {
         seq += 1
         // 同步结束刷新状态：等待方不再依赖已被取消的响应（共性第 30 条）
         snapshot.refreshing = false
+        deferral.reset()
         subscriptions.removeAll()
     }
 }

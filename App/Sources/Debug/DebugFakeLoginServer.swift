@@ -30,11 +30,20 @@ final class DebugFakeLoginServer: URLProtocol {
 
     /// 启动参数里有 `-CouliFakeLoginServer` 时返回接管所有请求的会话配置；否则 nil。打开时从游客开始：清掉本机会话与
     /// pending_action（截图与 UI 测试每次冷启动状态一致）。
+    /// 假登录的 access_token（不是凭据）。
+    static let fakeTradeAccess = "debug-at-trade"
+
     static func configurationIfEnabled(
         arguments: [String] = ProcessInfo.processInfo.arguments
     ) -> URLSessionConfiguration? {
         guard arguments.contains(launchArgument) else { return nil }
-        try? SecureSessionTokens(store: KeychainStore()).clear()
+        let tokens = SecureSessionTokens.production()
+        // FU-IOS-0712：冷启动直接是已登录假账号时沿用上一次假登录的持久化登录世代（模拟同一次登录跨进程保留：断网冷启动读订单 / 钱包缓存
+        // 的截图与冒烟用例要它）；其余一律从游客开始
+        let keptEpoch = arguments.contains(DebugFakeTrade.loggedInArgument)
+            ? (try? tokens.readSession()).flatMap(\.self).flatMap { $0.access == fakeTradeAccess ? $0.loginEpoch : nil }
+            : nil
+        try? tokens.clear()
         UserDefaultsPendingBackend().delete()
         // APP-08：订单 Tab 的恢复记录每次冷启动从空开始（`-CouliFakeOrdersKeepState` 时保留，截进程恢复用）
         if !arguments.contains("-CouliFakeOrdersKeepState") {
@@ -45,8 +54,10 @@ final class DebugFakeLoginServer: URLProtocol {
         // APP-06b：购买场景（`-CouliFakeTradeLoggedIn` 冷启动直接是已登录的假账号，截购买流程用；假令牌不是凭据）。
         DebugFakeTrade.prepare(arguments: arguments)
         if arguments.contains(DebugFakeTrade.loggedInArgument) {
-            try? SecureSessionTokens(store: KeychainStore())
-                .save(access: "debug-at-trade", refresh: "debug-rt-trade", scope: "full", account: "debug-fake-user")
+            try? tokens.save(
+                access: fakeTradeAccess, refresh: "debug-rt-trade", scope: "full", account: "debug-fake-user",
+                loginEpoch: keptEpoch ?? SessionLoginEpoch.make()
+            )
             // APP-09（iOS R1-01）：未决记录默认保留（brief §0 第 3 条，冷启动照常恢复待确认）；只有截图 / 冒烟 UI 测试的夹具显式带
             // `-CouliFakeWalletResetPending` 时才清假账号的未决记录与金额草稿。
             DebugFakeWallet.prepareColdStart(arguments: arguments)

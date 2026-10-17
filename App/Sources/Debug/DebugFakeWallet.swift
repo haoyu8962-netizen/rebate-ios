@@ -83,10 +83,11 @@ final class DebugFakeWallet: @unchecked Sendable {
         for record in (try? backend.loadAll(account: account)) ?? [] {
             try? backend.delete(account: account, key: record.key)
         }
-        let draft = draftRoot
-            .appendingPathComponent(WalletCacheStore.hash(account), isDirectory: true)
-            .appendingPathComponent(WalletCacheStore.draftFile)
-        try? FileManager.default.removeItem(at: draft)
+        // 草稿按「账号 + 登录世代」分区（FU-IOS-0712）：删掉各分区目录里的草稿
+        let dirs = (try? FileManager.default.contentsOfDirectory(at: draftRoot, includingPropertiesForKeys: nil)) ?? []
+        for dir in dirs + [draftRoot.appendingPathComponent(WalletCacheStore.hash(account), isDirectory: true)] {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(WalletCacheStore.draftFile))
+        }
     }
 
     var options: [String: String] {

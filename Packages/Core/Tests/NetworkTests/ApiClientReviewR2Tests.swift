@@ -24,9 +24,13 @@ final class ApiClientReviewR2Tests: XCTestCase {
         let tokens = SecureSessionTokens(store: store)
         XCTAssertNil(try tokens.readSession(), "不存在 → nil")
         try tokens.save(access: "a", refresh: "r", scope: SessionScope.deletionOnly, account: "account-A")
+        // FU-IOS-0712：快照另带持久化登录世代（保存时新生成），按读出的世代比较其余字段
+        let epoch = try XCTUnwrap(try tokens.readSession()?.loginEpoch)
         XCTAssertEqual(
             try tokens.readSession(),
-            SessionSnapshot(access: "a", refresh: "r", scope: SessionScope.deletionOnly, account: "account-A")
+            SessionSnapshot(
+                access: "a", refresh: "r", scope: SessionScope.deletionOnly, account: "account-A", loginEpoch: epoch
+            )
         )
         store.failReads = true
         XCTAssertThrowsError(try tokens.readSession()) { error in

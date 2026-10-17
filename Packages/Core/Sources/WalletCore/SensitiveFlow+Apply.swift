@@ -221,6 +221,12 @@ extension SensitiveFlow {
                 state.phase = .editing
                 return
             }
+            // 共享结算还留着本操作的结果（RV-02）：补不上就不重放，原键保留、提示稍后再试
+            guard sharedSettled() else {
+                state.phase = .editing
+                state.error = notice(SensitiveOutcome.retryLaterKey)
+                return
+            }
             // 原键重放沿用点击时的身份（共性第 39 条）：发送前核对，换了会话的不发
             send(
                 click: click,
@@ -235,6 +241,12 @@ extension SensitiveFlow {
         // 恢复前核对：本机未决记录仍是同一个键、未结束（共性第 49 条）
         guard state.pending?.key == intent.key else {
             refreshPending()
+            return
+        }
+        // 共享结算还留着本操作的结果（RV-02，补修三）：先请 App 核对补结算；补不上不续发，原键保留在待确认卡上，提示稍后再试
+        guard sharedSettled() else {
+            markInFlight(false)
+            state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
         }
         intent.stepUpReplayed = true

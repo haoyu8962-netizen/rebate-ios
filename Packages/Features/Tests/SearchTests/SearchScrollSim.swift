@@ -21,8 +21,9 @@ final class FakeScrollView: UIScrollView {
 /// 模拟搜索结果列表（LazyVStack）：上内边距 16、卡高 `cardHeight`（默认 150；大字号时更高）、间距 12、底部 footer 60，
 /// 视口高 600；只上报视口上下 400pt 左右以内建出的卡（顶边在 (-550, 1000) 内）。scrollTo 与 SwiftUI ScrollViewProxy
 /// 一样把卡顶 / 底对齐并按内容限界。跟踪器的接线与 SearchView 相同（attach + setVisible + update / refresh）。
-/// 跟踪器安排的「下一轮主循环」经 `nextTurn` 接到这里：与真机一样，两轮主循环之间先提交一次排版（`layoutOnce`）；
-/// `beforeTurn` 在排版前执行，用来在任务的两个阶段之间插入用户滚动、盖住等操作。
+/// 跟踪器安排的「下一轮主循环」经 `nextTurn`、确认阶段的「下一帧」经 `nextFrame` 接到这里：缺省与真机一样，回调之前先提交一次排版
+/// （`layoutOnce`）；`layoutBeforeTurn = false` 时不排版（布局滞后，R1-06）。`beforeTurn` 在排版前执行，用来在任务的两个阶段之间插入
+/// 用户滚动、盖住等操作。scrollTo 到还没排版的卡不生效（ScrollViewProxy 不认识还没进布局的 id）。
 @MainActor
 final class ListSim {
     let scroll = FakeScrollView(frame: CGRect(x: 0, y: 0, width: 390, height: 600))
@@ -37,6 +38,13 @@ final class ListSim {
     var reportsFrames = true
     /// 列表底部额外的高度（模拟页尾加载状态切换、懒布局修正估算高度引起的内容高度变化；卡片框不变）。
     var extraHeight: CGFloat = 0
+    /// 为假时跟踪器安排的下一轮主循环 / 下一帧回调之前**不**排版（FU-IOS-0712 R1-06：模型已更新、列表布局滞后）；排版只在测试显式
+    /// 调 `layoutOnce` 时发生。
+    var layoutBeforeTurn = true
+    /// 已排版的卡数（最近一次 `layoutOnce` 时的条数）：scrollTo 到还没排版的卡不生效（与 ScrollViewProxy 一样，不认识的 id 不滚动）。
+    private(set) var laidOut = 0
+    /// scrollTo 被调用的次数（含没生效的）。
+    private(set) var scrollToCalls = 0
 
     init(page: SearchPageConfig, cardHeight: CGFloat = 150) {
         self.page = page
@@ -47,11 +55,14 @@ final class ListSim {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.beforeTurn?()
-                    self?.layoutOnce()
+                    if self?.layoutBeforeTurn == true {
+                        self?.layoutOnce()
+                    }
                     work()
                 }
             }
         }
+        tracker.nextFrame = tracker.nextTurn
         tracker.attach(page) { [weak self] index, anchor in self?.scrollTo(index, anchor: anchor) }
         tracker.setVisible(true)
     }
@@ -69,6 +80,8 @@ final class ListSim {
     }
 
     private func scrollTo(_ index: Int, anchor: UnitPoint) {
+        scrollToCalls += 1
+        guard index < laidOut else { return }
         let top = anchor == .bottom ? cardTop(index) + cardHeight - scroll.bounds.height : cardTop(index)
         scroll.contentOffset.y = min(max(top, 0), maxOffset)
     }
@@ -88,6 +101,7 @@ final class ListSim {
     func layoutOnce() {
         let height = page.controller.snapshot.items.isEmpty ? 0 : cardTop(count) + 60 + extraHeight
         scroll.contentSize = CGSize(width: 390, height: height)
+        laidOut = count
         if reportsFrames {
             tracker.update(frames())
         }

@@ -50,12 +50,35 @@ public struct FlowState: Equatable, Sendable {
     public var toast: Notice?
     /// 被拦下的自动引导（APP-09 共性第 51 条）：页面上给可点的手动入口，已填内容保留、不自动重提。
     public var guideRoute: String?
+    /// 写请求（提交、确认、放弃）已经结束、结果已到，但身份暂时未知、还没采用（FU-IOS-0712 重理后补修 RW-03）：不再显示「提交中」，
+    /// 页面给【重试】核对身份（`SensitiveFlow.recheckIdentity`）；确认后采用原结果，不重发写请求。按钮仍不可用（不换键重提）。
+    public var awaitingIdentity = false
     /// 本表单所属的身份（APP-09 共性第 52 条）：按钮回调带上它，执行前核对。
     public var owner: WalletOwner
 
+    /// 新提交可用：可编辑、没有待确认、记录读得出，且没有「结果待身份确认」的写结果（RV-01：待落地结果是独立的提交锁，未决记录
+    /// 消失也不解除）。
     public var canSubmit: Bool {
-        phase == .editing && pending == nil && !pendingUnreadable
+        phase == .editing && pending == nil && !pendingUnreadable && !awaitingIdentity
     }
+
+    /// 待确认卡转圈：确认 / 放弃请求仍在途才转；结果已到、待身份确认时停转（RV-04）。
+    public var pendingCardBusy: Bool {
+        pending?.inFlight == true && !awaitingIdentity
+    }
+
+    /// 待确认卡【确认上一笔】/【放弃】可用：不在途、也没有待身份确认的结果（RV-04：停转圈但继续禁用）。
+    public var pendingActionsEnabled: Bool {
+        pending?.inFlight == false && !awaitingIdentity
+    }
+}
+
+/// 一次提交的结果（身份暂时未知时原样留到身份确认后采用）。
+struct SubmitArrival {
+    let result: ApiResult
+    let outcome: Outcome?
+    let replayed: Bool
+    let probe: SendProbe
 }
 
 /// 一次提交的原键、原请求体与展示摘要（二次验证后沿用原键、原体重放）。
@@ -121,6 +144,9 @@ public final class SensitiveFlow: ObservableObject {
     var localBusy = false
     var refreshSerial = 0
     var unsubscribe: (() -> Void)?
+    /// 身份暂时未知时中止的待确认记录读取、迟到的提交 / 确认 / 放弃结果（FU-IOS-0712 整体重理：与各资金页同一套机制）。写请求不重放，
+    /// 只在身份确认后、仍是本表单身份时采用已到的结果。
+    public let deferral = IdentityDeferral()
 
     init(deps: WalletDeps, operationId: String, action: String, outcomeOp: String, gate: RetryAfterGate,
          marksWalletDirty: Bool, alive: @escaping () -> Bool, owner: WalletOwner) {
@@ -170,6 +196,11 @@ public final class SensitiveFlow: ObservableObject {
     /// 用户点【提交】（【保存】）。`body` 原始请求体（签名与重放都用这份），`summary` 未决记录的展示摘要，`owner` 渲染这张表单时的身份。
     func submit(body: String, summary: String, owner: WalletOwner) {
         guard alive(), state.canSubmit else { return }
+        // 共享结算还留着本操作的结果（如 42901 禁用期，RV-02）：先请 App 核对身份补结算；补不上就不发
+        guard sharedSettled() else {
+            state.error = notice(SensitiveOutcome.retryLaterKey)
+            return
+        }
         if gate.active {
             state.error = notice("error.42901")
             return
@@ -193,6 +224,8 @@ public final class SensitiveFlow: ObservableObject {
     /// `replayed`：这次是本次用户提交在二次验证之后的原键重放（10003 重放预算已用，共性第 16 条）。请求不随页面取消（共性第 40 条），
     /// 带点击时的网络归属（共性第 39 条）。
     func send(click: WalletOwner, payload: Submission, token: String?, replayed: Bool) {
+        // 还有待身份确认的写结果（RV-01）：不发任何新的写请求（页面保持等待，出口是身份核对）
+        guard !state.awaitingIdentity else { return }
         // 发送前核对：会话已换（二次验证期间、排队期间）的不发，键不用了
         guard deps.env.isCurrent(click), let account = click.account else {
             reuseKey = nil
@@ -218,9 +251,8 @@ public final class SensitiveFlow: ObservableObject {
                 input: WalletErrors.outcomeInput(result)
             )
             settlement.settleWrite(ticket, result, outcome, consumesToken: true)
-            if let self, alive(), deps.env.isCurrent(click) {
-                onSubmitResult(result, outcome, replayed: replayed, probe: probe)
-            }
+            let arrival = SubmitArrival(result: result, outcome: outcome, replayed: replayed, probe: probe)
+            self?.submitArrived(arrival, click)
             // 结算通知放在本页处理完之后（共性第 1 条）
             deps.pending.send(PendingSettled(account: account, operationId: operationId))
         }
@@ -237,6 +269,43 @@ public final class SensitiveFlow: ObservableObject {
     /// 进强更（已有分流）。
     func writeTicket(_ click: WalletOwner) -> WriteTicket {
         WriteTicket(owner: click, action: action, gate: gate, marksWalletDirty: marksWalletDirty)
+    }
+
+    /// 提交结果的身份核对：暂时未知 → 不采用、记下（提交中保持；身份确认后仍是点击时的会话才采用，不重放）；已换代 → 丢弃。
+    func submitArrived(_ arrival: SubmitArrival, _ click: WalletOwner) {
+        guard alive(), deferral.admit(deps.env.check(click), slot: "submit", resume: { [weak self] in
+            self?.submitArrived(arrival, click)
+        }, settle: {
+            state.awaitingIdentity = true
+        }) else { return }
+        let held = state.awaitingIdentity
+        state.awaitingIdentity = false
+        onSubmitResult(arrival.result, arrival.outcome, replayed: arrival.replayed, probe: arrival.probe)
+        // 等身份期间没让本机未决记录改页面（RV-01）：结果采用后再按记录同步一次
+        if held {
+            refreshPending()
+        }
+    }
+
+    /// 本操作的共享结算已落地（RV-02）：会话级服务还留着这个禁用期上的结果时先请 App 核对一次身份（确认后按原截止补结算）；
+    /// 仍留着（身份仍未知）返回 false，写入口不发。
+    func sharedSettled() -> Bool {
+        guard deps.settlement.holds(gate) else { return true }
+        deps.env.recheckIdentity()
+        return !deps.settlement.holds(gate)
+    }
+
+    /// 本页的核对入口（RW-03）：写请求已结束、等身份确认时，用户点【重试】请 App 立即核对一次身份（确认后共享结算与本页结果一并采用，
+    /// 不重发写请求）。
+    public func recheckIdentity() {
+        guard alive(), state.awaitingIdentity else { return }
+        deps.env.recheckIdentity()
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的待确认记录读取、采用身份未知时到达的结果。
+    public func resumeAfterIdentityConfirmed() {
+        guard alive() else { return }
+        deferral.resume()
     }
 
     func onSubmitResult(_ result: ApiResult, _ outcome: Outcome?, replayed: Bool, probe: SendProbe) {

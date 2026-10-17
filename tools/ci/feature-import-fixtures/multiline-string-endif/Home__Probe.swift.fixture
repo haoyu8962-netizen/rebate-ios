@@ -1,0 +1,6 @@
+let text = """
+#endif
+"""
+#if NEVER_DEFINED
+import Search
+#endif

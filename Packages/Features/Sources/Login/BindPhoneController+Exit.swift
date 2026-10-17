@@ -25,17 +25,23 @@ extension BindPhoneController {
     /// appeared；仍隐藏就记下发起身份延后（APP-05b 共性第 25、26 条，鸿蒙 FU-HM-0720 R1-01 / R1-02 同口径）。
     func boundArrived(_ kind: BindExitKind) {
         guard alive, !exited else { return }
-        if visibleNow {
-            exitNow(kind)
-        } else {
+        if !exitNow(kind), deferredExit == nil, !visibleNow {
             deferredExit = BindDeferredExit(owner: owner, kind: kind)
         }
     }
 
-    /// 核对后退出一次；返回是否已退出。
+    /// 核对后退出一次；返回是否已退出。F-IOS-12：所有退出入口（结果到达、appeared 消费延后记录、recheckBound、共享通知）都在这里
+    /// 统一核对 `visibleNow`（存活、可见、栈顶、前台）。没有页面许可时不退出：已有延后记录就**保留原记录与原退出方式**（不被后来的
+    /// resumeOnly 覆盖），没有才按本次方式记下；恢复（下一次 appeared）后由同一身份消费一次。
     @discardableResult
     func exitNow(_ kind: BindExitKind) -> Bool {
         guard boundExitAllowed else { return false }
+        guard visibleNow else {
+            if deferredExit == nil {
+                deferredExit = BindDeferredExit(owner: owner, kind: kind)
+            }
+            return false
+        }
         exited = true
         deferredExit = nil
         switch kind {

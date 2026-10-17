@@ -21,6 +21,8 @@ struct WalletAppFixture {
     let wallet: AppWallet
     let routing: AppRouting
     let tokens: MemorySessionTokens
+    /// 网络层实际用的令牌存储（包着 `tokens`，记读取次数；末轮窄修二用 `failRead(nth:)` 让某一次读取暂时失败）。
+    let store: CountingSessionTokens
     let network: AppNetwork
     let login: AppLogin
     let runner: WithdrawalCleanupRunner
@@ -42,17 +44,25 @@ struct WalletAppFixture {
     }
 
     /// `pending` 传入同一个未决记录后端可模拟「杀进程后冷启动」：新组合（新的 ApiClient 与 AppWallet）读同一份本机记录。
+    /// `cacheFlag`：缓存目录之外的待清理标记（nil = 缺省文件标记；FU-IOS-0712 R1-01 用它在写入路径里插入交错）。
     static func make(suiteName: String, defaults: UserDefaults, account: String = "user-a",
-                     pending: MemoryPendingKeyBackend = MemoryPendingKeyBackend()) -> WalletAppFixture {
-        let tokens = MemorySessionTokens(access: "at", refresh: "rt", scope: "full", account: account)
+                     pending: MemoryPendingKeyBackend = MemoryPendingKeyBackend(),
+                     cacheFlag: OrderPendingClearFlag? = nil, scope: String = "full",
+                     unknownIdentityAtInit: Bool = false) -> WalletAppFixture {
+        let tokens = MemorySessionTokens()
+        // FU-IOS-0712：同一账号的夹具代表同一次登录（「杀进程后冷启动」读同一份会话，持久化登录世代相同）；换账号另有世代
+        try? tokens.save(
+            access: "at", refresh: "rt", scope: scope, account: account, loginEpoch: "fixture-login-\(account)"
+        )
         let withdrawal = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
         let environmentSwitch = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
         let privacyStore = MemoryPrivacyStore()
         privacyStore.decisionRaw = "consented"
         privacyStore.consentedVersion = "1"
         let runner = WithdrawalCleanupRunner(store: privacyStore, registry: withdrawal)
+        let store = CountingSessionTokens(tokens)
         let network = AppNetwork(
-            tokens: tokens, pendingBackend: pending, device: Device(), withdrawalRegistry: withdrawal,
+            tokens: store, pendingBackend: pending, device: Device(), withdrawalRegistry: withdrawal,
             environmentRegistry: environmentSwitch, credentialsReadable: { runner.credentialsReadable },
             configuration: WalletStubProtocol.configuration()
         )
@@ -71,14 +81,16 @@ struct WalletAppFixture {
         // 已登录的是短信登录的账号（一定绑了手机号）：守卫按已绑手机（APP-05b：phone_bound 未知按未绑，共性第 13 条）
         login.phone.record(true, generation: network.client.sessionGeneration)
         routing.shellAppeared()
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(suiteName)
-            .appendingPathComponent("wallet")
-        let cleaner = WalletCacheCleaner(store: WalletCacheStore(root: root))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(suiteName + "/wallet")
+        let cleaner = WalletCacheCleaner(store: WalletCacheStore(root: root, flag: cacheFlag))
         WalletCacheCleaner.register(cleaner, withdrawal: withdrawal, environmentSwitch: environmentSwitch)
+        // FU-IOS-0712 末轮 R3-02：生产初始化时 Keychain 暂时读失败（身份暂时未知），初始化之后恢复
+        tokens.failReads = unknownIdentityAtInit ? .readFailed : nil
         let wallet = AppWallet(
             network: network, config: config, routing: routing, login: login, mask: AmountMaskStore(defaults: defaults),
             cleaner: cleaner, credentialsReadable: { runner.credentialsReadable }
         )
+        tokens.failReads = nil
         let system = RecordingClipboard()
         let ledgerStore = MemoryClipboardHashStore()
         wallet.writer = ClipboardWriter(system: system, ledger: ClipboardWriteLedger(store: ledgerStore))
@@ -86,9 +98,9 @@ struct WalletAppFixture {
         wallet.track = { tracked.events.append($0) }
         wallet.phoneProvider = { _ in "13800005678" }
         return WalletAppFixture(
-            wallet: wallet, routing: routing, tokens: tokens, network: network, login: login, runner: runner,
-            withdrawal: withdrawal, environmentSwitch: environmentSwitch, cleaner: cleaner, pendingBackend: pending,
-            system: system, ledgerStore: ledgerStore, tracked: tracked
+            wallet: wallet, routing: routing, tokens: tokens, store: store, network: network, login: login,
+            runner: runner, withdrawal: withdrawal, environmentSwitch: environmentSwitch, cleaner: cleaner,
+            pendingBackend: pending, system: system, ledgerStore: ledgerStore, tracked: tracked
         )
     }
 

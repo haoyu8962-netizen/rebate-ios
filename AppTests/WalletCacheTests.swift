@@ -81,15 +81,22 @@ final class WalletCacheTests: XCTestCase {
         let controller = try openWallet(fixture)
         controller.load()
         await waitUntil { controller.state.summary != nil }
-        XCTAssertNotNil(fixture.cleaner.store.read(account: "user-a"))
+        // FU-IOS-0712 R1-01：缓存读写必须带固定身份的登录世代（原来存储自己读当前世代）；这里取页面固定身份的那一份，断言不变
+        let ownerA = controller.state.owner
+        XCTAssertNotNil(fixture.cleaner.store.read(account: "user-a", loginEpoch: ownerA.loginEpoch))
         try fixture.switchAccount(to: "user-b")
-        XCTAssertNil(fixture.cleaner.store.read(account: "user-a"), "换账号删除别的账号的缓存")
+        XCTAssertNil(
+            fixture.cleaner.store.read(account: "user-a", loginEpoch: ownerA.loginEpoch), "换账号删除别的账号的缓存"
+        )
         // 撤回同意：清理注册表里的钱包清理项删缓存，并作废内存里的页面
         controller.load()
         await waitUntil { controller.state.summary != nil && controller.state.owner.account == "user-b" }
-        XCTAssertNotNil(fixture.cleaner.store.read(account: "user-b"))
+        let ownerB = controller.state.owner
+        XCTAssertNotNil(fixture.cleaner.store.read(account: "user-b", loginEpoch: ownerB.loginEpoch))
         try fixture.cleaner.cleanForEnvironmentSwitch()
-        XCTAssertNil(fixture.cleaner.store.read(account: "user-b"), "切换环境 / 撤回同意的清理项删除缓存")
+        XCTAssertNil(
+            fixture.cleaner.store.read(account: "user-b", loginEpoch: ownerB.loginEpoch), "切换环境 / 撤回同意的清理项删除缓存"
+        )
         XCTAssertEqual(fixture.wallet.clearedCount, 1)
         XCTAssertNil(controller.state.summary, "清理后内存里的显示同步作废")
     }

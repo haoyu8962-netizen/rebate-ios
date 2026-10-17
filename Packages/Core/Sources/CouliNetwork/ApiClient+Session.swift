@@ -5,18 +5,21 @@ import Session
 extension ApiClient {
     // MARK: - 会话读取（作废的会话不可读）
 
-    /// 一份会话快照（同一次 Keychain 读取的四项；空串按没有）。
+    /// 一份会话快照（同一次 Keychain 读取的各项；空串按没有）。
     struct LiveSession: Equatable {
         let access: String?
         let refresh: String?
         let scope: String?
         let account: String?
+        /// 持久化登录世代（FU-IOS-0712；升级前的会话为 nil）。
+        let loginEpoch: String?
 
-        init(access: String?, refresh: String?, scope: String?, account: String?) {
+        init(access: String?, refresh: String?, scope: String?, account: String?, loginEpoch: String? = nil) {
             self.access = access
             self.refresh = refresh
             self.scope = scope
             self.account = account
+            self.loginEpoch = loginEpoch
         }
 
         init(_ snapshot: SessionSnapshot) {
@@ -24,6 +27,7 @@ extension ApiClient {
             refresh = snapshot.refresh.isEmpty ? nil : snapshot.refresh
             scope = snapshot.scope.isEmpty ? nil : snapshot.scope
             account = snapshot.account
+            loginEpoch = snapshot.loginEpoch.flatMap { $0.isEmpty ? nil : $0 }
         }
     }
 
@@ -203,6 +207,28 @@ public extension ApiClient {
     var isolatedAccount: String? {
         lock.withLock {
             readBarrier ? nil : readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 }
+        }
+    }
+
+    /// 持久化登录世代（FU-IOS-0712，跨端教训 2、9）：与会话可用性同一口径、同一把锁里读——撤回禁读屏障竖着、凭据不可读
+    /// （`credentialsReadable` 由调用方传入此刻 `WithdrawalCleanupRunner.credentialsReadable`）、隔离中（清会话删除失败）、读取失败、
+    /// 内容损坏、被撤销标记阻断、没有令牌、升级前没有世代的会话 → nil。按账号分区的本机缓存只经它取世代，nil 一律不读不写。
+    func sessionLoginEpoch(credentialsReadable: Bool) -> String? {
+        lock.withLock {
+            guard credentialsReadable, !readBarrier, let live = readSessionLocked().live,
+                  live.access != nil, live.refresh != nil
+            else { return nil }
+            return live.loginEpoch
+        }
+    }
+
+    /// 给定账号此刻的持久化登录世代：会话账号就是它时才给（同一次读取里核对账号与取世代），其余同 `sessionLoginEpoch`。
+    func loginEpoch(forAccount account: String, credentialsReadable: Bool) -> String? {
+        lock.withLock {
+            guard credentialsReadable, !readBarrier, !account.isEmpty, let live = readSessionLocked().live,
+                  live.access != nil, live.refresh != nil, live.account == account
+            else { return nil }
+            return live.loginEpoch
         }
     }
 

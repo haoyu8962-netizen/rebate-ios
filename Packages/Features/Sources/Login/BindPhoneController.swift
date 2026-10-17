@@ -177,9 +177,11 @@ public final class BindPhoneController: ObservableObject {
         now = service.clock()
         restartTicker()
         if let deferred = deferredExit {
-            // 延后的退出只由记下它的同一身份消费，消费时重核（R3-01，鸿蒙 FU-HM-0720 R1-02 同口径）
-            deferredExit = nil
-            if deferred.owner == owner, exitNow(deferred.kind) {
+            // 延后的退出只由记下它的同一身份消费，消费时重核（R3-01，鸿蒙 FU-HM-0720 R1-02 同口径）。F-IOS-12：appeared 时仍可能
+            // inactive / 不在栈顶——exitNow 统一核对 visibleNow，没有许可时原记录（含原退出方式）保留，等下一次恢复再消费
+            if deferred.owner != owner || !boundExitAllowed {
+                deferredExit = nil
+            } else if exitNow(deferred.kind) {
                 return
             }
         }
@@ -217,7 +219,8 @@ public final class BindPhoneController: ObservableObject {
     /// inactive 期间返回、当时没有许可时，回到前台由这里补处理）；仍未知时只在首次查一次 getMe，结果只交给发起时的同一实例与可见世代。
     private func recheckBound() {
         let generation = owner.request.generation
-        if exitNow(.resumeOnly) {
+        // F-IOS-12：共享已绑时同样经 exitNow 核对 visibleNow；没有许可时记下延后（只恢复），不再发查询
+        if exitNow(.resumeOnly) || deferredExit != nil {
             return
         }
         guard !rechecked, service.store.bound(generation: generation) == nil else { return }

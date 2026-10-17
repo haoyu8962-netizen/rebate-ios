@@ -287,7 +287,8 @@ public enum MeResultInput {
         case let .failure(code, msg, data, traceId, effect, _):
             var out: [String: Any] = [
                 "kind": "error",
-                "code": code,
+                // 非强更的 10405 按 5xxxx 交写结果表（统一错误 + trace6，F-X-09）
+                "code": NonForcedUpdate.pageCode(code: code, effect: effect),
                 "data": MeJson.object(data) ?? NSNull(),
                 "msg": msg,
             ]

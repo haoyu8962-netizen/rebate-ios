@@ -22,7 +22,7 @@ public struct LaborSnapshot: Equatable, Sendable {
 /// 【同意并签署】可用；签署成功后出栈回 Withdraw（不重放、由用户再点【提交】）。接口契约没有（G02）：只由 Debug 假服务实现（`LaborBackend`）；
 /// Release 全文区显示「协议正文暂未提供」，【同意并签署】置灰，不发请求。sha256 取服务端返回的值原样回传。只在主线程使用。
 @MainActor
-public final class LaborAgreementController: ObservableObject {
+public final class LaborAgreementController: ObservableObject, IdentityResumable {
     @Published public private(set) var state: LaborSnapshot
     let deps: WalletDeps
     public var page: UUID?
@@ -31,6 +31,8 @@ public final class LaborAgreementController: ObservableObject {
     private var serial = 0
     private var loadSeq = 0
     private var deferredBack = false
+    /// 因身份暂时未知中止的读取与签署结果（FU-IOS-0712 整体重理：与各资金页同一套机制；签署不重放，只在身份确认后采用已到的结果）。
+    public let deferral = IdentityDeferral()
 
     public init(deps: WalletDeps) {
         self.deps = deps
@@ -49,8 +51,8 @@ public final class LaborAgreementController: ObservableObject {
     public func load() {
         guard let backend = deps.labor, !left else { return }
         let owner = state.owner
-        // 当前会话已不是本页身份：不读，内容不绑到别的账号
-        guard deps.env.isCurrent(owner) else { return }
+        // 当前会话已不是本页身份：不读，内容不绑到别的账号；身份暂时未知：记待补取并结算为可重试的失败态
+        guard admitLoad(deps.env.check(owner)) else { return }
         if deps.gates.read.active {
             serial += 1
             state.phase = .error
@@ -64,9 +66,35 @@ public final class LaborAgreementController: ObservableObject {
         state.error = nil
         Task { @MainActor [weak self] in
             let result = await backend.current(owner: owner.request)
-            guard let self, !left, loadSeq == request, state.owner == owner, deps.env.isCurrent(owner) else { return }
+            guard let self, !left, loadSeq == request, state.owner == owner, admitLoad(deps.env.check(owner)) else {
+                return
+            }
             loaded(result)
         }
+    }
+
+    /// 页面【重试】：照常读取；身份暂时未知时请 App 立即核对一次。
+    public func retry() {
+        load()
+        if deferral.isPending {
+            deps.env.recheckIdentity()
+        }
+    }
+
+    /// 身份确认之后（App 的会话核对，判据相同也调）：补做中止的读取、采用身份未知时到达的签署结果。
+    public func resumeAfterIdentityConfirmed() {
+        guard !left else { return }
+        deferral.resume()
+    }
+
+    /// 读取的身份核对：暂时未知 → 记待补取，没有内容时结算为可重试的失败态（不是无出口的加载）；已换代 → 丢弃。
+    private func admitLoad(_ check: IdentityCheck) -> Bool {
+        deferral.admit(check, slot: "current", resume: { [weak self] in self?.load() }, settle: {
+            if state.phase != .content {
+                state.phase = .error
+                state.error = nil
+            }
+        })
     }
 
     private func loaded(_ result: ApiResult) {
@@ -106,9 +134,17 @@ public final class LaborAgreementController: ObservableObject {
         state.error = nil
         Task { @MainActor [weak self] in
             let result = await backend.sign(version: version, textSha256: sha, owner: owner.request)
-            guard let self, !left, state.owner == owner, deps.env.isCurrent(owner) else { return }
-            signed(result)
+            self?.signArrived(result, owner: owner)
         }
+    }
+
+    /// 签署结果的身份核对：暂时未知 → 不采用、记下（身份确认后仍是本页身份才采用，不重放签署）；已换代 → 丢弃。
+    private func signArrived(_ result: ApiResult, owner: WalletOwner) {
+        guard !left, state.owner == owner else { return }
+        guard deferral.admit(deps.env.check(owner), slot: "sign", resume: { [weak self] in
+            self?.signArrived(result, owner: owner)
+        }) else { return }
+        signed(result)
     }
 
     private func signed(_ result: ApiResult) {
@@ -145,6 +181,7 @@ public final class LaborAgreementController: ObservableObject {
         guard !left else { return }
         deferredBack = false
         loadSeq += 1
+        deferral.reset()
         state = LaborSnapshot(phase: deps.labor == nil ? .unavailable : .loading, owner: owner)
         load()
     }
@@ -152,5 +189,6 @@ public final class LaborAgreementController: ObservableObject {
     public func leave() {
         left = true
         loadSeq += 1
+        deferral.reset()
     }
 }

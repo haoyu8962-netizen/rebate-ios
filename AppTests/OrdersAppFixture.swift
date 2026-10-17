@@ -35,7 +35,10 @@ struct OrdersAppFixture {
         var installSecret: String? = "test-only.install.device-a"
     }
 
-    static func make(suiteName: String, defaults: UserDefaults) -> OrdersAppFixture {
+    /// `cacheFlag`：缓存目录之外的待清理标记（nil = 缺省文件标记；FU-IOS-0712 R1-01 用它在写入路径里插入交错）。
+    static func make(
+        suiteName: String, defaults: UserDefaults, cacheFlag: OrderPendingClearFlag? = nil
+    ) -> OrdersAppFixture {
         let tokens = MemorySessionTokens(access: "at", refresh: "rt", scope: "full", account: "user-a")
         let store = CountingSessionTokens(tokens)
         let withdrawal = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: store)])
@@ -65,7 +68,7 @@ struct OrdersAppFixture {
         let cache = OrderCacheStore(
             root: FileManager.default.temporaryDirectory.appendingPathComponent(suiteName)
                 .appendingPathComponent("orders"),
-            legacyPageStateDefaults: defaults
+            flag: cacheFlag, legacyPageStateDefaults: defaults
         )
         let cleaner = OrderCacheCleaner(store: cache)
         let orders = AppOrders(
@@ -84,6 +87,10 @@ final class CountingSessionTokens: SessionTokens, @unchecked Sendable {
     private let inner: MemorySessionTokens
     private let lock = NSLock()
     private var count = 0
+    /// 第几次读取（按 `reads` 计数）抛读取失败（FU-IOS-0712 R3-01：只让某一次读取暂时失败）。
+    private var failAt: Int?
+    /// 从第几次读取起持续失败（含），直到 `stopFailing()`（末轮窄修二 RC-03：换代识别那次之后的读取全部暂时失败，与读取次数无关）。
+    private var failFrom: Int?
 
     init(_ inner: MemorySessionTokens) {
         self.inner = inner
@@ -93,13 +100,38 @@ final class CountingSessionTokens: SessionTokens, @unchecked Sendable {
         lock.withLock { count }
     }
 
+    /// 从现在起的第 `nth` 次读取暂时失败一次（其余照常）。
+    func failRead(nth: Int) {
+        lock.withLock { failAt = count + nth }
+    }
+
+    /// 从现在起的第 `nth` 次读取开始持续失败，直到 `stopFailing()`。
+    func failReads(fromNth nth: Int) {
+        lock.withLock { failFrom = count + nth }
+    }
+
+    func stopFailing() {
+        lock.withLock { failFrom = nil }
+    }
+
     func readSession() throws -> SessionSnapshot? {
-        lock.withLock { count += 1 }
+        let fail = lock.withLock { () -> Bool in
+            count += 1
+            return count == failAt || failFrom.map { count >= $0 } == true
+        }
+        if fail {
+            throw SessionReadError.readFailed
+        }
         return try inner.readSession()
     }
 
     func save(access: String, refresh: String, scope: String, account: String?) throws {
         try inner.save(access: access, refresh: refresh, scope: scope, account: account)
+    }
+
+    /// FU-IOS-0712：带登录世代的写入原样转给内层（刷新沿用世代）。
+    func save(access: String, refresh: String, scope: String, account: String?, loginEpoch: String?) throws {
+        try inner.save(access: access, refresh: refresh, scope: scope, account: account, loginEpoch: loginEpoch)
     }
 
     func clear() throws {

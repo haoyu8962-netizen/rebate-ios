@@ -170,6 +170,56 @@ if bad:
     python3 "$ROOT/tools/ci/check-feature-imports.py" "$ROOT/Packages/Features/Sources"
 }
 
+# check-feature-imports 违反样例（FU-IOS-0712，F-IOS-01 / F-X-07；第 1 轮修复 R1-02 加 4 个注释 / 字符串边界样例）：tools/ci/feature-import-fixtures/ 下每个样例还原成临时的
+# Features/Sources（`<Feature>__<文件名>.fixture`，另补 Search 模块），退出码必须等于 expect；单独 CR 样例先核对 CR 字节确实在。
+# 再现造两种 git 存不了的目录树故障（子目录 chmod 000、chmod 444），必须退出 4（扫不完整），不能放行也不能只报违反。
+feature_import_fixtures() {
+    local fixtures="$ROOT/tools/ci/feature-import-fixtures" dir name expect tmp file base feature code found=0
+    python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if b"\r" in d and b"\r\n" not in d else 1)' \
+        "$fixtures/lone-cr-inactive-branch/Home__Probe.swift.fixture" || { echo "单独 CR 样例里没有单独 CR 字节"; return 1; }
+    # 评审 R1-02 原样例必须逐字节原样（注释里的指令记号改变注释边界）
+    python3 -c 'import sys; sys.exit(0 if open(sys.argv[1],"rb").read() == b"/* #if note */\n#if NEVER_DEFINED\nimport Search\n#endif\n// */\n" else 1)' \
+        "$fixtures/comment-marker-moves-boundary/Home__Probe.swift.fixture" || { echo "R1-02 原样例内容不对"; return 1; }
+    for dir in "$fixtures"/*/; do
+        name="$(basename "$dir")"
+        expect="$(cat "$dir/expect")" || return 1
+        tmp="$(mktemp -d "${TMPDIR:-/tmp}/couli-feature-fixture.XXXXXX")" || return 1
+        mkdir -p "$tmp/Sources/Search" && printf '%s\n' "public struct SearchScreen {}" >"$tmp/Sources/Search/SearchScreen.swift" || return 1
+        for file in "$dir"*.fixture; do
+            base="$(basename "$file" .fixture)"
+            feature="${base%%__*}"
+            mkdir -p "$tmp/Sources/$feature" && cp "$file" "$tmp/Sources/$feature/${base#*__}" || return 1
+        done
+        python3 "$ROOT/tools/ci/check-feature-imports.py" "$tmp/Sources"
+        code=$?
+        rm -rf "$tmp"
+        if [ "$code" != "$expect" ]; then
+            echo "样例 ${name}：退出 ${code}，应为 ${expect}"
+            return 1
+        fi
+        echo "ok：样例 ${name} 退出 ${code}"
+        found=$((found + 1))
+    done
+    [ "$found" -ge 9 ] || { echo "样例不全（${found} 个）"; return 1; }
+    for mode in 000 444; do
+        tmp="$(mktemp -d "${TMPDIR:-/tmp}/couli-feature-fixture.XXXXXX")" || return 1
+        mkdir -p "$tmp/Sources/Search" "$tmp/Sources/Home/Locked/Nested" || return 1
+        printf '%s\n' "public struct SearchScreen {}" >"$tmp/Sources/Search/SearchScreen.swift"
+        printf '%s\n' "import SwiftUI" >"$tmp/Sources/Home/Ok.swift"
+        printf '%s\n' "import Search" >"$tmp/Sources/Home/Locked/Hidden.swift"
+        chmod "$mode" "$tmp/Sources/Home/Locked"
+        python3 "$ROOT/tools/ci/check-feature-imports.py" "$tmp/Sources"
+        code=$?
+        chmod 755 "$tmp/Sources/Home/Locked"
+        rm -rf "$tmp"
+        if [ "$code" != 4 ]; then
+            echo "目录 chmod ${mode}：退出 ${code}，应为 4（扫不完整）"
+            return 1
+        fi
+        echo "ok：目录 chmod ${mode} 退出 4"
+    done
+}
+
 # 构建级负向验收：在 Home 里临时放一个探针文件，内容是评审 R2-01 的漏检写法
 # `func …() { _ = #/https://example.com/# }; import /* probe */ Search`（此时 Search 模块已构建好、
 # 对 Home 隐式可见），普通 Debug 构建必须失败，且失败来自每次构建都跑的 Feature 隔离检查。
@@ -412,10 +462,12 @@ check_lock() {
 }
 
 step "快照与 contract.lock 一致（按锁定提交重建核对）" check_lock
+step "源码树可完整读取（自测 + 全仓，F-X-07）" bash -c 'python3 tools/ci/check-source-tree.py --self-test && python3 tools/ci/check-source-tree.py'
 step "swiftformat --lint" swiftformat --lint .
 step "swiftlint --strict" swiftlint lint --strict --no-cache
 step "lint 违反样例必须被拦" lint_fixtures
 step "Feature 之间无依赖（依赖图 + import 检查自测 + 源码）" feature_isolation
+step "check-feature-imports 违反样例必须被拦（含扫不完整退出 4）" feature_import_fixtures
 step "gen.py --check" python3 tools/codegen/gen.py --check
 step "gen.py 命名冲突探针（test_gen.py）" python3 tools/codegen/test_gen.py
 step "xcodegen generate" xcodegen generate
@@ -432,7 +484,10 @@ if [ "$FAST" -eq 0 ]; then
     step "release-scan 授权检查 grep 出错时必须失败（假 grep 返回 2）" release_scan_grep_failure
     DEST="$(pick_simulator)" || { RESULTS+=("FAIL  选择模拟器"); echo "$DEST"; summary; exit 1; }
     echo "    模拟器：$DEST"
-    step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" test
+    # FU-IOS-0712（F-IOS-10）：打开用例超时——UITests 每用例上限由测试包自己设（UITestTimeouts，480 秒），其余用例按 600 秒；
+    # 卡住的用例在上限内判失败，不再单个跑上千秒
+    step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 test
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \

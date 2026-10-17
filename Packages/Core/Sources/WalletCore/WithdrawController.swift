@@ -59,7 +59,7 @@ public struct WithdrawSnapshot: Equatable, Sendable {
 ///   并标记钱包需要刷新。
 /// 读请求绑定页面实例与固定身份；页面出栈（同步出口）后读请求作废。只在主线程使用。
 @MainActor
-public final class WithdrawController: ObservableObject {
+public final class WithdrawController: ObservableObject, IdentityResumable {
     public static let operation = "createWithdrawal"
     public static let action = "withdraw"
     static let rulesOperation = "getWithdrawRules"
@@ -77,6 +77,8 @@ public final class WithdrawController: ObservableObject {
     var seq: Int64 = 0
     var appliedSeq: Int64 = 0
     var payoutSeq = 0
+    /// rules / 收款账号读取因身份暂时未知而中止、等身份确认后补做（FU-IOS-0712 整体重理：与钱包摘要、各资金页同一套机制）。
+    public let deferral = IdentityDeferral()
     var blockedAtSeq = Int64.max
     var estimateTask: Task<Void, Never>?
     let requests = WalletRequests()
@@ -108,7 +110,8 @@ public final class WithdrawController: ObservableObject {
 
     /// 进入页面：取 rules（带上恢复的合法金额）、收款账号、未决记录。
     public func start() {
-        guard !left, flow.owner.account != nil else { return }
+        // 已确认没有会话的表单不读；身份暂时未知时构造的表单照常核对（结算为可重试，身份确认后由 App 换上身份）
+        guard !left, flow.owner.account != nil || !flow.owner.identityKnown else { return }
         state.slaText = deps.env.configText("withdraw.sla_text")
         state.helpTarget = HelpLink.target(deps.env.helpLinks(), key: HelpLink.withdrawRules)
         let api = deps.api

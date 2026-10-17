@@ -44,12 +44,17 @@ final class AppWallet: ObservableObject, WalletEnv {
     var meReadGate: RetryAfterGate?
     /// 撤回同意的清理已完成、会话凭据可读（生产为 `PrivacyWithdrawalCleanup.runner`；测试注入）。
     let credentialsReadable: @MainActor () -> Bool
+    /// 测试注入（FU-IOS-0712 第 2 轮修复 R2-02）：身份核对通过之后、调用方继续执行之前调用（确定性交错：在这里同账号重登）。生产为 nil。
+    var identityCheckPassed: (@MainActor () -> Void)?
     /// 本机时钟（测试注入）。
     var clock: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     /// 撤回同意 / 切换环境删掉钱包缓存的次数（固定身份的一部分）。
     var clearedCount = 0
     var pages: [UUID: WalletPageEntry] = [:]
-    var sessionKey = ""
+    /// 唯一的身份快照入口（与订单同一口径；FU-IOS-0712 整体重理）。建页期间钉住一份（执行器固定身份与「是否已确认」同一次读取）。
+    let identity: AppIdentity
+    /// 换代判据（结论只由它给出；启动时身份暂时未知不记判据，RC-04）。
+    let reconciler: SessionReconciler
     var sceneActive = true
     /// 本页可见性每变一次加一（实名查询后的导航许可，共性第 57 条）。
     var visibleGen: [UUID: Int] = [:]
@@ -74,14 +79,21 @@ final class AppWallet: ObservableObject, WalletEnv {
         gates = WalletGates()
         self.mask = mask
         self.credentialsReadable = credentialsReadable
+        let identity = AppIdentity(client: network.client, credentialsReadable: credentialsReadable)
+        self.identity = identity
+        // 判据与启动对账用同一次身份快照（RC-03）；启动时身份暂时未知不记判据（RC-04），首次确认时按结论处理
+        let snapshot = identity.snapshot()
+        reconciler = SessionReconciler(snapshot)
         lifetimes = WebRouteLifetimes(router: routing.router)
         let router = routing.router
         customerService = { _ in router.open(RouteRequest(route: WalletRoutes.help, from: .inApp)) }
         deps = WalletDeps(
             api: network.client, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: nil, labor: nil
         )
-        sessionKey = currentSessionKey()
-        cache.reconcileOwner(account: currentOwner().account)
+        // 摘要与金额草稿按「账号 + 持久化登录世代」分区（FU-IOS-0712）：世代与会话可用性同口径，未知不读不写；世代只取执行器构造时
+        // 固定的那一份（WalletOwner.loginEpoch，R1-01），存储不读当前世代
+        cleaner.store.partitionedByLoginEpoch = true
+        reconcileCache(snapshot)
         routing.realnameSource = { [weak self] in self?.realnameVerified() ?? false }
         router.onParamsDropped = { [weak self] route, count in self?.paramsDropped(route, count: count) }
         login.$sessionVersion.dropFirst().sink { [weak self] _ in
@@ -104,18 +116,49 @@ final class AppWallet: ObservableObject, WalletEnv {
 
     // MARK: - WalletEnv
 
+    /// 持久化登录世代与账号、会话世代同一次读出（`currentIdentity`，R1-01）：摘要与金额草稿的分区只用这一份。建页期间返回建页那一份快照。
     func currentOwner() -> WalletOwner {
-        let readable = credentialsReadable()
-        let network = client.currentOwnership(credentialsReadable: readable)
-        let key = "\(network.account ?? "-")#\(network.generation)#\(network.epoch)#\(clearedCount)"
-        return WalletOwner(
-            account: readable ? network.account : nil, key: readable ? key : key + "#withdrawing",
-            request: RequestOwnership(account: network.account, generation: network.generation, epoch: network.epoch)
+        owner(for: identity.snapshot())
+    }
+
+    /// 按一次快照构造的固定身份（账号、版本串、网络归属、登录世代与是否已确认同一次读取）。
+    func owner(for snapshot: IdentitySnapshot) -> WalletOwner {
+        WalletOwner(
+            account: snapshot.account,
+            key: AppIdentity.ownerKey(account: snapshot.account, snapshot, cleared: clearedCount),
+            request: snapshot.request, loginEpoch: snapshot.loginEpoch, identityKnown: snapshot.known
         )
     }
 
+    /// 缓存归属对账（启动、启动态落定、换代、撤回 / 切环境）：只用调用方这一次快照（不另读，RC-03）。待清理先完成（R3-02）；身份暂时
+    /// 未知延后（R2-01）；确认没有会话照旧删除；缺登录世代的旧会话不删也不读写（F-X-21）。
+    func reconcileCache(_ snapshot: IdentitySnapshot) {
+        cache.completePendingClear()
+        guard snapshot.known else { return }
+        cache.reconcileOwner(account: snapshot.account, loginEpoch: snapshot.loginEpoch)
+    }
+
     func isCurrent(_ owner: WalletOwner) -> Bool {
-        credentialsReadable() && currentOwner() == owner
+        check(owner) == .current
+    }
+
+    /// 固定身份与此刻身份的核对（一次读取；口径见 `AppIdentity.check`，与订单相同）。
+    func check(_ owner: WalletOwner) -> IdentityCheck {
+        let now = identity.snapshot()
+        let result = AppIdentity.check(
+            matchesNow: self.owner(for: now) == owner,
+            fixed: FixedIdentity(key: owner.key, account: owner.account, known: owner.identityKnown),
+            now: now, cleared: clearedCount
+        )
+        if result == .current {
+            identityCheckPassed?()
+        }
+        return result
+    }
+
+    /// 页面在身份暂时未知时被用户点了【重试】：立即核对一次。
+    func recheckIdentity() {
+        checkSession()
     }
 
     func configText(_ key: String) -> String? {

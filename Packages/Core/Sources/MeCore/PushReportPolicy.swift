@@ -54,6 +54,11 @@ public struct PushReportPolicy {
         pendingFlag
     }
 
+    /// 这条响应会不会被接纳（FU-IOS-0712，F-X-08 ②）：响应所属会话就是在途那条的会话。只读，不改状态；执行器据此决定是否开始限流计时。
+    public func accepts(responseFrom session: String) -> Bool {
+        !terminated && inFlightSession != nil && inFlightSession == session
+    }
+
     public var stopped: Bool {
         terminated
     }

@@ -28,8 +28,10 @@ extension OpenPurchaseController {
         case let .success(data, traceId, _):
             onSuccess(TJSON.parse(data) ?? [:], traceId: traceId, attempt: attempt, origin: origin, request: request)
         case let .failure(code, _, data, traceId, effect, _):
+            // 非强更的 10405 按统一错误（error.50001 + trace6，F-X-09，FU-IOS-0712）；强更照旧由网络层与外壳处理
             onFailure(
-                code: code, data: TJSON.parse(data) ?? [:], traceId: traceId, effect: effect, attempt: attempt,
+                code: NonForcedUpdate.pageCode(code: code, effect: effect), data: TJSON.parse(data) ?? [:],
+                traceId: traceId, effect: effect, attempt: attempt,
                 origin: origin
             )
         case .transportFailure:

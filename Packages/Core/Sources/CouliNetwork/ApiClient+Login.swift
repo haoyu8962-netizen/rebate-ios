@@ -58,6 +58,7 @@ extension ApiClient {
                 return .notSaved(LocalRejectReason.sessionChanged)
             }
             do {
+                // 四项写入 = 一次新登录：生成新的持久化登录世代，与令牌同一个条目、同一次写入（FU-IOS-0712）
                 try tokens.save(access: access, refresh: refresh, scope: scope, account: account)
             } catch {
                 return .notSaved(LocalRejectReason.sessionSaveFailed)

@@ -19,7 +19,11 @@ final class SubframeRedirectProbeTests: WebViewTestCase {
         host(webView)
         let base = "http://127.0.0.1:\(server.port)"
         webView.load(URLRequest(url: try XCTUnwrap(URL(string: base + "/parent"))))
-        try await waitUntil(timeout: 15) { recorder.subframePaths.contains("/final") }
+        // FU-IOS-0712（F-IOS-01 偶发）：导航判定回调先于对应请求到达服务端——只等到回调里出现 /final 就核对 `served`，服务端还没收到
+        // /final 时会偶发失败。改为等流程的两个终点都到：判定回调记下 /final、服务端也已回应 /final。上限 30 秒只用来判失败。
+        try await waitUntil(timeout: 30) {
+            recorder.subframePaths.contains("/final") && server.served.contains("/final")
+        }
         XCTAssertEqual(recorder.subframePaths, ["/hop1", "/hop2", "/final"], "子框架的每一跳都进入导航判定回调")
         XCTAssertEqual(recorder.mainPaths, ["/parent"])
         XCTAssertEqual(server.served, ["/parent", "/hop1", "/hop2", "/final"])

@@ -350,3 +350,39 @@ extension PendingTrackService {
         requestNotification(ticket(for: card))
     }
 }
+
+/// FU-IOS-0712 R1-01：缓存与恢复记录的读写改为必须带固定身份的登录世代（`loginEpoch:`）。这些执行层旧用例用的是不按登录世代分区的存储
+/// （`partitionedByLoginEpoch == false`，只按账号），世代不参与分区；这里保留它们原来的调用写法（世代传 nil），断言不变。
+@MainActor
+extension OrderCacheStore {
+    func readList(account: String?, scope: String) -> CachedOrderList? {
+        readList(account: account, loginEpoch: nil, scope: scope)
+    }
+
+    func writeList(account: String?, scope: String, data: OrderListData, fetchedAt: Int64) {
+        writeList(account: account, loginEpoch: nil, scope: scope, data: data, fetchedAt: fetchedAt)
+    }
+
+    func readDetail(account: String?, orderId: String) -> CachedOrderDetail? {
+        readDetail(account: account, loginEpoch: nil, orderId: orderId)
+    }
+
+    func writeDetail(account: String?, detail: OrderDetail, fetchedAt: Int64) {
+        writeDetail(account: account, loginEpoch: nil, detail: detail, fetchedAt: fetchedAt)
+    }
+
+    func reconcileOwner(account: String?) {
+        reconcileOwner(account: account, loginEpoch: nil)
+    }
+}
+
+@MainActor
+extension OrderPageRestorer {
+    func decide(account: String?) -> OrderPageRecord? {
+        decide(account: account, loginEpoch: nil)
+    }
+
+    func persist(conditions: OrderConditions, anchor: String?, account: String?) {
+        persist(conditions: conditions, anchor: anchor, account: account, loginEpoch: nil)
+    }
+}

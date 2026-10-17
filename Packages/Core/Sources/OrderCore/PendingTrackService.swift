@@ -243,8 +243,11 @@ public final class PendingTrackService: ObservableObject {
         switch result {
         case .success:
             PendingTrackDismiss.action(kind: "ok", code: nil, disableMs: 0)
-        case let .failure(code, _, _, _, _, _):
-            PendingTrackDismiss.action(kind: "error", code: code, disableMs: OrderErrorAction.disableMillis(result))
+        case let .failure(code, _, _, _, effect, _):
+            PendingTrackDismiss.action(
+                kind: "error", code: NonForcedUpdate.pageCode(code: code, effect: effect),
+                disableMs: OrderErrorAction.disableMillis(result)
+            )
         case let .localReject(reason)
             where reason == LocalRejectReason.callCancelled || reason == LocalRejectReason.sendBlocked:
             nil
