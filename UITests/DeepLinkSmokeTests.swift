@@ -23,8 +23,19 @@ final class DeepLinkSmokeTests: XCTestCase {
         XCTAssertTrue(decision.waitForExistence(timeout: 15), "route decision not shown")
         XCTAssertTrue(decision.label.contains("entry_not_allowed"), decision.label)
         XCTAssertFalse(placeholder(app, "Wallet").exists)
-        XCTAssertTrue(placeholder(app, "Home").exists, "停在首页 Tab")
-        XCTAssertTrue(app.descendants(matching: .any)["shell.tabBar"].exists)
+        // Wallet 已有正式页面，不能只检查旧占位页；加载中、错误态也算打开了 Wallet。
+        for identifier in ["wallet.page", "wallet.loading", "wallet.error", "wallet.content"] {
+            XCTAssertFalse(app.descendants(matching: .any)[identifier].exists, "未声明的深链不应打开 \(identifier)")
+        }
+        // 编排 2026-10-19 01:0x：正式首页根必须可见，且首页 Tab 仍选中。
+        // home.search 只是固定区入口，不能代替正式首页根；常驻但隐藏的首页也不能算通过。
+        let home = app.descendants(matching: .any)["home.root"].firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 15), "正式首页根未出现（home.root）")
+        XCTAssertTrue(home.isHittable, "正式首页根必须在屏幕上可见、可命中")
+        let tabBar = app.descendants(matching: .any)["shell.tabBar"].firstMatch
+        XCTAssertTrue(tabBar.exists)
+        XCTAssertTrue(tabBar.buttons["首页"].isSelected, "未声明的深链被拦后仍选中首页 Tab")
+        XCTAssertTrue(app.descendants(matching: .any)["home.search"].exists, "首页固定区仍在")
         save(app, "02-deeplink-wallet-blocked-stays-home")
     }
 

@@ -168,8 +168,8 @@ extension AppMe: MeEnv, CustomerServicePorts, PushReportState {
         if let dict = configObject("dict_version") {
             fields["config_version"] = (dict as? String) ?? (dict as? NSNumber)?.stringValue
         }
-        if let release = (configObject("h5_release") as? [String: Any])?["version"] {
-            fields["home_version"] = (release as? String) ?? (release as? NSNumber)?.stringValue
+        if let version = homeVersion() {
+            fields["home_version"] = version
         }
         return fields
     }

@@ -16,6 +16,12 @@ let placeholderModules: [String] = []
 let generated: Target.Dependency = .product(name: "Generated", package: "Generated")
 
 let coreTargets: [Target] = [
+    .target(
+        name: "HomeCore",
+        dependencies: ["CouliNetwork", "Router", "Update", "ClientCore", generated],
+        resources: [.process("Resources")]
+    ),
+    .testTarget(name: "HomeCoreTests", dependencies: ["HomeCore", "CouliNetwork", "Router", generated]),
     .target(name: "Config"),
     .testTarget(name: "ConfigTests", dependencies: ["Config"]),
     .target(name: "Router", dependencies: ["Config", generated]),
@@ -110,6 +116,7 @@ let placeholderTargets: [Target] = placeholderModules.map {
 }
 
 let coreProducts: [Product] = [
+    .library(name: "HomeCore", targets: ["HomeCore"]),
     .library(name: "Config", targets: ["Config"]),
     .library(name: "Router", targets: ["Router"]),
     .library(name: "Privacy", targets: ["Privacy"]),

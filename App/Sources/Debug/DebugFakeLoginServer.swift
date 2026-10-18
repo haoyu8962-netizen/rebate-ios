@@ -124,7 +124,7 @@ final class DebugFakeLoginServer: URLProtocol {
             : nil
         let reply = trade.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
             ?? search.map { Reply(code: $0.code, data: $0.data, headers: $0.headers) }
-            ?? Self.answer(path: path, body: body)
+            ?? homeOrDefault(path: path, body: body)
         let (code, data, headers) = (reply.code, reply.data, reply.headers)
         let trace = search?.traceId ?? (trade != nil ? "0199a3b4-5c6d-7e8f-9a0b-1c2d3e5d81a7" : "debug-fake-000000")
         let text = "{\"code\":\(code),\"msg\":\"\",\"data\":\(data),\"trace_id\":\"\(trace)\"}"
@@ -139,6 +139,10 @@ final class DebugFakeLoginServer: URLProtocol {
             client?.urlProtocol(self, didLoad: Data(text.utf8))
             client?.urlProtocolDidFinishLoading(self)
         }
+    }
+
+    private func homeOrDefault(path: String, body: [String: Any]) -> Reply {
+        DebugFakeHome.answer(request) ?? Self.answer(path: path, body: body)
     }
 
     private func answerWallet(_ reply: DebugFakeWallet.Reply) {

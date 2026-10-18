@@ -12,6 +12,7 @@ enum AppScenePhases {
         var wallet: AppWallet?
         var me: AppMe?
         var login: AppLogin?
+        var home: AppHome?
     }
 
     static func apply(_ phase: ScenePhase, _ targets: Targets) {
@@ -50,5 +51,6 @@ enum AppScenePhases {
         targets.me?.scenePhaseChanged(phase)
         // 绑手机页：active 之外都作废导航与弹窗许可（APP-05b，APP-09 共性第 77 条）
         targets.login?.scenePhaseChanged(active: phase == .active)
+        targets.home?.sceneChanged(active: phase == .active)
     }
 }

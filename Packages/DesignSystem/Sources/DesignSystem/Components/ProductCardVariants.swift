@@ -9,10 +9,14 @@ import SwiftUI
 public struct ProductGridCard<ImageContent: View>: View {
     private let data: ProductCardData
     private let image: ImageContent
+    private let framed: Bool
     @State private var disclaimerExpanded = false
 
-    public init(_ data: ProductCardData, @ViewBuilder image: () -> ImageContent) {
+    /// `framed`：自带白卡底（默认，搜索结果、首页商品流）；false 时不画卡底，放进已有白卡的区段里（首页「今日精选」「超市百货」
+    /// 区段整块是一张白卡，Main 稿里卡内商品不再各自套卡）。
+    public init(_ data: ProductCardData, framed: Bool = true, @ViewBuilder image: () -> ImageContent) {
         self.data = data
+        self.framed = framed
         self.image = image()
     }
 
@@ -69,7 +73,7 @@ public struct ProductGridCard<ImageContent: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .couliCard(padding: CouliSpacing.s3)
+        .modifier(GridCardChrome(framed: framed))
     }
 
     private var priceBlock: some View {
@@ -128,6 +132,19 @@ public struct ProductGridCard<ImageContent: View>: View {
             RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
                 .fill(accent ? CouliColor.rebateBackground : CouliColor.backgroundMuted)
         )
+    }
+}
+
+/// 网格卡外框：自带白卡（卡片圆角 + 阴影 + 12 内边距）或不画框（铺满所在列，左对齐）。
+private struct GridCardChrome: ViewModifier {
+    let framed: Bool
+
+    func body(content: Content) -> some View {
+        if framed {
+            content.couliCard(padding: CouliSpacing.s3)
+        } else {
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

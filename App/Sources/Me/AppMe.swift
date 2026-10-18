@@ -25,6 +25,7 @@ import WalletCore
 /// - 统一客服出口（`cs`）：原样 kf.url。
 @MainActor
 final class AppMe: ObservableObject {
+    var homeVersion: () -> String? = { nil }
     static let me = "Me"
     static let riskNotice = "RiskNotice"
     static let appeal = "Appeal"

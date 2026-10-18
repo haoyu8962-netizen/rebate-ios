@@ -42,6 +42,9 @@
 #     DebugFakeAuthorizer、启动参数 CouliFakeOAuth（App/Sources/Debug/DebugFakeOAuth.swift）
 #   - 钱包本机假服务（APP-09）：标记 COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52、类型名 DebugFakeWallet、启动参数 CouliFakeWallet
 #     （App/Sources/Debug/DebugFakeWallet.swift）
+#   - 首页草稿预览 HomePreview 与首页本机假服务（APP-11，03 §3.6，AC-S1-86 ②③）：标记 COULI_HOME_PREVIEW（App/Sources/Debug/HomePreviewView.swift）、
+#     COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a、类型名 DebugFakeHome（App/Sources/Debug/DebugFakeHome.swift）；路由名 HomePreview 由下面的 routes.json 一项覆盖；
+#     首页 UI 测试设施类型名 DebugHomeUITestSupport、启动参数 CouliHomeTestReset 与 CouliFakeFlags、运行中改开关与配置回答信号名（App/Sources/Debug/DebugHomeUITestSupport.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -150,6 +153,14 @@ HITS_LOG="$WORK/hits"
     echo "DebugPushTokenSource"
     echo "CouliFakePushToken"
     echo "debug-push-token-"
+    echo "COULI_HOME_PREVIEW"
+    echo "COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a"
+    echo "DebugFakeHome"
+    echo "DebugHomeUITestSupport"
+    echo "CouliHomeTestReset"
+    echo "CouliFakeFlags"
+    echo "debug.uitest.fake-flag."
+    echo "debug.uitest.config-served"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

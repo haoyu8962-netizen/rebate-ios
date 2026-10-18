@@ -7,38 +7,13 @@ enum SearchSorts {
     static let all = ["relevance", "sales_desc", "final_price_asc", "rebate_desc"]
 }
 
-/// 页底口径说明的键（BR-PRICE-03、09、17；共性 13、25）：卡片 disclaimer_keys 去重、按出现顺序；有券、无券混排时价格句
-/// 只放 price_basis.general（BR-PRICE-03 细则「无券商品与混排列表的口径说明」），但返利句不能丢：有普通返利卡（normal）
-/// 显示返利金额时一定带 rebate_estimate。纯比价区间卡（price_compare_risk）只用服务端下发的 rebate_compare，不追加
-/// rebate_estimate（BR-PRICE-17）。
+/// 页底口径说明的键（BR-PRICE-03、09、17；共性 13、25）。合并规则在 DesignSystem 的 `ProductDisclaimers`，首页商品卡同用一份
+/// （APP-11 P2）：混排时价格句只放 price_basis.general，有普通返利金额时追加 rebate_estimate，价格句在前。
 enum SearchDisclaimers {
-    static let rebateEstimate = "rebate_estimate"
+    static let rebateEstimate = ProductDisclaimers.rebateEstimate
 
     static func footerKeys(_ items: [[String: Any]]) -> [String] {
-        var keys: [String] = []
-        for item in items {
-            let own = (item["disclaimer_keys"] as? [Any])?.compactMap { $0 as? String } ?? []
-            for key in own where !keys.contains(key) {
-                keys.append(key)
-            }
-        }
-        if keys.contains("price_basis"), keys.contains("price_basis.general") {
-            keys.removeAll { $0 == "price_basis" }
-        }
-        if !keys.contains(rebateEstimate), items.contains(where: showsRebateAmount) {
-            keys.append(rebateEstimate)
-        }
-        // 价格口径句在前，其余（以结算为准、返利说明…）按出现顺序在后（设计稿 Search 页底：价格句 → 以结算为准）。
-        let price = keys.filter { $0.hasPrefix("price_basis") }
-        return price + keys.filter { !$0.hasPrefix("price_basis") }
-    }
-
-    private static func showsRebateAmount(_ item: [String: Any]) -> Bool {
-        let basis = item["rebate_basis"] as? String
-        guard basis == "normal",
-              ProductCardMapper.priceUnavailable(item) == false
-        else { return false }
-        return ((item["rebate_max_fen"] as? NSNumber)?.int64Value ?? 0) > 0
+        ProductDisclaimers.footerKeys(items)
     }
 }
 

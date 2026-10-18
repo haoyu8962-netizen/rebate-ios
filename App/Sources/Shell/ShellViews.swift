@@ -50,6 +50,7 @@ struct TabShellView<Home: View>: View {
     let root: RouteDestination
     let onSelect: (ShellTab) -> Void
     @ViewBuilder let home: (RouteDestination) -> Home
+    @State private var retainedHome = RouteDestination(route: RoutePolicy.home)
 
     private var selected: ShellTab {
         ShellTab(rootRoute: root.route)
@@ -68,12 +69,35 @@ struct TabShellView<Home: View>: View {
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }
 
-    @ViewBuilder private var content: some View {
-        switch selected {
-        case .home:
-            home(root)
-        default:
-            RouteViewRegistry.view(for: root)
+    /// 首页常驻（切走 Tab 再回来沿用 ScrollView 的位置、不重建首页视图）。用系统分页容器承载各 Tab 根页面：未选中的页面由系统
+    /// 移出显示层级，读屏与界面自动化都够不到、也接不到点击；切回时原实例连同滚动位置恢复（APP-11 补修：常驻首页读屏可达）。
+    /// 选中哪个 Tab 仍只跟随 Router（绑定只读），系统自带的标签栏隐藏，外壳照旧画设计系统的 TabBar。
+    private var content: some View {
+        TabView(selection: Binding(get: { selected }, set: { _ in })) {
+            home(selected == .home ? root : retainedHome)
+                .tag(ShellTab.home)
+                .toolbar(.hidden, for: .tabBar)
+            ForEach(ShellTab.allCases.filter { $0 != .home }, id: \.self) { tab in
+                Group {
+                    if selected == tab {
+                        RouteViewRegistry.view(for: root)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .tag(tab)
+                .toolbar(.hidden, for: .tabBar)
+            }
+        }
+        .onAppear {
+            if selected == .home {
+                retainedHome = root
+            }
+        }
+        .onChange(of: root) { value in
+            if value.route == RoutePolicy.home {
+                retainedHome = value
+            }
         }
     }
 }
@@ -88,16 +112,10 @@ struct BasicModeHomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            ScrollView {
-                VStack(spacing: CouliSpacing.s3) {
-                    notice
-                    RouteViewRegistry.view(for: RouteDestination(route: RoutePolicy.home, readonly: true))
-                        .frame(minHeight: CouliSpacing.s16 * 3)
-                }
+            notice
                 .padding(.horizontal, CouliSpacing.s4)
                 .padding(.top, CouliSpacing.s1)
-                .padding(.bottom, CouliSpacing.s4)
-            }
+            RouteViewRegistry.view(for: RouteDestination(route: RoutePolicy.home, readonly: true))
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }

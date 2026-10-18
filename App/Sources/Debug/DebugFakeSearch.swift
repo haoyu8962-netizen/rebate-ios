@@ -37,6 +37,7 @@ enum DebugFakeSearch {
             status[platform] = value
         }
         features["search_status"] = status
+        DebugFakeFlags.apply(to: &features)
         // `-CouliFakePlatformStatus taobao=maintenance,jd=not_launched`：改平台购买状态（R2-01 截图用；其余平台按包内配置）。
         if let raw = UserDefaults.standard.string(forKey: "CouliFakePlatformStatus") {
             var purchase = features["platform_status"] as? [String: Any] ?? [:]

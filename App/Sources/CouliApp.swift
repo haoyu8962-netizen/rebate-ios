@@ -23,6 +23,7 @@ struct CouliApp: App {
     @StateObject private var orders: AppOrders
     @StateObject private var wallet: AppWallet
     @StateObject private var me: AppMe
+    @StateObject private var home: AppHome
     @Environment(\.scenePhase) private var scenePhase
     private let routing: AppRouting
     private let network: AppNetwork
@@ -37,15 +38,7 @@ struct CouliApp: App {
         let config = AppConfig(client: network.client)
         // 埋点队列的清理器先登记（直接删队列文件），再重试上次没清干净的撤回清理（清干净之前任何模块不得读取会话凭据），
         // 最后创建 EnvironmentStore 做启动对账：覆盖安装换了环境时旧队列也被清掉（APP-03b 共性 23）。
-        let launch = AppLaunchCleanup.reconcile(
-            retryWithdrawal: {
-                PrivacyWithdrawalCleanup.runner.retryIfPending()
-                #if DEBUG
-                DebugPrivacyPreset.applyFromLaunchArguments()
-                #endif
-            },
-            makeEnvironment: BuildInfo.makeEnvironmentStore
-        )
+        let launch = Self.reconcileLaunch()
         let environment = launch.environment
         // 同意后的第一步：设备注册（APP-03b，DeviceRegistry；失败按闸门的退避重试）；推送步骤只启动 PushTokenSource（APP-12 G17）。
         let (privacy, pushSource) = Self.makePrivacy(network)
@@ -82,6 +75,9 @@ struct CouliApp: App {
         _orders = StateObject(wrappedValue: orders)
         let account = Self.makeAccount(web, login, update, MeShopModules(clipboard, search, orders), pushSource)
         (_wallet, _me) = (StateObject(wrappedValue: account.wallet), StateObject(wrappedValue: account.me))
+        let home = Self.makeHome(web, login, environment, clipboard)
+        home.connect(me: account.me)
+        _home = StateObject(wrappedValue: home)
         _permissions = StateObject(wrappedValue: permissions)
         _web = StateObject(wrappedValue: web)
         _login = StateObject(wrappedValue: login)
@@ -92,6 +88,34 @@ struct CouliApp: App {
         self.network = network
     }
 
+    private static func reconcileLaunch() -> (trackerCleaner: TrackerQueueCleaner, environment: EnvironmentStore) {
+        AppLaunchCleanup.reconcile(
+            retryWithdrawal: {
+                PrivacyWithdrawalCleanup.runner.retryIfPending()
+                #if DEBUG
+                DebugPrivacyPreset.applyFromLaunchArguments()
+                #endif
+            },
+            makeEnvironment: BuildInfo.makeEnvironmentStore
+        )
+    }
+
+    private static func makeHome(_ web: AppWeb, _ login: AppLogin, _ environment: EnvironmentStore,
+                                 _ clipboard: AppClipboard) -> AppHome {
+        let home = AppHome.make(network: web.network, routing: web.routing, config: web.config,
+                                login: login, update: web.update, privacy: web.privacy,
+                                environment: environment, variant: .current, debugPort: {
+                                    #if DEBUG
+                                    DebugFakeHome.port(environment: { environment.current })
+                                    #else
+                                    nil
+                                    #endif
+                                })
+        home.clipboard = clipboard
+        home.track = { [tracker = web.tracker] event in _ = tracker.track(event) }
+        return home
+    }
+
     /// 须在启动对账之前登记的清理项：撤回同意要清的凭证（切换环境时同样要清，两边共用占位清理器）；剪贴板 hash 记录的撤回清理
     /// （APP-07：在启动对账重试上次没清干净的撤回之前登记，只进撤回同意的注册表）。
     private static func registerEarlyCleaners() {
@@ -99,6 +123,7 @@ struct CouliApp: App {
         ClipboardRecordsCleaner.register()
         // APP-08：订单断网缓存（撤回同意与切换环境都删；待清理状态在缓存目录之外，启动对账重试撤回清理时一并完成）
         OrderCacheCleaner.register()
+        HomeDataCleaner.register()
         // APP-09：钱包摘要缓存与提现金额草稿（同上）
         WalletCacheCleaner.register()
         // APP-12：设备级本机偏好 couli_me_prefs（引导条关闭时刻、个性化开关；只进撤回同意的注册表，切换环境不清，G29）
@@ -247,6 +272,7 @@ struct CouliApp: App {
                 .environmentObject(orders)
                 .environmentObject(wallet)
                 .environmentObject(me)
+                .environmentObject(home)
                 .onOpenURL { url in
                     routing.handle(url: url)
                 }
@@ -258,7 +284,7 @@ struct CouliApp: App {
                 .onChange(of: scenePhase) { phase in
                     AppScenePhases.apply(phase, AppScenePhases.Targets(
                         routing: routing, config: config, search: search, clipboard: clipboard,
-                        orders: orders, wallet: wallet, me: me, login: login
+                        orders: orders, wallet: wallet, me: me, login: login, home: home
                     ))
                 }
         }

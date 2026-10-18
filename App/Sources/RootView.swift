@@ -1,6 +1,7 @@
 import Config
 import DesignSystem
 import Generated
+import Home
 import Privacy
 import Router
 import SwiftUI
@@ -21,6 +22,7 @@ struct RootView: View {
     @EnvironmentObject private var search: AppSearch
     @EnvironmentObject private var clipboard: AppClipboard
     @EnvironmentObject private var me: AppMe
+    @EnvironmentObject private var home: AppHome
     #if DEBUG
     @State private var showsDebugPanel = false
     #endif
@@ -196,7 +198,11 @@ struct RootView: View {
     }
 
     /// 首页 Tab：已同意时按 Router 的实际目的地渲染（保留只读标记，R1-05）。
-    @ViewBuilder private func homeTab(_ root: RouteDestination) -> some View {
+    private func homeTab(_ root: RouteDestination) -> some View {
+        HomeRootTone(grayscale: home.grayscale) { homeContent(root) }
+    }
+
+    @ViewBuilder private func homeContent(_ root: RouteDestination) -> some View {
         if privacy.state.decision == .basicMode {
             BasicModeHomeView(
                 onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },

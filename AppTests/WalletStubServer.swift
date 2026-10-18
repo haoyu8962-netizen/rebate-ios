@@ -19,6 +19,8 @@ final class WalletStubProtocol: URLProtocol, @unchecked Sendable {
         let body: String
         let headers: [String: String]
         let id: Int
+        /// 请求实际发往的主机（APP-11：核对预览按当前环境发出）。
+        var host: String = ""
 
         func header(_ name: String) -> String? {
             headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
@@ -90,7 +92,7 @@ final class WalletStubProtocol: URLProtocol, @unchecked Sendable {
             return Recorded(
                 method: request.httpMethod ?? "GET", path: components?.path ?? url.path,
                 query: components?.percentEncodedQuery ?? "", body: Self.body(request),
-                headers: request.allHTTPHeaderFields ?? [:], id: Self.next
+                headers: request.allHTTPHeaderFields ?? [:], id: Self.next, host: url.host ?? ""
             )
         }
         let reply: Reply = Self.lock.withLock {

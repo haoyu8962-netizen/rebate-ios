@@ -110,8 +110,16 @@ public struct TabBar: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
-                .accessibilityLabel(Text(verbatim: item.title))
-                .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+                // 读屏 / 自动化里每个 Tab 只是一个按钮：容器带标签栏特征（iOS 17+）时，按钮里的图标、文字也会被当成按钮，
+                // 树里出现同名的多个「首页」；用只含名称的按钮作无障碍表示，激活仍走 onSelect
+                .accessibilityRepresentation {
+                    Button {
+                        onSelect(item)
+                    } label: {
+                        Text(verbatim: item.title)
+                    }
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
                 .accessibilityShowsLargeContentViewer {
                     Label {
                         Text(verbatim: item.title)

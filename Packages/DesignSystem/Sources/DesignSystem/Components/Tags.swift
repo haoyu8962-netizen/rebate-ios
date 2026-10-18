@@ -75,8 +75,11 @@ public struct CouliTag: View {
         .padding(.horizontal, CouliSpacing.s2)
         .padding(.vertical, CouliGuideMetric.tagPaddingVertical)
         .frame(minHeight: CouliGuideMetric.tagMinHeight)
-        .background(Capsule().fill(colors.background))
-        .overlay(Capsule().strokeBorder(colors.border ?? .clear, lineWidth: CouliComponentMetric.controlBorderWidth))
+        .background(Capsule(style: .circular).fill(colors.background))
+        .overlay(
+            Capsule(style: .circular)
+                .strokeBorder(colors.border ?? .clear, lineWidth: CouliComponentMetric.controlBorderWidth)
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: text))
     }

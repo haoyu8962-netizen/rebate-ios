@@ -275,7 +275,8 @@ staging_has_debug_capabilities() {
     tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect staging.couli.invalid \
-        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_OAUTH_SERVER_APP05B_IOS_4c7e1d --expect DebugFakeOAuth --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal "$app" || return 1
+        --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_OAUTH_SERVER_APP05B_IOS_4c7e1d --expect DebugFakeOAuth --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal \
+        --expect COULI_HOME_PREVIEW --expect COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a --expect DebugFakeHome "$app" || return 1
     [ "$(/usr/libexec/PlistBuddy -c "Print :CouliBuildConfiguration" "$app/Info.plist")" = "Staging" ] || {
         echo "Staging 包的 CouliBuildConfiguration 不是 Staging"
         return 1
@@ -469,6 +470,8 @@ step "lint 违反样例必须被拦" lint_fixtures
 step "Feature 之间无依赖（依赖图 + import 检查自测 + 源码）" feature_isolation
 step "check-feature-imports 违反样例必须被拦（含扫不完整退出 4）" feature_import_fixtures
 step "身份未知展示接线（FU-IOS-0713：漏接样例自测 + 源码）" bash -c 'python3 tools/ci/check-identity-wiring.py --self-test && python3 tools/ci/check-identity-wiring.py'
+step "首页接线（APP-11：漏接样例自测 + 源码）" bash -c 'python3 tools/ci/check-home-wiring.py --self-test && python3 tools/ci/check-home-wiring.py'
+step "首页禁止项（APP-11：不渲染 WebView、不执行脚本 / 模板 / 反射，置灰只在首页根视图；违规样例自测 + 源码）" bash -c 'python3 tools/ci/check-home-forbidden.py --self-test && python3 tools/ci/check-home-forbidden.py'
 step "gen.py --check" python3 tools/codegen/gen.py --check
 step "gen.py 命名冲突探针（test_gen.py）" python3 tools/codegen/test_gen.py
 step "xcodegen generate" xcodegen generate
@@ -494,6 +497,7 @@ if [ "$FAST" -eq 0 ]; then
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
         --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_OAUTH_SERVER_APP05B_IOS_4c7e1d --expect DebugFakeOAuth --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal --expect COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a --expect CouliClipboardDiagnostics --expect COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19 --expect COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52 --expect DebugFakeWallet --expect 127.0.0.1 \
         --expect COULI_FAKE_ME_SERVER_APP12_IOS_2b9e47 --expect DebugFakeMe --expect DebugPushTokenSource \
+        --expect COULI_HOME_PREVIEW --expect COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a --expect DebugFakeHome \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

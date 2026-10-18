@@ -87,7 +87,7 @@ targets:
       - package: Generated
       - package: Core
         products: [Config, Router, Privacy, Update, CouliNetwork, Session, SecureStore, ClientCore, BridgeHost, ProductSearch,
-                   TradeJump, Trade, Clipboard, OrderCore, MeCore, Push]
+                   TradeJump, Trade, Clipboard, OrderCore, MeCore, Push, HomeCore]
       - package: DesignSystem
       - package: Features
         products: [Home, Search, Product, Agent, Orders, Wallet, Me, Auth, Web, Login, Purchase]
@@ -144,6 +144,9 @@ schemes:
         - package: Core/WalletCoreTests
         # APP-12：Codex 先写的 Me 向量测试与执行器测试（APP-09 曾漏登记导致向量测试不跑，这里登记）
         - package: Core/MeCoreTests
+        # APP-11：首页 SDUI（向量、本机存储、执行器）与首页 golden 截图（测试作者先写；实现方在 Core / Features 的 Package.swift 加对应 target）
+        - package: Core/HomeCoreTests
+        - package: Features/HomeTests
         - package: DesignSystem/DesignSystemTests
         - package: Features/LoginTests
         - package: Features/SearchTests
