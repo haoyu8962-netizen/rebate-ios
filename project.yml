@@ -59,8 +59,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"  # 只做 iPhone；iPad 以 iPhone 兼容模式运行（01 §7.5）
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
         # 资源目录：系统启动屏底色 LaunchBackground（APP-02b，= 令牌 background.canvas）与 App 图标 AppIcon（BRAND-01：
-        # 单尺寸 1024 universal，Any / Dark / Tinted 三个外观，取自规划仓库 design/app-icon/icon-default / icon-dark / icon-tinted；
-        # Tinted 按系统要求转成灰阶（亮度换算，构图不变），着色由系统完成）。
+        # 单尺寸 1024 universal，Any / Dark / Tinted 三个外观：Any = icon-default，Dark = icon-dark，Tinted = icon-dark 的构图按亮度
+        # 转灰阶（深底浅图形，与系统着色图标约定一致；icon-tinted 是浅底深图形，只作单色识别检查，见 design/app-icon/README.md），着色由系统完成）。
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Info.plist 手写并经 C 预处理（APP-02a）：测试用深链 scheme 只在 Debug / Staging 声明，
         # Release 的 Info.plist 里没有 CFBundleURLTypes（占位 scheme 不进正式包，needs N-05）。
