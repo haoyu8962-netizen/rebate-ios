@@ -1,5 +1,5 @@
 // swift-tools-version: 6.0
-// 设计系统：令牌映射、格式化与组件模型（纯函数）、SwiftUI 组件（DS-01）。
+// 设计系统：令牌映射、格式化与组件模型（纯函数）、SwiftUI 组件（DS-01）；品牌 Logo 资源 Resources/Brand.xcassets（BRAND-01）。
 // 依赖方向：DesignSystem → Generated。快照测试库只给测试 target（精确版本）。
 import PackageDescription
 
@@ -16,7 +16,8 @@ let package = Package(
     targets: [
         .target(
             name: "DesignSystem",
-            dependencies: [.product(name: "Generated", package: "Generated")]
+            dependencies: [.product(name: "Generated", package: "Generated")],
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "DesignSystemTests",
