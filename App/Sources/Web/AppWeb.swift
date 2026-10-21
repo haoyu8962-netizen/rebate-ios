@@ -158,7 +158,8 @@ final class AppWeb: ObservableObject {
                     caller: caller,
                     services: services,
                     ui: ui,
-                    awaitUpdate: { [weak self] in await self?.awaitUpdate() ?? BridgeUpdateState.unknown }
+                    awaitUpdate: { [weak self] in await self?.awaitUpdate() ?? BridgeUpdateState.unknown },
+                    disabledMethods: { [weak self] in self?.disabledMethods() ?? [] }
                 )
                 hosts.add(host)
                 return host
@@ -166,8 +167,14 @@ final class AppWeb: ObservableObject {
             onOpenExternal: { [weak self] target in
                 self?.openExternal(target)
             },
-            onClose: onClose
+            onClose: onClose,
+            declaredMethodsChanges: config.$snapshotJson.dropFirst().map { _ in () }.eraseToAnyPublisher()
         )
+    }
+
+    /// 远程禁用的桥方法（F-X-24）：生效配置的 bridge_disabled_methods（与 bridge_origins 同一份文档、同一刷新链路）。
+    func disabledMethods() -> Set<String> {
+        config.store.bridgeDisabledMethods()
     }
 
     /// 可信容器跳到白名单外的 https 地址：在新的 ExternalWebView 打开（经 Router，App 内来源，不受 external_hosts 限制）。

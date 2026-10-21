@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// 一次 `/v1/config` 拉取的结果（fetcher 回调给 ConfigStore）。
 public struct ConfigReply: Sendable, Equatable {
@@ -60,6 +61,10 @@ public final class ConfigStore {
     /// 切换环境时 +1：之前发出的拉取结果丢弃。
     private var generation: UInt64 = 0
     private var observers: [UUID: (ConfigStore) -> Void] = [:]
+    /// 生效文档的变化次数（每次通知订阅者 +1）：bridge_disabled_methods 形状不对的系统日志按它去重。
+    private var revision: UInt64 = 0
+    /// 已为哪一版生效文档记过 bridge_disabled_methods 的 warn（系统日志出口）。
+    private var warnedDisabledRevision: UInt64?
 
     private struct Layer {
         let document: ConfigDocument
@@ -92,7 +97,35 @@ public final class ConfigStore {
 
     /// 当前生效的配置 data（JSON 对象文本）。
     public var snapshotJson: String {
-        (current?.document ?? lkg?.document ?? bundled)?.json ?? "{}"
+        effectiveDocument?.json ?? "{}"
+    }
+
+    /// 生效的那一份文档（当前 → LKG → 包内，整份选择；`snapshotJson` 即它的文本）。
+    private var effectiveDocument: ConfigDocument? {
+        current?.document ?? lkg?.document ?? bundled
+    }
+
+    public static let bridgeDisabledMethodsKey = "bridge_disabled_methods"
+
+    /// 桥方法远程禁用名单（F-X-24；03 §5.3「方法远程禁用（试行）」）：与 bridge_origins、share_domains 同口径，从整份生效文档
+    /// （`snapshotJson` 那一份）读取，不逐键回落——当前文档缺键或键无效时为空集合，不复活旧文档里的名单。
+    /// 缺键 → 空集合、不记日志；形状不对（见 `ConfigResolver.bridgeDisabledMethods`）→ 整键按缺省空集合，记一条只含键名的 warn：
+    /// 传了 `warn` 交给它；没传走系统日志（桥准入与能力列表每次都读，同一版生效文档只记一次）。
+    public func bridgeDisabledMethods(warn: ((String) -> Void)? = nil) -> Set<String> {
+        let key = Self.bridgeDisabledMethodsKey
+        guard let raw = effectiveDocument?.object[key] else {
+            return []
+        }
+        if let methods = ConfigResolver.bridgeDisabledMethods(raw) {
+            return methods
+        }
+        if let warn {
+            warn(key)
+        } else if warnedDisabledRevision != revision {
+            warnedDisabledRevision = revision
+            ConfigLog.invalidKey(key)
+        }
+        return []
     }
 
     /// 键（"a.b" 路径）按当前 → LKG → 包内回落后的值（JSON 文本）。
@@ -285,9 +318,19 @@ public final class ConfigStore {
     }
 
     private func notify() {
+        revision &+= 1
         for handler in observers.values {
             handler(self)
         }
+    }
+}
+
+/// 配置日志（系统日志；只写键名，不写取值）。
+enum ConfigLog {
+    static let logger = Logger(subsystem: "com.couli.app", category: "config")
+
+    static func invalidKey(_ key: String) {
+        logger.warning("config: invalid value for \(key, privacy: .public), using default")
     }
 }
 

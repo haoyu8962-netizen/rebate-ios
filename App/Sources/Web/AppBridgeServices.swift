@@ -132,7 +132,8 @@ final class AppBridgeServices: BridgeServices {
     static let loginPollNanos: UInt64 = 100_000_000
 
     /// signed_paths 已在协议层核对；按 method + path 找 openapi 的签名接口，由 ApiClient 签名代发（03 §5.3 代发约定）。
-    /// 契约即白名单（CT-LOCK-02 编排裁定）：原生侧不另设拦截表；服务端 bridge_disabled_methods 紧急关闭三端尚未接入（F-X-24）；
+    /// 契约即白名单（CT-LOCK-02 编排裁定）：原生侧不另设拦截表；服务端 bridge_disabled_methods 紧急关闭由 BridgeHost 准入层处理
+    /// （F-X-24：名单里有 net.signedRequest 时在处理器之前 90403 + reason=method_disabled，不到这里、不发请求）；
     /// 找不到时按「本端不支持」结束，不臆造请求（与 Android 相同）。TODO(N-22)：幂等键由 ApiClient 新生成（03 §5.3 未定）。
     func signedRequest(
         method: String,

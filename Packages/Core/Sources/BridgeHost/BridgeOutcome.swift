@@ -27,4 +27,12 @@ public struct BridgeOutcome: @unchecked Sendable {
     public static func fail(_ code: Int) -> BridgeOutcome {
         BridgeOutcome(code: code, data: nil)
     }
+
+    /// 方法远程禁用（bridge_disabled_methods，03 §5.3 试行）的 data.reason。
+    public static let methodDisabledReason = "method_disabled"
+
+    /// 被远程禁用的方法：90403，data.reason = method_disabled（处理器不执行）。
+    public static var disabled: BridgeOutcome {
+        BridgeOutcome(code: BridgeCode.notAllowed, data: ["reason": methodDisabledReason])
+    }
 }

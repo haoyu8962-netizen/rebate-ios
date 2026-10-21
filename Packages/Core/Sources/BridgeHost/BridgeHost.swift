@@ -80,8 +80,12 @@ public protocol BridgeUI: AnyObject {
     func close()
 }
 
-/// BridgeHost（03 §5.3）：信封 → 协议准入（`BridgeProtocol.decide`）→ 能力是否在本端提供 → 强更守卫 → 分派到能力实现 → 标准响应。
+/// BridgeHost（03 §5.3）：信封 → origin 与框架 → 方法远程禁用 → 其余协议准入（`BridgeProtocol.decide`）→ 能力是否在本端提供 → 强更守卫 → 分派到能力实现 → 标准响应。
 ///
+/// - 方法远程禁用（F-X-24，03 §5.3 试行）：`disabledMethods` 每次现取生效配置的 bridge_disabled_methods；名单里的方法在 origin 与
+///   框架核对之后、其余协议判定与任何处理器之前以 90403（data.reason=method_disabled）结束并记 bridge_call（只记契约方法名），
+///   强更等待之后分派之前再判一次；
+///   声明给 H5 的方法列表（`declaredMethods`，H5 has() 的依据）同时去掉它们。名单里的未知方法名无副作用。
 /// - 在途 id：与仍在处理中的调用相同的 id，后到的那次 90002、不执行（03 §5.3「信封 id」）。
 /// - 本端提供的方法见 `implemented`；契约里有、since.ios 为 null 或本任务不实现的（trade.*、share.open、media.*、ext.*、cs.open）
 ///   在协议准入通过后返回 90001（编排者三端裁定：先协议判定再 90001；TODO 见 `notImplementedTasks`）。
@@ -137,6 +141,8 @@ public final class BridgeHost {
     let services: any BridgeServices
     weak var ui: (any BridgeUI)?
     let awaitUpdate: @MainActor () async -> String
+    /// 远程禁用的方法名单（每次准入与读取声明列表时现取，配置更新后下一次调用即生效）。
+    let disabledMethods: @MainActor () -> Set<String>
     private var generation: UInt64 = 0
     private var inFlight: [String: Call] = [:]
     private var disposed = false
@@ -151,18 +157,21 @@ public final class BridgeHost {
         caller: @escaping @MainActor () -> BridgeCallerState,
         services: any BridgeServices,
         ui: any BridgeUI,
-        awaitUpdate: @escaping @MainActor () async -> String
+        awaitUpdate: @escaping @MainActor () async -> String,
+        disabledMethods: @escaping @MainActor () -> Set<String> = { [] }
     ) {
         self.protocolProvider = protocolProvider
         self.caller = caller
         self.services = services
         self.ui = ui
         self.awaitUpdate = awaitUpdate
+        self.disabledMethods = disabledMethods
     }
 
-    /// 本端声明给 H5 的方法（`__REBATE_BRIDGE__.methods`）：契约里 since.ios 不为 null 的方法。
+    /// 本端声明给 H5 的方法（`__REBATE_BRIDGE__.methods`）：契约里 since.ios 不为 null、且此刻没有被远程禁用的方法。
     public var declaredMethods: [String] {
-        BridgeProtocol.declaredMethods
+        let disabled = disabledMethods()
+        return BridgeProtocol.declaredMethods.filter { !disabled.contains($0) }
     }
 
     public var bridgeVersion: Int {
@@ -212,7 +221,17 @@ public final class BridgeHost {
             method: method, origin: origin, isMainFrame: isMainFrame, userGesture: userGesture,
             privacy: state.privacy, loggedIn: state.loggedIn, params: params
         )
-        let decision = protocolProvider().decide(ctx: ctx)
+        let rules = protocolProvider()
+        // 方法远程禁用（三端同口径）：origin 与框架核对之后、其余协议判定（方法查找、隐私、登录、手势、参数）与任何处理器之前；
+        // 不核对名字是否在契约里，名单里的未知名同样 90403 + reason（含 net.signedRequest，不发请求）。
+        guard !(isMainFrame && rules.isTrustedOrigin(origin) && disabledMethods().contains(method)) else {
+            let outcome = BridgeOutcome.disabled
+            reject(method: method, code: outcome.code) {
+                reply(BridgeProtocol.response(id: id, code: outcome.code, data: outcome.data))
+            }
+            return
+        }
+        let decision = rules.decide(ctx: ctx)
         guard decision.allow else {
             let code = decision.errorCode ?? BridgeCode.notAllowed
             reject(method: method, code: code) {
@@ -318,7 +337,7 @@ public final class BridgeHost {
             call.reply(BridgeProtocol.response(id: id, code: BridgeCode.ok, data: outcome.data ?? [:]))
         } else {
             reject(method: call.method, code: outcome.code) {
-                call.reply(BridgeProtocol.response(id: id, code: outcome.code))
+                call.reply(BridgeProtocol.response(id: id, code: outcome.code, data: outcome.data))
             }
         }
     }
@@ -339,6 +358,10 @@ public final class BridgeHost {
             fromForceUpdatePage: state.fromForceUpdatePage
         ) {
             return .fail(code)
+        }
+        // 强更等待期间配置可能已把它禁用：分派前按此刻的名单再判一次。
+        if disabledMethods().contains(contract.name) {
+            return .disabled
         }
         return await dispatch(
             contract.name, params.raw, readOnlyMode: update != BridgeUpdateState.supported,
@@ -372,29 +395,4 @@ public final class BridgeHost {
         let now = caller()
         return started == generation && now.privacy == state.privacy && now.accountKey == state.accountKey
     }
-
-    /// 强更守卫（03 §4.4）：返回不执行时的错误码；照常执行为 nil。
-    static func updateGuard(method: String, update: String, fromForceUpdatePage: Bool) -> Int? {
-        switch update {
-        case BridgeUpdateState.supported:
-            nil
-        case BridgeUpdateState.below:
-            fromForceUpdatePage && readOnlyMethods.contains(method) ? nil : BridgeCode.nativeError
-        default:
-            // 未知（含检查中等满 5 秒）：只读方法照常，打开页面类只开只读页面（在分派里），其余 90500。
-            readOnlyMethods.contains(method) || openPageMethods.contains(method) ? nil : BridgeCode.nativeError
-        }
-    }
-}
-
-/// 已校验的 params（只读，跨越一次 Task 边界用）。
-struct BridgeParams: @unchecked Sendable {
-    let raw: [String: Any]
-}
-
-/// 一次调用的归属：开始时的宿主世代、调用方状态与有效性。
-struct BridgeCallOwner {
-    let generation: UInt64
-    let state: BridgeCallerState
-    let validity: BridgeCallValidity
 }

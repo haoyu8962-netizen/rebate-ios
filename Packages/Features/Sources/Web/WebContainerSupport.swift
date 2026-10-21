@@ -62,6 +62,15 @@ enum WebContainerSupport {
         return url.port.map { "\(scheme)://\(host):\($0)" } ?? "\(scheme)://\(host)"
     }
 
+    /// 浏览器口径的 origin（与页面里 `location.origin` 相同：默认端口 https 443、http 80 省略）。
+    static func webOrigin(of url: URL?) -> String? {
+        guard let url, let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty
+        else { return nil }
+        let defaultPort = (scheme == "https" && url.port == 443) || (scheme == "http" && url.port == 80)
+        guard let port = url.port, !defaultPort else { return "\(scheme)://\(host)" }
+        return "\(scheme)://\(host):\(port)"
+    }
+
     /// 调用方框架的 origin（WKSecurityOrigin；不透明 origin 的 protocol / host 为空 → "null"）。
     static func origin(of security: WKSecurityOrigin) -> String {
         let scheme = security.protocol.lowercased()

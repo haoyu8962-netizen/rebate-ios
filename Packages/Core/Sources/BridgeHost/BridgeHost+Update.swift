@@ -31,4 +31,17 @@ extension BridgeHost {
 
     /// 绑定版本检查轮次的最多次数（每次至多等 5 秒；超过仍在变化就取消，三端共性第 63 条）。
     static let updateBindAttempts = 3
+
+    /// 强更守卫（03 §4.4）：返回不执行时的错误码；照常执行为 nil。
+    static func updateGuard(method: String, update: String, fromForceUpdatePage: Bool) -> Int? {
+        switch update {
+        case BridgeUpdateState.supported:
+            nil
+        case BridgeUpdateState.below:
+            fromForceUpdatePage && readOnlyMethods.contains(method) ? nil : BridgeCode.nativeError
+        default:
+            // 未知（含检查中等满 5 秒）：只读方法照常，打开页面类只开只读页面（在分派里），其余 90500。
+            readOnlyMethods.contains(method) || openPageMethods.contains(method) ? nil : BridgeCode.nativeError
+        }
+    }
 }

@@ -1,4 +1,5 @@
 import BridgeHost
+import Combine
 import Foundation
 import UIKit
 import WebKit
@@ -33,8 +34,12 @@ public final class TrustedWebController: NSObject, ObservableObject {
     private var started = false
     private let onOpenExternal: @MainActor (URL) -> Void
     private let onClose: @MainActor () -> Void
-    private let tap = WebTapRecorder()
+    /// 原生点击识别（传输层取手势资格）。
+    let tap = WebTapRecorder()
     private var scriptHandler: WeakScriptHandler?
+    /// 声明给 H5 的方法列表的同步（令牌、版本、文档身份；F-X-24）。
+    var methodsSync = DeclaredMethodsSync(methods: [])
+    private var declaredSubscription: AnyCancellable?
     private var toastTask: Task<Void, Never>?
     /// 被取消的子框架文档导航次数（诊断与测试用：证明同源子框架确实没有载入）。
     private(set) var blockedSubframeCount = 0
@@ -46,12 +51,15 @@ public final class TrustedWebController: NSObject, ObservableObject {
     ///   - url: 要打开的地址（Router 已按 bridge_origins 放行；容器加载前再判一次）。
     ///   - hostFactory: 用本容器作界面能力创建 BridgeHost（App 接业务能力、调用方状态与可信源）。
     ///   - onOpenExternal: 主框架跳到白名单外的 https 地址时调用（Router 打开 ExternalPage）。
+    ///   - declaredMethodsChanges: 声明的方法列表可能变化时发一次（生效配置更新，F-X-24 方法远程禁用），在主线程上发；
+    ///     收到后按宿主此刻的 `declaredMethods` 更新已加载页面与之后新文档的列表（`refreshDeclaredMethods`）。
     public init(
         url: URL?,
         appVersion: String,
         hostFactory: @MainActor (any BridgeUI) -> BridgeHost,
         onOpenExternal: @escaping @MainActor (URL) -> Void,
-        onClose: @escaping @MainActor () -> Void
+        onClose: @escaping @MainActor () -> Void,
+        declaredMethodsChanges: AnyPublisher<Void, Never>? = nil
     ) {
         initialURL = url
         self.onOpenExternal = onOpenExternal
@@ -64,13 +72,8 @@ public final class TrustedWebController: NSObject, ObservableObject {
         super.init()
         let host = hostFactory(self)
         self.host = host
-        let script = WKUserScript(
-            source: BridgeBootstrapScript.source(version: host.bridgeVersion, methods: host.declaredMethods),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true,
-            in: .page
-        )
-        configuration.userContentController.addUserScript(script)
+        methodsSync = DeclaredMethodsSync(methods: host.declaredMethods)
+        configuration.userContentController.addUserScript(methodsSync.userScript(bridgeVersion: host.bridgeVersion))
         let handler = WeakScriptHandler(self)
         scriptHandler = handler
         configuration.userContentController.addScriptMessageHandler(
@@ -82,10 +85,16 @@ public final class TrustedWebController: NSObject, ObservableObject {
         webView.allowsLinkPreview = false
         tap.attach(to: webView)
         observeAppLifecycle()
+        declaredSubscription = declaredMethodsChanges?.sink { [weak self] in
+            MainActor.assumeIsolated {
+                self?.refreshDeclaredMethods()
+            }
+        }
     }
 
     /// 容器离开界面（销毁）时调用：作废并拒收之后的桥调用，摘掉传输通道。
     public func teardown() {
+        declaredSubscription = nil
         host?.dispose()
         webView.stopLoading()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -170,7 +179,7 @@ public final class TrustedWebController: NSObject, ObservableObject {
         return url.scheme?.lowercased() == "https"
     }
 
-    private func isTrustedDocument(_ url: URL) -> Bool {
+    func isTrustedDocument(_ url: URL) -> Bool {
         guard let origin = WebContainerSupport.origin(of: url) else { return false }
         return host?.acceptsOrigin(origin) ?? false
     }
@@ -268,31 +277,6 @@ extension TrustedWebController: BridgeUI {
     }
 }
 
-// MARK: - 传输层
-
-extension TrustedWebController: WKScriptMessageHandlerWithReply {
-    public func userContentController(
-        _: WKUserContentController,
-        didReceive message: WKScriptMessage,
-        replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void
-    ) {
-        guard message.webView === webView, let raw = message.body as? String, let host else {
-            replyHandler(nil, "invalid")
-            return
-        }
-        // 框架身份只取 WebKit 给出的 frameInfo（不看页面自报的任何字段，不按 URL 比较）。
-        let frame = message.frameInfo
-        host.handle(
-            raw: raw,
-            origin: WebContainerSupport.origin(of: frame.securityOrigin),
-            isMainFrame: frame.isMainFrame,
-            userGesture: tap.hasRecentTap
-        ) { reply in
-            replyHandler(reply, reply == nil ? "invalid" : nil)
-        }
-    }
-}
-
 // MARK: - 导航
 
 extension TrustedWebController: WKNavigationDelegate, WKUIDelegate {
@@ -357,20 +341,26 @@ extension TrustedWebController: WKNavigationDelegate, WKUIDelegate {
     /// 在途桥调用，不等新文档提交——新页面加载很慢或失败时，旧调用也不能再发请求或继续权限流程（三端共性第 29 条）。
     /// 提交新文档时（didCommit）再作废一次，保持新旧文档隔离。
     public func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
+        methodsSync.navigationStarted()
         loadFailed = false
         tap.reset()
         host?.invalidate()
     }
 
+    /// 提交新文档（含前进后退从页面缓存恢复）、加载完成：按当前版本补同步方法列表（F-X-24）。
     public func webView(_: WKWebView, didCommit _: WKNavigation!) {
         mainFrameChanged()
+        methodsSync.documentCommitted()
+        pushDeclaredMethods()
     }
 
     public func webView(_: WKWebView, didFinish _: WKNavigation!) {
         canGoBack = webView.canGoBack
+        pushDeclaredMethods()
     }
 
     public func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
+        methodsSync.navigationEnded()
         if !WebContainerSupport.isCancellation(error) {
             loadFailed = true
         }

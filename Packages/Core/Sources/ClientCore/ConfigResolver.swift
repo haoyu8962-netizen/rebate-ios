@@ -77,6 +77,33 @@ public enum ConfigResolver {
         }
     }
 
+    /// bridge_disabled_methods 的取值（04 数据模型；契约 Config.bridge_disabled_methods）：方法名字符串数组，uniqueItems，每项合
+    /// `^[a-z][a-zA-Z0-9]*\.[a-z][a-zA-Z0-9]*$`。整个值形状不对（null、不是数组、有一项不是字符串或不合 pattern、有重复项）→ nil，
+    /// 由调用方整键按缺省空集合，不逐项挑拣。不核对方法名是否在桥契约里（未知方法名无副作用）。
+    static func bridgeDisabledMethods(_ raw: Any) -> Set<String>? {
+        guard let items = raw as? [Any] else {
+            return nil
+        }
+        var names = Set<String>()
+        for item in items {
+            guard let name = item as? String, isBridgeMethodName(name), names.insert(name).inserted else {
+                return nil
+            }
+        }
+        return names
+    }
+
+    /// 桥方法名：两段，各段小写 ASCII 字母开头、其余为 ASCII 字母或数字，以一个点相连。
+    static func isBridgeMethodName(_ name: String) -> Bool {
+        let parts = name.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 2 && parts.allSatisfy { part in
+            guard let first = part.unicodeScalars.first, ("a"..."z").contains(first) else { return false }
+            return part.unicodeScalars.allSatisfy {
+                ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0)
+            }
+        }
+    }
+
     /// 合法主机名（RFC 1123 标签，不分大小写）：点分标签，每个标签 1–63 个字母、数字或连字符，不以连字符开头或结尾，
     /// 总长不超过 253。带协议（`https://`）、路径、端口、用户信息、空白或末尾点的一律不合法。
     static func isHostName(_ host: String) -> Bool {

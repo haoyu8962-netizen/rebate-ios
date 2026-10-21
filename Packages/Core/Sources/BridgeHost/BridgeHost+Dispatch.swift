@@ -89,3 +89,15 @@ extension BridgeHost {
         return .ok()
     }
 }
+
+/// 已校验的 params（只读，跨越一次 Task 边界用）。
+struct BridgeParams: @unchecked Sendable {
+    let raw: [String: Any]
+}
+
+/// 一次调用的归属：开始时的宿主世代、调用方状态与有效性。
+struct BridgeCallOwner {
+    let generation: UInt64
+    let state: BridgeCallerState
+    let validity: BridgeCallValidity
+}
