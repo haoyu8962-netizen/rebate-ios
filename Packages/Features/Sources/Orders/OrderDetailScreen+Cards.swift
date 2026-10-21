@@ -153,7 +153,7 @@ extension OrderDetailScreen {
             HStack(alignment: .center, spacing: CouliSpacing.s2) {
                 let name = texts.text("platform." + summary.platform)
                 if !name.isEmpty {
-                    PlatformBadge(name)
+                    PlatformBadge(name, platformCode: summary.platform)
                 }
                 Spacer(minLength: 0)
                 if let view {

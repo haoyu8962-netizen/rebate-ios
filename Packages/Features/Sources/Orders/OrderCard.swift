@@ -42,7 +42,7 @@ struct OrderCard: View {
             HStack(spacing: CouliSpacing.s2) {
                 let name = texts.text("platform." + item.platform)
                 if !name.isEmpty {
-                    PlatformBadge(name)
+                    PlatformBadge(name, platformCode: item.platform)
                 }
                 if let paid = OrderFormat.paidMillis(item) {
                     Text(verbatim: CouliFormat.timeListPast(epochMillis: paid, nowEpochMillis: now))

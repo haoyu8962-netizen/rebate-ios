@@ -85,20 +85,24 @@ public struct CouliTag: View {
     }
 }
 
-/// 平台来源标签（GUIDE §7.1）：白底 + source 描边、中性文字。平台 logo 未到，暂只用文字
-/// （TODO(N-11): design/icons/platform/ 到位后加小图标）。名称由调用方给（平台字典）。
+/// 平台来源标签（GUIDE §7.1、03 §10.2）：白底 + source 描边、中性文字；有包内官方图的平台在文字左侧加 14pt 图标
+/// （F-X-05a，design/specs/app-home.md「14px 官方图标」；画板：左内边距 4、图文间距 4、右内边距 8）。
+/// 暂缺图的平台、未知编码或不给编码时只显示文字（与原样式一致，不画占位）。名称由调用方给（平台字典），
+/// 读屏整个标签只读这个名称一次，图标不单独可聚焦。`remoteURL` 给 F-X-05 预留，本任务一律用内置图。
 public struct PlatformBadge: View {
     private let name: String
+    private let platformCode: String?
+    private let remoteURL: URL?
 
-    public init(_ name: String) {
+    public init(_ name: String, platformCode: String? = nil, remoteURL: URL? = nil) {
         self.name = name
+        self.platformCode = platformCode
+        self.remoteURL = remoteURL
     }
 
     public var body: some View {
-        Text(verbatim: name)
-            .couliFont(.caption)
+        content
             .foregroundColor(CouliColor.token("source.text"))
-            .padding(.horizontal, CouliSpacing.s2)
             .frame(minHeight: CouliGuideMetric.badgeMinHeight)
             .background(Capsule().fill(CouliColor.token("source.background")))
             .overlay(
@@ -108,7 +112,26 @@ public struct PlatformBadge: View {
                 )
             )
             .fixedSize()
-            .accessibilityLabel(Text(verbatim: name))
+            // 读屏只有一个静态文字元素「平台名」（与改动前的纯文字标签一致）；图标与内部文字不再单独暴露。
+            // 用 accessibilityRepresentation 而不是 accessibilityElement(children: .ignore)：后者在 XCUI 无障碍树里
+            // 仍会把内部 Image / StaticText 挂成子节点。
+            .accessibilityRepresentation { Text(verbatim: name) }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let code = platformCode, PlatformIcon.hasBuiltinImage(code) {
+            HStack(spacing: CouliSpacing.s1) {
+                PlatformIcon(platformCode: code, size: .badge, remoteURL: remoteURL)
+                Text(verbatim: name)
+                    .couliFont(.caption)
+            }
+            .padding(.leading, CouliSpacing.s1)
+            .padding(.trailing, CouliSpacing.s2)
+        } else {
+            Text(verbatim: name)
+                .couliFont(.caption)
+                .padding(.horizontal, CouliSpacing.s2)
+        }
     }
 }
 

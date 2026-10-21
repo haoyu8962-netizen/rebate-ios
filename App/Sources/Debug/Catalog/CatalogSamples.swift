@@ -69,6 +69,7 @@ enum CatalogSample {
             : couponFen > 0 ? CatalogText.buyCoupon : CatalogText.buy)
         return ProductCardData(
             platformName: name(platform),
+            platformCode: platform.rawValue,
             title: title,
             tags: tags,
             price: price,

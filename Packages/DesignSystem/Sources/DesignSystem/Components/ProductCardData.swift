@@ -22,6 +22,8 @@ public struct ProductCardTag: Sendable, Hashable {
 /// 价格与返利用 `PriceTagModel` / `RebateTagModel` / `EstNetModel` 的结果。
 public struct ProductCardData: Sendable {
     public var platformName: String
+    /// 平台编码（BR-TEXT-24 标识键，如 `pdd`），给来源标签取包内官方图（F-X-05a）；nil 或无图时只显示文字。
+    public var platformCode: String?
     public var title: String
     /// 优惠标签（预售标签由 `price.presaleLabel` 自动放在最前，不用重复给）。
     public var tags: [ProductCardTag]
@@ -51,6 +53,7 @@ public struct ProductCardData: Sendable {
 
     public init(
         platformName: String,
+        platformCode: String? = nil,
         title: String,
         tags: [ProductCardTag] = [],
         price: PriceTagContent,
@@ -68,6 +71,7 @@ public struct ProductCardData: Sendable {
         rebateNotLaunched: Bool = false
     ) {
         self.platformName = platformName
+        self.platformCode = platformCode
         self.title = title
         self.tags = tags
         self.price = price

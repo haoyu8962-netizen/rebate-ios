@@ -138,7 +138,7 @@ final class ComponentSnapshotTests: XCTestCase {
             RebateTag(Samples.rangeCard.rebate, placement: .detail, isLarge: true)
             EstNetLine(Samples.rangeCard.estNet, rebate: Samples.rangeCard.rebate)
             CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s2) {
-                PlatformBadge("淘宝")
+                PlatformBadge("淘宝", platformCode: "taobao")
                 CouliTag("有券")
                 CouliTag("预估中", style: .pending)
                 CouliTag("已结算", style: .success)
@@ -289,6 +289,7 @@ enum Samples {
         )
         return ProductCardData(
             platformName: platformName,
+            platformCode: platform.rawValue,
             title: title,
             tags: tags,
             price: PriceTagModel.make(

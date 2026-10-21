@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "couli",
+  "sourceCommit": "8209d6e31bf5e4eb336421f51aa5354eb6b539c2",
+  "files": [
+    {
+      "platformCode": "taobao",
+      "file": "taobao.png",
+      "sourcePath": "design/icons/platform/taobao.png",
+      "sha256": "d987c0084948eeeada4da71bce00653a9eb2e5743149adb4b25587adb573a4ea",
+      "bytes": 34046,
+      "width": 224,
+      "height": 224
+    },
+    {
+      "platformCode": "jd",
+      "file": "jd.png",
+      "sourcePath": "design/icons/platform/jd.png",
+      "sha256": "574f09c6bdfc99fa91e814a07e5fd569618060065fa723165059586b0e79766c",
+      "bytes": 6565,
+      "width": 224,
+      "height": 224
+    },
+    {
+      "platformCode": "pdd",
+      "file": "pinduoduo.png",
+      "sourcePath": "design/icons/platform/pinduoduo.png",
+      "sha256": "6b9ff1c90ef7c168ecda69b56e5b33ab609a7883a910688aeeee8ca8ee07997d",
+      "bytes": 9935,
+      "width": 224,
+      "height": 224
+    }
+  ]
+}

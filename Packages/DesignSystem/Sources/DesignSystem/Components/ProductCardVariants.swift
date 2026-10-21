@@ -50,7 +50,10 @@ public struct ProductGridCard<ImageContent: View>: View {
         let placement = Self.disclaimerPlacement(data)
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             ProductImageFrame(side: nil) { image }
-            BadgedTitle(platform: data.platformName, title: data.title, style: .footnote, lineLimit: 2)
+            BadgedTitle(
+                platform: data.platformName, platformCode: data.platformCode, title: data.title,
+                style: .footnote, lineLimit: 2
+            )
             if !data.allTags.isEmpty {
                 TagRow(tags: data.allTags)
             }
@@ -257,6 +260,7 @@ public struct ProductDetailHeader: View {
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 BadgedTitle(
                     platform: data.platformName,
+                    platformCode: data.platformCode,
                     title: data.title,
                     style: .body,
                     weight: .couliSemibold,

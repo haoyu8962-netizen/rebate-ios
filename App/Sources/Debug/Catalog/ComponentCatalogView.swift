@@ -248,9 +248,9 @@ struct ComponentGallery: View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             title("PlatformBadge · CouliTag · MatchBadge · AiLabel")
             CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s2) {
-                PlatformBadge(CatalogText.taobao)
-                PlatformBadge(CatalogText.jd)
-                PlatformBadge(CatalogText.pdd)
+                PlatformBadge(CatalogText.taobao, platformCode: Platform.taobao.rawValue)
+                PlatformBadge(CatalogText.jd, platformCode: Platform.jd.rawValue)
+                PlatformBadge(CatalogText.pdd, platformCode: Platform.pdd.rawValue)
                 CouliTag(CatalogText.couponTag)
                 CouliTag(PriceTerms.presale)
                 CouliTag(PriceTerms.specNote)

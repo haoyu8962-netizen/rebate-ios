@@ -56,12 +56,15 @@ public struct ProductCard<ImageContent: View>: View {
             ImageLeadingLayout(spacing: CouliSpacing.s3) {
                 ProductImageFrame(side: CouliGuideMetric.listImage) { image }
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                    BadgedTitle(platform: data.platformName, title: data.title, style: .footnote, lineLimit: 2)
-                        .padding(
-                            .trailing,
-                            layout == .agent && ProductCardData.showsDisclaimerButton(data)
-                                ? CouliSpacing.s6 + CouliSpacing.s1 : 0
-                        )
+                    BadgedTitle(
+                        platform: data.platformName, platformCode: data.platformCode, title: data.title,
+                        style: .footnote, lineLimit: 2
+                    )
+                    .padding(
+                        .trailing,
+                        layout == .agent && ProductCardData.showsDisclaimerButton(data)
+                            ? CouliSpacing.s6 + CouliSpacing.s1 : 0
+                    )
                     if !priceAreaFullWidth {
                         priceArea
                     }
@@ -280,6 +283,7 @@ struct TagRow: View {
 /// 读屏角色为标题，可用标题转子定位；列表卡里的不是。
 public struct BadgedTitle: View {
     private let platform: String
+    private let platformCode: String?
     private let title: String
     private let style: CouliTextStyle
     private let weight: Font.Weight
@@ -288,9 +292,11 @@ public struct BadgedTitle: View {
     @ScaledMetric private var fontSize: CGFloat
     @Environment(\.displayScale) private var displayScale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(
         platform: String,
+        platformCode: String? = nil,
         title: String,
         style: CouliTextStyle,
         weight: Font.Weight = .regular,
@@ -298,6 +304,7 @@ public struct BadgedTitle: View {
         isHeader: Bool = false
     ) {
         self.platform = platform
+        self.platformCode = platformCode
         self.title = title
         self.style = style
         self.weight = weight
@@ -334,7 +341,9 @@ public struct BadgedTitle: View {
     @MainActor
     private func renderBadge() -> UIImage {
         let renderer = ImageRenderer(
-            content: PlatformBadge(platform).environment(\.dynamicTypeSize, dynamicTypeSize)
+            content: PlatformBadge(platform, platformCode: platformCode)
+                .environment(\.dynamicTypeSize, dynamicTypeSize)
+                .environment(\.colorScheme, colorScheme)
         )
         renderer.scale = displayScale
         return renderer.uiImage ?? UIImage()

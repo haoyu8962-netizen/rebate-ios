@@ -58,6 +58,7 @@ public enum ProductCardMapper {
             .filter { !$0.isEmpty && $0 != PriceTerms.presale }.map { ProductCardTag($0) } ?? []
         let data = ProductCardData(
             platformName: texts(ProductCardKeys.platform(platform)),
+            platformCode: platform,
             title: card["title"] as? String ?? "",
             tags: tags,
             price: price,
