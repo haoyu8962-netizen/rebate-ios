@@ -3,6 +3,7 @@
 
 /// 契约枚举 `admin_permission`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case dashboardView = "dashboard.view"
     case userList = "user.list"
     case userLookup = "user.lookup"
     case piiRevealPhone = "pii.reveal_phone"
@@ -60,6 +61,7 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     case unknown = "__unknown__"
 
     public static let allCases: [AdminPermission] = [
+        .dashboardView,
         .userList,
         .userLookup,
         .piiRevealPhone,
@@ -191,5 +193,112 @@ public enum AdminAuthLevel: Swift.String, Swift.Sendable, Swift.CaseIterable, Sw
     public init(from decoder: any Swift.Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
         self = AdminAuthLevel(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_dashboard_todo_key`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminDashboardTodoKey: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case withdrawReviewPending = "withdraw_review_pending"
+    case claimReviewPending = "claim_review_pending"
+    case settleBillPending = "settle_bill_pending"
+    case reconDiffOpen = "recon_diff_open"
+    case appealPending = "appeal_pending"
+    case agentReportOverdue = "agent_report_overdue"
+    case beneficiaryHeldOverdue = "beneficiary_held_overdue"
+    case unionAuthExpiring = "union_auth_expiring"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminDashboardTodoKey] = [
+        .withdrawReviewPending,
+        .claimReviewPending,
+        .settleBillPending,
+        .reconDiffOpen,
+        .appealPending,
+        .agentReportOverdue,
+        .beneficiaryHeldOverdue,
+        .unionAuthExpiring,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminDashboardTodoKey(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_search_hit_type`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminSearchHitType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case order
+    case user
+    case withdrawal
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminSearchHitType] = [
+        .order,
+        .user,
+        .withdrawal,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminSearchHitType(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `export_status`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum ExportStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case pending
+    case running
+    case done
+    case failed
+    case expired
+    case cancelled
+    case unknown = "__unknown__"
+
+    public static let allCases: [ExportStatus] = [
+        .pending,
+        .running,
+        .done,
+        .failed,
+        .expired,
+        .cancelled,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = ExportStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `export_resource`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum ExportResource: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case users
+    case auditLogs = "audit_logs"
+    case unknown = "__unknown__"
+
+    public static let allCases: [ExportResource] = [
+        .users,
+        .auditLogs,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = ExportResource(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_claim_match_field`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminClaimMatchField: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case orderNo = "order_no"
+    case paidDate = "paid_date"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminClaimMatchField] = [
+        .orderNo,
+        .paidDate,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminClaimMatchField(rawValue: rawValue) ?? .unknown
     }
 }

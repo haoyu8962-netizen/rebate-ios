@@ -201,6 +201,11 @@ public enum ErrorCodes {
             retryKindByReason: [:],
             isDeprecated: false, isP1: false
         ),
+        30154: ErrorCodeInfo(
+            code: 30154, http: 422, retryKind: .never,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
         30201: ErrorCodeInfo(
             code: 30201, http: 404, retryKind: .never,
             retryKindByReason: [:],
@@ -356,6 +361,11 @@ public enum ErrorCodes {
             retryKindByReason: [:],
             isDeprecated: false, isP1: false
         ),
+        30417: ErrorCodeInfo(
+            code: 30417, http: 422, retryKind: .never,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
         30501: ErrorCodeInfo(
             code: 30501, http: 422, retryKind: .never,
             retryKindByReason: [:],
@@ -463,6 +473,11 @@ public enum ErrorCodes {
         ),
         44003: ErrorCodeInfo(
             code: 44003, http: 403, retryKind: .afterAction,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
+        44004: ErrorCodeInfo(
+            code: 44004, http: 403, retryKind: .never,
             retryKindByReason: [:],
             isDeprecated: false, isP1: false
         ),

@@ -13,7 +13,8 @@ import Session
 /// - 10405 进强更不重放；本机版本不低于 data.min_supported_version（或它为空）而会话是 deletion_only 时只刷新；
 ///   reason=no_account 提示先更新。42901 按 Retry-After（非负整数秒；缺省或非法一律 5 秒）禁用按钮。
 /// - 带 data.reason 的取 error.<code>.<reason>，字典没有回落 error.<code>；表外码与废弃码：5xxxx 通用错误态附 trace6，
-///   其余用服务端 msg（fallbackMessage）；表内无专门分支、字典也没有文案键的 1xxxx（10008 / 10009）同样回落 msg（CT-LOCK-01）。
+///   其余用服务端 msg（fallbackMessage）；表内无专门分支、字典也没有文案键的码（10008 / 10009 / 30154 / 30417 / 44004）同样回落 msg
+///   （CT-LOCK-01、CT-LOCK-02）。
 public enum ErrorActionMapper {
     private static let loginRoute = "Login"
     /// 20004 后回到登录页的第三方登录接口（其余，如二次验证，回到验证面板）。
@@ -239,9 +240,9 @@ public enum ErrorActionMapper {
         if context.isServerError {
             return context.withTrace(context.effect(.genericError))
         }
-        if (10000...19999).contains(code), context.textKey == nil {
-            // CT-LOCK-01：表内但用户侧字典没有文案键的 1xxxx（目前只有只出现在 /admin/v1 的 10008 / 10009）与表外 1xxxx
-            // 同一回落：用服务端 msg，不写专门分流（与鸿蒙 / Android 同口径）
+        if context.textKey == nil {
+            // CT-LOCK-01 / CT-LOCK-02：表内但用户侧字典没有文案键的码（页面自处理码、置灰码、5xxxx 已在上面分走；目前只有只出现在
+            // /admin/v1 的 10008 / 10009 / 30154 / 30417 / 44004）与表外码同一回落：用服务端 msg，不写专门分流（三端同口径）
             return context.effect(.fallbackMessage, key: .some(nil))
         }
         return context.effect(.toast)

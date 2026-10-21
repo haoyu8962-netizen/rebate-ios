@@ -132,7 +132,8 @@ final class AppBridgeServices: BridgeServices {
     static let loginPollNanos: UInt64 = 100_000_000
 
     /// signed_paths 已在协议层核对；按 method + path 找 openapi 的签名接口，由 ApiClient 签名代发（03 §5.3 代发约定）。
-    /// TODO(N-22)：openapi 9cd1e6f 没有 POST /v1/orders/claims，找不到时按「本端不支持」结束，不臆造请求（与 Android 相同）。
+    /// 契约即白名单（CT-LOCK-02 编排裁定）：原生侧不另设拦截表；服务端 bridge_disabled_methods 紧急关闭三端尚未接入（F-X-24）；
+    /// 找不到时按「本端不支持」结束，不臆造请求（与 Android 相同）。TODO(N-22)：幂等键由 ApiClient 新生成（03 §5.3 未定）。
     func signedRequest(
         method: String,
         path: String,
@@ -140,11 +141,30 @@ final class AppBridgeServices: BridgeServices {
         validity: BridgeCallValidity
     ) async -> BridgeOutcome {
         guard let client = web?.network.client else { return .fail(BridgeCode.nativeError) }
+        return await Self.signedRequest(
+            client: client,
+            method: method,
+            path: path,
+            bodyJson: bodyJson,
+            validity: validity
+        )
+    }
+
+    /// 桥代发用的签名接口（method + 去掉查询串的 path 对应 openapi 里 x-signed 的 operation）；契约里没有时为 nil。
+    static func signedOperation(method: String, path: String) -> ApiOperation? {
+        ApiOperations.all.values.first { $0.method == method && $0.pathTemplate == path && $0.signed }
+    }
+
+    static func signedRequest(
+        client: ApiClient,
+        method: String,
+        path: String,
+        bodyJson: String?,
+        validity: BridgeCallValidity
+    ) async -> BridgeOutcome {
         let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
         let bare = parts.first.map(String.init) ?? path
-        guard let operation = ApiOperations.all.values.first(where: {
-            $0.method == method && $0.pathTemplate == bare && $0.signed
-        }) else {
+        guard let operation = signedOperation(method: method, path: bare) else {
             return .fail(BridgeCode.notSupported)
         }
         let query = parts.count > 1 ? String(parts[1]) : nil

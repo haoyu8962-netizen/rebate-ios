@@ -2,7 +2,8 @@ import Foundation
 import Generated
 
 /// routes.json params 的 JSON Schema 校验（03 §4.4「统一入口守卫」：所有来源都校验参数）。
-/// 只认 routes.json 用到的关键字：type、enum、minLength、maxLength、pattern、required、additionalProperties。
+/// 只认 routes.json 用到的关键字：type、enum、minLength、maxLength、pattern、minimum（CT-LOCK-02：Agreement.version）、required、
+/// additionalProperties。
 public enum RouteParamValidator {
     public static func isValid(_ params: [String: JSONValue], spec: RouteSpec) -> Bool {
         for name in spec.requiredParams where params[name] == nil {
@@ -31,6 +32,9 @@ public enum RouteParamValidator {
                 return false
             }
         }
+        guard meetsMinimum(value, param.minimum) else {
+            return false
+        }
         guard let text = value.stringValue else {
             return true
         }
@@ -46,6 +50,19 @@ public enum RouteParamValidator {
             return false
         }
         return true
+    }
+
+    /// minimum 只约束数值（integer / number）；没有 minimum 或不是数值时不限。
+    private static func meetsMinimum(_ value: JSONValue, _ minimum: Int?) -> Bool {
+        guard let minimum else { return true }
+        switch value {
+        case let .integer(number):
+            return number >= Int64(minimum)
+        case let .number(number):
+            return number >= Double(minimum)
+        default:
+            return true
+        }
     }
 
     private static func matchesType(_ value: JSONValue, _ type: RouteParamType) -> Bool {

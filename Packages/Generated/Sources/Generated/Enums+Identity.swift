@@ -182,6 +182,7 @@ public enum ConsentType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift
     case idVerification = "id_verification"
     case personalization
     case laborAgreement = "labor_agreement"
+    case clipboardAutoImport = "clipboard_auto_import"
     case unknown = "__unknown__"
 
     public static let allCases: [ConsentType] = [
@@ -191,6 +192,7 @@ public enum ConsentType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift
         .idVerification,
         .personalization,
         .laborAgreement,
+        .clipboardAutoImport,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {
@@ -307,6 +309,29 @@ public enum RiskState: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.C
     public init(from decoder: any Swift.Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
         self = RiskState(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `risk_reason_category`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum RiskReasonCategory: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case maliciousRights = "malicious_rights"
+    case fraudInvite = "fraud_invite"
+    case abnormalTrade = "abnormal_trade"
+    case accountSecurity = "account_security"
+    case other
+    case unknown = "__unknown__"
+
+    public static let allCases: [RiskReasonCategory] = [
+        .maliciousRights,
+        .fraudInvite,
+        .abnormalTrade,
+        .accountSecurity,
+        .other,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = RiskReasonCategory(rawValue: rawValue) ?? .unknown
     }
 }
 

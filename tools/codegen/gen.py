@@ -430,7 +430,7 @@ def gen_error_codes(out: dict[str, str]):
 
 # routes.json 参数 schema 只允许这些关键字；出现别的就报错，不静默丢弃约束。
 PARAM_SCHEMA_KEYS = {"type", "additionalProperties", "properties", "required"}
-PARAM_PROPERTY_KEYS = {"type", "enum", "minLength", "maxLength", "pattern", "description", "additionalProperties"}
+PARAM_PROPERTY_KEYS = {"type", "enum", "minLength", "maxLength", "pattern", "minimum", "description", "additionalProperties"}
 PARAM_TYPES = {"string", "integer", "number", "boolean", "object", "array"}
 
 
@@ -481,6 +481,14 @@ def route_params(schema, ctx: str, indent: str):
                 args.append(f"{label}: {value}")
         if "pattern" in prop:
             args.append(f"pattern: {swift_string(as_str(prop['pattern'], pctx + '.pattern'))}")
+        if "minimum" in prop:
+            # CT-LOCK-02：Agreement.version（integer，minimum 1）。只接受整数下限，且只用于 integer 参数。
+            value = prop["minimum"]
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise GenError(f"{pctx}.minimum 应为整数")
+            if ptype != "integer":
+                raise GenError(f"{pctx}.minimum 只支持 integer 参数")
+            args.append(f"minimum: {value}")
         lines.append(f"{indent}RouteParamSpec({', '.join(args)}),")
     return lines, required, additional
 
@@ -606,10 +614,12 @@ def gen_routes(out: dict[str, str], route_entry_cases):
         "    public let minLength: Swift.Int?",
         "    public let maxLength: Swift.Int?",
         "    public let pattern: Swift.String?",
+        "    public let minimum: Swift.Int?",
         "",
         "    public init(",
         "        name: Swift.String, type: RouteParamType, enumValues: [Swift.String]? = nil,",
-        "        minLength: Swift.Int? = nil, maxLength: Swift.Int? = nil, pattern: Swift.String? = nil",
+        "        minLength: Swift.Int? = nil, maxLength: Swift.Int? = nil, pattern: Swift.String? = nil,",
+        "        minimum: Swift.Int? = nil",
         "    ) {",
         "        self.name = name",
         "        self.type = type",
@@ -617,6 +627,7 @@ def gen_routes(out: dict[str, str], route_entry_cases):
         "        self.minLength = minLength",
         "        self.maxLength = maxLength",
         "        self.pattern = pattern",
+        "        self.minimum = minimum",
         "    }",
         "}",
         "",
@@ -1105,7 +1116,8 @@ def gen_api_operations(out: dict[str, str]):
             if unknown:
                 raise GenError(f"{where} 有不认识的扩展字段：{unknown}")
             auth = op.get("x-auth")
-            if auth not in ("none", "optional", "login", "realname"):
+            # CT-LOCK-02：契约 x-auth 加 phone（04 §5，/v1/me/inviter 等新接口；G21）。
+            if auth not in ("none", "optional", "login", "phone", "realname"):
                 raise GenError(f"{where} 的 x-auth 不认识：{auth!r}")
             flags = {}
             for key in ("x-signed", "x-idempotent"):
@@ -1170,7 +1182,7 @@ def gen_api_operations(out: dict[str, str]):
         "    /// 大写 HTTP 方法。",
         "    public let method: Swift.String",
         "    public let pathTemplate: Swift.String",
-        "    /// x-auth：none / optional / login / realname。",
+        "    /// x-auth：none / optional / login / phone / realname。",
         "    public let auth: Swift.String",
         "    public let signed: Swift.Bool",
         "    public let idempotent: Swift.Bool",

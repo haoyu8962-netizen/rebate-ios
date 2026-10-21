@@ -63,10 +63,12 @@ public struct RouteParamSpec: Swift.Sendable, Swift.Equatable {
     public let minLength: Swift.Int?
     public let maxLength: Swift.Int?
     public let pattern: Swift.String?
+    public let minimum: Swift.Int?
 
     public init(
         name: Swift.String, type: RouteParamType, enumValues: [Swift.String]? = nil,
-        minLength: Swift.Int? = nil, maxLength: Swift.Int? = nil, pattern: Swift.String? = nil
+        minLength: Swift.Int? = nil, maxLength: Swift.Int? = nil, pattern: Swift.String? = nil,
+        minimum: Swift.Int? = nil
     ) {
         self.name = name
         self.type = type
@@ -74,6 +76,7 @@ public struct RouteParamSpec: Swift.Sendable, Swift.Equatable {
         self.minLength = minLength
         self.maxLength = maxLength
         self.pattern = pattern
+        self.minimum = minimum
     }
 }
 
@@ -126,7 +129,8 @@ public enum Routes {
             agentGuide: false,
             agentGuideAccount: nil,
             params: [
-                RouteParamSpec(name: "type", type: .string, enumValues: ["agreement", "privacy", "sdk_list"]),
+                RouteParamSpec(name: "type", type: .string, enumValues: ["agreement", "privacy", "sdk_list", "labor_agreement"]),
+                RouteParamSpec(name: "version", type: .integer, minimum: 1),
             ],
             requiredParams: [],
             additionalParams: false
