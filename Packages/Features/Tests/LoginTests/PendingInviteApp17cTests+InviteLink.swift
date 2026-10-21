@@ -51,7 +51,7 @@ extension PendingInviteApp17cTests {
     }
 
     /// 游客本人码为 nil；已登录本人码未知（nil）不当本人码；各种格式不符的码游客 / 已登录都 drop。
-    func testDispatcherNilOwnCodeAndBadFormats() {
+    func testDispatcherNilOwnCodeAndBadFormats() throws {
         let guest = InviteLinkDispatcher.decide(
             InviteLinkInput(rawCode: codeK, consented: true, guest: true, ownCode: nil, eligible: false)
         )
@@ -62,20 +62,8 @@ extension PendingInviteApp17cTests {
         )
         XCTAssertEqual(unknownOwn.kindRaw, InviteLinkDecision.inviteBackfill, "本人码未知不当本人码")
         XCTAssertEqual(unknownOwn.code, codeK)
-        // 长度不对、含字符集外字符（0 1 I O 与符号）、空串
-        let bad = [
-            "",
-            "K7M2Q",
-            "K7M2QXA",
-            "K7M2Q0",
-            "K7M2Q1",
-            "K7M2QI",
-            "K7M2QO",
-            "K7M2Q-",
-            "K7M2Q!",
-            "https://x/i/K7M2QX",
-        ]
-        for raw in bad {
+        // 共用 v2 invalid 包含原 10 条手写样例，另补 K0M2QX；游客 / 已登录的分流断言均保留。
+        for raw in try PendingInviteSetVectors.load().invalid {
             for asGuest in [true, false] {
                 let decision = InviteLinkDispatcher.decide(
                     InviteLinkInput(rawCode: raw, consented: true, guest: asGuest, ownCode: nil, eligible: true)
