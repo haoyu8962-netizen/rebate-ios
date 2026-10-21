@@ -79,7 +79,9 @@ final class AppClipboard: ObservableObject {
     let history: PromptHistory
     let writer: ClipboardWriter
     let seeds = ProductSeeds()
-    let invitePrefill = InvitePrefill()
+    /// 游客邀请确认后的待绑定码（APP-17c）：生产用 AppLogin 的那一份（G21，`make` 传入）；离开登录页不丢，撤回同意、基本模式、
+    /// 切换环境时清。
+    let pendingInvite: PendingInviteCode
     private(set) lazy var watcher = ClipboardWatcher { [weak self] event, round in
         self?.evaluate(event: event, round: round)
     }
@@ -148,9 +150,11 @@ final class AppClipboard: ObservableObject {
         api: ParseApi,
         router: Router,
         deps: Deps,
-        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
+        pendingInvite: PendingInviteCode = PendingInviteCode()
     ) {
         self.system = system
+        self.pendingInvite = pendingInvite
         self.store = store
         self.router = router
         self.deps = deps
@@ -192,11 +196,7 @@ final class AppClipboard: ObservableObject {
         suppressedWeb.formIntersection(alive)
         fills = fills.filter { alive.contains($0.key) }
         seeds.retain(alive)
-        // 预填只给这一次登录：登录页出栈后丢弃（G16）
-        if !next.contains(where: { $0.route == Self.loginRoute }),
-           path.contains(where: { $0.route == Self.loginRoute }) {
-            invitePrefill.discard()
-        }
+        // 待绑定码有效期为本次进程：登录页出栈不丢（APP-17c Q1，替代原 G16「出栈即丢」）
         path = next
         screenChanged()
     }

@@ -88,8 +88,6 @@ public final class LoginPageConfig {
     public var onLoggedIn: (LoginOutcome) -> Void = { _ in }
     /// 10405（受限登录查不到账号 no_account 等）：App 提示先更新（文案键），关闭登录页回到强更页。
     public var onForceUpdate: (String?) -> Void = { _ in }
-    /// 游客在剪贴板邀请提示点了确认（APP-07，G16）：进入验证码页时取一次预填的邀请码（取走即丢弃，之后以用户输入为准）。
-    public var takeInvitePrefill: () -> String? = { nil }
     /// 邀请码行【粘贴】（APP-07，LoginCodeInvite）：系统粘贴控件交回的文本由 App 只抽码；nil = 不显示。
     public var invitePaste: LoginInvitePaste?
 

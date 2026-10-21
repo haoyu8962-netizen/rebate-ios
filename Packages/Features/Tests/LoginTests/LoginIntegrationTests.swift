@@ -72,17 +72,22 @@ final class LoginIntegrationTests: XCTestCase {
         XCTAssertNil(env.client.isolatedSessionScope)
     }
 
-    /// §2.5 登录成功后恢复 pending_action；请求带包内协议版本、勾选时刻与规范化的邀请码；先保存会话再关登录页、交 Router。
+    /// §2.5 登录成功后恢复 pending_action；请求带包内协议版本、勾选时刻与待绑定码（APP-17c：邀请码只来自待绑定码，BR-INV-06
+    /// 2026-10-18）；先保存会话再关登录页、交 Router。
     func testLoginResumesPendingAction() async throws {
         LoginStubProtocol.install { _ in okReply(loginData(scope: "full", isNew: true,
                                                            invite: "{\"result\":\"bound\",\"code\":null}")) }
         let env = LoginHarness()
+        let pendingInvite = PendingInviteCode()
+        pendingInvite.set("K7M2QX")
+        env.service.pendingInvite = pendingInvite
         env.guestOpensOrders()
         XCTAssertEqual(env.routes, ["Login"])
         XCTAssertTrue(env.router.hasPendingAction)
         let outcome = await env.service.login(phone: "+86 138 0013 8000", code: code,
-                                              consentAtMillis: 1_700_000_000_000, invite: " k7m2qx ",
+                                              consentAtMillis: 1_700_000_000_000, invite: "",
                                               restricted: false)
+        XCTAssertNil(pendingInvite.peek(), "提交后清除")
         XCTAssertEqual(outcome.stateRaw, LoginOutcome.loggedIn)
         XCTAssertEqual(outcome.actions, ["save_session", "resume_pending"])
         XCTAssertEqual(outcome.inviteResult, "bound")

@@ -25,7 +25,8 @@ extension AppClipboard {
                 networkEpoch: { client.invalidationTicket },
                 serverForced: { routing.update.onServerForced() },
                 networkForced: { routing.update.on10405(minSupported: $0) }
-            )
+            ),
+            pendingInvite: login.pendingInvite
         )
         clipboard.connect(privacy: privacy, login: login, records: records)
         return clipboard
@@ -134,10 +135,12 @@ extension AppClipboard {
 extension AppClipboard {
     // MARK: - 作废出口
 
-    /// 隐私结论变化：不再是已同意（撤回、基本模式）时作废全部；hash 记录由撤回清理项删除（确认落盘），这里另尽力清一次。
+    /// 隐私结论变化：不再是已同意（撤回、基本模式）时作废全部、清待绑定码（APP-17c）；hash 记录由撤回清理项删除（确认落盘），
+    /// 这里另尽力清一次。
     func privacyChanged(_ state: PrivacyState) {
         screenChanged()
         guard state != .consented else { return }
+        pendingInvite.clear()
         invalidateAll()
         try? ledger.clear()
         try? history.clear()
@@ -149,13 +152,14 @@ extension AppClipboard {
         invalidateAll()
     }
 
-    /// 登录、退出、切换账号：作废提示条与在途 parse。
+    /// 登录、退出、切换账号：作废提示条与在途 parse（待绑定码不清：第三方新号要留给 InviteBackfill 预填）。
     func sessionChanged() {
         invalidateAll()
     }
 
-    /// 切换环境：作废全部。
+    /// 切换环境：作废全部、清待绑定码（APP-17c）。
     func environmentSwitched() {
+        pendingInvite.clear()
         invalidateAll()
     }
 

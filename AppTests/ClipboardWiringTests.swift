@@ -239,6 +239,7 @@ final class ClipboardWiringTests: XCTestCase {
 
     // MARK: - 邀请（AC-S1-63）
 
+    /// APP-17c（F-CLIP-06、AC-S1-63 ①，G19）：游客点确认 → 记为待绑定码，不跳登录页、不发请求；读取不取走。
     func testGuestInviteConfirmPrefillsLoginWithoutRequest() throws {
         let fixture = make()
         fixture.clipboard.sceneActive()
@@ -247,10 +248,11 @@ final class ClipboardWiringTests: XCTestCase {
         guard case let .inviteConfirm(code) = result.kind else { return XCTFail("游客出邀请确认") }
         XCTAssertEqual(code, "K7M2QX")
         fixture.clipboard.confirmInvite(result.id)
-        XCTAssertEqual(fixture.routing.router.path.last?.route, "Login")
-        XCTAssertEqual(fixture.clipboard.invitePrefill.take(), "K7M2QX")
-        XCTAssertNil(fixture.clipboard.invitePrefill.take(), "取走即丢弃")
-        XCTAssertEqual(fixture.api.bodies.count, 0, "游客只预填不上传")
+        XCTAssertTrue(fixture.routing.router.path.isEmpty, "不跳登录页（G19）")
+        XCTAssertNil(fixture.clipboard.result)
+        XCTAssertEqual(fixture.clipboard.pendingInvite.peek(), "K7M2QX")
+        XCTAssertEqual(fixture.clipboard.pendingInvite.peek(), "K7M2QX", "读取不取走")
+        XCTAssertEqual(fixture.api.bodies.count, 0, "游客只记下不上传")
     }
 
     func testProductPriorityAndLoggedInInviteSilent() async {

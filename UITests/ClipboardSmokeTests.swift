@@ -5,7 +5,7 @@ import XCTest
 /// （`-CouliClipboardDiagnostics`：探测、parse 请求、App 写系统剪贴板的次数，不含内容）。测试进程往系统剪贴板写样例数据，模拟别的 App
 /// 复制（演示链接与邀请码，没有个人信息）。断言：命中出提示条、点击前 0 次请求、点系统粘贴控件后恰好 1 次并打开详情、全程 App 写入次数为 0、
 /// 系统剪贴板 changeCount 前后不变、从不出现系统「允许粘贴」弹窗；内容没变不再提示；敏感页（Login）回前台不读、返回首页不补出；游客粘贴
-/// 邀请内容出邀请提示条、确认后进登录页且不发请求。设置 TEST_RUNNER_COULI_SHOT_DIR 时另跑截图用例。
+/// 邀请内容出邀请提示条、确认后提示条消失并留在首页、不发请求（G19）。设置 TEST_RUNNER_COULI_SHOT_DIR 时另跑截图用例。
 @MainActor
 final class ClipboardSmokeTests: XCTestCase {
     private let sampleLink = "【淘宝】全脂纯牛奶 https://e.tb.cn/h.Demo01?tk=Sample 「全脂纯牛奶 250ml」 复制这段话打开"
@@ -103,7 +103,7 @@ final class ClipboardSmokeTests: XCTestCase {
         assertNoPasteAlert(app, "敏感页")
     }
 
-    func testGuestInviteFromHomeCardPrefillsLoginWithoutRequest() {
+    func testGuestInviteFromHomeCardStaysHomeWithoutLoginOrRequest() {
         let invite = "好友邀请你一起省钱，邀请码 K7M3QX"
         let app = launch(clip: invite)
         sleep(1)
@@ -112,8 +112,10 @@ final class ClipboardSmokeTests: XCTestCase {
         XCTAssertTrue(element(app, "clipboard.invitePrompt").waitForExistence(timeout: 10), "游客粘贴邀请内容没有出邀请提示条")
         XCTAssertTrue(app.buttons["粘贴并绑定邀请人"].exists, "邀请条按钮读屏名")
         element(app, "clipboard.invite.confirm").tap()
-        XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10), "确认后没有进登录页")
-        XCTAssertTrue(diagnostics(app).contains("parse=0"), "游客只预填不上传：\(diagnostics(app))")
+        XCTAssertTrue(element(app, "clipboard.invitePrompt").waitForNonExistence(timeout: 10), "确认后邀请提示条应消失")
+        XCTAssertTrue(element(app, "clipboard.homeCard.paste").isHittable, "确认后仍在首页")
+        XCTAssertFalse(element(app, "login.page").exists, "G19：确认邀请不打开登录页")
+        XCTAssertTrue(diagnostics(app).contains("parse=0"), "游客确认只记录待绑定码、不上传：\(diagnostics(app))")
         assertNoPasteAlert(app, "邀请")
     }
 }

@@ -5,8 +5,10 @@ import Session
 
 /// 短信登录的执行器（APP-05a；03 §4.2、§4.4；BR-ID-04、BR-ID-05、BR-ID-10）：
 /// - 发码：先规范化，不合法本地给 20001 同一文案、不发出；同一号码截止前不再发出；成功 60 秒倒计时，42901 按 Retry-After；
-/// - 登录：手机号、6 位码、协议勾选时刻齐全才发；带包内协议版本与勾选 / 确认时刻；受限登录不带邀请码；ApiClient 保存
-///   会话成功才算登录成功，之后按 AfterLogin.plan 依次执行；
+/// - 登录：手机号、6 位码、协议勾选时刻齐全才发；带包内协议版本与勾选 / 确认时刻；ApiClient 保存会话成功才算登录成功，
+///   之后按 AfterLogin.plan 依次执行；
+/// - 邀请码（APP-17c，BR-INV-06）：只带待绑定码 `pendingInvite`，本地校验与 BUSY 都通过、即将发出时当场取走，之后不论结果都
+///   不再带（G18），在途期间新到的码不受影响；受限登录不读不清（G07）；
 /// - 归属（共性 1）：发码、登录、受限复查都以本次尝试的 `AttemptOwner` 发出（`ApiClient.send(_:isValid:)`），并在可取消的
 ///   Task 里运行。`invalidateAttempt` 同步作废归属并取消这些 Task（传输层随 Task 取消）；ApiClient 在保存会话的同一把锁里
 ///   核对归属，迟到的旧响应不保存会话、不通知 Router、不恢复待办；
@@ -28,6 +30,8 @@ public final class LoginService {
     private var commitSerial: UInt64 = 0
     /// 手机号绑定状态（APP-05b）：短信登录保存会话时记为已绑（短信登录的账号一定有手机号）。nil = 没接。
     public var phoneBinding: PhoneBindingStore?
+    /// 待绑定码（APP-17c）：App 注入进程内唯一的一份（AppLogin，G21）；nil = 没接，登录不带邀请码。
+    public var pendingInvite: PendingInviteCode?
     /// 本次尝试作废时（换号、取消、登录页出栈、登出）同步调用（APP-05b：第三方授权的等待随之终止）。
     var onAttemptInvalidated: [() -> Void] = []
 
@@ -159,7 +163,8 @@ public final class LoginService {
     }
 
     /// 短信登录。`consentAtMillis`：勾选或确认框同意的时刻；`restricted`：从强更页进入的受限登录（APP-02c 内部标记）。
-    public func login(phone rawPhone: String, code: String, consentAtMillis: Int64?, invite: String,
+    /// `invite`：旧邀请码输入框的值，已不再使用（BR-INV-06 2026-10-18：邀请码只来自待绑定码）；签名留给登录页改版任务删。
+    public func login(phone rawPhone: String, code: String, consentAtMillis: Int64?, invite _: String,
                       restricted: Bool) async -> LoginOutcome {
         guard let phone = PhoneNumber.normalize(rawPhone).normalized else {
             let local = LoginErrorMapper.map(op: LoginErrorMapper.loginBySms, code: 20001, data: Self.phoneInvalidData)
@@ -182,7 +187,9 @@ public final class LoginService {
             "legal_versions": ["privacy": legal.privacy, "agreement": legal.agreement],
             "consent_at": Self.isoTime(consentAtMillis),
         ]
-        if let wire = InviteField.wireValue(invite, restricted: restricted) {
+        // 本地校验与 BUSY 都已通过、下面就发出：此刻取走本次提交的那一份（只清这一份，在途期间新写入的码保留到下一次）
+        if !restricted, let invite = pendingInvite?.consumeForRequest(),
+           let wire = InviteField.wireValue(invite, restricted: false) {
             body["invite_code"] = wire
         }
         let text = Self.json(body)

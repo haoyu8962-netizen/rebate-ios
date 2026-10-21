@@ -17,7 +17,7 @@ struct ClipboardResult {
         case unrecognized(String, prefill: String?)
         /// 多条结果：当前页弹层按搜索卡样式列出（G09）；行内 error_code 逐条按码处理（共性第 5 条）。
         case cardList([ParseRow], traceId: String?)
-        /// 只有邀请内容（游客）：本地抽出的码，确认后预填登录页，不发请求、不持久化（G07、共性第 15 条）。
+        /// 只有邀请内容（游客）：本地抽出的码，确认后记为待绑定码（不跳登录，APP-17c），不发请求、不持久化（G07、共性第 15 条）。
         case inviteConfirm(code: String)
     }
 
@@ -74,29 +74,5 @@ final class ProductSeeds {
 
     func retain(_ alive: Set<UUID>) {
         claimed = claimed.filter { alive.contains($0.key) }
-    }
-}
-
-/// 游客邀请预填（brief §2.7；G16）：游客确认后码放进这里，经 Router 打开 Login；进入验证码页时填一次（之后以用户输入为准），取走即丢弃；
-/// 登录页出栈或进程结束即丢弃。只在进程内，不持久化、不上传（随登录提交 LoginBySmsRequest.invite_code）。
-@MainActor
-final class InvitePrefill {
-    private var code: String?
-
-    func set(_ value: String) {
-        code = value
-    }
-
-    func take() -> String? {
-        defer { code = nil }
-        return code
-    }
-
-    func discard() {
-        code = nil
-    }
-
-    var pending: Bool {
-        code != nil
     }
 }

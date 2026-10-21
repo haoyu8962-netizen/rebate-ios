@@ -98,7 +98,7 @@ extension AppClipboard {
                 manualParse(upload, title: text.flatMap(ClipboardText.quotedTitle), origin: origin)
             }
         case ManualPasteAction.invite:
-            // 只有邀请内容：不上传 parse（共性第 13、15 条）。游客出确认，确认后预填登录页；已登录按 G01 静默（共性第 19 条）
+            // 只有邀请内容：不上传 parse（共性第 13、15 条）。游客出确认，确认后记为待绑定码（不跳登录，APP-17c）；已登录按 G01 静默（共性第 19 条）
             // TODO(N-30) G01：契约补 POST /v1/me/inviter 与 InviteBackfill 路由后接已登录用户的补填
             if let code = decision.code, deps.guest() {
                 show(origin, .inviteConfirm(code: code))
@@ -271,7 +271,7 @@ extension AppClipboard {
         open(Self.searchRoute, query.isEmpty ? [:] : ["q": .string(query)])
     }
 
-    /// 邀请确认（游客）：发起页仍是当前页才预填登录页；不发请求（brief §2.7、G16）。
+    /// 邀请确认（游客）：发起页仍是当前页才记为待绑定码（替换旧的）；不跳登录页、不发请求（APP-17c：F-CLIP-06、AC-S1-63 ①、G19）。
     func confirmInvite(_ id: Int64) {
         guard let result = current(id), case let .inviteConfirm(code) = result.kind, overlayClear(), !blockActive
         else { return }
@@ -280,8 +280,7 @@ extension AppClipboard {
         // 已登录用户 me 一律按拿不到（G01：界面不出已登录用户的邀请提示）
         guard InviteConfirmAction.decide(session: session, me: nil).actionRaw == InviteConfirmAction.prefillLogin
         else { return }
-        invitePrefill.set(code)
-        open(Self.loginRoute, [:])
+        pendingInvite.set(code)
     }
 
     /// 多卡弹层点一张卡或它的购买按钮：以这张卡为种子打开详情。共享限流禁用期内执行层拦下（不导航、不关弹层，共性第 31 条）。

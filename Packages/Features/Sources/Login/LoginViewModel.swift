@@ -38,23 +38,31 @@ public final class LoginViewModel: ObservableObject {
     /// 确认框同意后要继续的动作。
     var afterConfirm: (() -> Void)?
     var ticker: Task<Void, Never>?
+    /// 待绑定码变化（剪贴板确认、邀请链接、【移除】、带码登录）转成本页的变化通知，小字行跟着刷新（APP-17c）。
+    private var pendingWatch: AnyCancellable?
 
     public init(config: LoginPageConfig) {
         self.config = config
         let service = config.service
         agreement = AgreementState(clock: { MainActor.assumeIsolated { service.now } })
         now = service.now
+        pendingWatch = service.pendingInvite?.objectWillChange.sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.objectWillChange.send() }
+        }
     }
 
     var service: LoginService {
         config.service
     }
 
-    /// 剪贴板邀请确认后的预填（APP-07，G16）：进入验证码页时取一次，取走即丢弃；已有输入时不覆盖。
-    func applyInvitePrefill() {
-        guard !config.restricted, let code = config.takeInvitePrefill(), inviteText.isEmpty else { return }
-        inviteText = code
-        inviteOpen = true
+    /// 登录页顶部的待绑定码小字行（APP-17c，BR-TEXT-14 `login.pending_invite`）：现读共享容器，读取不消费；受限登录不显示（G20）。
+    public var pendingInviteRow: PendingInviteRow? {
+        PendingInviteRow.of(service.pendingInvite, restricted: config.restricted)
+    }
+
+    /// 小字行的【移除】：丢弃待绑定码（之后的登录不带）。
+    public func removePendingInvite() {
+        service.pendingInvite?.remove()
     }
 
     func text(_ key: String) -> String {

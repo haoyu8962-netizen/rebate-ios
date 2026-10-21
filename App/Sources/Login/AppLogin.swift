@@ -26,8 +26,11 @@ final class AppLogin: ObservableObject {
     let routing: AppRouting
     let texts = AppLoginTexts()
     private var sessionExpiredPending = false
-    /// 剪贴板识别（APP-07）：邀请码【粘贴】与游客邀请预填（CouliApp 创建后接上）。
+    /// 剪贴板识别（APP-07）：登录页邀请码【粘贴】（CouliApp 创建后接上）。
     weak var clipboard: AppClipboard?
+    /// 待绑定码（APP-17c）：进程内唯一的一份（G21）。剪贴板确认、邀请链接分流、登录页小字行、短信登录请求（以后一键登录）都用它；
+    /// 撤回同意、基本模式、切换环境时由剪贴板接线清除（AppClipboard+Wiring）。
+    let pendingInvite = PendingInviteCode()
     /// 手机号绑定状态与查询、第三方登录、绑手机（APP-05b）。
     let phone: PhoneBindingStore
     let phoneSync: PhoneBindingSync
@@ -75,6 +78,7 @@ final class AppLogin: ObservableObject {
         }
         self.phone = phone
         service.phoneBinding = phone
+        service.pendingInvite = pendingInvite
         phoneSync = PhoneBindingSync(client: client, store: phone)
         phoneSync.ownership = { [network] in network.ownershipNow() }
         oauth = OAuthLoginService(login: service, host: host, phone: phoneSync, authorizers: Self.authorizers())
@@ -209,10 +213,10 @@ final class AppLogin: ObservableObject {
             onLoginCompleted?(client.sessionGeneration)
             showInviteResult(outcome)
         }
-        // 剪贴板（APP-07）：邀请码行【粘贴】（受限登录不显示邀请码，也就没有【粘贴】，H07 同口径）；游客邀请确认后的预填（G16）
+        // 剪贴板（APP-07）：邀请码行【粘贴】（受限登录不显示邀请码，也就没有【粘贴】，H07 同口径）。待绑定码不再预填进这个输入框
+        // （APP-17c：登录页顶部小字行现读 service.pendingInvite）
         if let clipboard, !restricted {
             config.invitePaste = clipboard.makeLoginInvitePaste()
-            config.takeInvitePrefill = { [weak clipboard] in clipboard?.invitePrefill.take() }
         }
         config.onForceUpdate = { [weak self] key in
             // 10405：提示先更新（error.10405.no_account 等），关闭登录页回到强更页（BR-ID-01 细则「受限登录」）。

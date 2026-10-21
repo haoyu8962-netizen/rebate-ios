@@ -12,6 +12,8 @@ final class LoginStubProtocol: URLProtocol {
         case json(status: Int, headers: [String: String], body: String)
         /// 不回应，直到测试 `release(id, with:)`；被取消时 `wasStopped(id)` 为 true。
         case hold(String)
+        /// 传输失败（APP-17c 第 2 版）：请求已到假服务，随后断连，没有响应（ApiClient 结果为 transportFailure）。
+        case disconnect
     }
 
     struct Recorded {
@@ -114,7 +116,12 @@ final class LoginStubProtocol: URLProtocol {
     private func deliver(_ reply: Reply) {
         let url = request.url ?? URL(fileURLWithPath: "/")
         guard case let .json(status, headers, text) = reply else {
-            client?.urlProtocol(self, didFailWithError: URLError(.unknown))
+            let lost = if case .disconnect = reply {
+                URLError(.networkConnectionLost)
+            } else {
+                URLError(.unknown)
+            }
+            client?.urlProtocol(self, didFailWithError: lost)
             return
         }
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)

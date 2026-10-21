@@ -50,6 +50,9 @@ enum LoginDraftTexts {
         "login.invite.label": "邀请码（选填）",
         "login.invite.placeholder": "6 位邀请码",
         "login.invite.clear": "清除邀请码",
+        // ---- APP-17c：登录页顶部待绑定码小字行（措辞照规划 BR-TEXT-14 表 C 原文；2026-10-19 起旁边不显示告知句）
+        "login.pending_invite": "已识别好友邀请码 {code}",
+        "login.pending_invite.remove": "移除",
         "login.submit": "登录",
         // LoginCodeBlocked（标题用 error.44001；说明句 BR-TEXT-14 表 C 已有措辞）
         "login.risk_blocked.desc": "账号没有创建，填写的手机号保留在本页，验证码需要重新获取。如有疑问，可以联系客服申诉，客服核实后会帮你登记。",

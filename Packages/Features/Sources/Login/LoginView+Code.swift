@@ -57,8 +57,6 @@ extension LoginView {
             }
             if !restricted {
                 inviteField
-                    // 游客在剪贴板邀请提示点了确认（APP-07，G16）：进入验证码页时填一次
-                    .onAppear(perform: model.applyInvitePrefill)
             }
             agreementRow
             CouliButton(
