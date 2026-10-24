@@ -61,43 +61,6 @@ private struct ProductPromptBar: View {
     }
 }
 
-/// 提示条的版式（设计稿：白底圆角浮起卡片，左文案 14/600，右按钮，独立【关闭】48pt 命中区）。
-struct PromptBarFrame<Action: View>: View {
-    let text: String
-    let closeLabel: String
-    let closeId: String
-    let onClose: () -> Void
-    @ViewBuilder let action: () -> Action
-
-    var body: some View {
-        HStack(spacing: CouliSpacing.s2) {
-            Text(verbatim: text)
-                .couliFont(.footnote, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            action()
-            Button(action: onClose) {
-                CouliIconView(.close, size: 18)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .couliHitTarget()
-            }
-            .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
-            .accessibilityLabel(Text(verbatim: closeLabel))
-            .accessibilityIdentifier(closeId)
-        }
-        .padding(.leading, CouliSpacing.s4)
-        .padding(.trailing, CouliSpacing.s1)
-        .padding(.vertical, CouliSpacing.s2)
-        .background(
-            RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                .fill(CouliColor.backgroundSurface)
-                .couliShadow(.floating)
-        )
-        .accessibilityElement(children: .contain)
-    }
-}
-
 /// 首页常驻粘贴卡（Main-v3 / HomeGuest-v3；BR-ID-16）：一张卡、一个按钮。brand.subtle 底、圆角 16、高约 132；左标题「粘贴查返利」
 /// 17/600（`clipboard.paste_hint`，即按钮的说明文字）+ 下方系统粘贴控件（UIPasteControl，文字与图标由系统给，只调主色底与胶囊圆角）；
 /// 右侧自绘示意插图（装饰，读屏跳过；大字号时让出宽度不画）。无副标题（负责人 10-21）。
@@ -256,7 +219,7 @@ struct ClipboardResultView: View {
     /// 本结果出现时的播报文案；多卡弹层没有（弹层自身的出现由系统读屏处理）。
     private var announcement: String? {
         switch result.kind {
-        case let .notice(text), let .unrecognized(text, _): text
+        case let .notice(text), let .unrecognized(text, _), let .networkFailed(text, _): text
         case let .inviteConfirm(code): InvitePromptBar.text(code)
         case .cardList: nil
         }
@@ -272,14 +235,27 @@ struct ClipboardResultView: View {
             )
             .accessibilityIdentifier("clipboard.notice")
         case let .unrecognized(text, prefill):
-            ErrorNoticeRow(
-                text: text, closeId: "clipboard.notice.close",
-                action: NoticeAction(title: ClipboardDraftTexts.text("clipboard.search_by_name")) {
+            // ① 识别不了（HomeClipboardResults-v3）：白卡 + 信息图标 + 文案 + 描边次按钮【用商品名搜索】
+            InlineResultCard(
+                icon: .info, text: text,
+                action: NoticeAction(title: ClipboardDraftTexts.text("clipboard.search_by_name"),
+                                     identifier: "clipboard.searchByName") {
                     clipboard.searchByName(result.id, prefill: prefill)
                 },
-                onClose: { clipboard.dismissResult(result.id) }
+                enabled: !clipboard.blocked
             )
             .accessibilityIdentifier("clipboard.unrecognized")
+        case let .networkFailed(text, _):
+            // ⑤ 网络失败（HomeClipboardResults-v3）：白卡 + 警示图标 + 文案 + 描边次按钮【重试】
+            InlineResultCard(
+                icon: .alert, text: text,
+                action: NoticeAction(title: ClipboardDraftTexts.text("clipboard.retry"),
+                                     identifier: "clipboard.retry") {
+                    clipboard.retryParse(result.id)
+                },
+                enabled: !clipboard.blocked && !clipboard.busy
+            )
+            .accessibilityIdentifier("clipboard.networkFailed")
         case let .inviteConfirm(code):
             InvitePromptBar(clipboard: clipboard, id: result.id, code: code)
         case .cardList:
@@ -289,7 +265,7 @@ struct ClipboardResultView: View {
     }
 }
 
-/// 邀请提示条（HomeClipboardInvite）：「检测到好友邀请码 {invite_code}，绑定为邀请人？」+【粘贴】（读屏名「粘贴并绑定邀请人」）+【关闭】。
+/// 邀请提示条（HomeClipboardInvite-v3）：「检测到好友邀请码 {invite_code}，绑定为邀请人？」（问句不拆行）+【绑定】（读屏名「绑定邀请人」）+【关闭】。
 /// 出现时的播报由 ClipboardResultView 按结果编号发出（R3-02）。
 /// iOS 在这之前已经由用户点系统粘贴控件读到文本，这里的按钮只确认、不再读剪贴板。
 private struct InvitePromptBar: View {
@@ -307,15 +283,19 @@ private struct InvitePromptBar: View {
             text: text,
             closeLabel: ClipboardDraftTexts.text("clipboard.prompt.close"),
             closeId: "clipboard.invite.close",
+            keepLastClause: true,
             onClose: { clipboard.dismissResult(id) },
             action: {
                 Button { clipboard.confirmInvite(id) } label: {
+                    // HomeClipboardInvite-v3：浅底胶囊【绑定】（brand.subtle 底、brand.emphasis 14/600，左右 16，命中 44）；
+                    // 限流置灰时回 background.muted 底 + 次文字色
                     Text(verbatim: ClipboardDraftTexts.text("clipboard.invite_prompt.action"))
                         .couliFont(.footnote, weight: .couliSemibold)
-                        .foregroundColor(CouliColor.brandEmphasis)
-                        .padding(.horizontal, CouliSpacing.s3)
+                        .foregroundColor(clipboard.blocked ? CouliColor.textSecondary : CouliColor.brandEmphasis)
+                        .padding(.horizontal, CouliSpacing.s4)
                         .frame(minHeight: CouliHitTarget.minimum)
-                        .background(Capsule().fill(CouliColor.backgroundMuted))
+                        .background(Capsule().fill(clipboard.blocked ? CouliColor.backgroundMuted
+                                : CouliColor.brandSubtle))
                 }
                 .buttonStyle(.plain)
                 .disabled(clipboard.blocked)
@@ -325,12 +305,6 @@ private struct InvitePromptBar: View {
         )
         .accessibilityIdentifier("clipboard.invitePrompt")
     }
-}
-
-/// 提示里的动作按钮（【用商品名搜索】）。
-private struct NoticeAction {
-    let title: String
-    let perform: () -> Void
 }
 
 /// ShareHubInvalid 的提示样式：错误底色圆角 12，图标 + 文案 +（可选）动作按钮 + 关闭。
@@ -358,7 +332,7 @@ private struct ErrorNoticeRow: View {
                             .frame(minHeight: CouliHitTarget.minimum, alignment: .leading)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("clipboard.searchByName")
+                    .accessibilityIdentifier(action.identifier)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

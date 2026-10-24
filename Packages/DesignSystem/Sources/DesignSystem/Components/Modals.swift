@@ -131,24 +131,33 @@ struct ScrollingBody<Content: View>: View {
 
 /// 底部半屏（GUIDE §3「半屏」）：上两角圆角 24、把手、标题 → 关闭 → 正文 → 操作；模态，焦点进标题。
 /// 正文放不下时只有正文滚动，头部与 `actions` 固定可见。
+/// `showsTitle == false`（APP-11v HomeClipboardCard-v3：单张识别卡无标题）：只有把手与右上关闭，标题不画也不另读一遍，
+/// 只作为半屏容器的读屏名（进入半屏时读一次）；打开焦点落到关闭。
 public struct CouliSheet<Content: View, Actions: View>: View {
     private let title: String
     private let closeLabel: String
+    private let showsTitle: Bool
+    private let closeID: String?
     private let onClose: () -> Void
     private let content: Content
     private let actions: Actions
     @AccessibilityFocusState private var titleFocused: Bool
+    @AccessibilityFocusState private var closeFocused: Bool
 
     /// - Parameter closeLabel: 关闭按钮读屏名称（字典文案）。
     public init(
         title: String,
         closeLabel: String,
+        showsTitle: Bool = true,
+        closeID: String? = nil,
         onClose: @escaping () -> Void,
         @ViewBuilder content: () -> Content,
         @ViewBuilder actions: () -> Actions
     ) {
         self.title = title
         self.closeLabel = closeLabel
+        self.showsTitle = showsTitle
+        self.closeID = closeID
         self.onClose = onClose
         self.content = content()
         self.actions = actions()
@@ -162,12 +171,14 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
             HStack(alignment: .top) {
-                Text(verbatim: title)
-                    .couliFont(.body, weight: .couliSemibold)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityFocused($titleFocused)
+                if showsTitle {
+                    Text(verbatim: title)
+                        .couliFont(.body, weight: .couliSemibold)
+                        .foregroundColor(CouliColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($titleFocused)
+                }
                 Spacer(minLength: CouliSpacing.s2)
                 Button(action: onClose) {
                     CouliIconView(.close)
@@ -177,6 +188,8 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                 .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
                 .padding(-CouliSpacing.s2)
                 .accessibilityLabel(Text(verbatim: closeLabel))
+                .accessibilityFocused($closeFocused)
+                .modifier(OptionalIdentifier(id: closeID))
             }
             ScrollingBody {
                 VStack(alignment: .leading, spacing: CouliSpacing.s4) { content }
@@ -196,11 +209,42 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                 .couliShadow(.floating)
         )
         .accessibilityElement(children: .contain)
+        .modifier(SheetPaneName(name: showsTitle ? nil : title))
         .accessibilityAddTraits(.isModal)
         .task {
-            // 等面板挂上无障碍树、底层隐藏生效后再把读屏焦点放到标题（adaptation-a11y-spec §4）。
+            // 等面板挂上无障碍树、底层隐藏生效后再把读屏焦点放到标题（adaptation-a11y-spec §4）；无标题时放到关闭。
             try? await Task.sleep(nanoseconds: ModalFocus.titleFocusDelayNanos)
-            titleFocused = true
+            if showsTitle {
+                titleFocused = true
+            } else {
+                closeFocused = true
+            }
+        }
+    }
+}
+
+/// 可选的可访问标识（nil 时不加，既有调用方不变）。
+private struct OptionalIdentifier: ViewModifier {
+    let id: String?
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.accessibilityIdentifier(id)
+        } else {
+            content
+        }
+    }
+}
+
+/// 无标题半屏的容器读屏名（有标题时不加，与既有半屏一致）。
+private struct SheetPaneName: ViewModifier {
+    let name: String?
+
+    func body(content: Content) -> some View {
+        if let name {
+            content.accessibilityLabel(Text(verbatim: name))
+        } else {
+            content
         }
     }
 }
@@ -233,26 +277,33 @@ private struct ModalOverlayModifier<Panel: View>: ViewModifier {
     let alignment: Alignment
     let dismissOnScrim: (() -> Void)?
     let restoreFocus: AccessibilityFocusState<Bool>.Binding?
+    var dismissal = CouliSheetDismissal.none
     let panel: () -> Panel
+    @State private var drag: CGFloat = 0
+
+    /// 下滑关闭的阈值（拖动距离或按速度预测的落点）。
+    private static var swipeDistance: CGFloat {
+        96
+    }
 
     func body(content: Content) -> some View {
         ZStack(alignment: alignment) {
             content
                 .accessibilityHidden(isPresented)
             if isPresented {
-                CouliScrim.color
-                    .ignoresSafeArea()
-                    .onTapGesture { dismissOnScrim?() }
-                    .accessibilityHidden(true)
+                scrim
                     .transition(.opacity)
                 panel()
                     // 弹窗四周留 24；半屏顶部留 24（最大高 = 可视高度 − 顶部安全区 − 24）。
                     .padding(alignment == .center ? .all : .top, CouliSpacing.s6)
+                    .offset(y: drag)
+                    .gesture(swipe, including: dismissal.dismissOnSwipe ? .all : .subviews)
                     .transition(alignment == .center ? .opacity : .move(edge: .bottom))
             }
         }
         .animation(.easeOut(duration: 0.2), value: isPresented)
         .onChange(of: isPresented) { newValue in
+            drag = 0
             guard ModalFocus.transition(wasPresented: !newValue, isPresented: newValue) == .restoreTrigger,
                   let restoreFocus
             else {
@@ -263,6 +314,39 @@ private struct ModalOverlayModifier<Panel: View>: ViewModifier {
                 restoreFocus.wrappedValue = true
             }
         }
+    }
+}
+
+private extension ModalOverlayModifier {
+    @ViewBuilder var scrim: some View {
+        let base = CouliScrim.color
+            .ignoresSafeArea()
+            .onTapGesture { dismissOnScrim?() }
+        if let label = dismissal.label, let dismissOnScrim {
+            base
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: label))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { dismissOnScrim() }
+                .accessibilityIdentifier(dismissal.identifier ?? "")
+        } else {
+            base.accessibilityHidden(true)
+        }
+    }
+
+    var swipe: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                drag = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                let distance = max(value.translation.height, value.predictedEndTranslation.height)
+                if distance > Self.swipeDistance, let dismissOnScrim {
+                    dismissOnScrim()
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) { drag = 0 }
+                }
+            }
     }
 }
 
@@ -296,9 +380,10 @@ public extension View {
         isPresented: Bool,
         dismissOnScrim: (() -> Void)?,
         restoreFocusTo: AccessibilityFocusState<Bool>.Binding? = nil,
+        dismissal: CouliSheetDismissal? = nil,
         @ViewBuilder sheet: @escaping () -> some View
     ) -> some View {
         modifier(ModalOverlayModifier(isPresented: isPresented, alignment: .bottom, dismissOnScrim: dismissOnScrim,
-                                      restoreFocus: restoreFocusTo, panel: sheet))
+                                      restoreFocus: restoreFocusTo, dismissal: dismissal ?? .none, panel: sheet))
     }
 }

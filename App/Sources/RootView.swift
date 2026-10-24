@@ -98,6 +98,8 @@ struct RootView: View {
             .couliToast($login.toast)
             // 剪贴板 parse 的多卡弹层（APP-07 G09）：盖在发起页上，发起页离开即消失
             .clipboardCardSheet(clipboard)
+            // 剪贴板首次用途说明半屏（APP-11v-b HomeClipboardConsent-v3）
+            .clipboardConsentSheet(clipboard.consentNotice)
             // APP-12：统一客服出口的半屏、「撤回没有生效」提示（应用级，盖在当前可见界面上）
             .modifier(MeOverlays(cs: me.cs, withdraw: me.deps.withdraw, me: me))
     }
@@ -226,7 +228,8 @@ struct RootView: View {
                 VStack(spacing: 0) {
                     HomeSearchRow(
                         onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },
-                        onAskAI: { router.open(RouteRequest(route: AppSearchRoutes.agentChat, from: .inApp)) }
+                        onAskAI: { router.open(RouteRequest(route: AppSearchRoutes.agentChat, from: .inApp)) },
+                        popupShowing: home.popupShowing
                     )
                     RouteViewRegistry.view(for: root)
                     #if DEBUG

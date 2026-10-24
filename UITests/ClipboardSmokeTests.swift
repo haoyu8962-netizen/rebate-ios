@@ -110,7 +110,7 @@ final class ClipboardSmokeTests: XCTestCase {
         XCTAssertFalse(element(app, "clipboard.prompt").exists, "只有纯邀请码、没有链接时不自动提示（G07）")
         element(app, "clipboard.homeCard.paste").tap()
         XCTAssertTrue(element(app, "clipboard.invitePrompt").waitForExistence(timeout: 10), "游客粘贴邀请内容没有出邀请提示条")
-        XCTAssertTrue(app.buttons["粘贴并绑定邀请人"].exists, "邀请条按钮读屏名")
+        XCTAssertTrue(app.buttons["绑定邀请人"].exists, "邀请条按钮读屏名（三端统一「绑定邀请人」）")
         element(app, "clipboard.invite.confirm").tap()
         XCTAssertTrue(element(app, "clipboard.invitePrompt").waitForNonExistence(timeout: 10), "确认后邀请提示条应消失")
         XCTAssertTrue(element(app, "clipboard.homeCard.paste").isHittable, "确认后仍在首页")

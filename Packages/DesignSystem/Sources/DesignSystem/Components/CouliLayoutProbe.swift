@@ -22,9 +22,14 @@ public final class CouliLayoutProbe {
         remove(id)
     }
 
-    public init(report: @escaping (CouliLayoutProbeRecord) -> Void, remove: @escaping (String) -> Void) {
+    /// 读屏焦点转移的接收方（APP-11v-b）：组件的 `AccessibilityFocusState` 变成「有焦点」时报控件编号；nil 时不报。
+    public let focus: ((String) -> Void)?
+
+    public init(report: @escaping (CouliLayoutProbeRecord) -> Void, remove: @escaping (String) -> Void,
+                focus: ((String) -> Void)? = nil) {
         self.report = report
         self.remove = remove
+        self.focus = focus
     }
 }
 
@@ -72,6 +77,41 @@ public extension View {
                         baseFontSize: CGFloat) -> some View {
         modifier(CouliProbeModifier(id: id, role: role, card: "", text: text, natural: 0, fontSize: fontSize,
                                     base: baseFontSize))
+    }
+}
+
+public extension View {
+    /// 把读屏焦点的转移报给接收方：`focused`（AccessibilityFocusState）变成 true，或组件把焦点移到这里的请求次数 `requests`
+    /// 增加时报 `id`。没有接收方时什么也不做。
+    ///
+    /// 为什么也报请求：没有辅助技术（VoiceOver）运行时，系统忽略对 AccessibilityFocusState 的写入（实测值保持 false），
+    /// UI 测试里只能看到生产组件「把焦点移到哪里」这一次写入；真实焦点转移仍须 VoiceOver 实机核对。
+    func couliFocusProbe(_ id: String, focused: Bool, requests: Int = 0) -> some View {
+        modifier(CouliFocusProbeModifier(id: id, focused: focused, requests: requests))
+    }
+}
+
+struct CouliFocusProbeModifier: ViewModifier {
+    @Environment(\.couliLayoutProbe) private var probe
+    let id: String
+    let focused: Bool
+    let requests: Int
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                if focused || requests > 0 {
+                    probe?.focus?(id)
+                }
+            }
+            .onChange(of: focused) { value in
+                if value {
+                    probe?.focus?(id)
+                }
+            }
+            .onChange(of: requests) { _ in
+                probe?.focus?(id)
+            }
     }
 }
 

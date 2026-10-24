@@ -3,7 +3,8 @@ import DesignSystem
 import ProductSearch
 import SwiftUI
 
-/// 多卡弹层（G09，没有专稿）：底部半屏「识别到的商品」，按搜索卡样式列出；点卡片或购买按钮都以这张卡为种子打开详情（A03 同口径）；
+/// 识别卡半屏（HomeClipboardCard-v3；APP-11v-b）：只有 1 张商品卡时无标题，只有把手与右上关闭（标题只作半屏容器的读屏名），
+/// 卡下一句价格口径（只看显示了价格的卡）。多卡弹层（G09，没有专稿）：底部半屏「识别到的商品」，按搜索卡样式列出；点卡片或购买按钮都以这张卡为种子打开详情（A03 同口径）；
 /// 行内 error_code 的那条置灰、写该码文案（30132 另给【用商品名搜索】，5xxxx 带 trace6）。42901 共享禁用期内卡片、购买按钮、
 /// 【用商品名搜索】一并置灰（执行层 openCard / searchByName 另拦，共性第 31 条）。平台购买状态与搜索卡同一映射（`cardMapping`，R3-01）。
 struct ClipboardCardList: View {
@@ -12,18 +13,40 @@ struct ClipboardCardList: View {
     let rows: [ParseRow]
     let traceId: String?
 
+    /// 只有 1 张商品卡（HomeClipboardCard-v3）：不画标题。
+    private var single: Bool {
+        rows.count == 1 && rows[0].card != nil
+    }
+
+    /// 卡下的价格口径句（显示了价格的卡才算；④ 查不到价格不配「券后价按单件计算…」）。
+    private var footer: String? {
+        let priced = rows.compactMap(\.card).filter { !ProductCardMapper.priceUnavailable($0) }
+        guard let key = ProductDisclaimers.footerKeys(priced).first(where: {
+            $0.hasPrefix(ProductDisclaimers.priceBasis)
+        }) else { return nil }
+        let text = AppSearchTexts().text(key)
+        return text.isEmpty ? nil : text
+    }
+
     var body: some View {
         CouliSheet(
             title: ClipboardDraftTexts.text("clipboard.card_list.title"),
             closeLabel: ClipboardDraftTexts.text("clipboard.card_list.close"),
+            showsTitle: !single,
+            closeID: "clipboard.cards.close",
             onClose: { clipboard.dismissResult(id) },
             content: {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     if let card = row.card {
                         let mapping = clipboard.cardMapping(card)
-                        ProductCard(mapping.data, onBuy: { clipboard.openCard(id, card: card) }, image: {
-                            ProductRemoteImage(url: ProductImageSource.url(card["image"]))
-                        })
+                        ProductCard(
+                            mapping.data,
+                            onBuy: { clipboard.openCard(id, card: card) },
+                            framed: !single,
+                            image: {
+                                ProductRemoteImage(url: ProductImageSource.url(card["image"]))
+                            }
+                        )
                         .contentShape(Rectangle())
                         .onTapGesture {
                             if !clipboard.blocked {
@@ -37,6 +60,13 @@ struct ClipboardCardList: View {
                     } else {
                         errorRow(row, index: index)
                     }
+                }
+                if let footer {
+                    Text(verbatim: footer)
+                        .couliFont(.caption)
+                        .foregroundColor(CouliColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("clipboard.cards.footer")
                 }
             }, actions: {
                 EmptyView()

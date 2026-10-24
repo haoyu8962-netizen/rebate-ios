@@ -138,3 +138,15 @@ enum HomeDraftTexts {
         return body
     }
 }
+
+extension AppHome {
+    /// 首页弹窗是否在显示（跟随当前控制器；控制器换实例时接到新的那个）。APP-11v-b：弹窗关闭后读屏焦点回到搜索入口。
+    var popupShowing: AnyPublisher<Bool, Never> {
+        $controller
+            .compactMap(\.self)
+            .map { controller in controller.$state.map { $0.popup != nil } }
+            .switchToLatest()
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+}

@@ -137,7 +137,7 @@ extension AppClipboard {
                 busy = false
             }
             guard !Task.isCancelled, !outcome.dropped, stillOwned(), let action = outcome.action else { return }
-            act(action, origin: origin)
+            act(action, origin: origin, retry: ParseRetry(upload: upload, title: title))
         }
     }
 
@@ -190,7 +190,8 @@ extension AppClipboard {
 
     // MARK: - 结果
 
-    func act(_ action: ParseAction, origin: String) {
+    /// - Parameter retry: 本次已提取的上传片段与标题（网络失败时供【重试】原样再发一次，不再读剪贴板；只在结果里保存，结果作废即丢）。
+    func act(_ action: ParseAction, origin: String, retry: ParseRetry? = nil) {
         switch action.actionRaw {
         case ParseResultAction.openDetail:
             guard let card = action.card else { return }
@@ -207,7 +208,16 @@ extension AppClipboard {
         case ParseResultAction.forceUpdate:
             enterForceUpdate(action)
         case ParseResultAction.error:
-            notice(origin: origin, key: action.textKey, traceId: action.showTrace6 == false ? nil : action.traceId)
+            let text = ClipboardDraftTexts.error(
+                action.textKey,
+                traceId: action.showTrace6 == false ? nil : action.traceId
+            )
+            if action.errorCode == nil, let retry {
+                // 传输失败（没有服务端码，ParseInputService.transportFailure）：同一提示加【重试】（HomeClipboardResults-v3 ⑤）
+                show(origin, .networkFailed(text, retry: retry))
+            } else {
+                show(origin, .notice(text))
+            }
         default:
             notice(origin: origin, key: action.textKey, traceId: nil)
         }
@@ -257,6 +267,16 @@ extension AppClipboard {
         if result?.id == id {
             result = nil
         }
+    }
+
+    /// ⑤ 网络失败的【重试】：仍是当前结果、发起页仍是当前页、没有敏感浮层与限流、没有在途时，用本次已提取的片段再发一次 parse
+    /// （同一归属核对与在途保护；不读剪贴板、不套去重）。
+    func retryParse(_ id: Int64) {
+        guard let result = current(id), case let .networkFailed(_, retry) = result.kind, overlayClear(),
+              !blockActive, !busy
+        else { return }
+        self.result = nil
+        manualParse(retry.upload, title: retry.title, origin: result.origin)
     }
 
     /// 30132 的【用商品名搜索】：发起页是 SearchTyping 时填进本页搜索框；否则经 Router 打开 Search（q 预填，提取不到留空）。

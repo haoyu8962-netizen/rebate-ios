@@ -19,6 +19,8 @@ public struct ProductCard<ImageContent: View>: View {
     private let onBuy: () -> Void
     private let onDisclaimer: (() -> Void)?
     private let disclaimerFocus: AccessibilityFocusState<Bool>.Binding?
+    /// false（APP-11v-b 识别卡单张，HomeClipboardCard-v3）：不画卡底与内边距，直接排在半屏里；默认 true，其余调用方不变。
+    private let framed: Bool
     @State private var disclaimerExpanded = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -31,6 +33,7 @@ public struct ProductCard<ImageContent: View>: View {
         onBuy: @escaping () -> Void,
         onDisclaimer: (() -> Void)? = nil,
         disclaimerFocus: AccessibilityFocusState<Bool>.Binding? = nil,
+        framed: Bool = true,
         @ViewBuilder image: () -> ImageContent
     ) {
         self.data = data
@@ -38,6 +41,7 @@ public struct ProductCard<ImageContent: View>: View {
         self.onBuy = onBuy
         self.onDisclaimer = onDisclaimer
         self.disclaimerFocus = disclaimerFocus
+        self.framed = framed
         self.image = image()
     }
 
@@ -82,7 +86,7 @@ public struct ProductCard<ImageContent: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .couliCard(padding: CouliSpacing.s3)
+        .modifier(ProductCardFrame(framed: framed))
         .overlay(alignment: .topTrailing) {
             if layout == .agent, ProductCardData.showsDisclaimerButton(data) {
                 DisclaimerInfoButton(isExpanded: disclaimerBinding, accessibilityLabel: data.disclaimerButtonLabel)
@@ -347,5 +351,18 @@ public struct BadgedTitle: View {
         )
         renderer.scale = displayScale
         return renderer.uiImage ?? UIImage()
+    }
+}
+
+/// 列表卡的卡底（白底圆角 16 + 卡片阴影 + 内边距 12）；`framed == false` 时只占满宽度。
+private struct ProductCardFrame: ViewModifier {
+    let framed: Bool
+
+    func body(content: Content) -> some View {
+        if framed {
+            content.couliCard(padding: CouliSpacing.s3)
+        } else {
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

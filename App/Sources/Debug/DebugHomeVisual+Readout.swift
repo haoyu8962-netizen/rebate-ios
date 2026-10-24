@@ -77,8 +77,8 @@ extension DebugHomeVisual {
             "sectionRequests": counts.sections,
             "parseRequests": clipboard?.parseCount ?? 0,
             "clipboardReads": clipboard?.readCount ?? 0,
-            // iOS 首页粘贴走系统 UIPasteControl，没有「用途说明」同意请求出口（b 组再定）；如实报 0。
-            "consentRequests": 0,
+            // 用途说明半屏【开启】的实际次数（ClipboardConsentNotice；返回 / 遮罩 / 下滑 /【暂不开启】都不计）
+            "consentRequests": clipboard?.consentNotice.enableCount ?? 0,
             "promptIdentity": identity,
             "unexpectedRequests": images.unexpected,
             "pasteControlClass": pasteControlClass(),
@@ -124,8 +124,9 @@ extension DebugHomeVisual {
             advanceInvite(settled: settled, state: state)
         } else if Self.stableScenes.contains(scene) || scene.hasPrefix("stress_") || scene.hasPrefix("no_rebate_") {
             readyWhenStable(settled: settled, state: state)
+        } else if Self.overlayScenes.contains(scene) {
+            advanceOverlay(settled: settled, state: state)
         }
-        // 其余（popup / consent / clipboard_*）属 b 组，本工作树不接：不发 ready，UI 测试明确失败。
     }
 
     private static let stableScenes: Set = [
@@ -160,7 +161,7 @@ extension DebugHomeVisual {
         }
     }
 
-    private func readyWhenStable(settled: Bool, state: HomeUiState) {
+    func readyWhenStable(settled: Bool, state: HomeUiState) {
         guard state.source != nil, settled else {
             quietTicks = 0
             return
@@ -171,7 +172,7 @@ extension DebugHomeVisual {
         }
     }
 
-    private func markReady() {
+    func markReady() {
         ready = settings.name
     }
 

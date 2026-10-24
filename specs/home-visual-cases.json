@@ -203,6 +203,166 @@
       "category": "large"
     },
     {
+      "name": "MainPopupStatic-light",
+      "page": "main_v3",
+      "scene": "popup",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "MainPopupStatic-dark",
+      "page": "main_v3",
+      "scene": "popup",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardConsent-v3-light",
+      "page": "guest_v3",
+      "scene": "consent",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardConsent-v3-dark",
+      "page": "guest_v3",
+      "scene": "consent",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardCard-v3-light",
+      "page": "main_v3",
+      "scene": "clipboard_card",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardCard-v3-dark",
+      "page": "main_v3",
+      "scene": "clipboard_card",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardUnrecognized-light",
+      "page": "main_v3",
+      "scene": "clipboard_30132",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardUnrecognized-dark",
+      "page": "main_v3",
+      "scene": "clipboard_30132",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardNoPrice-light",
+      "page": "main_v3",
+      "scene": "clipboard_no_price",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardNoPrice-dark",
+      "page": "main_v3",
+      "scene": "clipboard_no_price",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardNetwork-light",
+      "page": "main_v3",
+      "scene": "clipboard_network",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardNetwork-dark",
+      "page": "main_v3",
+      "scene": "clipboard_network",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardMaterial-light",
+      "page": "main_v3",
+      "scene": "clipboard_material",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "ClipboardMaterial-dark",
+      "page": "main_v3",
+      "scene": "clipboard_material",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardInvite-v3-light",
+      "page": "guest_v3",
+      "scene": "invite",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeClipboardInvite-v3-dark",
+      "page": "guest_v3",
+      "scene": "invite",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
       "name": "BannerNotice-light",
       "page": "main_v3",
       "scene": "banner_notice",
@@ -270,6 +430,16 @@
       "dark": false,
       "width": 840,
       "height": 1180,
+      "category": "large"
+    },
+    {
+      "name": "Popup-short",
+      "page": "main_v3",
+      "scene": "popup",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 480,
       "category": "large"
     }
   ]

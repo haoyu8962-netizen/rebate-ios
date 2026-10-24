@@ -17,6 +17,8 @@ struct ClipboardResult {
         case unrecognized(String, prefill: String?)
         /// 多条结果：当前页弹层按搜索卡样式列出（G09）；行内 error_code 逐条按码处理（共性第 5 条）。
         case cardList([ParseRow], traceId: String?)
+        /// 网络失败（传输失败，没有服务端码）：提示 +【重试】（HomeClipboardResults-v3 ⑤），重试用本次已提取的片段。
+        case networkFailed(String, retry: ParseRetry)
         /// 只有邀请内容（游客）：本地抽出的码，确认后记为待绑定码（不跳登录，APP-17c），不发请求、不持久化（G07、共性第 15 条）。
         case inviteConfirm(code: String)
     }
@@ -24,6 +26,12 @@ struct ClipboardResult {
     let id: Int64
     let origin: String
     let kind: Kind
+}
+
+/// 一次 parse 的上传片段（本地抽出的最小候选，不是剪贴板原文）与「」标题：只随网络失败结果留在内存，供【重试】。
+struct ParseRetry {
+    let upload: String
+    let title: String?
 }
 
 /// 主线程在每个变化出口整体替换的不可变归属快照（共性第 12 条）；网络线程的归属核对只读它，不碰界面状态与集合。

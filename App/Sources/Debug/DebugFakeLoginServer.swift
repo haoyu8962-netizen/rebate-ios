@@ -108,7 +108,8 @@ final class DebugFakeLoginServer: URLProtocol {
             return
         }
         // APP-08：订单场景（DebugFakeOrders）先于其他场景；offline 开关时按传输失败结束（断网演示）。
-        if let orders = DebugFakeOrders.answer(method: request.httpMethod ?? "GET", path: path, query: query) {
+        // APP-11v-b：首页视觉「网络失败」场景的剪贴板 parse 按断网结束（传输失败），与订单断网同一出口
+        if let orders = DebugHomeVisual.parseReply(method: request.httpMethod ?? "GET", path: path, query: query) {
             answerOrders(orders)
             return
         }

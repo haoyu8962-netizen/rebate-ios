@@ -28,6 +28,7 @@ if [[ $# -eq 0 ]]; then
     -only-testing:CouliUITests/HomeVisualAccessibilityTests \
     -only-testing:CouliUITests/HomeVisualFeedWindowUITests \
     -only-testing:CouliUITests/HomeVisualLayoutTests \
+    -only-testing:CouliUITests/HomeVisualOverlayTests \
     -only-testing:CouliUITests/HomeVisualScreenSnapshotTests
 fi
 

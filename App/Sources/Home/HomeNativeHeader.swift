@@ -1,3 +1,4 @@
+import Combine
 import DesignSystem
 import Generated
 import Home
@@ -41,7 +42,13 @@ extension EnvironmentValues {
 struct HomeSearchRow: View {
     let onSearch: () -> Void
     let onAskAI: () -> Void
+    /// 首页弹窗是否在显示（APP-11v-b：弹窗关闭后读屏焦点回到搜索入口，APP-11 共性第 3 条）；nil = 不接。
+    var popupShowing: AnyPublisher<Bool, Never>?
     @Environment(\.dynamicTypeSize) private var size
+    @AccessibilityFocusState private var searchFocused: Bool
+    @State private var popupWasShowing = false
+    /// 把读屏焦点还到搜索入口的次数（测量桥上报用）。
+    @State private var searchFocusRequests = 0
 
     var body: some View {
         // 辅助字号档（≥ AX1）时重新排布：搜索入口独占一行，【问 AI】换到下一行靠右，两者都按大字号显示，不再挤在同一行里逐字折行
@@ -49,7 +56,8 @@ struct HomeSearchRow: View {
             ? AnyLayout(VStackLayout(alignment: .trailing, spacing: CouliSpacing.s2))
             : AnyLayout(HStackLayout(spacing: CouliSpacing.s2))
         layout {
-            HomeSearchEntry(identifier: "home.search", onSearch: onSearch)
+            HomeSearchEntry(identifier: "home.search", onSearch: onSearch, focus: $searchFocused,
+                            focusRequests: searchFocusRequests)
                 .frame(maxWidth: .infinity)
             HomeTonalButton(title: HomeDraftTexts.text("home.search.ask_ai", [:]), icon: .chat, probeID: "home.askAI",
                             action: onAskAI)
@@ -66,6 +74,16 @@ struct HomeSearchRow: View {
         // 长按搜索入口 /【问 AI】显示大内容查看器
         .dynamicTypeSize(...Self.maxTypeSize)
         .fixedSize(horizontal: false, vertical: true)
+        .onReceive(popupShowing ?? Empty().eraseToAnyPublisher()) { showing in
+            defer { popupWasShowing = showing }
+            guard popupWasShowing, !showing else { return }
+            // 等全屏浮层收起、首页重新进入读屏树后再还焦点（与组件库弹层的还焦点时机一致）
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                searchFocused = true
+                searchFocusRequests += 1
+            }
+        }
     }
 
     /// 内容列最大宽度（03 §10.4；与首页列表、搜索页同一取值）。
@@ -79,6 +97,9 @@ struct HomeSearchRow: View {
 struct HomeSearchEntry: View {
     let identifier: String
     let onSearch: () -> Void
+    /// 读屏焦点（首页弹窗关闭后还到这里）；nil = 不接（基本模式）。
+    var focus: AccessibilityFocusState<Bool>.Binding?
+    var focusRequests = 0
     /// 占位文字实际字号（与 `couliFont(.body)` 同一缩放曲线；受所在搜索行的字号上限约束）。
     @ScaledMetric(relativeTo: .body) private var fontSize = CouliTextStyle.body.baseSize
     private var placeholder: String {
@@ -114,6 +135,7 @@ struct HomeSearchEntry: View {
         .accessibilityIdentifier(identifier)
         .accessibilityShowsLargeContentViewer()
         .couliProbe(identifier, role: "independent-hit")
+        .modifier(SearchEntryFocus(id: identifier, focus: focus, requests: focusRequests))
     }
 }
 
@@ -149,5 +171,22 @@ struct BasicModeNotice: View {
             RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
                 .fill(CouliColor.brandSubtle)
         )
+    }
+}
+
+/// 搜索入口的读屏焦点绑定与上报（没有绑定时原样）。
+private struct SearchEntryFocus: ViewModifier {
+    let id: String
+    let focus: AccessibilityFocusState<Bool>.Binding?
+    let requests: Int
+
+    func body(content: Content) -> some View {
+        if let focus {
+            content
+                .accessibilityFocused(focus)
+                .couliFocusProbe(id, focused: focus.wrappedValue, requests: requests)
+        } else {
+            content
+        }
     }
 }

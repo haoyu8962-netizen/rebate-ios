@@ -42,6 +42,8 @@ final class DebugHomeVisual: ObservableObject {
     let port: DebugHomeVisualPort
     let clock = DebugHomeVisualClock()
     private let lkgPage: Data
+    /// b 组识别卡场景用的商品（共用 fixture 第一件完整商品，`sectionItems.scroll.items[0]`）。
+    let clipboardCard: [String: Any]
 
     @Published var width: CGFloat
     @Published var ready: String?
@@ -70,9 +72,10 @@ final class DebugHomeVisual: ObservableObject {
     lazy var longFeed: DebugHomeVisualLongFeed? = settings.scene == "long_feed"
         ? DebugHomeVisualLongFeed(visual: self) : nil
 
-    private init(settings: Settings, page: Data, responses: [String: Data]) {
+    private init(settings: Settings, page: Data, responses: [String: Data], clipboardCard: [String: Any]) {
         self.settings = settings
         lkgPage = page
+        self.clipboardCard = clipboardCard
         port = DebugHomeVisualPort(scene: settings.scene, page: page, responses: responses)
         width = CGFloat(settings.width)
     }
@@ -102,9 +105,18 @@ final class DebugHomeVisual: ObservableObject {
             sections.insert(contentsOf: notice, at: 0)
             fixture["sections"] = sections
         }
+        if settings.scene == "popup" {
+            // 既有 golden 弹窗区块放进测试页最前（版本不变）：由真实弹窗状态机按冷启动、图片就绪、无阻挡项弹出
+            var sections = fixture["sections"] as? [[String: Any]] ?? []
+            let popup = (root["popup"] as? [String: Any])?["sections"] as? [[String: Any]] ?? []
+            sections.insert(contentsOf: popup, at: 0)
+            fixture["sections"] = sections
+        }
+        let firstItems = (items["scroll"] as? [String: Any])?["items"] as? [[String: Any]]
         guard let page = try? JSONSerialization.data(withJSONObject: fixture, options: [.sortedKeys]) else { return }
         let responses = items.compactMapValues { try? JSONSerialization.data(withJSONObject: $0) }
-        let visual = DebugHomeVisual(settings: settings, page: page, responses: responses)
+        let visual = DebugHomeVisual(settings: settings, page: page, responses: responses,
+                                     clipboardCard: firstItems?.first ?? [:])
         shared = visual
         DebugHomeVisualNetworkGuard.install()
         if settings.level == "member" {
@@ -140,7 +152,9 @@ final class DebugHomeVisual: ObservableObject {
     /// 布局测量接收方（生产组件经环境值上报原始几何）。
     lazy var probe = CouliLayoutProbe(
         report: { [weak self] record in self?.store(record) },
-        remove: { [weak self] id in self?.drop(id) }
+        remove: { [weak self] id in self?.drop(id) },
+        // 读屏焦点的实际转移（生产组件的 AccessibilityFocusState 变成有焦点时上报）
+        focus: { [weak self] id in self?.focus = id }
     )
 
     /// 首页与剪贴板就绪：LKG 场景按同一身份预写真实 HomeLkgStore；登记信号；开始轮询读数。

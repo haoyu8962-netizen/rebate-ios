@@ -73,6 +73,20 @@ final class HomeVisualSnapshotTests: XCTestCase {
         }
     }
 
+    func testPopupStaticAndShortViewport() async throws {
+        for dark in [false, true] {
+            let fixture = try HomeVisualFixture(page: "popup")
+            await fixture.start()
+            let popup = try XCTUnwrap(fixture.controller.state.popup)
+            for height: CGFloat in [844, 480, 1189, 1349] {
+                await snap(HomePopupView(popup: popup, onClose: {}, onTap: {}),
+                           name: "popup-\(Int(height))-\(dark ? "dark" : "light")", dark: dark, height: height,
+                           expect: [popup.image])
+            }
+            await fixture.close()
+        }
+    }
+
     private func snap(_ view: some View, name: String, dark: Bool = false, width: CGFloat = 390,
                       height: CGFloat = 3200, size: DynamicTypeSize = .large, expect: [String] = [],
                       file: StaticString = #filePath, testName: String = #function, line: UInt = #line) async {

@@ -7,9 +7,20 @@ import XCTest
 @MainActor
 final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
     func testAMatrixViewportBaselines() throws {
+        try matrix(overlays: false)
+    }
+
+    func testBMatrixViewportBaselines() throws {
+        try matrix(overlays: true)
+    }
+
+    private func matrix(overlays: Bool) throws {
         let cases = try HomeVisualFiles.cases()
         let selection = ProcessInfo.processInfo.environment["COULI_HOME_VISUAL_CASE"]
-        for item in cases where item.width <= 390 && (selection == nil || item.name == selection) {
+        let floating: Set = ["popup", "consent", "clipboard_card", "clipboard_no_price", "clipboard_material",
+                             "clipboard_30132", "clipboard_network", "invite"]
+        for item in cases where item.width <= 390 && floating.contains(item.scene) == overlays &&
+            (selection == nil || item.name == selection) {
             try launch(item)
             let state = try diagnostics()
             let sources = ["lkg": "lkg", "bundled": "bundled"]
@@ -26,9 +37,7 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
                 assertHit(try reveal("home.feed.retry"))
                 try alignForSnapshot("home.footer", bottom: true)
             }
-            if item.scene == "invalid" {
-                XCTAssertTrue(element("home.loadFailed").exists)
-            }
+            assertSceneMarker(item.scene)
             // 沿用已录的 matrix-overlays.* 文件名；移出 b 组不另起一套 a 基准。
             snapshot(name: item.name, testName: "matrix(overlays:)")
             keepTree(item.name)
@@ -65,6 +74,18 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
             XCTAssertTrue(element("home.list").frame.contains(element("home.info.content.\(kind).0").frame),
                           "无返利展开文案必须完整进入截图")
             snapshot(name: "no-rebate-\(kind)-expanded")
+        }
+    }
+
+    private func assertSceneMarker(_ scene: String) {
+        let markers = [
+            "invalid": "home.loadFailed", "popup": "home.popup.close", "consent": "clipboard.consent.sheet",
+            "clipboard_card": "clipboard.cardList", "clipboard_no_price": "clipboard.cardList",
+            "clipboard_material": "clipboard.cardList", "clipboard_30132": "clipboard.searchByName",
+            "clipboard_network": "clipboard.retry", "invite": "clipboard.invite.confirm",
+        ]
+        if let id = markers[scene] {
+            XCTAssertTrue(element(id).exists)
         }
     }
 

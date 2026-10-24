@@ -75,6 +75,8 @@ final class AppClipboard: ObservableObject {
     /// 诊断（不含内容）：商品粘贴入口发起系统读取的次数（首页常驻卡、SearchTyping、商品提示条共用，R2-02）。
     var readCount = 0
 
+    /// 首次用途说明半屏（APP-11v-b 版式；生产触发随 BR-ID-16 iOS 系列接，见 ClipboardConsentNotice）。
+    let consentNotice = ClipboardConsentNotice()
     let ledger: ClipboardWriteLedger
     let history: PromptHistory
     let writer: ClipboardWriter
@@ -280,6 +282,14 @@ final class AppClipboard: ObservableObject {
     // MARK: - 自动识别
 
     func evaluate(event: String, round: Int64) {
+        #if DEBUG
+        // 首页视觉 UI 测试场景（-CouliHomeVisual）一律关掉自动识别：模拟器剪贴板里前一个用例留下的链接不能变成提示条、
+        // 卡住截图矩阵（主线裁定，APP-11v-b）。本轮照常算读过；Release 不编译这段
+        if DebugHomeVisual.shared != nil {
+            watcher.consume(round)
+            return
+        }
+        #endif
         let state = readState(event: event)
         let decision = ClipboardReadPolicy.decide(platform: Self.platform, state: state)
         // 一次前台最多判定一次（共性第 1 条）：不论结果，本轮都算读过

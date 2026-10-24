@@ -32,8 +32,8 @@ enum HomeVisualFiles {
         )))
         let data = try Data(contentsOf: root.appendingPathComponent("specs/home-sdui-vectors.json"))
         XCTAssertEqual(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), manifest.fixtureSHA256)
-        XCTAssertEqual(manifest.cases.count, 27)
-        XCTAssertEqual(Set(manifest.cases.map(\.name)).count, 27)
+        XCTAssertEqual(manifest.cases.count, 44)
+        XCTAssertEqual(Set(manifest.cases.map(\.name)).count, 44)
         return manifest.cases
     }
 
@@ -80,7 +80,7 @@ enum HomeVisualFiles {
         page = try overrides.page(page)
         let settings = try JSONSerialization.jsonObject(with: JSONEncoder().encode(item))
         let envelope: [String: Any] = ["version": 1, "settings": settings, "fixture": page,
-                                       "banner": pages["banner"] ?? [:],
+                                       "popup": pages["popup"] ?? [:], "banner": pages["banner"] ?? [:],
                                        "notice": try overrides.notice(pages["notice_static"])]
         return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys]).base64EncodedString()
     }

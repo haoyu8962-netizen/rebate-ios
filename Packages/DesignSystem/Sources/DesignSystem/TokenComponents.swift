@@ -1,5 +1,6 @@
 import Generated
 import SwiftUI
+import UIKit
 
 /// 组件尺寸（pt），对应 tokens.component。
 public enum CouliComponentMetric {
@@ -62,12 +63,20 @@ public extension View {
     }
 }
 
-/// 遮罩：墨棕按令牌规定的不透明度（GUIDE §2：rgba(40, 37, 31, 0.4)）。
-/// TODO(N-11): 令牌补 overlay.scrim 后改读令牌。
+/// 遮罩：浅色墨棕按令牌规定的不透明度（GUIDE §2：rgba(40, 37, 31, 0.4)）；深色取唯一源 v0.4.0 `color.overlay.scrim.dark`
+/// `#0000008C`（黑 55%）——深色下主文字色是浅色，不能再拿它当遮罩（APP-11v-b MainPopupDark / HomeClipboardCardDark-v3）。
+/// TODO(N-11 / DS-02-iOS): 锁定令牌补 overlay.scrim 后改读令牌。
 public enum CouliScrim {
     public static let opacity = 0.4
+    /// 深色遮罩不透明度（v0.4.0 overlay.scrim dark 末两位 8C）。
+    static let darkOpacity = 0x8C / 255.0
     public static var color: Color {
-        CouliColor.textPrimary.opacity(opacity)
+        guard let ink = TokenRGB(token: "text.primary") else {
+            return CouliColor.textPrimary.opacity(opacity)
+        }
+        let light = ink.uiColor.withAlphaComponent(opacity)
+        let night = UIColor.black.withAlphaComponent(darkOpacity)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? night : light })
     }
 }
 
