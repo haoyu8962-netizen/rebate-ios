@@ -24,6 +24,9 @@ public final class ParseInputService: Sendable {
     public static let scene = "clipboard"
     /// openapi ParseInputRequest.text maxLength。
     public static let maxTextLength = 4000
+    /// 出【重试】的传输失败（FU-IOS-0730 三端口径）：超时、断连（无网也归这类）、拿到的不是统一外壳（按网络异常看）。
+    /// 取值与 HttpTransport.kindTimeout / kindDisconnect / kindNoEnvelope 一致；cancelled 与刷新暂时失败沿用的原因不在内。
+    public static let retryableTransportKinds: Set<String> = ["timeout", "disconnect", "no_envelope"]
 
     private let api: ParseApi
 
@@ -80,10 +83,12 @@ public final class ParseInputService: Sendable {
                 }
             }
             return ParseOutcome(action: action, dropped: false)
-        case .transportFailure:
+        case let .transportFailure(kind, _, _, _):
             var action = ParseAction(actionRaw: ParseResultAction.error)
             action.textKey = ParseResultAction.genericErrorKey
             action.showTrace6 = false
+            action.transportKind = kind
+            action.retryable = retryableTransportKinds.contains(kind)
             return ParseOutcome(action: action, dropped: false)
         case .localReject, .sessionCleared, .abandoned, .sessionNotSaved:
             return ParseOutcome(action: nil, dropped: true)

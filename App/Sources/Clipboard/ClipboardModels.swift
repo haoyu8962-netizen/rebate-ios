@@ -17,7 +17,7 @@ struct ClipboardResult {
         case unrecognized(String, prefill: String?)
         /// 多条结果：当前页弹层按搜索卡样式列出（G09）；行内 error_code 逐条按码处理（共性第 5 条）。
         case cardList([ParseRow], traceId: String?)
-        /// 网络失败（传输失败，没有服务端码）：提示 +【重试】（HomeClipboardResults-v3 ⑤），重试用本次已提取的片段。
+        /// 网络失败（可重试的传输失败：timeout / disconnect / no_envelope）：提示 +【重试】（HomeClipboardResults-v3 ⑤），重试用本次已提取的片段。
         case networkFailed(String, retry: ParseRetry)
         /// 只有邀请内容（游客）：本地抽出的码，确认后记为待绑定码（不跳登录，APP-17c），不发请求、不持久化（G07、共性第 15 条）。
         case inviteConfirm(code: String)

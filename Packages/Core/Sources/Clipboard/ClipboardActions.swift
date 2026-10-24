@@ -39,6 +39,11 @@ public struct ParseAction: @unchecked Sendable {
     public var networkForced = false
     /// 整体 10405 带来的最低支持版本（data.min_supported_version；没有为 nil，按服务端判定处理）。
     public var minSupportedVersion: String?
+    /// 网络层传输失败的原因（ApiResult.transportFailure 的 kind，原样透传；不是传输失败为 nil）。
+    public var transportKind: String?
+    /// 可【重试】的传输失败：只有 kind 为 timeout / disconnect（含无网）/ no_envelope 时为 true（FU-IOS-0730 三端口径）。
+    /// 空结果、业务错误码、cancelled、刷新暂时失败沿用的原因（如 session_unreadable）都不设，按既有对应状态显示。
+    public var retryable = false
 
     public init(actionRaw: String) {
         self.actionRaw = actionRaw

@@ -57,6 +57,16 @@ extension AppClipboard {
         busy = true
         // 手动粘贴开始：收起已有商品提示条，所有商品粘贴入口共享这次在途保护（R2-02）
         prompt = nil
+        // 同步清掉旧的 ① 识别不了 / ⑤ 网络失败结果卡（FU-IOS-0730）：之后没有新结果的路径（空文本、已登录纯邀请码、请求被丢弃、
+        // 在途期间）都不再留旧卡。轻提示与邀请条这次不动。
+        if let kind = result?.kind {
+            switch kind {
+            case .unrecognized, .networkFailed:
+                result = nil
+            default:
+                break
+            }
+        }
         return { [weak self] text in
             self?.delivered(ticket, text: text)
         }
@@ -212,8 +222,9 @@ extension AppClipboard {
                 action.textKey,
                 traceId: action.showTrace6 == false ? nil : action.traceId
             )
-            if action.errorCode == nil, let retry {
-                // 传输失败（没有服务端码，ParseInputService.transportFailure）：同一提示加【重试】（HomeClipboardResults-v3 ⑤）
+            if action.retryable, let retry {
+                // 只认网络层明确的可重试传输失败（timeout / disconnect / no_envelope，ParseAction.retryable）：同一提示加【重试】
+                // （HomeClipboardResults-v3 ⑤）。成功但结果为空、业务错误码、cancelled 等都按轻提示（FU-IOS-0730）
                 show(origin, .networkFailed(text, retry: retry))
             } else {
                 show(origin, .notice(text))
