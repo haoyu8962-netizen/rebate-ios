@@ -18,6 +18,8 @@ public struct SystemPasteControl: UIViewRepresentable {
         case tinted
         /// 只有文字（登录页邀请码行的文字链位置）。
         case plain
+        /// 主按钮：品牌主色底、白字、图标 + 文字、胶囊（首页常驻粘贴卡，Main-v3 / HomeGuest-v3；APP-11v）。
+        case primary
     }
 
     let style: Style
@@ -56,6 +58,10 @@ public struct SystemPasteControl: UIViewRepresentable {
             natural.height,
             UIFontMetrics.default.scaledValue(for: CouliHitTarget.minimum, compatibleWith: traits)
         )
+        if style == .primary {
+            // 首页粘贴卡主按钮：命中区下限 44 再留 1pt（所在卡可能落在非整像素位置，量出的高度不因舍入低于 44）
+            return CGSize(width: max(natural.width, minWidth), height: max(height, CouliHitTarget.minimum + 1))
+        }
         if style == .tinted, let width = proposal.width, width.isFinite {
             return CGSize(width: width, height: max(height, CouliComponentMetric.buttonMinHeight))
         }
@@ -83,6 +89,11 @@ public struct SystemPasteControl: UIViewRepresentable {
             configuration.cornerStyle = .capsule
             configuration.baseBackgroundColor = UIColor(CouliColor.backgroundMuted)
             configuration.baseForegroundColor = UIColor(CouliColor.textLink)
+        case .primary:
+            configuration.displayMode = .iconAndLabel
+            configuration.cornerStyle = .capsule
+            configuration.baseBackgroundColor = UIColor(CouliColor.brandPrimary)
+            configuration.baseForegroundColor = UIColor(CouliColor.textInverse)
         }
         return configuration
     }

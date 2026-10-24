@@ -167,19 +167,26 @@ private struct HomeRouteHost: View {
 /// 首页图片的本机色块（第 4 版 T3）：只拦图片主机（img.example.com / img.example.invalid），按地址回固定颜色的 PNG，
 /// 其余请求不碰（契约接口仍由 WalletStubProtocol 回答）。
 final class AppColorBlockImages: URLProtocol, @unchecked Sendable {
-    static let hosts: Set<String> = ["img.example.com", "img.example.invalid"]
+    static let hosts: Set<String> = ["img.example.com", "img.example.invalid", "img.example.test"]
     private static let lock = NSLock()
     private nonisolated(unsafe) static var started = 0
     private nonisolated(unsafe) static var finished = 0
     private nonisolated(unsafe) static var urls: [String] = []
+    private nonisolated(unsafe) static var generation = 0
 
     static func install() {
+        reset()
+        URLProtocol.registerClass(AppColorBlockImages.self)
+    }
+
+    /// 每张图开始前清零；旧窗口尚未结束的请求不能给新窗口充数。
+    static func reset() {
         lock.withLock {
+            generation += 1
             started = 0
             finished = 0
             urls = []
         }
-        URLProtocol.registerClass(AppColorBlockImages.self)
     }
 
     static func uninstall() {
@@ -190,25 +197,29 @@ final class AppColorBlockImages: URLProtocol, @unchecked Sendable {
         lock.withLock { urls }
     }
 
-    /// 等图片请求全部结算、0.4 秒内没有新请求，再给界面 0.3 秒（最长 8 秒）。
+    /// 指定图片必须在本轮完成，所有请求结算且静止 0.4 秒后，再给界面 0.3 秒（上限 8 秒）。
     @MainActor
-    static func settle() async {
+    static func settle(expect url: String? = nil, file: StaticString = #filePath, line: UInt = #line) async {
         var last = -1
         var quiet = 0
         for _ in 0..<80 {
             try? await Task.sleep(nanoseconds: 100_000_000)
-            let now = lock.withLock { (started, finished) }
-            if now.0 == now.1, now.0 == last {
+            let now = lock.withLock { (started, finished, url.map { urls.contains($0) } ?? true) }
+            if now.0 == now.1, now.0 == last, now.2 {
                 quiet += 1
                 if quiet >= 4 {
-                    break
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    if lock.withLock({ started == now.0 && finished == now.1 }) {
+                        return
+                    }
+                    quiet = 0
                 }
             } else {
                 quiet = 0
             }
             last = now.0
         }
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTFail("图片请求未完成或未稳定：\(url ?? "全部本机图片")", file: file, line: line)
     }
 
     override static func canInit(with request: URLRequest) -> Bool {
@@ -220,9 +231,9 @@ final class AppColorBlockImages: URLProtocol, @unchecked Sendable {
     }
 
     override func startLoading() {
-        Self.lock.withLock {
+        let generation = Self.lock.withLock {
             Self.started += 1
-            Self.urls.append(request.url?.absoluteString ?? "")
+            return Self.generation
         }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -237,7 +248,11 @@ final class AppColorBlockImages: URLProtocol, @unchecked Sendable {
         }
         client?.urlProtocol(self, didLoad: png)
         client?.urlProtocolDidFinishLoading(self)
-        Self.lock.withLock { Self.finished += 1 }
+        Self.lock.withLock {
+            guard generation == Self.generation else { return }
+            Self.finished += 1
+            Self.urls.append(request.url?.absoluteString ?? "")
+        }
     }
 
     override func stopLoading() {}

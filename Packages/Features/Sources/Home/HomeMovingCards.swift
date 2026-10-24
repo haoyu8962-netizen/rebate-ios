@@ -50,7 +50,7 @@ struct HomeBanner: View {
     }
 }
 
-/// 公告条（Main 稿）：白底、圆角 12、行高至少 44；左侧次要色圆圈 i，正文 14/21 主文字色（长文完整换行），右侧 44×44 关闭（次要色 ×）。
+/// 公告条（APP-11v 按令牌推导：brand.subtle 底、圆角 16）：行高至少 44；左侧次要色圆圈 i，正文 14/21 主文字色（长文完整换行），右侧 44×44 关闭（次要色 ×）。
 /// 没有跳转目标的条目按普通文字画，不用禁用按钮的灰字。
 struct HomeNoticeView: View {
     let section: HomeSectionUi
@@ -66,8 +66,9 @@ struct HomeNoticeView: View {
         }
         .padding(.leading, CouliSpacing.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // 第 1 批定稿没画公告条：按令牌推导（brand.subtle 底、卡片圆角 16，与其他卡同间距；APP-11v compare 记「无定稿」）
         .background(
-            RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous).fill(CouliColor.backgroundSurface)
+            RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous).fill(CouliColor.brandSubtle)
         )
         .task(id: section.autoplay) {
             guard section.autoplay, section.items.count > 1 else { return }
@@ -86,6 +87,7 @@ struct HomeNoticeView: View {
                 HomeAdBadge(label: item.adLabel)
                 Text(verbatim: item.title ?? "").couliFont(.footnote).foregroundColor(CouliColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("home.notice.text")
             }
             .padding(.vertical, CouliSpacing.s2)
             .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum, alignment: .leading)
@@ -130,7 +132,7 @@ public struct HomePopupView: View {
             }
         }
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel(Text(verbatim: HomeText.text("home.popup.name")))
+        .accessibilityLabel(Text(verbatim: HomeVisualRules.popupAccessibilityName))
         .accessibilityAction(.escape, onClose)
         .onAppear { closeFocused = true }
     }

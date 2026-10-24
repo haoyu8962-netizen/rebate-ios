@@ -39,8 +39,7 @@ enum ShellDraftTexts {
 
     // MARK: 基本模式页（BasicMode）
 
-    /// 搜索框提示（基本模式不能识别链接，所以不是「搜索商品或粘贴链接」）。TODO(N-16) 待法务定稿，不得提审。
-    static let basicSearchPlaceholder = "搜索商品"
+    // 基本模式搜索入口的占位与首页同键（APP-11v G-V09：`search.placeholder`，见 HomeTextDrafts），这里不再另写。
     /// 【设置】入口的读屏名称。TODO(N-16) 待法务定稿，不得提审。
     static let settingsLabel = "设置"
 

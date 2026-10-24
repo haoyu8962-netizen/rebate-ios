@@ -29,7 +29,10 @@ struct RootView: View {
 
     var body: some View {
         #if DEBUG
-        if let width = DebugLayoutWidth.value {
+        if let visual = DebugHomeVisual.shared {
+            // APP-11v：首页视觉 UI 测试场景的画布（请求的宽高、字号、深浅色；只读调试元素）
+            DebugHomeVisualCanvas(visual: visual, content: gatedByEnvironment)
+        } else if let width = DebugLayoutWidth.value {
             // 截图用（APP-05a）：`-CouliDebugLayoutWidth 320` 把根布局限制为窄屏宽度（模拟器没有 320pt 宽机型）。
             gatedByEnvironment.frame(width: width).frame(maxWidth: .infinity)
         } else {
@@ -62,6 +65,8 @@ struct RootView: View {
     /// 弹窗本身仍不能被关闭，只能点按钮（BR-ID-11）。
     private var gated: some View {
         navigation
+            // 外观：跟随系统外观的运行时接线（DS-02-iOS 裁定前只在 Debug / Staging 开关打开时生效，见 AppAppearance）
+            .background(AppAppearanceHook())
             .couliDialog(isPresented: privacyDialogShown) {
                 privacyDialog()
             }
@@ -202,31 +207,43 @@ struct RootView: View {
         HomeRootTone(grayscale: home.grayscale) { homeContent(root) }
     }
 
-    @ViewBuilder private func homeContent(_ root: RouteDestination) -> some View {
-        if privacy.state.decision == .basicMode {
-            BasicModeHomeView(
-                onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },
-                onSettings: { router.open(RouteRequest(route: "Settings", from: .inApp)) },
-                onEnableFull: privacy.requestFullFunction
-            )
-        } else {
-            VStack(spacing: 0) {
-                // 首页的搜索入口（APP-06a 冒烟：首页 → Search）。首页内容本身在 APP-11。
-                HomeSearchEntry { router.open(RouteRequest(route: "Search", from: .inApp)) }
-                    .padding(.horizontal, CouliSpacing.s4)
-                    .padding(.top, CouliSpacing.s2)
-                // 剪贴板（APP-07）：提示条、粘贴结果、「粘贴链接，先查返利」卡；只在首页 Tab 根页（APP-11 的首页 SDUI 之前挂在固定位置）
-                HomeClipboardArea(clipboard: clipboard)
-                    .fixedSize(horizontal: false, vertical: true)
-                RouteViewRegistry.view(for: root)
-                #if DEBUG
-                if !DebugPrivacyPreset.hidesDebugInfo {
-                    debugInfo
-                        .padding(CouliSpacing.s4)
+    /// 首页 Tab 内容（APP-11v）：吸顶搜索行 + 首页列表；剪贴板提示条、游客价值卡、粘贴卡（基本模式为提示条、价值卡）作为列表头部，
+    /// 经环境值交给首页路由（与 SDUI 卡同一条滚动，G-V02）。
+    private func homeContent(_ root: RouteDestination) -> some View {
+        let basic = privacy.state.decision == .basicMode
+        let header = HomeNativeHeader(
+            home: home, clipboard: clipboard, basic: basic,
+            onLogin: { router.open(RouteRequest(route: RoutePolicy.login, from: .inApp)) },
+            onEnableFull: privacy.requestFullFunction
+        )
+        return Group {
+            if basic {
+                BasicModeHomeView(
+                    onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },
+                    onSettings: { router.open(RouteRequest(route: "Settings", from: .inApp)) }
+                )
+            } else {
+                VStack(spacing: 0) {
+                    HomeSearchRow(
+                        onSearch: { router.open(RouteRequest(route: "Search", from: .inApp)) },
+                        onAskAI: { router.open(RouteRequest(route: AppSearchRoutes.agentChat, from: .inApp)) }
+                    )
+                    RouteViewRegistry.view(for: root)
+                    #if DEBUG
+                    if !DebugPrivacyPreset.hidesDebugInfo {
+                        debugInfo
+                            .padding(CouliSpacing.s4)
+                    }
+                    #endif
                 }
-                #endif
+                // 搜索行与状态栏区域也是页面底色（Main-v3），不露出 Tab 容器的系统白底
+                .background(CouliColor.backgroundCanvas.ignoresSafeArea())
+                // 正式首页根（深链被拦后的验收接口）；.contain 保留子元素各自的标识，不覆盖
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("home.root")
             }
         }
+        .environment(\.homeNativeHeader, AnyView(header))
     }
 
     #if DEBUG

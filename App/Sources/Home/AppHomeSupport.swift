@@ -20,9 +20,17 @@ import UIKit
         blocking
     }
 
+    #if DEBUG
+    /// UI 测试（APP-11v `reader-on`）：经这个真实 HomeSignals 出口把读屏状态当作已开启。
+    var debugReaderOverride: Bool?
+    #endif
+
     func set(visible: Bool, reader: Bool, blockers: Set<String>) {
         self.visible = visible
         screenReader = reader
+        #if DEBUG
+        screenReader = debugReaderOverride ?? reader
+        #endif
         blocking = blockers
         subject.send()
     }

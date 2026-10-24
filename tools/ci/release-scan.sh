@@ -45,6 +45,8 @@
 #   - 首页草稿预览 HomePreview 与首页本机假服务（APP-11，03 §3.6，AC-S1-86 ②③）：标记 COULI_HOME_PREVIEW（App/Sources/Debug/HomePreviewView.swift）、
 #     COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a、类型名 DebugFakeHome（App/Sources/Debug/DebugFakeHome.swift）；路由名 HomePreview 由下面的 routes.json 一项覆盖；
 #     首页 UI 测试设施类型名 DebugHomeUITestSupport、启动参数 CouliHomeTestReset 与 CouliFakeFlags、运行中改开关与配置回答信号名（App/Sources/Debug/DebugHomeUITestSupport.swift）
+#   - 首页视觉 UI 测试场景与布局测量桥（APP-11v）：标记 COULI_HOME_VISUAL_UITEST_APP11V_IOS_7a3c5e、类型名 DebugHomeVisual、启动参数 CouliHomeVisual、
+#     环境变量 COULI_HOME_VISUAL_REQUEST、只读调试元素前缀 home.visual.、信号前缀 debug.uitest.home-visual.（App/Sources/Debug/DebugHomeVisual*.swift）
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
@@ -161,6 +163,12 @@ HITS_LOG="$WORK/hits"
     echo "CouliFakeFlags"
     echo "debug.uitest.fake-flag."
     echo "debug.uitest.config-served"
+    echo "COULI_HOME_VISUAL_UITEST_APP11V_IOS_7a3c5e"
+    echo "DebugHomeVisual"
+    echo "CouliHomeVisual"
+    echo "COULI_HOME_VISUAL_REQUEST"
+    echo "home.visual."
+    echo "debug.uitest.home-visual."
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

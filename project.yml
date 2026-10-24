@@ -41,6 +41,10 @@ packages:
     path: Packages/DesignSystem
   Features:
     path: Packages/Features
+  # 首页视觉（APP-11v）的 App / UI 整页快照：与 Features/HomeTests 同一个现有测试库、同一精确版本，只加到两个测试 target。
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    exactVersion: 1.19.6
 
 targets:
   Couli:
@@ -99,26 +103,36 @@ targets:
     platform: iOS
     sources:
       - path: AppTests
+        excludes:
+          - "**/__Snapshots__"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.tests
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: Couli
+      - package: SnapshotTesting
 
   CouliUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - path: UITests
+        excludes:
+          - "**/__Snapshots__"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.uitests
         GENERATE_INFOPLIST_FILE: YES
         # FU-IOS-0712（F-IOS-10）：包载入时登记每用例总上限（UITests/UITestWaits.swift 的 UITestTimeouts）
         INFOPLIST_KEY_NSPrincipalClass: CouliUITestTimeouts
+        # APP-11v：SnapshotTesting 的模块按条件 import Testing；Xcode 给 UI 测试 target 默认把 Testing 别名成不可用模块
+        # （TESTING_FRAMEWORK_MODULE_ALIAS_FLAGS = -module-alias Testing=_Testing_Unavailable），载入 SnapshotTesting 会失败。
+        # 只对这个 target 清掉别名；UI 测试本身仍只用 XCTest。
+        TESTING_FRAMEWORK_MODULE_ALIAS_FLAGS: ""
     dependencies:
       - target: Couli
+      - package: SnapshotTesting
 
 schemes:
   Couli:

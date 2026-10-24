@@ -498,6 +498,7 @@ if [ "$FAST" -eq 0 ]; then
         --expect COULI_BRIDGE_CONFORMANCE_APP04_7d41c2 --expect COULI_FAKE_LOGIN_SERVER_APP05A_IOS_3f8e21 --expect COULI_FAKE_OAUTH_SERVER_APP05B_IOS_4c7e1d --expect DebugFakeOAuth --expect COULI_FAKE_SEARCH_SERVER_APP06A_IOS_7c2d94 --expect COULI_FAKE_TRADE_SERVER_APP06B_IOS_5d81a7 --expect COULI_DEBUG_JUMP_PORTS_APP06B_IOS_9b3e60 --expect DebugJumpPorts --expect debugNoExternal --expect debugInstalled --expect CouliFakeTradeNoExternal --expect COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a --expect CouliClipboardDiagnostics --expect COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19 --expect COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52 --expect DebugFakeWallet --expect 127.0.0.1 \
         --expect COULI_FAKE_ME_SERVER_APP12_IOS_2b9e47 --expect DebugFakeMe --expect DebugPushTokenSource \
         --expect COULI_HOME_PREVIEW --expect COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a --expect DebugFakeHome \
+        --expect COULI_HOME_VISUAL_UITEST_APP11V_IOS_7a3c5e --expect DebugHomeVisual \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

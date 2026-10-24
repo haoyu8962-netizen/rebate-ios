@@ -44,8 +44,12 @@ final class HomeGoldenSnapshotTests: XCTestCase {
 
     func testEveryGoldenPageRendersThroughTheSameRenderer() async throws {
         let pages = try SnapshotKit.goldenPages()
-        XCTAssertEqual(pages.count, 15)
-        for name in pages.keys.sorted() {
+        // test-change(APP-11v / G-V11)：新增两页由 HomeVisualSnapshotTests 按 sectionItems 驱动；
+        // 旧 15 页仍逐张跑，不能把新页交给旧的四件商品替身。
+        let legacyNames = Set(pages.keys).subtracting(["main_v3", "guest_v3"])
+        XCTAssertEqual(legacyNames.count, 15)
+        XCTAssertTrue(Set(pages.keys).isSuperset(of: ["main_v3", "guest_v3"]))
+        for name in legacyNames.sorted() {
             let page = try XCTUnwrap(pages[name] as? [String: Any])
             let controller = await render(page)
             XCTAssertNotNil(controller.state.source, "\(name) 没有渲染")

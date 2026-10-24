@@ -1,5 +1,6 @@
 import ClientCore
 import Config
+import HomeCore
 import MeCore
 import Privacy
 import Push
@@ -98,22 +99,6 @@ struct CouliApp: App {
             },
             makeEnvironment: BuildInfo.makeEnvironmentStore
         )
-    }
-
-    private static func makeHome(_ web: AppWeb, _ login: AppLogin, _ environment: EnvironmentStore,
-                                 _ clipboard: AppClipboard) -> AppHome {
-        let home = AppHome.make(network: web.network, routing: web.routing, config: web.config,
-                                login: login, update: web.update, privacy: web.privacy,
-                                environment: environment, variant: .current, debugPort: {
-                                    #if DEBUG
-                                    DebugFakeHome.port(environment: { environment.current })
-                                    #else
-                                    nil
-                                    #endif
-                                })
-        home.clipboard = clipboard
-        home.track = { [tracker = web.tracker] event in _ = tracker.track(event) }
-        return home
     }
 
     /// 须在启动对账之前登记的清理项：撤回同意要清的凭证（切换环境时同样要清，两边共用占位清理器）；剪贴板 hash 记录的撤回清理
@@ -245,6 +230,8 @@ struct CouliApp: App {
     private static func makeNetwork() -> AppNetwork {
         #if DEBUG
         if let configuration = DebugFakeLoginServer.configurationIfEnabled() {
+            // APP-11v：首页视觉场景在本机假会话清空之后读请求（会员身份写入假会话）
+            DebugHomeVisual.bootstrap()
             return AppNetwork(configuration: configuration)
         }
         #endif
@@ -304,5 +291,43 @@ struct MeShopModules {
         self.clipboard = clipboard
         self.search = search
         self.orders = orders
+    }
+}
+
+/// 首页装配（APP-11 / APP-11v）：经生产工厂按当前构建装配；Debug 下首页视觉 UI 测试场景只换端口、时钟、图片与包内默认。
+private extension CouliApp {
+    static func makeHome(_ web: AppWeb, _ login: AppLogin, _ environment: EnvironmentStore,
+                         _ clipboard: AppClipboard) -> AppHome {
+        var timers: HomeTimers = HomeSystemTimers()
+        var clock: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+        var images: HomeImageLoader = AppHomeImages()
+        var bundled: @MainActor () -> Data? = HomeBundled.data
+        #if DEBUG
+        // APP-11v：首页视觉 UI 测试场景（-CouliHomeVisual）只换端口、时钟、图片与包内默认，其余照生产组装
+        let visual = DebugHomeVisual.shared
+        if let visual {
+            visual.seed(login)
+            timers = visual.clock
+            clock = visual.clock.clock
+            images = DebugHomeVisualImages()
+            bundled = visual.bundled
+        }
+        #endif
+        let home = AppHome.make(network: web.network, routing: web.routing, config: web.config,
+                                login: login, update: web.update, privacy: web.privacy,
+                                environment: environment, variant: .current, debugPort: {
+                                    #if DEBUG
+                                    visual.map { $0.makePort() }
+                                        ?? DebugFakeHome.port(environment: { environment.current })
+                                    #else
+                                    nil
+                                    #endif
+                                }, timers: timers, clock: clock, images: images, bundled: bundled)
+        home.clipboard = clipboard
+        home.track = { [tracker = web.tracker] event in _ = tracker.track(event) }
+        #if DEBUG
+        visual?.attach(home: home, clipboard: clipboard)
+        #endif
+        return home
     }
 }

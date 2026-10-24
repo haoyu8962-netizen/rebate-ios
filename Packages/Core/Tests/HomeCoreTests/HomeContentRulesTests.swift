@@ -10,7 +10,8 @@ final class HomeContentRulesTests: XCTestCase {
     func testBundledDefaultHomeIsTheVectorPageByteForByte() throws {
         let data = try XCTUnwrap(HomeBundled.data(), "包内没有 default_home.json")
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        XCTAssertEqual(digest, "cd7f5a7b1998e278355f24a9770e3fa0e3e11a4c100d2c73e5a074530bb96466")
+        // test-change(APP-11v / G-V04)：两项副标题随三端同一份默认页更新，资源由实现方同步。
+        XCTAssertEqual(digest, "66e6e453a18bfc591fb2dc06ef2c2f5bf615019461c606d542be90d65f83360d")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
         XCTAssertEqual(object, try HomeVectors.golden("default_home") as NSDictionary)
         XCTAssertFalse((String(bytes: data, encoding: .utf8) ?? "").contains("http"), "包内默认不引用网络图片")

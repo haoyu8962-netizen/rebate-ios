@@ -4,23 +4,13 @@ import Generated
 import SwiftUI
 import UIKit
 
-/// 首页剪贴板区（HomeClipboard / HomeClipboardInvite / Main「粘贴链接，先查返利」卡）：只在首页 Tab 根页显示；大屏最大内容宽度、水平居中，
-/// 放不下时可滚动（03 §10.4，共性第 8 条）。首页 SDUI 在 APP-11，这里挂在搜索框下面的固定位置。
-struct HomeClipboardArea: View {
+/// 首页原生头部里的剪贴板部分（APP-11v G-V02：并入首页列表头部，与 SDUI 同一条纵向滚动，不再另建滚动容器、不再单独限宽）：
+/// 提示条（商品 / 邀请）→ 本页粘贴结果 →（调用方插入的游客价值卡）→ 常驻粘贴卡。只在首页 Tab 根页显示；内容列宽由首页列表给。
+struct HomeClipboardArea<Guest: View>: View {
     @ObservedObject var clipboard: AppClipboard
-    /// 最大内容宽度（03 §10.4，与搜索页同一取值）。
-    static let maxWidth: CGFloat = 600
+    @ViewBuilder let guest: Guest
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView { content }
-        }
-        .frame(maxWidth: Self.maxWidth)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var content: some View {
         VStack(spacing: CouliSpacing.s3) {
             if let prompt = clipboard.prompt {
                 ProductPromptBar(clipboard: clipboard, prompt: prompt)
@@ -28,10 +18,15 @@ struct HomeClipboardArea: View {
             if let result = clipboard.result, AppClipboard.isHomeOrigin(result.origin) {
                 ClipboardResultView(clipboard: clipboard, result: result, style: .home)
             }
+            guest
             HomePasteCard(clipboard: clipboard)
         }
-        .padding(.horizontal, CouliSpacing.s4)
-        .padding(.vertical, CouliSpacing.s2)
+    }
+}
+
+extension HomeClipboardArea where Guest == EmptyView {
+    init(clipboard: AppClipboard) {
+        self.init(clipboard: clipboard) { EmptyView() }
     }
 }
 
@@ -103,42 +98,94 @@ struct PromptBarFrame<Action: View>: View {
     }
 }
 
-/// 首页「粘贴链接，先查返利」卡（Main / HomeGuest / HomeClipboard）：品牌浅底、标题 17/600、副标题 12；iOS 的「去粘贴」位置是系统粘贴控件
-/// （文字「粘贴」由系统给，差异见 compare-ios.md）。说明文字可被读屏读到。
+/// 首页常驻粘贴卡（Main-v3 / HomeGuest-v3；BR-ID-16）：一张卡、一个按钮。brand.subtle 底、圆角 16、高约 132；左标题「粘贴查返利」
+/// 17/600（`clipboard.paste_hint`，即按钮的说明文字）+ 下方系统粘贴控件（UIPasteControl，文字与图标由系统给，只调主色底与胶囊圆角）；
+/// 右侧自绘示意插图（装饰，读屏跳过；大字号时让出宽度不画）。无副标题（负责人 10-21）。
 private struct HomePasteCard: View {
     @ObservedObject var clipboard: AppClipboard
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        HStack(spacing: CouliSpacing.s3) {
-            VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                Text(verbatim: ClipboardDraftTexts.text("clipboard.home_card.title"))
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: CouliSpacing.s3 + 2) {
+                // 标题顶 24、按钮上 14（Main-v3：gap 2 + margin-top 12）
+                Text(verbatim: ClipboardDraftTexts.text("clipboard.paste_hint"))
                     .couliFont(.body, weight: .couliSemibold)
                     .foregroundColor(CouliColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: ClipboardDraftTexts.text("clipboard.home_card.subtitle"))
-                    .couliFont(.caption)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .couliLineBox(.body)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("clipboard.homeCard.text")
+                SystemPasteControl(
+                    style: .primary,
+                    isEnabled: clipboard.pasteEnabled,
+                    identifier: "clipboard.homeCard.paste"
+                ) {
+                    clipboard.beginPaste(entry: ManualPasteAction.entryHome)
+                }
+                .fixedSize()
+                .couliProbe("clipboard.homeCard.paste", role: "independent-hit")
             }
+            .padding(.leading, CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s6)
+            .padding(.bottom, CouliSpacing.s4)
+            .padding(.trailing, CouliSpacing.s2)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("clipboard.homeCard.text")
-            SystemPasteControl(
-                style: .capsule,
-                isEnabled: clipboard.pasteEnabled,
-                identifier: "clipboard.homeCard.paste"
-            ) {
-                clipboard.beginPaste(entry: ManualPasteAction.entryHome)
+            if !size.isAccessibilitySize {
+                HomePasteIllustration()
+                    .padding(.top, 10)
+                    .padding(.trailing, 10)
             }
-            .fixedSize()
         }
-        .padding(CouliSpacing.s4)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
                 .fill(CouliColor.brandSubtle)
         )
+        .clipShape(RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("clipboard.homeCard")
+    }
+}
+
+/// 粘贴卡右侧示意插图（Main-v3 的 132×112 自绘 SVG：链接卡 → 箭头 → 带预估返标签的商品卡）。颜色取令牌（商品绿无令牌，取
+/// status.success.text）；标签上的字画成色块（页面不写死中文）。装饰：读屏隐藏、不可点。
+private struct HomePasteIllustration: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Circle().fill(CouliColor.backgroundSurface.opacity(0.55)).frame(width: 116, height: 116)
+                .offset(x: 18, y: -2)
+            card(width: 104, height: 36).offset(x: 10, y: 10)
+            CouliContentIconView(.link, size: 24).foregroundColor(CouliColor.brandEmphasis).offset(x: 18, y: 16)
+            bar(width: 56).offset(x: 46, y: 20)
+            bar(width: 36).offset(x: 46, y: 30)
+            CouliIconView(.chevronDown, size: 14).foregroundColor(CouliColor.borderControl).offset(x: 55, y: 48)
+            card(width: 116, height: 42).offset(x: 10, y: 64)
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(CouliColor.backgroundPlaceholder)
+                .frame(width: 26, height: 26).offset(x: 18, y: 72)
+            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(CouliColor.backgroundSurface)
+                .frame(width: 14, height: 16).offset(x: 24, y: 78)
+            Rectangle().fill(CouliColor.statusSuccessText).frame(width: 14, height: 6).offset(x: 24, y: 88)
+            bar(width: 54).offset(x: 50, y: 74)
+            Capsule().fill(CouliColor.rebateBackground).frame(width: 68, height: 15).offset(x: 50, y: 84)
+            CouliIconView(.clock, size: 9).foregroundColor(CouliColor.rebateText).offset(x: 53.5, y: 87)
+            Capsule().fill(CouliColor.rebateText.opacity(0.55)).frame(width: 30, height: 5).offset(x: 66, y: 89)
+        }
+        .frame(width: 132, height: 112, alignment: .topLeading)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func card(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(CouliColor.backgroundSurface)
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(CouliColor.borderSubtle, lineWidth: 1))
+            .frame(width: width, height: height)
+    }
+
+    private func bar(width: CGFloat) -> some View {
+        Capsule().fill(CouliColor.borderSubtle).frame(width: width, height: 5)
     }
 }
 

@@ -1,0 +1,62 @@
+import SwiftUI
+import UIKit
+
+/// App 外观（APP-11v S2-4：深色运行时接线）。
+///
+/// 现状：`Info.plist` 的 `UIUserInterfaceStyle=Light` 把整 App 锁成浅色；是否解锁、整 App 跟随系统深色属 DS-02-iOS 待编排裁定
+/// （尚未改版的页面还没有深色令牌）。在裁定之前不改 Info.plist，只把「跟随系统外观」这条运行时路径接好：
+/// `followsSystem` 为真时，把所在窗口的外观覆盖改为系统当前外观并随系统切换，首页按 `CouliColor` 的深色取值（`CouliDarkTokens`）呈现。
+/// 裁定解锁时：删掉 Info.plist 的锁并把 `followsSystem` 改为恒真（或接到设置项），无需再改页面。
+enum AppAppearance {
+    /// 是否跟随系统外观。Release 恒为假（等 DS-02-iOS 裁定）；Debug / Staging 可用启动参数 `-CouliFollowSystemAppearance YES`
+    /// 打开，在不经 UI 测试场景、不强制覆盖外观的正常启动中验证系统深色下的首页。
+    static var followsSystem: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "CouliFollowSystemAppearance")
+        #else
+        false
+        #endif
+    }
+
+    /// 系统当前外观（不受本 App Info.plist 锁定影响的屏幕特征）。
+    @MainActor
+    static func systemStyle(_ window: UIWindow) -> UIUserInterfaceStyle {
+        (window.windowScene?.screen ?? UIScreen.main).traitCollection.userInterfaceStyle
+    }
+}
+
+/// 把「跟随系统外观」落到所在窗口（放在根视图背景里）。不跟随时什么都不改，保持 Info.plist 的浅色锁定。
+struct AppAppearanceHook: UIViewRepresentable {
+    func makeUIView(context _: Context) -> UIView {
+        Probe()
+    }
+
+    func updateUIView(_: UIView, context _: Context) {}
+
+    private final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            apply()
+        }
+
+        private var observing = false
+
+        @objc private func becameActive() {
+            apply()
+        }
+
+        private func apply() {
+            guard AppAppearance.followsSystem, let window else { return }
+            let style = AppAppearance.systemStyle(window)
+            if window.overrideUserInterfaceStyle != style {
+                window.overrideUserInterfaceStyle = style
+            }
+            if !observing {
+                // 系统外观切换后回到前台时重新取一次（选择器式观察者随对象释放自动移除）
+                observing = true
+                NotificationCenter.default.addObserver(self, selector: #selector(becameActive),
+                                                       name: UIApplication.didBecomeActiveNotification, object: nil)
+            }
+        }
+    }
+}

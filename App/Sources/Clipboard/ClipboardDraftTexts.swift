@@ -16,10 +16,8 @@ enum ClipboardDraftTexts {
         "clipboard.invite_prompt.action": "粘贴",
         "clipboard.invite_prompt.action_label": "粘贴并绑定邀请人",
         "clipboard.prompt.close": "关闭",
-        // 首页「粘贴链接，先查返利」卡（HomeClipboard / Main / HomeGuest）
-        "clipboard.home_card.title": "粘贴链接，先查返利",
-        "clipboard.home_card.subtitle": "支持淘宝、京东、拼多多",
-        "clipboard.home_card.action": "去粘贴",
+        // 首页常驻粘贴卡的标题（即系统粘贴按钮的说明文字，BR-ID-16；Main-v3 / HomeGuest-v3，APP-11v：无副标题）
+        "clipboard.paste_hint": "粘贴查返利",
         // 系统粘贴控件旁边的说明文字（BR-ID-16「粘贴查返利」；SearchTyping）
         "clipboard.paste_entry": "粘贴查返利",
         "clipboard.paste_entry.hint": "复制了商品链接？点下方按钮识别并查返利",

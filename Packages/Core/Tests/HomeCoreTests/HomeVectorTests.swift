@@ -59,8 +59,10 @@ final class HomeVectorTests: XCTestCase {
         // 每个 golden 都进解码测试（fixture 与截图一一对应，共性第 15 条）
         let golden: JSONObject = try field(root, "goldenPages")
         let rows: [JSONObject] = try field(root, "pageDecode")
-        XCTAssertEqual(golden.count, 15)
-        XCTAssertEqual(Set(golden.keys), Set(rows.compactMap { $0["page"] as? String }))
+        // test-change(APP-11v)：旧判定向量原样保留；两张视觉页由 HomeVisualFixtureTests 经真实控制器解码。
+        XCTAssertEqual(golden.count, 17)
+        XCTAssertEqual(Set(golden.keys).subtracting(["main_v3", "guest_v3"]),
+                       Set(rows.compactMap { $0["page"] as? String }))
     }
 
     func testVectors() throws {

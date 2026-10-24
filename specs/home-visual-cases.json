@@ -1,0 +1,276 @@
+{
+  "version": 1,
+  "fixtureSHA256": "70cab00a88a26ce45bcd078bd10178a3f383fa3f07ef6cc14bced87a1d9f100e",
+  "cases": [
+    {
+      "name": "Main-v3-light",
+      "page": "main_v3",
+      "scene": "normal",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Main-v3-dark",
+      "page": "main_v3",
+      "scene": "normal",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeGuest-v3-light",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "HomeGuest-v3-dark",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "MainRankEntry-v3-light",
+      "page": "main_v3",
+      "scene": "rank",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "MainRankEntry-v3-dark",
+      "page": "main_v3",
+      "scene": "rank",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Loading-light",
+      "page": "main_v3",
+      "scene": "loading",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Loading-dark",
+      "page": "main_v3",
+      "scene": "loading",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Bundled-light",
+      "page": "default_home",
+      "scene": "bundled",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Bundled-dark",
+      "page": "default_home",
+      "scene": "bundled",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "LKG-light",
+      "page": "main_v3",
+      "scene": "lkg",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "LKG-dark",
+      "page": "main_v3",
+      "scene": "lkg",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "FeedFailure-light",
+      "page": "main_v3",
+      "scene": "feed_failure",
+      "level": "member",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "FeedFailure-dark",
+      "page": "main_v3",
+      "scene": "feed_failure",
+      "level": "member",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "LastResort-light",
+      "page": "main_v3",
+      "scene": "invalid",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "LastResort-dark",
+      "page": "main_v3",
+      "scene": "invalid",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "EmptySources-light",
+      "page": "guest_v3",
+      "scene": "empty",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "EmptySources-dark",
+      "page": "guest_v3",
+      "scene": "empty",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Basic-light",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "basic",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Basic-dark",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "basic",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "BannerNotice-light",
+      "page": "main_v3",
+      "scene": "banner_notice",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "BannerNotice-dark",
+      "page": "main_v3",
+      "scene": "banner_notice",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "large"
+    },
+    {
+      "name": "Main-font200-w320-light",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "guest",
+      "dark": false,
+      "width": 320,
+      "height": 844,
+      "category": "accessibilityExtraLarge"
+    },
+    {
+      "name": "Main-font200-w390-light",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "guest",
+      "dark": false,
+      "width": 390,
+      "height": 844,
+      "category": "accessibilityExtraLarge"
+    },
+    {
+      "name": "Main-font200-w390-dark",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "guest",
+      "dark": true,
+      "width": 390,
+      "height": 844,
+      "category": "accessibilityExtraLarge"
+    },
+    {
+      "name": "member-w840",
+      "page": "main_v3",
+      "scene": "normal",
+      "level": "member",
+      "dark": false,
+      "width": 840,
+      "height": 1180,
+      "category": "large"
+    },
+    {
+      "name": "basic-w840",
+      "page": "guest_v3",
+      "scene": "normal",
+      "level": "basic",
+      "dark": false,
+      "width": 840,
+      "height": 1180,
+      "category": "large"
+    }
+  ]
+}

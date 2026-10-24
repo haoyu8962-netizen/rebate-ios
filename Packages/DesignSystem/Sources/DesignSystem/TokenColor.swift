@@ -1,5 +1,6 @@
 import Generated
 import SwiftUI
+import UIKit
 
 /// "#RRGGBB" 令牌的 sRGB 分量（0…1）。
 public struct TokenRGB: Sendable, Equatable {
@@ -27,6 +28,10 @@ public struct TokenRGB: Sendable, Equatable {
 
     public var color: Color {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
+    }
+
+    var uiColor: UIColor {
+        UIColor(red: red, green: green, blue: blue, alpha: 1)
     }
 }
 
@@ -69,12 +74,50 @@ public enum CouliColor {
         "border.subtle", "border.control", "focus.ring",
     ]
 
-    /// 任意令牌路径 → Color（组件任务里用于语义名之外的令牌）。
+    /// 任意令牌路径 → Color（组件任务里用于语义名之外的令牌）。有深色取值的令牌返回随浅 / 深外观切换的颜色（UIKit 特征与 SwiftUI
+    /// colorScheme 同一来源）；浅色取值仍是锁定快照里的令牌。
     public static func token(_ path: String) -> Color {
         guard let rgb = TokenRGB(token: path) else {
             assertionFailure("missing color token \(path)")
             return .clear
         }
-        return rgb.color
+        guard let dark = CouliDarkTokens.rgb(path) else {
+            return rgb.color
+        }
+        let light = rgb.uiColor
+        let night = dark.uiColor
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? night : light })
+    }
+}
+
+/// 颜色令牌的深色取值（APP-11v；00 D35 三端深色）。
+///
+/// 本仓库锁定的令牌快照（contract.lock → couli 18ad5b4，design-tokens v0.3.0）还没有 `dark`；唯一源 couli
+/// `design/tokens/design-tokens.json`
+/// v0.4.0 已有浅 / 深两套。按任务书「缺令牌在组件库以常量补并登记」，这里逐条照 v0.4.0 的 `dark` 抄入（路径与唯一源一致）；
+/// TODO(DS-02-iOS)：contract.lock 升到含 v0.4.0 的提交后改由生成代码提供并删除本表。
+/// 应用级仍按 Info.plist 浅色外观（整 App 跟随系统深色由 DS-02-iOS 统一开），深色只在外观被显式设为深色时生效。
+enum CouliDarkTokens {
+    static let hex: [String: String] = [
+        "brand.primary": "#C44820", "brand.emphasis": "#F0956B", "brand.secondary": "#6CC49F",
+        "brand.subtle": "#3A2219", "background.canvas": "#171513", "background.surface": "#24211E",
+        "background.muted": "#2F2B27", "background.placeholder": "#36312C", "text.primary": "#F2EEE6",
+        "text.secondary": "#B5ACA2", "text.inverse": "#FFFFFF", "text.link": "#F0956B", "price.text": "#F2EEE6",
+        "rebate.text": "#F29A6E", "rebate.background": "#3A2219", "status.success.text": "#6CC49F",
+        "status.warning.text": "#E3B65C", "status.error.text": "#F28DA4", "border.subtle": "#3A3530",
+        "border.control": "#8C8278", "focus.ring": "#5DBB97", "source.text": "#B5ACA2",
+        "source.background": "#24211E", "source.border": "#3A3530", "rebate.solid.background": "#C44820",
+        "rebate.solid.text": "#FFFFFF", "status.pending.text": "#B5ACA2", "status.pending.background": "#2F2B27",
+        "status.success.background": "#16302A", "status.warning.background": "#33290F",
+        "status.error.background": "#3B1A22", "border.active": "#F2EEE6",
+        "button.primary.default.background": "#C44820", "button.primary.default.text": "#FFFFFF",
+        "button.primary.pressed.background": "#A83B1F", "button.primary.pressed.text": "#FFFFFF",
+        "button.primary.disabled.background": "#36312C", "button.primary.disabled.text": "#A39A90",
+        "button.inverse.background": "#FFFFFF", "button.inverse.text": "#A83B1F", "control.checked": "#C44820",
+        "badge.background": "#C44820",
+    ]
+
+    static func rgb(_ path: String) -> TokenRGB? {
+        hex[path].flatMap { TokenRGB(hex: $0) }
     }
 }

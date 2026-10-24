@@ -107,3 +107,23 @@ enum CouliFontMetrics {
         font(size).lineHeight
     }
 }
+
+private struct CouliLineBoxModifier: ViewModifier {
+    @ScaledMetric private var height: CGFloat
+
+    init(style: CouliTextStyle) {
+        _height = ScaledMetric(wrappedValue: style.baseSize * style.lineHeightMultiple, relativeTo: style.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        content.frame(minHeight: height)
+    }
+}
+
+public extension View {
+    /// 单行文字也按令牌行高占位（`couliFont` 的行距只作用于多行）：最小高 = 字号 × 行高倍数，随系统字号缩放。
+    /// 只给需要与设计稿行高对齐的新组件用（APP-11v 首页），不改 `couliFont` 本身。
+    func couliLineBox(_ style: CouliTextStyle) -> some View {
+        modifier(CouliLineBoxModifier(style: style))
+    }
+}

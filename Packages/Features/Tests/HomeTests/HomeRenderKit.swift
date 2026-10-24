@@ -8,7 +8,7 @@ import XCTest
 /// 用例可断言没有意外请求。
 final class HomeColorBlockImages: URLProtocol, @unchecked Sendable {
     /// 样例里出现的图片主机（golden 向量与 Main 组合页用 img.example.com，本机假服务用 img.example.invalid）。
-    static let hosts: Set<String> = ["img.example.com", "img.example.invalid"]
+    static let hosts: Set<String> = ["img.example.com", "img.example.invalid", "img.example.test"]
     private static let lock = NSLock()
     private nonisolated(unsafe) static var started = 0
     private nonisolated(unsafe) static var finished = 0
@@ -137,16 +137,16 @@ enum HomeShot {
     /// `stable`：截图比对用的稳定等待——连续两帧一致或 2 秒超时就截，不再按点名图片等到 8 秒；点名图片在截下的这一帧上核对。
     static func capture(
         _ view: some View, width: CGFloat = 390, height: CGFloat = 1600, size: DynamicTypeSize = .large,
-        expect: [HomeImageExpectation], stable: Bool = false,
+        expect: [HomeImageExpectation], stable: Bool = false, colorScheme: ColorScheme = .light,
         file: StaticString = #filePath, line: UInt = #line
     ) async -> UIImage {
         let root = AnyView(view
             .frame(width: width, height: height)
             .environment(\.dynamicTypeSize, size)
-            .environment(\.colorScheme, .light))
+            .environment(\.colorScheme, colorScheme))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
         let host = UIHostingController(rootView: root)
-        window.overrideUserInterfaceStyle = .light
+        window.overrideUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds

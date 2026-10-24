@@ -102,50 +102,26 @@ struct TabShellView<Home: View>: View {
     }
 }
 
-/// 基本模式页（设计稿 BasicMode）：搜索框 +【设置】，顶部提示条 `privacy.basic_mode.notice` +【开启完整功能】，
-/// 下面是首页内容（首页卡片由 APP-11 实现，这里是路由注册表的首页占位）。
+/// 基本模式页（设计稿 BasicMode；首页底稿按 HomeGuest-v3，app-basic-mode.md）：吸顶的搜索入口 +【设置】，下面是首页列表
+/// （基本模式提示条 + 游客价值卡作为列表头部，由 RootView 经 `homeNativeHeader` 交给首页路由）。搜索行、头部、SDUI 同一 600 列（03 §10.4）。
 struct BasicModeHomeView: View {
     let onSearch: () -> Void
     let onSettings: () -> Void
-    let onEnableFull: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            notice
-                .padding(.horizontal, CouliSpacing.s4)
-                .padding(.top, CouliSpacing.s1)
             RouteViewRegistry.view(for: RouteDestination(route: RoutePolicy.home, readonly: true))
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.root")
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }
 
     private var topBar: some View {
         HStack(spacing: CouliSpacing.s2) {
-            Button(action: onSearch) {
-                HStack(spacing: CouliSpacing.s2) {
-                    CouliIconView(.search, size: 20)
-                    Text(verbatim: ShellDraftTexts.basicSearchPlaceholder)
-                        .couliFont(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .foregroundColor(CouliColor.textSecondary)
-                .padding(.vertical, CouliSpacing.s2)
-                .padding(.horizontal, CouliSpacing.s3)
-                .frame(minHeight: CouliHitTarget.minimum)
-                .background(
-                    RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                        .fill(CouliColor.backgroundSurface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                        .stroke(CouliColor.borderControl, lineWidth: 1)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("basic.search")
+            HomeSearchEntry(identifier: "basic.search", onSearch: onSearch)
+                .frame(maxWidth: .infinity)
             Button(action: onSettings) {
                 CouliIconView(.settings)
                     .foregroundColor(CouliColor.textPrimary)
@@ -154,38 +130,17 @@ struct BasicModeHomeView: View {
             .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
             .accessibilityLabel(Text(verbatim: ShellDraftTexts.settingsLabel))
             .accessibilityIdentifier("basic.settings")
+            .accessibilityShowsLargeContentViewer()
+            .couliProbe("basic.settings", role: "independent-hit")
         }
+        .frame(maxWidth: HomeSearchRow.maxColumn)
+        .couliProbe("home.column.search", role: "column")
         .padding(.horizontal, CouliSpacing.s4)
         .padding(.vertical, CouliSpacing.s2)
-    }
-
-    private var notice: some View {
-        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.info, size: 20, relativeTo: .footnote)
-                    .foregroundColor(CouliColor.brandEmphasis)
-                Text(verbatim: DefaultTexts.text("privacy.basic_mode.notice") ?? "")
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("basic.notice")
-            }
-            CouliButton(
-                DefaultTexts.text("privacy.basic_mode.enable") ?? "",
-                kind: .primary,
-                size: .compact,
-                fillsWidth: true,
-                action: onEnableFull
-            )
-            .accessibilityIdentifier("basic.enableFull")
-        }
-        .padding(CouliSpacing.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                .fill(CouliColor.brandSubtle)
-        )
+        .frame(maxWidth: .infinity)
+        // 与首页吸顶搜索行同一字号上限（AX3，正文约 235%；更大档按 03 §10.4 导航元素封顶 + 大内容查看器）
+        .dynamicTypeSize(...HomeSearchRow.maxTypeSize)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -212,37 +167,5 @@ struct LaunchBackdropView: View {
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("launch.backdrop")
-    }
-}
-
-/// 首页顶部的搜索入口（APP-06a；与基本模式页同一写法）。TODO(APP-11)：首页实现后并入首页顶栏。
-struct HomeSearchEntry: View {
-    let onSearch: () -> Void
-
-    var body: some View {
-        Button(action: onSearch) {
-            HStack(spacing: CouliSpacing.s2) {
-                CouliIconView(.search, size: 20)
-                Text(verbatim: ShellDraftTexts.basicSearchPlaceholder)
-                    .couliFont(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .foregroundColor(CouliColor.textSecondary)
-            .padding(.vertical, CouliSpacing.s2)
-            .padding(.horizontal, CouliSpacing.s3)
-            .frame(minHeight: CouliHitTarget.minimum)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                    .fill(CouliColor.backgroundSurface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                    .stroke(CouliColor.borderControl, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("home.search")
     }
 }
