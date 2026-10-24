@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Web
 import WebKit
 
 /// 「我的」类页面要的系统能力（App 给；生产 `IOSMeSystem`，测试替身）。都在主线程调用。
@@ -50,8 +51,10 @@ final class IOSMeSystem: MeSystemPorts {
         self.removeWebData = removeWebData
     }
 
+    /// 网页缓存在两处：系统默认 store（历史数据），与可信容器专用的独立 store（F-X-25 起可信页面只用它）。只清缓存类型。
     static func removeWebKitCaches() async {
         await WKWebsiteDataStore.default().removeData(ofTypes: webCacheTypes, modifiedSince: .distantPast)
+        await TrustedWebDataStore.current.removeData(ofTypes: webCacheTypes, modifiedSince: .distantPast)
     }
 
     func permissionStatus(_ type: String) async -> String {

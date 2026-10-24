@@ -15,34 +15,62 @@ import WebKit
 /// - 证书错误一律取消并显示原生错误页（CSB-02）；客户端证书、HTTP 认证一律取消。
 /// - UA 只追加 ` Couli/<版本号>`；页面里的 http / ws 子资源不加载（CSB-03；只有 Debug 本机一致性页本身是 http，那时不装此规则）。
 /// - 用户手势：原生点击识别（`WebTapRecorder`）；主框架开始新导航、提交新文档时清除手势，并作废在途桥调用（三端共性第 4、5 条）。
+/// - 数据存储：可信容器专用的独立 store（`TrustedWebDataStore`，不是 default，也不是外部容器的 store；F-X-25 I6）。
+/// - 切号（F-X-25，`TrustedWebAuthCoordinator`）：隔离期间（`isAuthIsolated`）桥调用一律 90500、不补发方法列表与事件（受控的
+///   auth.changed 除外）、导航与加载一律取消、开始加载 / 重试都不加载；清理成功后换一个新的 WKWebView（新宿主、新令牌、
+///   新浏览上下文）重新加载当前入口，旧 WebView 退役。
 @MainActor
 public final class TrustedWebController: NSObject, ObservableObject {
-    @Published public private(set) var navTitle: String?
-    @Published public private(set) var navBarVisible = true
-    @Published public private(set) var hideClose = false
+    @Published public internal(set) var navTitle: String?
+    @Published public internal(set) var navBarVisible = true
+    @Published public internal(set) var hideClose = false
     /// ui.setNavBar 的样式（三端共性第 23 条）：背景（纯色 / 渐变 / 图片）、文字颜色、沉浸式、底部安全区。
-    @Published public private(set) var navStyle = TrustedNavStyle()
-    @Published public private(set) var toast: String?
-    @Published public private(set) var loadingText: String?
-    @Published public private(set) var isLoadingOverlay = false
-    @Published public private(set) var loadFailed = false
-    @Published public private(set) var canGoBack = false
+    @Published public internal(set) var navStyle = TrustedNavStyle()
+    @Published public internal(set) var toast: String?
+    @Published public internal(set) var loadingText: String?
+    @Published public internal(set) var isLoadingOverlay = false
+    @Published public internal(set) var loadFailed = false
+    @Published public internal(set) var canGoBack = false
+    /// 切号隔离中（F-X-25 I1）：只读，界面与测试观察用。
+    @Published public internal(set) var isAuthIsolated = false
 
-    public let webView: WKWebView
+    /// 当前承载页面的 WKWebView。切号恢复时整体换新（旧的退役），界面按它的身份重建承载视图。
+    @Published public internal(set) var webView: WKWebView
     public private(set) var host: BridgeHost?
     private var initialURL: URL?
-    private var started = false
-    private let onOpenExternal: @MainActor (URL) -> Void
-    private let onClose: @MainActor () -> Void
+    var started = false
+    let appVersion: String
+    /// 当前的可信 store（切号后换新，评审 r2 S0-R2-01；新 WebView 一律建在它上面）。
+    var dataStore: WKWebsiteDataStore {
+        auth?.currentStore ?? TrustedWebDataStore.current
+    }
+
+    private let hostFactory: @MainActor (any BridgeUI) -> BridgeHost
+    let auth: TrustedWebAuthCoordinator?
+    let onOpenExternal: @MainActor (URL) -> Void
+    let onClose: @MainActor () -> Void
+    /// 已 teardown（不再登记切号、不再投递）。
+    private(set) var isTornDown = false
+    /// 当前 WebView 发起过加载（有过文档或在途导航；退役时据此决定要不要换新 WebView）。
+    var loadIssued = false
+    /// 当前 WebView 的主框架文档编号（每次提交 +1；0 = 还没有文档）与提交时的地址（切号恢复时重新加载的「当前入口」）。
+    var documentSerial = 0
+    var committedURL: URL?
+    /// 切号隔离时记下的恢复地址（隔离那一刻已提交文档的地址；没有文档为 nil）。
+    var restoreURL: URL?
+    /// 隔离后、恢复前要换新 WebView（隔离已 dispose 当前宿主）。
+    var needsFreshView = false
+    /// 切号恢复的加载已发出、新文档还没提交（`whenAuthSettled` 等它）。
+    var awaitingAuthCommit = false
     /// 原生点击识别（传输层取手势资格）。
     let tap = WebTapRecorder()
     private var scriptHandler: WeakScriptHandler?
     /// 声明给 H5 的方法列表的同步（令牌、版本、文档身份；F-X-24）。
     var methodsSync = DeclaredMethodsSync(methods: [])
     private var declaredSubscription: AnyCancellable?
-    private var toastTask: Task<Void, Never>?
+    var toastTask: Task<Void, Never>?
     /// 被取消的子框架文档导航次数（诊断与测试用：证明同源子框架确实没有载入）。
-    private(set) var blockedSubframeCount = 0
+    var blockedSubframeCount = 0
 
     /// H5 路由的地址来源（APP-08 共性第 22、29 条）：首次加载与首次未加载成后的【重试】都重新取（读生效配置、生成地址）。
     public var urlProvider: (@MainActor () -> URL?)?
@@ -56,76 +84,119 @@ public final class TrustedWebController: NSObject, ObservableObject {
     public init(
         url: URL?,
         appVersion: String,
-        hostFactory: @MainActor (any BridgeUI) -> BridgeHost,
+        hostFactory: @escaping @MainActor (any BridgeUI) -> BridgeHost,
         onOpenExternal: @escaping @MainActor (URL) -> Void,
         onClose: @escaping @MainActor () -> Void,
-        declaredMethodsChanges: AnyPublisher<Void, Never>? = nil
+        declaredMethodsChanges: AnyPublisher<Void, Never>? = nil,
+        auth: TrustedWebAuthCoordinator? = nil
     ) {
         initialURL = url
+        self.appVersion = appVersion
+        self.hostFactory = hostFactory
+        self.auth = auth
         self.onOpenExternal = onOpenExternal
         self.onClose = onClose
-        let configuration = WKWebViewConfiguration()
-        WebContainerSupport.applyCommonSettings(configuration)
-        WebContainerSupport.applyUserAgent(configuration, appVersion: appVersion)
-        configuration.websiteDataStore = .default()
-        webView = WKWebView(frame: .zero, configuration: configuration)
-        super.init()
-        let host = hostFactory(self)
-        self.host = host
-        methodsSync = DeclaredMethodsSync(methods: host.declaredMethods)
-        configuration.userContentController.addUserScript(methodsSync.userScript(bridgeVersion: host.bridgeVersion))
-        let handler = WeakScriptHandler(self)
-        scriptHandler = handler
-        configuration.userContentController.addScriptMessageHandler(
-            handler, contentWorld: .page, name: BridgeBootstrapScript.handlerName
+        webView = Self.makeWebView(
+            appVersion: appVersion, dataStore: auth?.currentStore ?? TrustedWebDataStore.current
         )
-        webView.navigationDelegate = self
-        webView.uiDelegate = self
-        webView.allowsBackForwardNavigationGestures = true
-        webView.allowsLinkPreview = false
-        tap.attach(to: webView)
+        super.init()
+        bind(webView)
         observeAppLifecycle()
         declaredSubscription = declaredMethodsChanges?.sink { [weak self] in
             MainActor.assumeIsolated {
                 self?.refreshDeclaredMethods()
             }
         }
+        auth?.dependencies.configureWebView(webView)
+        auth?.register(self)
+    }
+
+    /// 新建一个可信 WKWebView（共同设置、UA、可信专用数据存储）。只建不装桥。
+    static func makeWebView(appVersion: String, dataStore: WKWebsiteDataStore) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        WebContainerSupport.applyCommonSettings(configuration)
+        WebContainerSupport.applyUserAgent(configuration, appVersion: appVersion)
+        configuration.websiteDataStore = dataStore
+        return WKWebView(frame: .zero, configuration: configuration)
+    }
+
+    /// 给 WebView 装上新宿主（新世代的桥绑定）、新的方法列表令牌与启动脚本、传输通道、导航代理与手势识别。
+    func bind(_ view: WKWebView) {
+        let host = hostFactory(self)
+        self.host = host
+        methodsSync = DeclaredMethodsSync(methods: host.declaredMethods)
+        let content = view.configuration.userContentController
+        content.addUserScript(methodsSync.userScript(bridgeVersion: host.bridgeVersion))
+        let handler = WeakScriptHandler(self)
+        scriptHandler = handler
+        content.addScriptMessageHandler(handler, contentWorld: .page, name: BridgeBootstrapScript.handlerName)
+        view.navigationDelegate = self
+        view.uiDelegate = self
+        view.allowsBackForwardNavigationGestures = true
+        view.allowsLinkPreview = false
+        tap.attach(to: view)
     }
 
     /// 容器离开界面（销毁）时调用：作废并拒收之后的桥调用，摘掉传输通道。
     public func teardown() {
+        isTornDown = true
+        awaitingAuthCommit = false
         declaredSubscription = nil
         host?.dispose()
         webView.stopLoading()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        // 立即退役并强持有到确认卸载（评审 r2 S1-R2-01）：界面随后释放 WebView 也不会让页面在没人等的情况下关闭；
+        // 下一次切号清理的最后一遍一定在它卸载之后。不移出界面（路由出栈自行移除）。
+        auth?.trackRetirement(TrustedWebRetirement.retire(webView, hadDocument: loadIssued, detach: false))
+        auth?.commitSettled()
     }
 
     /// 开始加载初始地址：不是可信源的不加载（显示错误页）；https 页面先装好「只放行 https 子资源」的规则再加载。
+    /// 切号隔离中（清理进行中或失败）只记下「要加载」，清理成功后与其他容器一并加载（F-X-25 I4）。
     public func start() {
         guard !started else { return }
         started = true
+        auth?.catchUp()
+        guard !isAuthIsolated else { return }
+        loadInitial()
+    }
+
+    func loadInitial() {
         initialURL = urlProvider?() ?? initialURL
         guard let url = initialURL, isTrustedDocument(url), !AuthPages.isAuthPage(url.absoluteString) else {
             loadFailed = true
             return
         }
+        load(url)
+    }
+
+    /// 加载一个可信地址：https 页面先装好「只放行 https 子资源」的规则再加载。
+    func load(_ url: URL, onFailure: @escaping @MainActor () -> Void = {}) {
+        let view = webView
+        loadIssued = true
         guard url.scheme?.lowercased() == "https" else {
-            // 只有 Debug 构建注入的本机一致性测试源会走到这里（http 本机源本身就是 http 页面）。
-            webView.load(URLRequest(url: url))
+            // 只有 Debug 构建注入的本机一致性测试源（及测试的本机源）会走到这里（http 本机源本身就是 http 页面）。
+            view.load(URLRequest(url: url))
             return
         }
         WebContainerSupport.httpsOnlyRules { [weak self] rules in
-            guard let self else { return }
+            guard let self, view === webView, !isAuthIsolated else { return }
             guard let rules else {
                 loadFailed = true
+                onFailure()
                 return
             }
-            webView.configuration.userContentController.add(rules)
-            webView.load(URLRequest(url: url))
+            view.configuration.userContentController.add(rules)
+            view.load(URLRequest(url: url))
         }
     }
 
     public func retry() {
+        if isAuthIsolated {
+            // 切号清理失败后的【重试】：重新清理，成功时恢复全部受影响的容器（不只本页）。
+            auth?.retry()
+            return
+        }
         loadFailed = false
         if webView.url == nil {
             started = false
@@ -135,9 +206,9 @@ public final class TrustedWebController: NSObject, ObservableObject {
         }
     }
 
-    /// 返回：页面有历史时先后退网页，没有历史才关闭容器（APP-04 三端共性第 11 条）。
+    /// 返回：页面有历史时先后退网页，没有历史才关闭容器（APP-04 三端共性第 11 条）。隔离中不后退（不恢复旧文档）。
     public func goBack() {
-        if webView.canGoBack {
+        if webView.canGoBack, !isAuthIsolated {
             webView.goBack()
         } else {
             close()
@@ -152,9 +223,9 @@ public final class TrustedWebController: NSObject, ObservableObject {
         sendEvent(name: "page.visible", data: ["visible": visible])
     }
 
-    /// 原生 → H5 事件：只下发契约 events 白名单里的事件，只发给主框架、且主框架当前是可信源。
+    /// 原生 → H5 事件：只下发契约 events 白名单里的事件，只发给主框架、且主框架当前是可信源。切号隔离中不下发。
     public func sendEvent(name: String, data: [String: Any] = [:]) {
-        guard let body = BridgeProtocol.event(name: name, data: data),
+        guard !isAuthIsolated, let body = BridgeProtocol.event(name: name, data: data),
               let url = webView.url, isTrustedDocument(url),
               let literal = Self.jsStringLiteral(body)
         else { return }
@@ -206,7 +277,7 @@ public final class TrustedWebController: NSObject, ObservableObject {
         sendEvent(name: "app.pause")
     }
 
-    private static func jsStringLiteral(_ text: String) -> String? {
+    static func jsStringLiteral(_ text: String) -> String? {
         guard let data = try? JSONSerialization.data(withJSONObject: text, options: [.fragmentsAllowed]) else {
             return nil
         }
@@ -214,176 +285,9 @@ public final class TrustedWebController: NSObject, ObservableObject {
     }
 
     /// 主框架开始导航或换了文档：清除手势资格，作废在途桥调用（结果不交回新页面）。
-    private func mainFrameChanged() {
+    func mainFrameChanged() {
         tap.reset()
         host?.invalidate()
         canGoBack = webView.canGoBack
-    }
-}
-
-// MARK: - BridgeUI
-
-extension TrustedWebController: BridgeUI {
-    public func toast(text: String, long: Bool) {
-        toast = text
-        toastTask?.cancel()
-        toastTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: long ? 3_500_000_000 : 2_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.toast = nil
-        }
-    }
-
-    public func showLoading(text: String?) {
-        loadingText = text
-        isLoadingOverlay = true
-    }
-
-    public func hideLoading() {
-        isLoadingOverlay = false
-        loadingText = nil
-    }
-
-    /// 全部字段都生效才返回 true。status_bar_style=light（浅色状态栏文字）本端做不到：App 固定浅色界面，SwiftUI 宿主的状态栏
-    /// 样式不能按页面改（capability-ios.md）；这时整次调用什么都不改、返回 false（宿主回 90001）。dark 就是本端状态栏的现状。
-    public func setNavBar(_ bar: BridgeNavBar) -> Bool {
-        if let style = bar.statusBarStyle, style != TrustedNavStyle.statusBarDark {
-            return false
-        }
-        if let visible = bar.visible {
-            navBarVisible = visible
-        }
-        if let title = bar.title {
-            navTitle = title
-        }
-        if let hide = bar.hideClose {
-            hideClose = hide
-        }
-        if let bounce = bar.bounce {
-            webView.scrollView.bounces = bounce
-            webView.scrollView.alwaysBounceVertical = bounce
-        }
-        navStyle = navStyle.applying(bar)
-        return true
-    }
-
-    /// 关闭容器。来自 nav.close 时，先让这次调用把成功响应交回页面（结算在本轮主线程任务里完成），下一轮再作废其余在途调用并关闭。
-    public func close() {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            host?.invalidate()
-            onClose()
-        }
-    }
-}
-
-// MARK: - 导航
-
-extension TrustedWebController: WKNavigationDelegate, WKUIDelegate {
-    public func webView(
-        _ webView: WKWebView,
-        decidePolicyFor action: WKNavigationAction,
-        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
-    ) {
-        guard !action.shouldPerformDownload, let url = action.request.url else {
-            decisionHandler(.cancel)
-            return
-        }
-        let isNewWindow = action.targetFrame == nil
-        let isMainFrame = action.targetFrame?.isMainFrame ?? true
-        // 授权与登录页不进容器（03 §5.1；三端共性第 16 条）：初始地址与每一次文档导航（含子框架）都查，不转交第三方页容器。
-        if !WebContainerSupport.isBlankDocument(url), AuthPages.isAuthPage(url.absoluteString) {
-            decisionHandler(.cancel)
-            return
-        }
-        if !isMainFrame {
-            // 子框架按目标地址的 origin 判（编排者裁定：非主框架且目标属于可信 origin → .cancel）。调用桥时的框架身份另由
-            // WKScriptMessage.frameInfo 判，不靠这里。
-            let allowed = Self.allowsSubframe(url, isTrustedOrigin: isTrustedDocument(url))
-            if !allowed {
-                blockedSubframeCount += 1
-            }
-            decisionHandler(allowed ? .allow : .cancel)
-            return
-        }
-        if isTrustedDocument(url) {
-            if isNewWindow {
-                // 新窗口请求在当前容器里打开（不另开窗口）。
-                decisionHandler(.cancel)
-                webView.load(action.request)
-            } else {
-                decisionHandler(.allow)
-            }
-            return
-        }
-        decisionHandler(.cancel)
-        if url.scheme?.lowercased() == "https" {
-            onOpenExternal(url)
-        }
-    }
-
-    public func webView(
-        _: WKWebView,
-        decidePolicyFor response: WKNavigationResponse,
-        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
-    ) {
-        decisionHandler(WebContainerSupport.isDownload(response) ? .cancel : .allow)
-    }
-
-    public func webView(
-        _: WKWebView,
-        respondTo challenge: URLAuthenticationChallenge
-    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
-        (WebContainerSupport.disposition(for: challenge), nil)
-    }
-
-    /// 主框架开始导航（WKNavigationDelegate 的这个回调只报主框架，不含同文档内的片段 / history 跳转）：立即作废旧页面的
-    /// 在途桥调用，不等新文档提交——新页面加载很慢或失败时，旧调用也不能再发请求或继续权限流程（三端共性第 29 条）。
-    /// 提交新文档时（didCommit）再作废一次，保持新旧文档隔离。
-    public func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
-        methodsSync.navigationStarted()
-        loadFailed = false
-        tap.reset()
-        host?.invalidate()
-    }
-
-    /// 提交新文档（含前进后退从页面缓存恢复）、加载完成：按当前版本补同步方法列表（F-X-24）。
-    public func webView(_: WKWebView, didCommit _: WKNavigation!) {
-        mainFrameChanged()
-        methodsSync.documentCommitted()
-        pushDeclaredMethods()
-    }
-
-    public func webView(_: WKWebView, didFinish _: WKNavigation!) {
-        canGoBack = webView.canGoBack
-        pushDeclaredMethods()
-    }
-
-    public func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
-        methodsSync.navigationEnded()
-        if !WebContainerSupport.isCancellation(error) {
-            loadFailed = true
-        }
-    }
-
-    public func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
-        if !WebContainerSupport.isCancellation(error) {
-            loadFailed = true
-        }
-    }
-
-    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        mainFrameChanged()
-        webView.reload()
-    }
-
-    public func webView(
-        _: WKWebView,
-        createWebViewWith _: WKWebViewConfiguration,
-        for _: WKNavigationAction,
-        windowFeatures _: WKWindowFeatures
-    ) -> WKWebView? {
-        // 新窗口请求已在 decidePolicyFor（targetFrame == nil）里按主框架判定，这里不创建新 WebView。
-        nil
     }
 }

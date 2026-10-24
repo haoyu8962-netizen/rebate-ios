@@ -115,7 +115,9 @@ public struct TrustedWebScreen: View {
 
     private var content: some View {
         ZStack {
+            // 切号恢复时容器换了新的 WKWebView（F-X-25）：按它的身份重建承载视图。
             WebViewHost(webView: controller.webView)
+                .id(ObjectIdentifier(controller.webView))
                 .accessibilityIdentifier("web.trusted.webview")
             if controller.loadFailed {
                 WebErrorView(onRetry: controller.retry, onClose: controller.close)

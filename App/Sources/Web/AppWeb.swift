@@ -37,6 +37,9 @@ final class AppWeb: ObservableObject {
     /// 容器页随路由真正出栈 teardown（三端共性第 28 条）。
     let routeLifetimes: WebRouteLifetimes
     private let cleaner: BridgeHostsCleaner
+    /// 切号时可信容器的通知、隔离、清理与重载（F-X-25）。
+    let webAuth: TrustedWebAuthCoordinator
+    private let webAuthCleaner: TrustedWebAuthCleaner
 
     init(
         config: AppConfig,
@@ -47,7 +50,8 @@ final class AppWeb: ObservableObject {
         tracker: AppTracker,
         permissions: AppPermissions,
         withdrawalRegistry: EnvironmentSwitchCleanerRegistry = PrivacyWithdrawalCleanup.registry,
-        environmentRegistry: EnvironmentSwitchCleanerRegistry = .shared
+        environmentRegistry: EnvironmentSwitchCleanerRegistry = .shared,
+        auth: TrustedWebAuthDependencies? = nil
     ) {
         self.config = config
         self.network = network
@@ -56,13 +60,31 @@ final class AppWeb: ObservableObject {
         self.update = update
         self.tracker = tracker
         self.permissions = permissions
-        cleaner = BridgeHostsCleaner(registry: hosts)
+        let hostsCleaner = BridgeHostsCleaner(registry: hosts)
+        cleaner = hostsCleaner
         routeLifetimes = WebRouteLifetimes(router: routing.router)
+        let coordinator = Self.makeWebAuth(network: network, dependencies: auth ?? .production())
+        let authCleaner = TrustedWebAuthCleaner(coordinator: coordinator)
+        webAuth = coordinator
+        webAuthCleaner = authCleaner
         // 作废在途桥调用排在网络层作废在途请求之后、清令牌之前（APP-04 三端共性第 4 条；网络层仍在第一位，APP-03a 共性第 35 条）。
         PrivacyWithdrawalCleanup.register(
             cleaner, after: NetworkInvalidationCleaner.name,
             withdrawal: withdrawalRegistry, environmentSwitch: environmentRegistry
         )
+        TrustedWebAuthCleaner.register(
+            authCleaner, withdrawal: withdrawalRegistry, environmentSwitch: environmentRegistry
+        )
+    }
+
+    /// 等调用之前已发生的切号处理（通知、清理、恢复页面提交）结算：成功或无事可做为 true，清理失败 / 仍有待清理为 false。只等待。
+    func whenAuthSettled() async -> Bool {
+        await webAuth.whenSettled()
+    }
+
+    /// 持久待清理记录的数据归属（诊断）。
+    var pendingAuthClearOwner: WebSessionIdentity? {
+        webAuth.pendingOwner
     }
 
     static var appVersion: String {
@@ -152,7 +174,7 @@ final class AppWeb: ObservableObject {
         return TrustedWebController(
             url: url,
             appVersion: Self.appVersion,
-            hostFactory: { [hosts] ui in
+            hostFactory: { [hosts, weak self] ui in
                 let host = BridgeHost(
                     protocol: protocolProvider,
                     caller: caller,
@@ -168,7 +190,8 @@ final class AppWeb: ObservableObject {
                 self?.openExternal(target)
             },
             onClose: onClose,
-            declaredMethodsChanges: config.$snapshotJson.dropFirst().map { _ in () }.eraseToAnyPublisher()
+            declaredMethodsChanges: config.$snapshotJson.dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            auth: webAuth
         )
     }
 

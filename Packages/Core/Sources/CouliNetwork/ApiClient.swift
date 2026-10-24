@@ -92,6 +92,8 @@ public final class ApiClient: @unchecked Sendable {
     /// （取快照前后作废世代未变）表明完整模式且撤回清理已完成时才放下（`readContext`）。网络层每一处令牌读取——包括没有状态快照的
     /// 登出、刷新入队、后台删除重试、Restricted 刷新后的读取、对外的隔离账号 / 作用域 / 请求归属——都先在锁里比较它，竖着时不读令牌。
     var readBarrier = false
+    /// 会话变化的观察者（F-X-25 可信容器切号）：在锁外调用，见 `observeSessionChanges`。
+    var sessionObservers: [@Sendable (SessionChange) -> Void] = []
 
     public init(
         identity: ClientIdentity,
@@ -241,6 +243,7 @@ public final class ApiClient: @unchecked Sendable {
             scheduleRevokedRetry()
         }
         pendingKeys.signOut()
+        postSessionChange(.cleared)
     }
 
     /// 强更状态恢复为受支持（升级后、最低版本调低后）：存储的会话若是 deletion_only，立即单飞刷新，期间带令牌的请求

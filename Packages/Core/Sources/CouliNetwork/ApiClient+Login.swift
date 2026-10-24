@@ -71,6 +71,7 @@ extension ApiClient {
         guard saved == .saved else {
             return saved
         }
+        postSessionChange(.saved)
         if let account, !account.isEmpty {
             pendingKeys.coldStart(account: account)
         } else {
@@ -99,6 +100,9 @@ extension ApiClient {
         if retry {
             scheduleRevokedRetry()
         }
+        if cleared != nil {
+            postSessionChange(.cleared)
+        }
         return cleared
     }
 
@@ -125,6 +129,9 @@ extension ApiClient {
         }
         if outcome != .superseded {
             pendingKeys.signOut()
+        }
+        if outcome == .signedOut {
+            postSessionChange(.cleared)
         }
         return outcome
     }

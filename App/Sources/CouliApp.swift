@@ -120,6 +120,8 @@ struct CouliApp: App {
     /// （APP-07：在启动对账重试上次没清干净的撤回之前登记，只进撤回同意的注册表）。
     private static func registerEarlyCleaners() {
         PrivacyWithdrawalCleanup.registerForEnvironmentSwitch(.shared)
+        // F-X-25：可信容器 Web 数据的待清理标记（启动阶段的撤回补清、换装环境清理也要登记；AppWeb 建好后换成协调器版本）
+        TrustedWebAuthCleaner.registerEarly()
         ClipboardRecordsCleaner.register()
         // APP-08：订单断网缓存（撤回同意与切换环境都删；待清理状态在缓存目录之外，启动对账重试撤回清理时一并完成）
         OrderCacheCleaner.register()

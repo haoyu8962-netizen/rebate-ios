@@ -18,7 +18,8 @@ final class DeclaredMethodsSync {
     private(set) var methods: [String]
     private(set) var version = 0
     private var serial = 0
-    private var navigating = false
+    /// 主框架导航在途（provisional，尚未提交）。
+    private(set) var navigating = false
     /// 当前文档已确认拿到的版本（文档换了清空）。
     private(set) var confirmedVersion: Int?
 
@@ -100,7 +101,8 @@ extension TrustedWebController {
     /// 声明给 H5 的方法列表跟上宿主此刻的 `declaredMethods`（远程禁用名单变化）：重新安装启动脚本（之后的新文档），并原地
     /// 换掉当前文档的 `__REBATE_BRIDGE__.methods`（不重载页面；只推给可信源的主文档，见 `DeclaredMethodsSync`）。列表没变时不动。
     public func refreshDeclaredMethods() {
-        guard let host, methodsSync.update(host.declaredMethods) else { return }
+        // 切号隔离中不向旧文档推新列表、不改启动脚本（恢复时整套换新，F-X-25 I1）。
+        guard !isAuthIsolated, let host, methodsSync.update(host.declaredMethods) else { return }
         let contentController = webView.configuration.userContentController
         contentController.removeAllUserScripts()
         contentController.addUserScript(methodsSync.userScript(bridgeVersion: host.bridgeVersion))
@@ -109,6 +111,7 @@ extension TrustedWebController {
 
     /// 把当前列表推进主文档（文档提交、加载完成时补同步）：主文档此刻不是可信源时不推。
     func pushDeclaredMethods() {
+        guard !isAuthIsolated else { return }
         methodsSync.push(to: webView) { [weak self] in
             guard let self, let url = webView.url, isTrustedDocument(url) else { return nil }
             return WebContainerSupport.webOrigin(of: url)

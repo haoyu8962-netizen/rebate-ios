@@ -95,6 +95,10 @@ extension ApiClient {
             if retry {
                 scheduleRevokedRetry()
             }
+            if case .cleared = outcome, emit != nil {
+                // 本次入队顺带清了会话（本世代已没有可刷新的会话）：明确清除会话（F-X-25）。
+                postSessionChange(.cleared)
+            }
             if let emit {
                 await hooks.onEffect(emit)
             }
@@ -175,6 +179,10 @@ extension ApiClient {
         }
         if settled.retry {
             scheduleRevokedRetry()
+        }
+        if case .cleared = settled.outcome {
+            // 刷新被拒 / 存不下新令牌而清会话：明确清除会话（F-X-25）。
+            postSessionChange(.cleared)
         }
         if let emit = settled.emit {
             await hooks.onEffect(emit)

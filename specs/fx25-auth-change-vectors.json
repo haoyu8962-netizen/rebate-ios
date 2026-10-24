@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "source": "NATIVE/F-X-25/brief.md",
+  "delivery": "all mounted trusted documents, including covered/background documents; immediate delivery selected by these tests",
+  "cases": [
+    {
+      "id": "D01_token_refresh",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "expected": "none",
+      "logged_in": null
+    },
+    {
+      "id": "D02_same_account_new_epoch",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-b"
+      },
+      "expected": "notify",
+      "logged_in": true
+    },
+    {
+      "id": "D03_switch_account",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": true,
+        "account": "user-b",
+        "loginEpoch": "epoch-b"
+      },
+      "expected": "notifyReload",
+      "logged_in": true
+    },
+    {
+      "id": "D04_logout",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": true,
+        "account": null,
+        "loginEpoch": null
+      },
+      "expected": "notifyReload",
+      "logged_in": false
+    },
+    {
+      "id": "D05_login",
+      "prev": {
+        "known": true,
+        "account": null,
+        "loginEpoch": null
+      },
+      "next": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "expected": "notifyReload",
+      "logged_in": true
+    },
+    {
+      "id": "D06_cold_start",
+      "prev": {
+        "known": false,
+        "account": null,
+        "loginEpoch": null
+      },
+      "next": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "expected": "none",
+      "logged_in": null
+    },
+    {
+      "id": "D07_cold_guest",
+      "prev": {
+        "known": false,
+        "account": null,
+        "loginEpoch": null
+      },
+      "next": {
+        "known": true,
+        "account": null,
+        "loginEpoch": null
+      },
+      "expected": "none",
+      "logged_in": null
+    },
+    {
+      "id": "D08_unreadable_is_not_logout",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": false,
+        "account": null,
+        "loginEpoch": null
+      },
+      "expected": "none",
+      "logged_in": null
+    },
+    {
+      "id": "D09_guest_unchanged",
+      "prev": {
+        "known": true,
+        "account": null,
+        "loginEpoch": null
+      },
+      "next": {
+        "known": true,
+        "account": null,
+        "loginEpoch": null
+      },
+      "expected": "none",
+      "logged_in": null
+    },
+    {
+      "id": "D10_account_changes_same_epoch",
+      "prev": {
+        "known": true,
+        "account": "user-a",
+        "loginEpoch": "epoch-a"
+      },
+      "next": {
+        "known": true,
+        "account": "user-b",
+        "loginEpoch": "epoch-a"
+      },
+      "expected": "notifyReload",
+      "logged_in": true
+    }
+  ]
+}
