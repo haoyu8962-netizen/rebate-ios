@@ -15,7 +15,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(Self.timeout())
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "networkFailed", "超时：⑤ 卡带【重试】")
         XCTAssertEqual(
             Self.text(fixture.clipboard.result),
@@ -32,7 +32,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
             }
             fixture.api.enqueue(Self.disconnect())
             fixture.clipboard.pasted(entry: entry, text: link)
-            await settle()
+            await waitParses(fixture, sent: 1)
             XCTAssertEqual(Self.name(fixture.clipboard.result), "networkFailed", "断连 / 无网（\(entry)）：⑤ 卡带【重试】")
         }
     }
@@ -43,7 +43,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let first = try await showNetworkFailed(fixture, entry: ManualPasteAction.entryHome)
         fixture.api.enqueue(Self.disconnect())
         fixture.clipboard.retryParse(first.id)
-        await settle()
+        await waitParses(fixture, sent: 2)
         XCTAssertEqual(fixture.api.sent, 2, "【重试】再发一次 parse")
         XCTAssertEqual(Self.name(fixture.clipboard.result), "networkFailed")
     }
@@ -54,7 +54,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(Self.success(#"{"results":[]}"#, trace: trace))
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "成功但结果为空：不是网络失败，不出【重试】（S2-1）")
         XCTAssertEqual(
             Self.text(fixture.clipboard.result),
@@ -63,6 +63,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         )
         let shown = try XCTUnwrap(fixture.clipboard.result)
         fixture.clipboard.retryParse(shown.id)
+        XCTAssertEqual(fixture.clipboard.parseCount, 1, "空结果上没有可用的【重试】，执行层不发起 parse")
         await settle()
         XCTAssertEqual(fixture.api.sent, 1, "空结果上没有可用的【重试】，不再发 parse")
     }
@@ -73,7 +74,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(Self.success(#"{"results":[]}"#, trace: nil))
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "无 trace 的空结果也不出【重试】")
         XCTAssertEqual(
             Self.text(fixture.clipboard.result),
@@ -93,7 +94,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
             let fixture = make()
             fixture.api.enqueue(Self.success(json, trace: trace))
             fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-            await settle()
+            await waitParses(fixture, sent: 1)
             XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "\(label)：不出【重试】")
             XCTAssertEqual(
                 Self.text(fixture.clipboard.result),
@@ -109,7 +110,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         _ = openSearchTyping(fixture)
         fixture.api.enqueue(Self.success(#"{"results":[]}"#, trace: trace))
         fixture.clipboard.pasted(entry: ManualPasteAction.entrySearchTyping, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "SearchTyping 上的空结果也不出【重试】")
     }
 
@@ -119,7 +120,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let first = try await showNetworkFailed(fixture, entry: ManualPasteAction.entryHome)
         fixture.api.enqueue(Self.success(#"{"results":[]}"#, trace: trace))
         fixture.clipboard.retryParse(first.id)
-        await settle()
+        await waitParses(fixture, sent: 2)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "重试得到空结果：不再出【重试】")
     }
 
@@ -148,7 +149,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
             let fixture = make()
             fixture.api.enqueue(item.answer)
             fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-            await settle()
+            await waitParses(fixture, sent: 1)
             XCTAssertEqual(Self.name(fixture.clipboard.result), item.expected, "\(item.label)：按码分流，不出【重试】")
         }
     }
@@ -157,7 +158,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(businessFailure(50001))
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(
             Self.text(fixture.clipboard.result),
             ClipboardDraftTexts.error("error.50001", traceId: trace),
@@ -169,7 +170,7 @@ final class FollowupIos0730RetryTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(businessFailure(42901, kind: .disableButton, disableMillis: 60000))
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(Self.name(fixture.clipboard.result), "notice", "42901：限流轻提示，不出【重试】")
         XCTAssertTrue(fixture.clipboard.blocked)
     }

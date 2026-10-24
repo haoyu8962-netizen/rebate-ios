@@ -59,9 +59,28 @@ class FollowupIos0730TestCase: XCTestCase {
         return Fixture(clipboard: clipboard, routing: routing, api: api, state: state)
     }
 
+    /// 只用于「这次不该发 parse」的路径（没有可等的条件）：让主线程上已排队的工作跑完。要等 parse 落地一律用 `waitParses`。
     func settle() async {
         for _ in 0..<20 {
             await Task.yield()
+        }
+    }
+
+    /// 等到假服务已收到 `sent` 次请求；`settled` 时还要求这些请求都已回答、执行层不再忙（回答已在主线程落地）。
+    /// v2：parse 经 nonisolated 的 ParseInputService 在全局执行器上发出，主线程固定让步 20 次不保证它已跑到假服务
+    /// （完整 verify 里 testDroppedParseClearsNetworkFailedCard 因此读到 sent = 1），改为按条件等，最多 10 秒，超时即失败。
+    func waitParses(
+        _ fixture: Fixture, sent: Int, settled: Bool = true, file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(10)
+        while !(fixture.api.sent >= sent
+            && (!settled || (fixture.api.answered >= sent && !fixture.clipboard.busy))) {
+            guard Date() < deadline else {
+                XCTFail("等待 parse 超时：sent=\(fixture.api.sent) answered=\(fixture.api.answered)", file: file, line: line)
+                return
+            }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
     }
 
@@ -125,9 +144,10 @@ class FollowupIos0730TestCase: XCTestCase {
 
     /// 先在当前页出一张 ⑤ 卡（传输失败）。
     func showNetworkFailed(_ fixture: Fixture, entry: String) async throws -> ClipboardResult {
+        let expected = fixture.api.sent + 1
         fixture.api.enqueue(Self.timeout())
         fixture.clipboard.pasted(entry: entry, text: link)
-        await settle()
+        await waitParses(fixture, sent: expected)
         let result = try XCTUnwrap(fixture.clipboard.result, "前置：传输失败出 ⑤ 卡")
         XCTAssertEqual(Self.name(result), "networkFailed", "前置：传输失败出 ⑤ 卡")
         return result
@@ -149,10 +169,16 @@ final class FollowupIos0730ParseApi: ParseApi, @unchecked Sendable {
     private var bodies: [String] = []
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var holding = false
+    private var replies = 0
     var fallback: ApiResult = .localReject(reason: LocalRejectReason.callCancelled)
 
     var sent: Int {
         lock.withLock { bodies.count }
+    }
+
+    /// 已经回答（send 已返回）的次数。
+    var answered: Int {
+        lock.withLock { replies }
     }
 
     func enqueue(_ results: ApiResult...) {
@@ -179,11 +205,21 @@ final class FollowupIos0730ParseApi: ParseApi, @unchecked Sendable {
             return (holding, next)
         }
         if held {
+            // 登记与 release 在同一把锁里判断：release 先到时直接放行，不会挂死（v2）
             await withCheckedContinuation { continuation in
-                lock.withLock { waiters.append(continuation) }
+                let parked = lock.withLock {
+                    if holding {
+                        waiters.append(continuation)
+                    }
+                    return holding
+                }
+                if !parked {
+                    continuation.resume()
+                }
             }
         }
-        guard isValid() else { return .localReject(reason: LocalRejectReason.callCancelled) }
-        return answer
+        let reply = isValid() ? answer : .localReject(reason: LocalRejectReason.callCancelled)
+        lock.withLock { replies += 1 }
+        return reply
     }
 }

@@ -95,7 +95,7 @@ final class FollowupIos0730ClearTests: FollowupIos0730TestCase {
         _ = try await showNetworkFailed(fixture, entry: ManualPasteAction.entryHome)
         fixture.api.enqueue(Self.dropped())
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 2)
         XCTAssertEqual(fixture.api.sent, 2, "前置：第二次粘贴发出了 parse")
         XCTAssertNil(fixture.clipboard.result, "parse 被丢弃：不出新结果，旧 ⑤ 卡也收起")
     }
@@ -106,7 +106,7 @@ final class FollowupIos0730ClearTests: FollowupIos0730TestCase {
         _ = try showUnrecognized(fixture, entry: ManualPasteAction.entrySearchTyping)
         fixture.api.enqueue(Self.dropped())
         fixture.clipboard.pasted(entry: ManualPasteAction.entrySearchTyping, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         XCTAssertEqual(fixture.api.sent, 1)
         XCTAssertNil(fixture.clipboard.result, "SearchTyping 上 parse 被丢弃：旧 ① 卡收起")
     }
@@ -119,11 +119,11 @@ final class FollowupIos0730ClearTests: FollowupIos0730TestCase {
         fixture.api.hold()
         fixture.api.enqueue(Self.card())
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 2, settled: false)
         XCTAssertTrue(fixture.clipboard.busy, "前置：新 parse 在途")
         XCTAssertNil(fixture.clipboard.result, "新 parse 在途：旧 ⑤ 卡不再显示")
         fixture.api.release()
-        await settle()
+        await waitParses(fixture, sent: 2)
         XCTAssertEqual(fixture.routing.router.path.last?.route, AppClipboard.productDetailRoute, "新结果照常（1 张卡开详情）")
     }
 
@@ -134,7 +134,7 @@ final class FollowupIos0730ClearTests: FollowupIos0730TestCase {
         let fixture = make()
         fixture.api.enqueue(businessFailure(42901, kind: .disableButton, disableMillis: 60000))
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
-        await settle()
+        await waitParses(fixture, sent: 1)
         let reads = fixture.clipboard.readCount
         XCTAssertNil(fixture.clipboard.beginPaste(entry: ManualPasteAction.entryHome), "限流：这次点击不读")
         XCTAssertEqual(fixture.clipboard.readCount, reads)
