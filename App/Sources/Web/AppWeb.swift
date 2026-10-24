@@ -63,6 +63,9 @@ final class AppWeb: ObservableObject {
         let hostsCleaner = BridgeHostsCleaner(registry: hosts)
         cleaner = hostsCleaner
         routeLifetimes = WebRouteLifetimes(router: routing.router)
+        #if DEBUG
+        assertSingleProductionCoordinator(isProduction: auth == nil)
+        #endif
         let coordinator = Self.makeWebAuth(network: network, dependencies: auth ?? .production())
         let authCleaner = TrustedWebAuthCleaner(coordinator: coordinator)
         webAuth = coordinator

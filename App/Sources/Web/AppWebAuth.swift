@@ -117,3 +117,17 @@ private final class WeakWebAuth: @unchecked Sendable {
         self.value = value
     }
 }
+
+#if DEBUG
+/// 「一个进程只由第一个生产协调器做冷启动核对」的前提（F-X-25，`TrustedWebDataStore.claimColdStart`）：正式 App 只有
+/// `CouliApp.init` 建 AppWeb、Info.plist 关了多窗口。若有人在同一进程再建生产协调器，后建的会跳过核对，这里在 Debug 下
+/// 直接断言（测试进程会按生产配置多次建 AppWeb，豁免）。
+@MainActor private var productionCoordinatorCount = 0
+
+@MainActor func assertSingleProductionCoordinator(isProduction: Bool) {
+    guard isProduction else { return }
+    productionCoordinatorCount += 1
+    let underTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    assert(productionCoordinatorCount == 1 || underTests, "同一进程建了第二个生产可信协调器，冷启动核对会被跳过")
+}
+#endif
