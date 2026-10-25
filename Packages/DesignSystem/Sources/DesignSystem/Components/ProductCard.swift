@@ -293,6 +293,7 @@ public struct BadgedTitle: View {
     private let weight: Font.Weight
     private let lineLimit: Int?
     private let isHeader: Bool
+    private let color: Color
     @ScaledMetric private var fontSize: CGFloat
     @Environment(\.displayScale) private var displayScale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -305,8 +306,10 @@ public struct BadgedTitle: View {
         style: CouliTextStyle,
         weight: Font.Weight = .regular,
         lineLimit: Int?,
-        isHeader: Bool = false
+        isHeader: Bool = false,
+        color: Color = CouliColor.textPrimary
     ) {
+        self.color = color
         self.platform = platform
         self.platformCode = platformCode
         self.title = title
@@ -324,7 +327,7 @@ public struct BadgedTitle: View {
         let offset = (font.ascender + font.descender - badge.size.height) / 2
         (Text(Image(uiImage: badge)).baselineOffset(offset) + Text(verbatim: " " + title))
             .couliFont(style, weight: weight)
-            .foregroundColor(CouliColor.textPrimary)
+            .foregroundColor(color)
             .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .ignore)

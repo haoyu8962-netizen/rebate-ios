@@ -20,6 +20,7 @@ public struct BuyButton: View {
     private let state: BuyButtonState
     private let size: CouliButtonSize
     private let fillsWidth: Bool
+    private let labelProbeID: String?
     private let action: () -> Void
 
     public init(
@@ -30,8 +31,10 @@ public struct BuyButton: View {
         state: BuyButtonState = .normal,
         size: CouliButtonSize = .compact,
         fillsWidth: Bool = false,
+        labelProbeID: String? = nil,
         action: @escaping () -> Void
     ) {
+        self.labelProbeID = labelProbeID
         self.base = base
         self.rebate = rebate
         self.amountHidden = amountHidden
@@ -78,6 +81,7 @@ public struct BuyButton: View {
             isEnabled: state == .normal,
             fillsWidth: fillsWidth,
             accessibilityLabel: label,
+            labelProbeID: labelProbeID,
             action: action
         )
     }

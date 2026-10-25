@@ -24,10 +24,13 @@ public enum ProductImagePhase: String, Sendable {
 /// 占位底（ProductCard 的图片框、ProductHeroImage 的占位块）。`onPhase` 回报阶段。
 public struct ProductRemoteImage: View {
     private let url: URL?
+    private let contentMode: ContentMode
     private let onPhase: ((ProductImagePhase) -> Void)?
 
-    public init(url: URL?, onPhase: ((ProductImagePhase) -> Void)? = nil) {
+    /// - Parameter contentMode: 缺省 `.fill`（列表卡、旧头图：铺满裁切）；详情头图传 `.fit`（GUIDE §6「完整显示 contain」，APP-06v）。
+    public init(url: URL?, contentMode: ContentMode = .fill, onPhase: ((ProductImagePhase) -> Void)? = nil) {
         self.url = url
+        self.contentMode = contentMode
         self.onPhase = onPhase
     }
 
@@ -36,7 +39,7 @@ public struct ProductRemoteImage: View {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
-                    image.resizable().scaledToFill().onAppear { onPhase?(.loaded) }
+                    image.resizable().aspectRatio(contentMode: contentMode).onAppear { onPhase?(.loaded) }
                 case .failure:
                     Color.clear.onAppear { onPhase?(.failed) }
                 default:

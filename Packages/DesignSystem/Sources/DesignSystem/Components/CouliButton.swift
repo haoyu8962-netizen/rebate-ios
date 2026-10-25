@@ -29,6 +29,7 @@ public struct CouliButton: View {
     private let isEnabled: Bool
     private let fillsWidth: Bool
     private let accessibilityLabel: String?
+    private let labelProbeID: String?
     private let action: () -> Void
 
     public init(
@@ -39,8 +40,10 @@ public struct CouliButton: View {
         isEnabled: Bool = true,
         fillsWidth: Bool = false,
         accessibilityLabel: String? = nil,
+        labelProbeID: String? = nil,
         action: @escaping () -> Void
     ) {
+        self.labelProbeID = labelProbeID
         self.title = title
         self.kind = kind
         self.size = size
@@ -64,6 +67,11 @@ public struct CouliButton: View {
                     .couliFont(size == .regular ? .body : .footnote, weight: .couliSemibold)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    // 按钮字测量（APP-06v G-D13：200% 底栏排法的测试依据）；nil 或没有接收方时不加任何视图。
+                    .couliTextNaturalProbe(
+                        labelProbeID, role: "button-label", text: title,
+                        style: size == .regular ? .body : .footnote, weight: .couliSemibold
+                    )
             }
             .frame(maxWidth: fillsWidth ? .infinity : nil)
         }

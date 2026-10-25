@@ -25,6 +25,8 @@ public enum ProductKeys {
     static let refExpiredCode = 30143
     /// 30141（商品已下架，置灰；BR-PRICE-21）。
     static let offShelfCode = 30141
+    /// 卡片 availability=off_shelf（下架原位置灰，BR-PRICE-14）。
+    static let offShelfAvailability = "off_shelf"
 }
 
 /// 详情页配置（App 组合：执行器、文案、跳转出口）。
@@ -53,10 +55,10 @@ public final class ProductPageConfig: ObservableObject {
     }
 }
 
-/// 商品详情页（设计稿 Product、ProductPublic、ProductCardStress、A11yFocusProduct）：返回 + 标题 → 头图（契约 image，没有或失败时占位）→ 详情大卡
-/// （DS-01 ProductDetailHeader：主价、副行、返利、预估返后、取价时间、标签、平台 + 标题、店铺）→ 口径说明框 → 底栏
-/// 【问问 AI】+ 购买按钮（服务端 cta.text_key）。价格趋势、收藏、分享赚属于各自的任务，不在这里。
-/// 公开态（游客 / 基本模式）版式相同：ProductPublic 的【分享赚】由分享任务决定（rule-gaps）。
+/// 商品详情页（App 内高保真第 1 批定稿 Product-v2 / ProductJd / ProductDark / ProductOffShelf-v3 / ProductPriceCompareCancelled-v2，
+/// APP-06v-a）：组件库导航栏（返回 + 居中标题）→ 可滚内容列（头图 contain → 价格大卡 → 口径块常驻全文）→ 底栏（【问问 AI】竖排入口
+/// + 购买按钮，200% 时按测量改两行）。价格走势、收藏（APP-16，G-D01）、分享赚（G-D02）、搜相似商品（APP-SIM，G-D06）不在这里。
+/// 公开态（游客 / 基本模式）版式相同。取数、判定与购买执行器不变（只改版式）。
 public struct ProductDetailScreen: View {
     private let config: ProductPageConfig
     @ObservedObject private var controller: ProductDetailController
@@ -78,27 +80,27 @@ public struct ProductDetailScreen: View {
                 title: texts.text(ProductKeys.title), backLabel: texts.text(ProductKeys.back), onBack: config.onBack
             )
             .background(CouliColor.backgroundCanvas)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            GeometryReader { proxy in
+                content(viewport: proxy.size.width)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .environment(\.productSafeAreaBottom, proxy.safeAreaInsets.bottom)
+            }
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
         .task { controller.start() }
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(viewport: CGFloat) -> some View {
         let snapshot = controller.snapshot
         switch snapshot.phase {
         case .loading:
-            ScrollView {
-                ProductCardSkeleton(accessibilityLabel: texts.text("search.loading"))
-                    .padding(CouliSpacing.s4)
-            }
-            .accessibilityIdentifier("product.loading")
+            ProductDetailSkeleton(accessibilityLabel: texts.text("search.loading"))
+                .accessibilityIdentifier("product.loading")
         case .error:
             errorView(snapshot)
         case .content:
             if let product = snapshot.product, let view = snapshot.view {
-                loaded(product, view: view)
+                loaded(product, view: view, viewport: viewport)
             }
         }
     }
@@ -124,42 +126,15 @@ public struct ProductDetailScreen: View {
         }
     }
 
-    private func loaded(_ product: [String: Any], view: ProductDetailView) -> some View {
+    private func loaded(_ product: [String: Any], view: ProductDetailView, viewport: CGFloat) -> some View {
         var mapping = ProductCardMapper.map(product, texts: texts.text, buyEnabled: view.buyEnabled)
         // 平台购买状态（R2-01、R3-02）：按钮置灰；明确 not_launched 时大卡不显示返利金额与预估返后。
         mapping.data = ProductCardMapper.applyPurchaseStatus(
             mapping.data, statusRaw: controller.snapshot.purchase.rawValue, texts: texts.text
         )
-        let title = product["title"] as? String ?? ""
         return VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-                    // 契约 image（共性 22）：加载中、为空、失败时显示占位底。
-                    ProductHeroImage(
-                        url: ProductImageSource.url(product["image"]),
-                        accessibilityLabel: texts.format(ProductKeys.image, ["title": title])
-                    )
-                    ProductDetailHeader(
-                        mapping.data,
-                        fetchedAt: mapping.quotedAt,
-                        shopName: mapping.shopName,
-                        staleNote: view.stale ? texts.text(ProductKeys.priceStale) : nil
-                    )
-                    // 容器保留子元素（读屏各项不变），标识只给容器，不覆盖内部「平台 + 商品名」的 product.title。
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("product.header")
-                    if product["no_rebate_cause"] as? String == "price_compare" {
-                        compareReason(product)
-                    }
-                    let lines = disclaimerLines(mapping, view: view)
-                    if !lines.isEmpty {
-                        DisclaimerFooter(lines: lines, style: .boxed)
-                            .accessibilityIdentifier("product.disclaimer")
-                    }
-                }
-                .padding(CouliSpacing.s4)
-                .frame(maxWidth: ProductLayout.maxContentWidth)
-                .frame(maxWidth: .infinity)
+                column(product, mapping: mapping, view: view, viewport: viewport)
             }
             if let pendingTrack = config.pendingTrack {
                 pendingTrack
@@ -176,21 +151,62 @@ public struct ProductDetailScreen: View {
         }
     }
 
-    /// 比价原因行（ProductPriceCompareCancelled；APP-06b 共性第 15 条：卡片上有 no_rebate_cause=price_compare 就显示，首次进入也有）。
-    private func compareReason(_ product: [String: Any]) -> some View {
-        CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s1) {
-            Text(verbatim: texts.text(ProductKeys.compareReason))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            CouliButton(texts.text(ProductKeys.similar), kind: .text, size: .compact) {
-                config.onSimilar(product)
+    /// 可滚内容列（§2）：头图 → 价格大卡 →（价格走势：APP-16，G-D01，不绘制）→ 口径块；页面左右 16、区块间距 12，≥600 限宽居中。
+    private func column(
+        _ product: [String: Any], mapping: ProductCardMapping, view: ProductDetailView, viewport: CGFloat
+    ) -> some View {
+        // 价格大卡外框宽：视口宽 − 页边距 16 × 2，限宽 600（不受内容撑宽，供超长金额退档判断；评审 r1 S1-1）
+        let cardWidth = min(viewport - CouliSpacing.s4 * 2, ProductLayout.maxContentWidth)
+        let title = product["title"] as? String ?? ""
+        // 下架原位置灰（ProductOffShelf-v3；availability=off_shelf，含 open 返回 30141 写进卡片的）：映射与按钮置灰不变，只改版式。
+        let offShelf = product["availability"] as? String == ProductKeys.offShelfAvailability
+        // BR-TEXT-17：ad_label 非 null 原样角标（G-D04；空串按无，不 trim）。
+        let adLabel = (product["ad_label"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let compare = !offShelf && product["no_rebate_cause"] as? String == "price_compare"
+        let lines = disclaimerLines(mapping, view: view)
+        return VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+            // 契约 image（共性 22）：完整显示（contain），加载中、为空、失败时显示占位底。
+            ProductDetailHero(
+                url: ProductImageSource.url(product["image"]),
+                accessibilityLabel: texts.format(ProductKeys.image, ["title": title]),
+                adLabel: adLabel,
+                grayscale: offShelf
+            )
+            ProductDetailCard(
+                mapping.data,
+                fetchedAt: mapping.quotedAt,
+                shopName: mapping.shopName,
+                staleNote: view.stale ? texts.text(ProductKeys.priceStale) : nil,
+                offShelfLabel: offShelf ? texts.text("error.\(ProductKeys.offShelfCode)") : nil,
+                rebateOverride: compare ? AnyView(compareReason(product)) : nil,
+                width: cardWidth
+            )
+            // 容器保留子元素（读屏各项不变），标识只给容器，不覆盖内部「平台 + 商品名」的 product.title。
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("product.header")
+            // 下架时口径块整块不显示。
+            if !offShelf, !lines.isEmpty {
+                ProductDetailDisclaimer(lines: lines)
+                    .accessibilityIdentifier("product.disclaimer")
             }
-            .accessibilityIdentifier("product.similar")
         }
-        .padding(.horizontal, CouliSpacing.s1)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("product.compareReason")
+        .frame(maxWidth: ProductLayout.maxContentWidth)
+        .couliProbe("product.content", role: "column")
+        .padding(.top, CouliSpacing.s2)
+        .padding(.horizontal, CouliSpacing.s4)
+        .padding(.bottom, CouliSpacing.s4)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 比价原因行（ProductPriceCompareCancelled-v2；APP-06b 共性第 15 条：卡片上有 no_rebate_cause=price_compare 就显示，首次进入也有）：
+    /// 放在价格大卡内返利标签的位置（§2.3），回调不变。
+    private func compareReason(_ product: [String: Any]) -> some View {
+        ProductCompareReasonRow(
+            reason: texts.text(ProductKeys.compareReason),
+            similarTitle: texts.text(ProductKeys.similar)
+        ) {
+            config.onSimilar(product)
+        }
     }
 
     /// 口径说明框：disclaimer_keys 的句子 + 入账说明（共性 15，BR-TEXT-04、F-PROD-05：设计稿 Product 第二行「确认收货后随联盟
@@ -205,8 +221,9 @@ public struct ProductDetailScreen: View {
         return lines
     }
 
-    /// 底栏。购买按钮按平台购买状态（features.platform_status，R2-01；已由 applyPurchaseStatus 并入 mapping）：维护中置灰
+    /// 底栏（§2.6）。购买按钮按平台购买状态（features.platform_status，R2-01；已由 applyPurchaseStatus 并入 mapping）：维护中置灰
     /// 「稍后再试」，未开放置灰「{平台}返利即将开放」；配置变化时随执行器发布刷新，点击时执行器再核对一次。
+    /// 【收藏】属 APP-16（G-D01）、【分享赚】属公开版（G-D02），本任务不绘制。
     private func bottomBar(
         _ product: [String: Any], mapping: ProductCardMapping, purchase: PurchaseState?
     ) -> some View {
@@ -220,33 +237,17 @@ public struct ProductDetailScreen: View {
             }
         }
         let notInstalled = state == .normal && purchase?.notInstalled == true
-        return HStack(spacing: CouliSpacing.s3) {
-            Button(action: config.onAskAI) {
-                VStack(spacing: 2) {
-                    CouliIconView(.chat, size: CouliSpacing.s6)
-                        .accessibilityHidden(true)
-                    Text(verbatim: texts.text(ProductKeys.askAI))
-                        .couliFont(.caption)
-                        .fixedSize()
-                }
-                .foregroundColor(CouliColor.textSecondary)
-                .couliHitTarget()
+        return ProductBottomBarShell {
+            ProductBottomBarLayout {
+                ProductBarEntry(icon: .chat, title: texts.text(ProductKeys.askAI), probeID: "product.askAI",
+                                action: config.onAskAI)
+                    .accessibilityIdentifier("product.askAI")
+                buyButton(product, mapping: mapping, state: state, notInstalled: notInstalled)
+                    .accessibilityFocused($buyFocused)
+                    .accessibilityIdentifier("product.buy")
+                    .couliProbe("product.buy", role: "hit")
             }
-            .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
-            .accessibilityIdentifier("product.askAI")
-            buyButton(product, mapping: mapping, state: state, notInstalled: notInstalled)
-                .accessibilityFocused($buyFocused)
-                .accessibilityIdentifier("product.buy")
         }
-        .padding(.horizontal, CouliSpacing.s4)
-        .padding(.vertical, CouliSpacing.s2)
-        .background(
-            CouliColor.backgroundSurface
-                .ignoresSafeArea(edges: .bottom)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(CouliColor.borderSubtle).frame(height: 1)
-                }
-        )
     }
 }
 
@@ -263,11 +264,14 @@ extension ProductDetailScreen {
         }
         if notInstalled {
             let name = texts.text("platform." + controller.platform)
-            CouliButton(texts.format(ProductKeys.notInstalled, ["platform_name": name]), fillsWidth: true, action: tap)
+            CouliButton(
+                texts.format(ProductKeys.notInstalled, ["platform_name": name]), fillsWidth: true,
+                labelProbeID: "product.buy.label", action: tap
+            )
         } else {
             BuyButton(
                 base: mapping.data.buyBase, rebate: mapping.data.rebate, context: .detail, state: state, size: .regular,
-                fillsWidth: true, action: tap
+                fillsWidth: true, labelProbeID: "product.buy.label", action: tap
             )
         }
     }

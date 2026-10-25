@@ -64,6 +64,10 @@ final class DebugFakeLoginServer: URLProtocol {
         }
         // 商品图走系统 AsyncImage（URLSession.shared）：只接管假图片主机（APP-06a 共性 22）。
         URLProtocol.registerClass(DebugFakeSearchImages.self)
+        // APP-06v：注入卡的测试位图（img.example.test/product-v/…），只在注入了卡时接管。
+        if DebugFakeProductCards.isActive {
+            URLProtocol.registerClass(DebugFakeProductImages.self)
+        }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [DebugFakeLoginServer.self]
         return configuration
@@ -114,7 +118,8 @@ final class DebugFakeLoginServer: URLProtocol {
             return
         }
         // APP-06b：购买场景（DebugFakeTrade）先于搜索与详情。
-        let trade = DebugFakeTrade.answer(path: path, query: query, request: request, body: body)
+        // APP-06v：商品详情视觉 UI 测试注入的卡（COULI_FAKE_PRODUCT_CARDS，DebugFakeProductCards）先于购买与搜索场景。
+        let trade = DebugFakeProductCards.answerOrTrade(path: path, query: query, request: request, body: body)
         // APP-06a：搜索与详情场景（DebugFakeSearch）。
         // APP-07：剪贴板 parse（DebugFakeSearch.parse）。
         let search = trade == nil

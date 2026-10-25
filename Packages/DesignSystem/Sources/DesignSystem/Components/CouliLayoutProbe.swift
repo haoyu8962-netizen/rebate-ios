@@ -160,6 +160,8 @@ public struct CouliUnbreakableText: View {
     private let probeID: String?
     private let role: String
     private let card: String
+    private let lineHeightMultiple: CGFloat
+    private let measuredNatural: CGFloat?
     @ScaledMetric private var size: CGFloat
     @Environment(\.couliLayoutProbe) private var probe
     @State private var natural: CGFloat = 0
@@ -167,8 +169,12 @@ public struct CouliUnbreakableText: View {
     /// - Parameters:
     ///   - size: 系统字号「大」时的字号；`relativeTo` 决定缩放曲线。
     ///   - probeID: 测量编号（nil 不上报）。
+    ///   - lineHeightMultiple: 单行占位的行高倍数（缺省正文 1.5；详情大价 display 1.2、返利金额 title 1.3，APP-06v）。
+    ///   - naturalWidth: 调用方已按同一字体量好的单行自然宽度（APP-06v 详情金额）；给了就直接上报它，不再放隐藏副本。
     public init(_ text: String, size: CGFloat, weight: Font.Weight = .regular, relativeTo: Font.TextStyle = .body,
-                monospacedDigits: Bool = true, probeID: String? = nil, role: String = "", card: String = "") {
+                monospacedDigits: Bool = true, probeID: String? = nil, role: String = "", card: String = "",
+                lineHeightMultiple: CGFloat = CouliTextStyle.body.lineHeightMultiple,
+                naturalWidth: CGFloat? = nil) {
         self.text = text
         base = size
         self.weight = weight
@@ -176,6 +182,8 @@ public struct CouliUnbreakableText: View {
         self.probeID = probeID
         self.role = role
         self.card = card
+        self.lineHeightMultiple = lineHeightMultiple
+        measuredNatural = naturalWidth
         _size = ScaledMetric(wrappedValue: size, relativeTo: relativeTo)
     }
 
@@ -185,10 +193,14 @@ public struct CouliUnbreakableText: View {
     }
 
     public var body: some View {
-        // 按令牌行高（1.5 倍）占位，与设计稿单行行高一致
+        // 按令牌行高（缺省 1.5 倍）占位，与设计稿单行行高一致
         let label = Text(verbatim: text).font(font).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-            .frame(minHeight: (size * CouliTextStyle.body.lineHeightMultiple).rounded())
-        if let probeID, probe != nil {
+            .frame(minHeight: (size * lineHeightMultiple).rounded())
+        if let probeID, probe != nil, let measuredNatural {
+            label
+                .modifier(CouliProbeModifier(id: probeID, role: role, card: card, text: text, natural: measuredNatural,
+                                             fontSize: size, base: base))
+        } else if let probeID, probe != nil {
             label
                 .background(alignment: .topLeading) {
                     Text(verbatim: text).font(font).lineLimit(1).fixedSize()
@@ -204,6 +216,55 @@ public struct CouliUnbreakableText: View {
                                              fontSize: size, base: base))
         } else {
             label
+        }
+    }
+}
+
+public extension View {
+    /// 可换行文字（按钮字等）的实际框、单行自然宽度与实际字号一起上报（APP-06v 购买按钮字）：有接收方时另放一份同字体、
+    /// 不限宽的隐藏副本量单行宽度；没有接收方时原样返回，不加任何视图。`style` / `weight` 须与正在显示的文字一致。
+    func couliTextNaturalProbe(_ id: String?, role: String, text: String, style: CouliTextStyle,
+                               weight: Font.Weight = .regular) -> some View {
+        modifier(CouliTextNaturalProbeModifier(id: id, role: role, text: text, style: style, weight: weight))
+    }
+}
+
+struct CouliTextNaturalProbeModifier: ViewModifier {
+    @Environment(\.couliLayoutProbe) private var probe
+    @ScaledMetric private var size: CGFloat
+    @State private var natural: CGFloat = 0
+    let id: String?
+    let role: String
+    let text: String
+    let style: CouliTextStyle
+    let weight: Font.Weight
+
+    init(id: String?, role: String, text: String, style: CouliTextStyle, weight: Font.Weight) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.style = style
+        self.weight = weight
+        _size = ScaledMetric(wrappedValue: style.baseSize, relativeTo: style.relativeTo)
+    }
+
+    func body(content: Content) -> some View {
+        if let id, probe != nil {
+            content
+                .background(alignment: .topLeading) {
+                    Text(verbatim: text).font(.system(size: size, weight: weight)).lineLimit(1).fixedSize()
+                        .hidden()
+                        .background(GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { natural = proxy.size.width }
+                                .onChange(of: proxy.size.width) { natural = $0 }
+                        })
+                        .accessibilityHidden(true)
+                }
+                .modifier(CouliProbeModifier(id: id, role: role, card: "", text: text, natural: natural,
+                                             fontSize: size, base: style.baseSize))
+        } else {
+            content
         }
     }
 }
