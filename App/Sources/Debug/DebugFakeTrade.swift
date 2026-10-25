@@ -13,7 +13,8 @@ import TradeJump
 ///   `t-coupon` 券失效、`t-compare` 比价无返利、`t-requote` 复核失败照常外跳、`t-slow` 第一次 10 秒（> 8 秒）、同键重发立即回答
 ///   （同一个 attempt_id）、`t-auth` 30101（web_code）→ 绑定后正常、`t-unavail` 30101 auth_unavailable、`t-pdd` 30111、
 ///   `t-sdk` 只有 sdk、`t-noinst` 只有 scheme、`t-browser` h5（京东）、`t-maint` / `t-notlaunched` 50301、`t-busy` 42901、
-///   `t-blocked` 30153、`t-503` 50303、`t-offshelf` 30141、`t-expired` 30144、`t-norebate` 30103。没有 Authorization 头 →
+///   `t-blocked` 30153、`t-503` 50303、`t-offshelf` 30141、`t-expired` 30144、`t-norebate` 30103、`t-rebind` 30151
+///   （APP-06v-b：30153 类第三种，版式同 30153）。没有 Authorization 头 →
 /// 10001。
 /// - getTips / markTipRead、listUnionBindings、getUnionAuthUrl、bindUnion 在内存里记状态（每次冷启动重置）。
 /// - 启动参数：`-CouliFakeTradeLoggedIn`（冷启动直接是已登录的假账号）、`-CouliFakeTradeNoExternal`（不真的拉起外部 App / 浏览器，
@@ -236,7 +237,7 @@ enum DebugFakeTrade {
         "t-maint": (50301, "{\"reason\":\"maintenance\",\"platform\":\"taobao\"}"),
         "t-notlaunched": (50301, "{\"reason\":\"not_launched\",\"platform\":\"taobao\"}"),
         "t-blocked": (30153, "{}"), "t-503": (50303, "{}"), "t-offshelf": (30141, "{}"), "t-expired": (30144, "{}"),
-        "t-norebate": (30103, "{}"),
+        "t-norebate": (30103, "{}"), "t-rebind": (30151, "{}"),
     ]
 
     private static func errorAnswer(_ scenario: String) -> Answer? {

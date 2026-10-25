@@ -273,7 +273,8 @@ extension SearchView {
         .contentShape(Rectangle())
         // 点卡片（读屏双击标题）进详情；卡内 i 按钮与购买按钮各自独立聚焦。
         .onTapGesture(perform: open)
-        .modifier(SearchCompareReason(item: item, texts: texts) { config.onSimilar(item) })
+        // 卡下的比价原因行；下架灰胶囊（APP-06v G-D07：下架不出轻提示，卡下可读「商品已下架」，Android b r1 S2-1 同口径）
+        .modifier(SearchCardRows(item: item, texts: texts, offShelf: offShelf, onOpen: open) { config.onSimilar(item) })
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("\(prefix).\(index)")
         // 结果卡（推荐卡不算）在列表视口坐标系里的框：用来找视口顶部的卡（R3-01）。
@@ -316,6 +317,48 @@ struct SearchCompareReason: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+/// 卡片下方的附加行：比价无返利原因行、下架状态（APP-06v-b）。
+struct SearchCardRows: ViewModifier {
+    let item: [String: Any]
+    let texts: SearchTexts
+    let offShelf: Bool
+    let onOpen: () -> Void
+    let onSimilar: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(SearchCompareReason(item: item, texts: texts, onSimilar: onSimilar))
+            .modifier(SearchOffShelfState(offShelf: offShelf, label: texts.text("error.30141"), onOpen: onOpen))
+    }
+}
+
+/// 搜索卡下架状态（APP-06v G-D07）：30141 / open 返回 off_shelf 都由执行器写进这张卡；卡片上方接一行灰胶囊「商品已下架」（读屏可读），
+/// 状态变成下架时排队播报一次。按钮仍由映射置灰，不依赖执行器轻提示。
+struct SearchOffShelfState: ViewModifier {
+    let offShelf: Bool
+    let label: String
+    /// 点胶囊同点卡片：进详情（胶囊在卡片上方，属于这张卡）。
+    let onOpen: () -> Void
+
+    func body(content: Content) -> some View {
+        VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+            // 放在卡片上方（同 Android 卡顶状态）：读屏也就排在卡片第一项、购买按钮之前（评审 r1 S2-5）
+            if offShelf {
+                ProductStatusCapsule(label)
+                    .padding(.horizontal, CouliSpacing.s3)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+                    .accessibilityIdentifier("search.offShelf")
+            }
+            content
+        }
+        .onChange(of: offShelf) { now in
+            guard CouliStatusAnnouncer.shouldAnnounce(was: !now, now: now) else { return }
+            CouliStatusAnnouncer.polite(label)
         }
     }
 }

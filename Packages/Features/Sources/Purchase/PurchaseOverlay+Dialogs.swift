@@ -130,35 +130,82 @@ extension PurchaseOverlay {
             }
             .accessibilityIdentifier("purchase.sdkFailed")
         case let .notice(textKey, traceId, noRebate, contact, retry):
-            DialogCard(
+            noticeCard(
                 title: text.withTrace(textKey ?? SearchErrorText.genericKey, platform: platform, traceId: traceId),
-                icon: .info
-            ) {
-                EmptyView()
-            } buttons: {
-                if retry {
-                    CouliButton(text.text(PurchaseKeys.retry), isEnabled: !state.rateLimited, fillsWidth: true) {
-                        actions.retry()
-                    }
-                }
-                if noRebate {
-                    CouliButton(text.text(PurchaseKeys.buyNoRebate), kind: retry ? .secondary : .primary,
-                                isEnabled: !state.rateLimited, fillsWidth: true) {
-                        actions.noRebate()
-                    }
-                    .accessibilityIdentifier("purchase.notice.noRebate")
-                }
-                if contact {
-                    CouliButton(text.text(PurchaseKeys.contact), kind: .secondary, fillsWidth: true) {
-                        actions.contact()
-                    }
-                }
-                CouliButton(text.text(PurchaseKeys.cancel), kind: .text, fillsWidth: true) { actions.dismiss() }
-            }
+                noRebate: noRebate, contact: contact, retry: retry, actions: actions
+            )
             .accessibilityIdentifier("purchase.notice")
+        case .compareNoRebate:
+            compareCard(actions)
         default:
             EmptyView()
         }
+    }
+
+    /// 带按钮的错误提示（ProductAuthBlocked / ProductPriceUnconfirmed）。只换按钮位置、样式与文字，回调不变（G-D08、G-D09）：
+    /// - 50303（`retry`）：主「稍后再试」（`card.retry_later`）= 只关弹窗、留在详情，用户再点购买才发新一次 open；次【仍去购买（无返利）】；
+    ///   标题前 i；没有【取消】（「稍后再试」已等于关闭，本线裁定 G-I01）。
+    /// - 30153 / 30103 / 30151（客服 + 无返利）：主【联系客服】、次【仍去购买（无返利）】，标题前警告色三角；保留【取消】文字按钮
+    ///   （iOS 没有系统返回键，G-I01「系统差异」）。
+    /// - 只有一个出路的（30121 等）：版式不变。
+    @ViewBuilder
+    func noticeCard(
+        title: String, noRebate: Bool, contact: Bool, retry: Bool, actions: PurchaseDialogActions
+    ) -> some View {
+        let blocked = contact && noRebate && !retry
+        DialogCard(
+            title: title,
+            icon: blocked ? .alert : .info,
+            iconColor: blocked ? CouliColor.statusWarningText : (retry ? CouliColor.textSecondary : nil)
+        ) {
+            EmptyView()
+        } buttons: {
+            if retry {
+                CouliButton(text.text(PurchaseKeys.retryLater), fillsWidth: true) { actions.dismiss() }
+                    .accessibilityIdentifier("purchase.notice.later")
+            }
+            if blocked {
+                CouliButton(text.text(PurchaseKeys.contact), fillsWidth: true) { actions.contact() }
+                    .accessibilityIdentifier("purchase.notice.contact")
+            }
+            if noRebate {
+                CouliButton(text.text(PurchaseKeys.buyNoRebate), kind: retry || blocked ? .secondary : .primary,
+                            isEnabled: !state.rateLimited, fillsWidth: true) {
+                    actions.noRebate()
+                }
+                .accessibilityIdentifier("purchase.notice.noRebate")
+            }
+            if contact, !blocked {
+                CouliButton(text.text(PurchaseKeys.contact), kind: .secondary, fillsWidth: true) {
+                    actions.contact()
+                }
+            }
+            if !retry {
+                CouliButton(text.text(PurchaseKeys.cancel), kind: .text, fillsWidth: true) { actions.dismiss() }
+            }
+        }
+    }
+
+    /// 比价无返利确认（ProductPriceCompareNoRebate-v2，G-D10）：居中弹窗 + 右上关闭；正文内强调色「查看说明」链接（没配文章不显示）；
+    /// 纵排主【看看相似商品】/ 次【仍去购买（无返利）】。回调不变：主 → similar、次 → confirm、关闭 / 读屏擦除 → dismiss。
+    func compareCard(_ actions: PurchaseDialogActions) -> some View {
+        let explain = text.text(PurchaseKeys.compareExplain)
+        return DialogCard(
+            title: text.text(PurchaseKeys.compareTitle),
+            close: DialogClose(label: text.text(PurchaseKeys.close), action: actions.dismiss)
+        ) {
+            CompareBody(
+                message: text.text(PurchaseKeys.compareBody),
+                link: controller.explanationAvailable ? explain : nil,
+                onLink: actions.explain
+            )
+        } buttons: {
+            CouliButton(text.text(PurchaseKeys.similar), fillsWidth: true) { actions.similar() }
+                .accessibilityIdentifier("purchase.compare.similar")
+            CouliButton(text.text(PurchaseKeys.buyNoRebate), kind: .secondary, fillsWidth: true) { actions.confirm() }
+                .accessibilityIdentifier("purchase.compare.buy")
+        }
+        .accessibilityIdentifier("purchase.compare")
     }
 
     /// 新价的口径（共性第 21、30、37、45、47 条）：改价、券失效后券额未知，补齐前「现在」不带口径词；补齐后按实际券额给
@@ -228,6 +275,46 @@ extension PurchaseOverlay {
                 }
                 stacked
             }
+        }
+    }
+}
+
+/// 比价确认正文：14 主文字，句尾接强调色 14/600「查看说明」行内链接（`link` 为 nil 不显示）。链接点击走 `onLink`（不打开任何地址）；
+/// 读屏：正文一项，「查看说明」另作该项的自定义操作，同时保留链接本身（转子「链接」可达）。
+struct CompareBody: View {
+    let message: String
+    let link: String?
+    let onLink: () -> Void
+
+    private static let linkURL = URL(string: "couli-inline://compare-explain")
+
+    private var attributed: AttributedString {
+        var out = AttributedString(message)
+        guard let link else { return out }
+        out += AttributedString(" ")
+        var run = AttributedString(link)
+        run.link = Self.linkURL
+        run.inlinePresentationIntent = .stronglyEmphasized
+        out += run
+        return out
+    }
+
+    var body: some View {
+        let text = Text(attributed)
+            .couliFont(.footnote)
+            .foregroundColor(CouliColor.textPrimary)
+            .tint(CouliColor.brandEmphasis)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.openURL, OpenURLAction { _ in
+                onLink()
+                return .handled
+            })
+            .accessibilityIdentifier(link == nil ? "purchase.compare.body" : "purchase.compare.explain")
+        if let link {
+            text.accessibilityAction(named: Text(verbatim: link)) { onLink() }
+        } else {
+            text
         }
     }
 }

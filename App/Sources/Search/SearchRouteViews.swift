@@ -27,7 +27,7 @@ private struct SearchRouteContent: View {
     var body: some View {
         if let purchase = config.purchaseController {
             SearchView(config: config)
-                .purchaseOverlay(purchase, texts: config.texts)
+                .purchaseOverlay(purchase, texts: config.texts, host: .search)
         } else {
             SearchView(config: config)
         }
@@ -57,7 +57,7 @@ private struct ProductRouteContent: View {
     var body: some View {
         if let purchase = config.purchase {
             ProductDetailScreen(config: config)
-                .purchaseOverlay(purchase, texts: config.texts)
+                .purchaseOverlay(purchase, texts: config.texts, host: .detail)
         } else {
             ProductDetailScreen(config: config)
         }

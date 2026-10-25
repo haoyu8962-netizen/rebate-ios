@@ -2,17 +2,21 @@ import Foundation
 import SwiftUI
 import UIKit
 
-/// 平台图标的两档尺寸（F-X-05a）：来源标签里的 14、首页金刚区平台格的 44。不随动态字号放大。
+/// 平台图标的尺寸档（F-X-05a）：来源标签里的 14、首页金刚区平台格的 44；授权半屏标题前的 32（APP-06v G-D14，同一张内置图缩放，
+/// 不新增素材）。不随动态字号放大。
 public enum PlatformIconSize: Sendable {
     /// 来源标签 `PlatformBadge` 里的小图标（design/specs/app-home.md「14px 官方图标」）。
     case badge
     /// 首页金刚区平台格（APP-11v）。
     case grid
+    /// 授权半屏标题前（APP-06v G-D14「标题前 32 平台官方图标」）。
+    case sheet
 
     public var points: CGFloat {
         switch self {
         case .badge: 14
         case .grid: 44
+        case .sheet: 32
         }
     }
 }

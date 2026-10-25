@@ -75,7 +75,7 @@ extension OpenPurchaseController {
         }
         switch outcome.actionRaw {
         case OpenActions.offShelf:
-            toast(PurchaseTextKeys.offShelf)
+            // 下架：卡片原位置灰（页面按卡片状态 polite 播报），不再出「商品已下架」轻提示（APP-06v G-D07）
             ready = nil
         case OpenActions.confirmPrice, OpenActions.confirmCoupon:
             showDialog(.confirmPrice(
@@ -191,7 +191,7 @@ extension OpenPurchaseController {
                 out["availability"] = Availability.offShelf.rawValue
                 return out
             }
-            toast(outcome.textKey ?? PurchaseTextKeys.offShelf)
+            // 不再出轻提示：卡片原位置灰 + 页面按卡片状态 polite 播报（APP-06v G-D07）
         } else if code == 50303 {
             showDialog(
                 .notice(textKey: outcome.textKey, traceId: traceId, noRebate: true, contact: false, retry: true),

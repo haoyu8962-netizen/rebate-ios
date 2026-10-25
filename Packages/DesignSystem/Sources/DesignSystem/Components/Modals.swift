@@ -137,6 +137,9 @@ public struct CouliSheet<Content: View, Actions: View>: View {
     private let title: String
     private let closeLabel: String
     private let showsTitle: Bool
+    private let titleStyle: CouliSheetTitleStyle
+    private let titleLeading: AnyView?
+    private let showsClose: Bool
     private let closeID: String?
     private let onClose: () -> Void
     private let content: Content
@@ -149,6 +152,9 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         title: String,
         closeLabel: String,
         showsTitle: Bool = true,
+        titleStyle: CouliSheetTitleStyle = .standard,
+        titleLeading: AnyView? = nil,
+        showsClose: Bool = true,
         closeID: String? = nil,
         onClose: @escaping () -> Void,
         @ViewBuilder content: () -> Content,
@@ -157,6 +163,9 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         self.title = title
         self.closeLabel = closeLabel
         self.showsTitle = showsTitle
+        self.titleStyle = titleStyle
+        self.titleLeading = titleLeading
+        self.showsClose = showsClose
         self.closeID = closeID
         self.onClose = onClose
         self.content = content()
@@ -172,24 +181,31 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                 .accessibilityHidden(true)
             HStack(alignment: .top) {
                 if showsTitle {
-                    Text(verbatim: title)
-                        .couliFont(.body, weight: .couliSemibold)
-                        .foregroundColor(CouliColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityFocused($titleFocused)
+                    HStack(alignment: .top, spacing: CouliSpacing.s3) {
+                        if let titleLeading {
+                            titleLeading
+                        }
+                        Text(verbatim: title)
+                            .modifier(SheetTitleFont(style: titleStyle))
+                            .foregroundColor(CouliColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($titleFocused)
+                    }
                 }
                 Spacer(minLength: CouliSpacing.s2)
-                Button(action: onClose) {
-                    CouliIconView(.close)
-                        .foregroundColor(CouliColor.textSecondary)
-                        .couliHitTarget()
+                if showsClose {
+                    Button(action: onClose) {
+                        CouliIconView(.close)
+                            .foregroundColor(CouliColor.textSecondary)
+                            .couliHitTarget()
+                    }
+                    .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
+                    .padding(-CouliSpacing.s2)
+                    .accessibilityLabel(Text(verbatim: closeLabel))
+                    .accessibilityFocused($closeFocused)
+                    .modifier(SheetOptionalIdentifier(id: closeID))
                 }
-                .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
-                .padding(-CouliSpacing.s2)
-                .accessibilityLabel(Text(verbatim: closeLabel))
-                .accessibilityFocused($closeFocused)
-                .modifier(OptionalIdentifier(id: closeID))
             }
             ScrollingBody {
                 VStack(alignment: .leading, spacing: CouliSpacing.s4) { content }
@@ -219,32 +235,6 @@ public struct CouliSheet<Content: View, Actions: View>: View {
             } else {
                 closeFocused = true
             }
-        }
-    }
-}
-
-/// 可选的可访问标识（nil 时不加，既有调用方不变）。
-private struct OptionalIdentifier: ViewModifier {
-    let id: String?
-
-    func body(content: Content) -> some View {
-        if let id {
-            content.accessibilityIdentifier(id)
-        } else {
-            content
-        }
-    }
-}
-
-/// 无标题半屏的容器读屏名（有标题时不加，与既有半屏一致）。
-private struct SheetPaneName: ViewModifier {
-    let name: String?
-
-    func body(content: Content) -> some View {
-        if let name {
-            content.accessibilityLabel(Text(verbatim: name))
-        } else {
-            content
         }
     }
 }

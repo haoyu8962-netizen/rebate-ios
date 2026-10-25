@@ -65,6 +65,9 @@ enum TradeDraftTexts {
         "trade.sdk_failed.body": "这次没有跳转，商品信息保留在本页，稍后可以再点购买。",
         "trade.not_installed": "安装{platform_name}后下单才有返利",
         "trade.not_installed.copied": "安装{platform_name}后下单才有返利，口令已复制",
+        // 淘宝未安装、口令复制步骤之后（ProductJumpNotInstalled-v2，G-D11；三端同名，登记 CT-16f）
+        "trade.not_installed.copy_tpwd": "复制淘口令",
+        "trade.not_installed.tpwd_copied": "已复制淘口令",
         "trade.jump_failed": "暂时无法打开{platform_name}，请稍后再试",
         // 跳转方案过了 expire_at（共性第 12 条；没有画板与文案键）
         "trade.jump_expired": "购买链接已过期，请重新点购买",

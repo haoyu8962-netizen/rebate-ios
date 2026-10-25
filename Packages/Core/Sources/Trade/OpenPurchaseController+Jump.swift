@@ -203,9 +203,12 @@ extension OpenPurchaseController {
             toast(PurchaseTextKeys.copied)
             onJumpedOut?(jump.attempt.platform, origin)
         case JumpTypes.finalNotInstalled:
-            // 明确未安装但口令已复制：安装提示照旧，同时算成功外跳（BR-ATTR-21；APP-08 共性第 33 条），回前台后拉待跟单卡
+            // 明确未安装但口令已复制：安装提示照旧，同时算成功外跳（BR-ATTR-21；APP-08 共性第 33 条），回前台后拉待跟单卡。
+            // 淘宝：页面改为常驻说明行 +【复制淘口令】、轻提示「已复制淘口令」（APP-06v G-D11，只换键名与展示标志，时机不变）
+            let tpwd = jump.attempt.platform == "taobao"
             state.notInstalled = true
-            toast(PurchaseTextKeys.notInstalledCopied)
+            state.notInstalledTpwd = tpwd
+            toast(tpwd ? PurchaseTextKeys.notInstalledTpwdCopied : PurchaseTextKeys.notInstalledCopied)
             onJumpedOut?(jump.attempt.platform, origin)
         default:
             let onlySdk = outcome.run.executed.allSatisfy { $0 == JumpTypes.sdk }

@@ -278,18 +278,22 @@ public struct ProductCardSkeleton: View {
 
 // MARK: - Toast
 
-/// 页顶轻提示（复制、保存等）：白底浮层阴影、墨棕字；出现时礼貌播报同文（adaptation-a11y-spec §10）。
+/// 页顶轻提示（复制、保存等）：白底浮层阴影、墨棕字、左侧 20 图标（按类型，缺省成功勾）；出现时礼貌播报同文（adaptation-a11y-spec §10）。
 public struct Toast: View {
     private let message: String
+    private let icon: CouliToastIcon
 
-    public init(_ message: String) {
+    public init(_ message: String, icon: CouliToastIcon = .success) {
         self.message = message
+        self.icon = icon
     }
 
     public var body: some View {
         HStack(spacing: CouliSpacing.s2) {
-            CouliIconView(.check, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
-                .foregroundColor(CouliColor.statusSuccessText)
+            if let symbol = icon.icon {
+                CouliIconView(symbol, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                    .foregroundColor(icon.color)
+            }
             Text(verbatim: message)
                 .couliFont(.footnote)
                 .foregroundColor(CouliColor.textPrimary)
@@ -309,10 +313,17 @@ public struct Toast: View {
 public struct CouliToastMessage: Equatable, Sendable {
     public let id: UUID
     public let text: String
+    /// 左侧图标类型（缺省成功勾，既有调用不变）。
+    public let icon: CouliToastIcon
 
     public init(_ text: String) {
+        self.init(text, icon: .success)
+    }
+
+    public init(_ text: String, icon: CouliToastIcon) {
         id = UUID()
         self.text = text
+        self.icon = icon
     }
 }
 
@@ -339,15 +350,17 @@ enum ToastAnnouncement {
 private struct ToastModifier: ViewModifier {
     @Binding var message: CouliToastMessage?
     let duration: TimeInterval
+    /// 额外下移（让出盖在同一页面里的导航栏，APP-06v-b：轻提示在导航栏下约 8）。
+    let topInset: CGFloat
     /// 上一次已播报的请求（同一请求重绘、视图重挂时不重复播报）。
     @State private var announced: CouliToastMessage?
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
             if let message {
-                Toast(message.text)
+                Toast(message.text, icon: message.icon)
                     .padding(.horizontal, CouliSpacing.s4)
-                    .padding(.top, CouliSpacing.s2)
+                    .padding(.top, CouliSpacing.s2 + topInset)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     // id 变化（首次出现、换内容、同文再提示）都会重跑：播报一次并重新计时。
                     .task(id: message.id) {
@@ -369,7 +382,9 @@ private struct ToastModifier: ViewModifier {
 public extension View {
     /// 页顶轻提示；`message` 置非空即显示，`duration` 秒后自动消失。显示期间再置一个新的 `CouliToastMessage`
     /// （不论文字是否相同）会换内容、重新计时并重新播报。
-    func couliToast(_ message: Binding<CouliToastMessage?>, duration: TimeInterval = 2) -> some View {
-        modifier(ToastModifier(message: message, duration: duration))
+    /// `topInset`：页顶有自绘导航栏时让出它的高度（缺省 0，既有调用不变）。
+    func couliToast(_ message: Binding<CouliToastMessage?>, duration: TimeInterval = 2,
+                    topInset: CGFloat = 0) -> some View {
+        modifier(ToastModifier(message: message, duration: duration, topInset: topInset))
     }
 }

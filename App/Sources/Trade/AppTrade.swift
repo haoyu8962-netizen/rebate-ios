@@ -309,6 +309,10 @@ final class AppTrade {
     }
 
     func open(route: String, params: [String: String]) {
+        #if DEBUG
+        // 商品详情视觉 UI 测试的只读记录（APP-06v-b 评审 r1，见 DebugPurchaseLog）
+        DebugPurchaseLog.record("route:\(route)")
+        #endif
         router.open(RouteRequest(route: route, values: params.mapValues { .string($0) }, from: .inApp))
     }
 

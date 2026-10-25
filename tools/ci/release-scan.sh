@@ -50,7 +50,7 @@
 #   - 本机假服务总入口（APP-05a；原为上一条的孤立续行，APP-06v 补条目头）：
 #     （App/Sources/Debug/DebugFakeLoginServer.swift，调试面板引用）、类名 DebugFakeLoginServer、启动参数 CouliFakeLoginServer
 #   - 商品详情视觉 UI 测试的卡片注入（APP-06v）：环境变量 COULI_FAKE_PRODUCT_CARDS、类型名 DebugFakeProductCards、DebugFakeProductImages
-#     （App/Sources/Debug/DebugFakeProductCards.swift）
+#     （App/Sources/Debug/DebugFakeProductCards.swift）；只读记录 DebugPurchaseLog / 标识 debug.purchase.log（APP-06v-b）
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -175,6 +175,8 @@ HITS_LOG="$WORK/hits"
     echo "COULI_FAKE_PRODUCT_CARDS"
     echo "DebugFakeProductCards"
     echo "DebugFakeProductImages"
+    echo "DebugPurchaseLog"
+    echo "debug.purchase.log"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

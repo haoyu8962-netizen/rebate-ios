@@ -25,7 +25,12 @@ if [[ $# -eq 0 ]]; then
     -only-testing:CouliTests/ProductVisualSnapshotTests \
     -only-testing:CouliTests/ProductVisualReviewR1Tests \
     -only-testing:CouliUITests/ProductVisualReviewR1UITests \
-    -only-testing:CouliUITests/ProductVisualAccessibilityUITests
+    -only-testing:CouliUITests/ProductVisualAccessibilityUITests \
+    -only-testing:TradeTests/PurchaseVisualExecutorTests \
+    -only-testing:TradeTests/JumpedOutOutcomeTests \
+    -only-testing:CouliUITests/PurchaseVisualUITests \
+    -only-testing:CouliUITests/PurchaseVisualScreenSnapshotTests \
+    -only-testing:CouliUITests/PurchaseVisualReviewR1UITests
 fi
 
 exec xcodebuild -scheme Couli -configuration Debug "$@" \

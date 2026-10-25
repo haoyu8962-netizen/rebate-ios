@@ -34,10 +34,10 @@ public enum PurchaseDialog: Equatable, Sendable {
     /// 带按钮的错误提示（30103 / 30121 / 30151 / 30153 / 50303）。
     case notice(textKey: String?, traceId: String?, noRebate: Bool, contact: Bool, retry: Bool)
 
-    /// 半屏（其余为居中弹窗）。
+    /// 半屏（其余为居中弹窗）。比价无返利确认按定稿是居中弹窗（APP-06v G-D10），不在这里。
     public var isSheet: Bool {
         switch self {
-        case .authSheet, .jumpTip, .compareNoRebate: true
+        case .authSheet, .jumpTip: true
         default: false
         }
     }
@@ -89,6 +89,9 @@ public struct PurchaseState {
     public var rateLimited = false
     /// 全部路径失败、安装状态明确为 false：「安装X后下单才有返利」（ProductJumpNotInstalled，BR-ATTR-27 ②；unknown 不算，共性第 13 条）。
     public var notInstalled = false
+    /// 淘宝明确未安装、且本次外跳的口令复制步骤已成功（APP-06v G-D11）：详情底栏上方常驻说明行、主按钮【复制淘口令】。只是展示标志，
+    /// 与 `notInstalled` 同时置位、同时复位；再点仍走原购买流程（复制由服务端步骤执行）。
+    public var notInstalledTpwd = false
     /// 即将交系统浏览器：「将通过浏览器打开X」+【取消】（ProductJumpBrowser）。
     public var browserNotice = false
     /// 当前这次加载层的编号（r3g NEW-02）：页面渲染时取出交给【取消】回调，旧加载层的回调取消不了新的加载。
@@ -204,6 +207,8 @@ public enum PurchaseTextKeys {
     public static let network = "buy.timeout"
     public static let copied = "share_page.copy_tpwd.done"
     public static let notInstalledCopied = "trade.not_installed.copied"
+    /// 淘宝未安装、口令已复制的轻提示「已复制淘口令」（APP-06v G-D11 草稿键，三端同名，CT-16f）。
+    public static let notInstalledTpwdCopied = "trade.not_installed.tpwd_copied"
     public static let requote = "trade.requote_notice"
     public static let jumpFailed = "trade.jump_failed"
     public static let jumpExpired = "trade.jump_expired"

@@ -327,10 +327,13 @@ public struct ProductDetailCard: View {
                     .couliProbe("product.offShelf", role: "capsule")
                 badgedTitle(color: CouliColor.textSecondary)
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: label + PriceTerms.spokenPause
-                    + BadgedTitle.accessibilityText(platform: data.platformName, title: data.title)))
-            .accessibilityAddTraits(.isHeader)
+            // 读屏一项「商品已下架，{平台}，{标题}」。用 accessibilityRepresentation：children: .ignore 在 XCUI 树里仍把胶囊文字
+            // 挂成子节点，「商品已下架」会被数两次（APP-06v-b G-D07 只许卡上一处，同头图 K8 做法）。
+            .accessibilityRepresentation {
+                Text(verbatim: label + PriceTerms.spokenPause
+                    + BadgedTitle.accessibilityText(platform: data.platformName, title: data.title))
+                    .accessibilityAddTraits(.isHeader)
+            }
             .accessibilityIdentifier("product.title")
             shop
                 .padding(.top, -CouliSpacing.s2)

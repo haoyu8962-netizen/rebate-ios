@@ -21,6 +21,8 @@ public enum ProductKeys {
     public static let similar = "no_rebate.price_compare.similar"
     /// 明确未安装、全部路径失败后的按钮（ProductJumpNotInstalled，BR-ATTR-27 ②；草稿 TODO(N-28)）。
     public static let notInstalled = "trade.not_installed"
+    /// 淘宝未安装、本次走了口令复制步骤后的主按钮字【复制淘口令】（ProductJumpNotInstalled-v2，G-D11 草稿键，CT-16f）。
+    public static let copyTpwd = "trade.not_installed.copy_tpwd"
     /// 30143（商品信息已失效，请重新搜索，error-codes navigate → Search）。
     static let refExpiredCode = 30143
     /// 30141（商品已下架，置灰；BR-PRICE-21）。
@@ -132,10 +134,13 @@ public struct ProductDetailScreen: View {
         mapping.data = ProductCardMapper.applyPurchaseStatus(
             mapping.data, statusRaw: controller.snapshot.purchase.rawValue, texts: texts.text
         )
+        let offShelf = product["availability"] as? String == ProductKeys.offShelfAvailability
         return VStack(spacing: 0) {
             ScrollView {
                 column(product, mapping: mapping, view: view, viewport: viewport)
             }
+            // 下架不出轻提示（G-D07）：卡片原位置灰，状态变成下架时礼貌播报一次「商品已下架」。
+            .modifier(PoliteStatusAnnouncer(active: offShelf, text: texts.text("error.\(ProductKeys.offShelfCode)")))
             if let pendingTrack = config.pendingTrack {
                 pendingTrack
                     .frame(maxWidth: ProductLayout.maxContentWidth)
@@ -237,32 +242,60 @@ public struct ProductDetailScreen: View {
             }
         }
         let notInstalled = state == .normal && purchase?.notInstalled == true
+        // 淘宝未安装且本次走了口令复制步骤（G-D11）：底栏上方常驻说明行 + 主按钮【复制淘口令】；其余未安装维持原写法。
+        let copyTpwd = notInstalled && purchase?.notInstalledTpwd == true
         return ProductBottomBarShell {
-            ProductBottomBarLayout {
-                ProductBarEntry(icon: .chat, title: texts.text(ProductKeys.askAI), probeID: "product.askAI",
-                                action: config.onAskAI)
-                    .accessibilityIdentifier("product.askAI")
-                buyButton(product, mapping: mapping, state: state, notInstalled: notInstalled)
-                    .accessibilityFocused($buyFocused)
-                    .accessibilityIdentifier("product.buy")
-                    .couliProbe("product.buy", role: "hit")
+            if copyTpwd {
+                VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                    ProductNotInstalledNote(
+                        text: texts.format(ProductKeys.notInstalled, ["platform_name": texts.text("platform.taobao")])
+                    )
+                    .accessibilityIdentifier("purchase.notInstalled")
+                    barRow(product, mapping: mapping, state: state, notInstalled: notInstalled, copyTpwd: true)
+                }
+            } else {
+                barRow(product, mapping: mapping, state: state, notInstalled: notInstalled, copyTpwd: false)
             }
+        }
+    }
+
+    private func barRow(
+        _ product: [String: Any], mapping: ProductCardMapping, state: BuyButtonState, notInstalled: Bool,
+        copyTpwd: Bool
+    ) -> some View {
+        ProductBottomBarLayout {
+            ProductBarEntry(icon: .chat, title: texts.text(ProductKeys.askAI), probeID: "product.askAI",
+                            action: config.onAskAI)
+                .accessibilityIdentifier("product.askAI")
+            buyButton(product, mapping: mapping, state: state, notInstalled: notInstalled, copyTpwd: copyTpwd)
+                .accessibilityFocused($buyFocused)
+                .accessibilityIdentifier("product.buy")
+                .couliProbe("product.buy", role: "hit")
         }
     }
 }
 
 extension ProductDetailScreen {
-    /// 购买按钮。明确未安装、全部路径失败（ProductJumpNotInstalled）：「安装X后下单才有返利」，点了重新发起一次购买（新键，A08 同口径）。
+    /// 购买按钮。明确未安装（ProductJumpNotInstalled）：淘宝且本次走了口令复制步骤时写【复制淘口令】（说明句在底栏上方常驻，G-D11），
+    /// 其余写「安装X后下单才有返利」；点了都是重新发起一次购买（新键，A08 同口径；复制仍由服务端步骤执行）。
     @ViewBuilder
     func buyButton(
-        _ product: [String: Any], mapping: ProductCardMapping, state: BuyButtonState, notInstalled: Bool
+        _ product: [String: Any], mapping: ProductCardMapping, state: BuyButtonState, notInstalled: Bool,
+        copyTpwd: Bool
     ) -> some View {
         let tap = {
             if controller.buyIntent() {
                 config.onBuyIntent(product)
             }
         }
-        if notInstalled {
+        if copyTpwd {
+            CouliButton(
+                texts.text(ProductKeys.copyTpwd),
+                fillsWidth: true,
+                labelProbeID: "product.buy.label",
+                action: tap
+            )
+        } else if notInstalled {
             let name = texts.text("platform." + controller.platform)
             CouliButton(
                 texts.format(ProductKeys.notInstalled, ["platform_name": name]), fillsWidth: true,

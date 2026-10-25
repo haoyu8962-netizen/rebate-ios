@@ -216,3 +216,36 @@ struct ProductDetailSkeleton: View {
             .couliProbe("product.skeleton." + id, role: "skeleton")
     }
 }
+
+/// 未安装淘宝的常驻说明行（ProductJumpNotInstalled-v2，G-D11）：底栏内、主按钮上方，i 图标 20 + 14 主文字；读屏一项。
+struct ProductNotInstalledNote: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
+            CouliIconView(.info, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                .foregroundColor(CouliColor.textSecondary)
+                .accessibilityHidden(true)
+            Text(verbatim: text)
+                .couliFont(.footnote)
+                .foregroundColor(CouliColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 状态变化的礼貌播报（G-D07：下架不出轻提示，改由卡片状态变化时排队播报一次，不打断当前朗读）。只在 false → true 时播报。
+struct PoliteStatusAnnouncer: ViewModifier {
+    let active: Bool
+    let text: String
+
+    func body(content: Content) -> some View {
+        content.onChange(of: active) { now in
+            // onChange 只在值变化时调用：变化前必是 !now
+            guard CouliStatusAnnouncer.shouldAnnounce(was: !now, now: now) else { return }
+            CouliStatusAnnouncer.polite(text)
+        }
+    }
+}

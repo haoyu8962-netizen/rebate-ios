@@ -194,6 +194,8 @@ struct CouliApp: App {
         #if DEBUG
         // 「挂住提交」开关（UI 测试用，FU-IOS-0712 R1-05）
         DebugUITestSignals.installHold(on: search.restoration)
+        // 商品详情视觉 UI 测试的只读记录（APP-06v-b 评审 r1：open 的 no_rebate、礼貌播报）
+        DebugPurchaseLog.install()
         #endif
         search.clipboard = clipboard
         return (clipboard, search)

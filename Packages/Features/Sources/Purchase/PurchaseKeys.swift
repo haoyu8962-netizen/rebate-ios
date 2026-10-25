@@ -52,6 +52,10 @@ public enum PurchaseKeys {
     public static let sdkFailedTitle = "jump.taobao_sdk_unavailable"
     public static let sdkFailedBody = "trade.sdk_failed.body"
     public static let notInstalled = "trade.not_installed"
+    /// 淘宝未安装且本次走口令复制步骤后的主按钮字（G-D11 草稿键，三端同名，CT-16f）。
+    public static let notInstalledCopyTpwd = "trade.not_installed.copy_tpwd"
+    /// 50303 主按钮「稍后再试」（G-D09，复用草稿键 card.retry_later）。
+    public static let retryLater = "card.retry_later"
     public static let contact = "trade.contact"
     public static let traceSuffix = "error.trace_suffix"
     public static let manageTitle = "auth_manage.title"

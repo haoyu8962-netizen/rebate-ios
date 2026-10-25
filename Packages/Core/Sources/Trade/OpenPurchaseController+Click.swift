@@ -20,6 +20,7 @@ extension OpenPurchaseController {
         state.platform = TJSON.string(card["platform"]) ?? ""
         state.card = card
         state.notInstalled = false
+        state.notInstalledTpwd = false
         if env.basicMode() {
             requestConsent(for: card, spm: spm)
             return
@@ -127,6 +128,7 @@ extension OpenPurchaseController {
         state.platform = platform
         state.card = card
         state.notInstalled = false
+        state.notInstalledTpwd = false
         send(attempt)
     }
 

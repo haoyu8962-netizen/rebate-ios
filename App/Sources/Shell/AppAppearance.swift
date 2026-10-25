@@ -18,11 +18,46 @@ enum AppAppearance {
         #endif
     }
 
-    /// 系统当前外观（不受本 App Info.plist 锁定影响的屏幕特征）。
+    /// 系统当前外观。模拟器上先读设备的外观设置（见 `simulatorStyle`），读不到再取屏幕特征。
     @MainActor
     static func systemStyle(_ window: UIWindow) -> UIUserInterfaceStyle {
-        (window.windowScene?.screen ?? UIScreen.main).traitCollection.userInterfaceStyle
+        #if DEBUG && targetEnvironment(simulator)
+        if let style = simulatorStyle() {
+            return style
+        }
+        #endif
+        return (window.windowScene?.screen ?? UIScreen.main).traitCollection.userInterfaceStyle
     }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// 模拟器设备的外观设置（`xcrun simctl ui <udid> appearance dark` / XCUIDevice.appearance 写入；2 = 深色）。
+    /// APP-06v-b 实测：iOS 26 模拟器上 Info.plist 的浅色锁连屏幕特征也锁成浅色，屏幕特征读不到系统深色，「跟随系统外观」
+    /// 开关形同虚设；只在 Debug / Staging 的模拟器上用这份设置补上，真机与 Release 不走这里。
+    static func simulatorStyle() -> UIUserInterfaceStyle? {
+        // 先经偏好服务读（刚切换外观时设置文件可能还没落盘，文件读到的是旧值），读不到再读文件。
+        let domain = "com.apple.uikitservices.userInterfaceStyleMode"
+        if let mode = UserDefaults(suiteName: domain)?.object(forKey: "UserInterfaceStyleMode") as? Int {
+            return mode == 2 ? .dark : .light
+        }
+        let env = ProcessInfo.processInfo.environment
+        let root: URL
+        if let shared = env["SIMULATOR_SHARED_RESOURCES_DIRECTORY"] {
+            root = URL(fileURLWithPath: shared)
+        } else if let home = env["SIMULATOR_HOST_HOME"], let udid = env["SIMULATOR_UDID"] {
+            root = URL(fileURLWithPath: home)
+                .appendingPathComponent("Library/Developer/CoreSimulator/Devices/\(udid)/data")
+        } else {
+            return nil
+        }
+        let file = root.appendingPathComponent(
+            "Library/Preferences/\(domain).plist"
+        )
+        guard let values = NSDictionary(contentsOf: file), let mode = values["UserInterfaceStyleMode"] as? Int else {
+            return nil
+        }
+        return mode == 2 ? .dark : .light
+    }
+    #endif
 }
 
 /// 把「跟随系统外观」落到所在窗口（放在根视图背景里）。不跟随时什么都不改，保持 Info.plist 的浅色锁定。

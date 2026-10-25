@@ -28,14 +28,21 @@ final class DebugJumpPorts: JumpPorts {
     }
 
     func launchApp(type: String, value: String) async -> Bool {
+        DebugPurchaseLog.record("jump:\(type)")
         if debugNoExternal {
             guard let url = URL(string: value), url.scheme != nil else { return false }
+            // APP-06v-b：商品详情视觉截图（注入卡）时，假「拉起失败」晚 2.5 秒回答，让 open 回答时的轻提示（如复核失败
+            // ProductRequoteCached）在截图时刻稳定显示，不被随后口令复制的提示半途替换（只改回答时机，结果不变）。
+            if DebugFakeProductCards.isActive {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+            }
             return false
         }
         return await system.launchApp(type: type, value: value)
     }
 
     func openBrowser(_ value: String) async -> Bool {
+        DebugPurchaseLog.record("jump:h5")
         if debugNoExternal {
             guard let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
                 return false
@@ -46,7 +53,8 @@ final class DebugJumpPorts: JumpPorts {
     }
 
     func copy(_ text: String) -> Bool {
-        system.copy(text)
+        DebugPurchaseLog.record("jump:copy_tpwd")
+        return system.copy(text)
     }
 }
 #endif
