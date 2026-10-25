@@ -48,7 +48,9 @@ final class JumpedOutOutcomeTests: XCTestCase {
         )
         await eventually { rig.controller.state.notInstalled }
         XCTAssertEqual(rig.ports.copied, ["￥tpwd￥"])
-        XCTAssertEqual(rig.controller.state.toast?.key, PurchaseTextKeys.notInstalledCopied, "安装提示照旧")
+        // test-change（APP-06v-b，G-D11 / D10-128）：轻提示键由合并句 trade.not_installed.copied 换成「已复制淘口令」
+        // trade.not_installed.tpwd_copied（时机不变）；常驻说明改由底栏上方说明行显示。
+        XCTAssertEqual(rig.controller.state.toast?.key, "trade.not_installed.tpwd_copied", "复制成功提示（G-D11）")
         XCTAssertEqual(jumps.platforms, ["taobao"], "已复制口令算成功外跳：回前台后拉待跟单卡")
     }
 
