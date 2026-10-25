@@ -353,5 +353,665 @@
     "下架：getProduct 可返回 30141 错误 envelope；map(product,context) 不接收详情错误。原文规定置灰及商品已下架，但未给下架按钮的独立 cta.text_key，不能自造 btn.off_shelf。price_unavailable 不下发 link_id 与锁定版 ProductCard 必填 link_id 也有差异，待补契约及错误态 API。",
     "9cd1e6f texts.default.json 未包含 btn.buy、btn.buy.coupon、btn.buy.no_rebate、tag.presale、presale.price_note 及普通搜索空态键。已有 CTA 键的依据是 ProductCta 与 BR-TEXT-12；这里只验 raw key，不声称字典渲染已可用。预售说明、免责声明顺序及位置、比价说明入口需组件测试。",
     "金额格式、券前/券后价、返利区间与按钮金额后缀继续由 DS-01 的 format-vectors.json 覆盖。本组不重算价格或返利，不用实现生成期望值。"
-  ]
+  ],
+  "visualCards": {
+    "clock": {
+      "timezone": "Asia/Shanghai",
+      "now": "2026-10-22T10:32:00+08:00",
+      "nowMillis": 1792636320000
+    },
+    "notes": [
+      "APP-06v-a / G-D16：仅新增 visualCards，不改变既有判定向量。",
+      "quoted_at 固定 10:00 / 10:32；图片为本地测试位图键，不请求网络。",
+      "off_shelf 故意保留旧金额，验证 UI 隐藏；no_rebate 不显示入账行，按既有独立开关规则优先于画板样例。"
+    ],
+    "cards": {
+      "tb_coupon_range": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "jd_no_coupon_single": {
+        "card_id": "visual-jd",
+        "product_key": "jd:visual-cup",
+        "platform": "jd",
+        "title": "保温杯 500ml 不锈钢 带茶隔 办公便携",
+        "shop_name": "家居生活自营店",
+        "image": "https://img.example.test/product-v/cup.png",
+        "price_fen": 4560,
+        "coupon_fen": 0,
+        "final_price_fen": 4560,
+        "est_net_price_fen": 4326,
+        "rebate_min_fen": 234,
+        "rebate_max_fen": 234,
+        "rebate_basis": "normal",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis.general",
+          "rebate_estimate"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy"
+        }
+      },
+      "pdd_coupon": {
+        "card_id": "visual-pdd",
+        "product_key": "pdd:visual-tissue",
+        "platform": "pdd",
+        "title": "云朵柔 抽纸 3 层 × 120 抽 24 包 家用整箱",
+        "shop_name": "云朵柔官方旗舰店",
+        "image": "https://img.example.test/product-v/tissue.png",
+        "price_fen": 1534,
+        "coupon_fen": 300,
+        "final_price_fen": 1234,
+        "est_net_price_fen": 1178,
+        "rebate_min_fen": 56,
+        "rebate_max_fen": 56,
+        "rebate_basis": "normal",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis",
+          "rebate_estimate"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "pdd_price_compare": {
+        "card_id": "visual-pdd",
+        "product_key": "pdd:visual-tissue",
+        "platform": "pdd",
+        "title": "云朵柔 抽纸 3 层 × 120 抽 24 包 家用整箱",
+        "shop_name": "云朵柔官方旗舰店",
+        "image": "https://img.example.test/product-v/tissue.png",
+        "price_fen": 1534,
+        "coupon_fen": 300,
+        "final_price_fen": 1234,
+        "est_net_price_fen": null,
+        "rebate_min_fen": 0,
+        "rebate_max_fen": 0,
+        "rebate_basis": "no_rebate",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:32:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.no_rebate"
+        },
+        "no_rebate_cause": "price_compare",
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "tb_off_shelf": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "off_shelf",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "tb_rebate_gone": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": null,
+        "rebate_min_fen": 0,
+        "rebate_max_fen": 0,
+        "rebate_basis": "no_rebate",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:32:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.no_rebate"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "tb_price_changed": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5990,
+        "coupon_fen": 1000,
+        "final_price_fen": 4990,
+        "est_net_price_fen": 4859,
+        "rebate_min_fen": 131,
+        "rebate_max_fen": 250,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:32:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "tb_price_changed_rebate_gone": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5990,
+        "coupon_fen": 1000,
+        "final_price_fen": 4990,
+        "est_net_price_fen": null,
+        "rebate_min_fen": 0,
+        "rebate_max_fen": 0,
+        "rebate_basis": "no_rebate",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:32:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.no_rebate"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "amount_unknown": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "pdd",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": null,
+        "coupon_fen": null,
+        "final_price_fen": null,
+        "est_net_price_fen": null,
+        "rebate_min_fen": null,
+        "rebate_max_fen": null,
+        "rebate_basis": "amount_unknown",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        }
+      },
+      "login_required": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": null,
+        "rebate_min_fen": null,
+        "rebate_max_fen": null,
+        "rebate_basis": "login_required",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "price_unavailable": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": null,
+        "coupon_fen": 1000,
+        "final_price_fen": null,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        }
+      },
+      "presale": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": true,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "stale": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": true,
+        "age_sec": 1920,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "ad_label": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 5678,
+        "coupon_fen": 1000,
+        "final_price_fen": 4678,
+        "est_net_price_fen": 4555,
+        "rebate_min_fen": 123,
+        "rebate_max_fen": 234,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis"
+        ],
+        "availability": "ok",
+        "ad_label": "广告 · 平台原文",
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy.coupon"
+        },
+        "benefit_tags": [
+          "有券"
+        ]
+      },
+      "long_amount": {
+        "card_id": "visual-tb",
+        "product_key": "tb:visual-milk",
+        "platform": "taobao",
+        "title": "全脂纯牛奶 250ml × 24 盒 整箱装 早餐奶 学生奶",
+        "shop_name": "乳品生活旗舰店",
+        "image": "https://img.example.test/product-v/milk.png",
+        "price_fen": 9999999,
+        "coupon_fen": 0,
+        "final_price_fen": 9999999,
+        "est_net_price_fen": 8765432,
+        "rebate_min_fen": 1234567,
+        "rebate_max_fen": 2345678,
+        "rebate_basis": "price_compare_risk",
+        "is_presale": false,
+        "stale": false,
+        "age_sec": 0,
+        "quoted_at": "2026-10-22T10:00:00+08:00",
+        "disclaimer_keys": [
+          "price_basis.general"
+        ],
+        "availability": "ok",
+        "ad_label": null,
+        "link_id": "visual-link",
+        "cta": {
+          "text_key": "btn.buy"
+        }
+      }
+    },
+    "purchase": {
+      "notes": "APP-06v-b：仅假服务与截图使用；不参加判定向量。时钟沿用 visualCards.clock，所有外跳由 src/test 端口拦截。",
+      "responses": {
+        "unchanged": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4678,
+          "new_link_id": null,
+          "requote_failed": false,
+          "new_rebate_min_fen": 123,
+          "new_rebate_max_fen": 234,
+          "no_rebate_cause": null,
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "price": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": true,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4990,
+          "new_link_id": "visual-link-new",
+          "requote_failed": false,
+          "new_rebate_min_fen": 123,
+          "new_rebate_max_fen": 234,
+          "no_rebate_cause": null,
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "coupon": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 5678,
+          "new_link_id": "visual-link-new",
+          "requote_failed": false,
+          "new_rebate_min_fen": 123,
+          "new_rebate_max_fen": 234,
+          "no_rebate_cause": null,
+          "availability": "coupon_gone",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "rebate": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4678,
+          "new_link_id": null,
+          "requote_failed": false,
+          "new_rebate_min_fen": 0,
+          "new_rebate_max_fen": 0,
+          "no_rebate_cause": null,
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "price_rebate": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": true,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4990,
+          "new_link_id": null,
+          "requote_failed": false,
+          "new_rebate_min_fen": 0,
+          "new_rebate_max_fen": 0,
+          "no_rebate_cause": null,
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "compare": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 1234,
+          "new_final_price_fen": 1234,
+          "new_link_id": null,
+          "requote_failed": false,
+          "new_rebate_min_fen": 0,
+          "new_rebate_max_fen": 0,
+          "no_rebate_cause": "price_compare",
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "off_shelf": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4678,
+          "new_link_id": null,
+          "requote_failed": false,
+          "new_rebate_min_fen": 123,
+          "new_rebate_max_fen": 234,
+          "no_rebate_cause": null,
+          "availability": "off_shelf",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        },
+        "cached": {
+          "attempt_id": "visual-attempt",
+          "jump": {
+            "primary": {
+              "type": "scheme",
+              "value": "fixture-shop://item"
+            },
+            "fallbacks": [],
+            "expire_at": "2026-10-22T11:00:00+08:00"
+          },
+          "price_changed": false,
+          "old_final_price_fen": 4678,
+          "new_final_price_fen": 4678,
+          "new_link_id": null,
+          "requote_failed": true,
+          "new_rebate_min_fen": 123,
+          "new_rebate_max_fen": 234,
+          "no_rebate_cause": null,
+          "availability": "ok",
+          "quoted_at": "2026-10-22T10:32:00+08:00"
+        }
+      },
+      "auth": {
+        "auth_url": "https://auth.example.test/authorize",
+        "state": "fixture-state",
+        "auth_methods": [
+          "web_code"
+        ]
+      },
+      "pending": {
+        "items": [
+          {
+            "platform": "taobao",
+            "attempt_id": "visual-attempt",
+            "link_id": "visual-link",
+            "show_claim_entry": false,
+            "dismissed": false,
+            "jumped_at": "2026-10-22T10:00:00+08:00"
+          }
+        ]
+      }
+    }
+  }
 }

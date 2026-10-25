@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "notes": [
+    "APP-06v-a iOS 测试 v2（评审 r1 S2-4-5）新增的截图卡；共用文件 search-product-vectors.json 的 visualCards 不动（与 Android 逐字节一致）。",
+    "Android / 鸿蒙如要对齐，把 cards 下各项原样并入各自 visualCards.cards，或同步本文件；字段与 visualCards 同口径（clock 沿用 visualCards.clock）。",
+    "pdd_amount_unknown_priced：价格字段有值 + rebate_basis=amount_unknown（评审 r1 S2-4-5 提的「有价格 + 金额未知」）。按 BR-PRICE-08（拼多多直链 amount_unknown「不显示任何价格与返利金额，显示『可返利，金额以订单为准』，按钮『去购买』」），价格字段即使有值也不得显示；本卡用来锁住这一点（visualCards.amount_unknown 的价格字段为空，测不到隐藏）。"
+  ],
+  "cards": {
+    "pdd_amount_unknown_priced": {
+      "card_id": "visual-pdd",
+      "product_key": "pdd:visual-tissue",
+      "platform": "pdd",
+      "title": "云朵柔 抽纸 3 层 × 120 抽 24 包 家用整箱",
+      "shop_name": "云朵柔官方旗舰店",
+      "image": "https://img.example.test/product-v/tissue.png",
+      "price_fen": 1534,
+      "coupon_fen": 300,
+      "final_price_fen": 1234,
+      "est_net_price_fen": null,
+      "rebate_min_fen": null,
+      "rebate_max_fen": null,
+      "rebate_basis": "amount_unknown",
+      "is_presale": false,
+      "stale": false,
+      "age_sec": 0,
+      "quoted_at": "2026-10-22T10:00:00+08:00",
+      "disclaimer_keys": ["price_basis"],
+      "availability": "ok",
+      "ad_label": null,
+      "link_id": "visual-link",
+      "cta": {"text_key": "btn.buy"},
+      "benefit_tags": ["有券"]
+    }
+  }
+}
