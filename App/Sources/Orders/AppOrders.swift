@@ -293,12 +293,10 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
         }
         let router = router
         page.onOpenDetail = { orderId in
-            router.open(RouteRequest(
-                route: AppOrderRoutes.orderDetail, values: ["order_id": .string(orderId)], from: .inApp
-            ))
+            Self.exit(router, AppOrderRoutes.orderDetail, ["order_id": .string(orderId)])
         }
-        page.onFindOrder = { router.open(RouteRequest(route: AppOrderRoutes.findOrder, from: .inApp)) }
-        page.onHome = { router.open(RouteRequest(route: AppOrderRoutes.home, from: .inApp)) }
+        page.onFindOrder = { Self.exit(router, AppOrderRoutes.findOrder) }
+        page.onHome = { Self.exit(router, AppOrderRoutes.home) }
         page.copy = { [weak self] text in self?.writeClipboard(text) ?? false }
         // 持久化与延迟回调只认当前这一份、且执行器的固定身份仍是当前会话（共性第 35 条；APP-06a 第 39 条；固定身份另由 page.live 核对）
         page.isCurrent = { [weak self, weak page] in
@@ -327,10 +325,6 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
             conditions: page.controller.snapshot.query.conditions, anchor: page.anchor.recorded,
             account: page.controller.owner.account, loginEpoch: page.controller.owner.loginEpoch
         )
-    }
-
-    private func writeClipboard(_ text: String) -> Bool {
-        clipboard?.writer.write(text) ?? false
     }
 
     // MARK: - 订单详情

@@ -37,6 +37,10 @@ enum DebugFakeOrders {
 
     static func answer(method: String, path: String, query: [String: String]) -> Reply? {
         guard path == prefix || path.hasPrefix(prefix + "/") else { return nil }
+        // APP-08v：订单视觉 UI 测试注入的数据（COULI_FAKE_ORDER_VISUAL）先于通用样例
+        if let visual = DebugOrderVisual.answer(method: method, path: path, query: query) {
+            return visual
+        }
         let state = options
         if state["offline"] != nil {
             return .offline

@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import Generated
+import OrderCore
 import Router
 import SecureStore
 import Session
@@ -48,6 +49,11 @@ final class DebugFakeLoginServer: URLProtocol {
         // APP-08：订单 Tab 的恢复记录每次冷启动从空开始（`-CouliFakeOrdersKeepState` 时保留，截进程恢复用）
         if !arguments.contains("-CouliFakeOrdersKeepState") {
             UserDefaults.standard.removeObject(forKey: "orders.page_state")
+            // F-IOS-31：APP-08 起恢复记录落在 Application Support 的 orders.page_state.json（不在 UserDefaults），一并删掉，
+            // 冷启动不再按上一次用例留下的筛选 / 搜索词 / 锚点恢复（App 启动在主线程调用这里）
+            MainActor.assumeIsolated {
+                _ = OrderPageStateFile.beside(root: OrderCacheStore.defaultRoot()).erase()
+            }
             UserDefaults.standard.removeObject(forKey: "amount_mask.hidden")
             UserDefaults.standard.removeObject(forKey: "orders.push_row_used")
         }

@@ -11,12 +11,15 @@ public enum PlatformIconSize: Sendable {
     case grid
     /// 授权半屏标题前（APP-06v G-D14「标题前 32 平台官方图标」）。
     case sheet
+    /// 选择列表（APP-08v 平台筛选半屏的选项前 20，变更记录「来源标签图标尺寸补 20（选择列表）」）。
+    case select
 
     public var points: CGFloat {
         switch self {
         case .badge: 14
         case .grid: 44
         case .sheet: 32
+        case .select: 20
         }
     }
 }

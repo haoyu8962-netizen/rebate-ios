@@ -500,6 +500,7 @@ if [ "$FAST" -eq 0 ]; then
         --expect COULI_HOME_PREVIEW --expect COULI_FAKE_HOME_SERVER_APP11_IOS_5e2c7a --expect DebugFakeHome \
         --expect COULI_HOME_VISUAL_UITEST_APP11V_IOS_7a3c5e --expect DebugHomeVisual \
         --expect COULI_FAKE_PRODUCT_CARDS --expect DebugFakeProductImages \
+        --expect COULI_FAKE_ORDER_VISUAL --expect DebugOrderLog \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

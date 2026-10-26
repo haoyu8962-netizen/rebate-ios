@@ -2,6 +2,7 @@ import DesignSystem
 import Generated
 import OrderCore
 import SwiftUI
+import UIKit
 
 /// 本功能用到的文案键（契约 texts.default.json 已有的直接取，缺的在 OrderCore 的 OrderDraftTexts，TODO(N-31)）。
 enum OrderKeys {
@@ -65,6 +66,10 @@ enum OrderLayout {
     /// 大屏（最小宽度 ≥ 600）内容限宽居中（APP-05a 第 17 条）。
     static let maxContentWidth: CGFloat = 600
     static let imageSize: CGFloat = 64
+    /// 分组 / 筛选胶囊视觉高（brief §2.1；命中区另由上下扩展补到 44）。
+    static let chipHeight = CouliSpacing.s8
+    /// 半屏选项区高度上限：屏高的 45%（一次定下的常量）。
+    @MainActor static let sheetOptionsMaxHeight = (UIScreen.main.bounds.height * 0.45).rounded()
 }
 
 /// 金额格（03 §10.2 AmountGrid）：左实付 / 已付定金，右返利类（只用服务端字段；金额为 null 的格整格不显示，不补 0，H07 同口径）。
@@ -162,28 +167,54 @@ struct OrderNumberRow: View {
     }
 }
 
-/// 商品图：image_url 加载中、为 null 或失败时露出占位底（APP-06a 第 22 条）；装饰，读屏不读。
+/// 商品图：image_url 加载中、为 null 或失败时露出占位底（APP-06a 第 22 条）；装饰，读屏不读。无图时占位写「商品图」；
+/// 分享单「好友购买的其他商品」（`otherProduct`）为占位底 + 文档图标、不写「商品图」（APP-08v brief-android O14）。
+/// `probe`：列表卡的测量前缀（`<probe>.image` / `.placeholder` / `.placeholderIcon`），nil 不量（详情缺省不变）。
 struct OrderImage: View {
     let url: String?
     let texts: OrderTexts
+    var otherProduct = false
+    var probe: String?
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous)
                 .fill(CouliColor.backgroundPlaceholder)
-            if url == nil {
+            if otherProduct, probe != nil {
+                CouliIconView(.orders, size: CouliGuideMetric.iconMedium)
+                    .foregroundColor(CouliColor.textSecondary)
+                    .orderProbe(probe.map { $0 + ".placeholderIcon" }, role: "icon")
+            } else if url == nil {
                 Text(verbatim: texts.text(OrderKeys.imagePlaceholder))
                     .couliFont(.caption)
                     .foregroundColor(CouliColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .padding(CouliSpacing.s1)
+                    .modifier(OrderPlaceholderProbe(probe: probe, text: texts.text(OrderKeys.imagePlaceholder)))
             }
             ProductRemoteImage(url: ProductImageSource.url(url))
                 .clipShape(RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous))
         }
         .frame(width: OrderLayout.imageSize, height: OrderLayout.imageSize)
+        .orderProbe(probe.map { $0 + ".image" }, role: "image")
         .accessibilityHidden(true)
+    }
+}
+
+/// 占位文字的测量（列表卡用；nil 不量）。
+private struct OrderPlaceholderProbe: ViewModifier {
+    let probe: String?
+    let text: String
+
+    func body(content: Content) -> some View {
+        if let probe {
+            content.couliTextProbe(probe + ".placeholder", role: "text", text: text,
+                                   fontSize: CouliTextStyle.caption.baseSize,
+                                   baseFontSize: CouliTextStyle.caption.baseSize)
+        } else {
+            content
+        }
     }
 }
 
@@ -215,7 +246,7 @@ struct OrderStatusLine: View {
     }
 }
 
-/// 眼睛按钮（金额隐藏开关，G21）：读屏名称 amount_mask.hide / show，44 命中区。
+/// 眼睛按钮（金额隐藏开关，G21）：图标 20（APP-08v brief §2.1-7），读屏名称 amount_mask.hide / show，44 命中区。
 struct AmountMaskButton: View {
     @ObservedObject var mask: AmountMaskStore
     let texts: OrderTexts
@@ -224,7 +255,7 @@ struct AmountMaskButton: View {
         Button {
             mask.toggle()
         } label: {
-            CouliIconView(mask.hidden ? .eyeOff : .eye)
+            CouliIconView(mask.hidden ? .eyeOff : .eye, size: CouliGuideMetric.iconMedium)
                 .foregroundColor(CouliColor.textSecondary)
                 .couliHitTarget()
         }

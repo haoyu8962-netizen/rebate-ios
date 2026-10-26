@@ -38,6 +38,9 @@ struct RootView: View {
         } else if DebugFakeProductCards.isActive {
             // APP-06v-b：商品详情视觉 UI 测试的只读记录（open 的 no_rebate、礼貌播报），见 DebugPurchaseLog
             gatedByEnvironment.overlay(alignment: .topLeading) { DebugPurchaseLogReadout() }
+        } else if DebugOrderVisual.isActive {
+            // APP-08v：订单视觉 UI 测试的只读记录（订单请求、出口路由、复制），见 DebugOrderLog
+            gatedByEnvironment.overlay(alignment: .topLeading) { DebugOrderLogReadout() }
         } else {
             gatedByEnvironment
         }

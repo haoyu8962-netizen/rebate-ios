@@ -102,7 +102,7 @@ public struct OrderDraftTexts: OrderTexts {
         "order_list.search.share_note": "分享订单只按商品名搜索",
         "order_list.filter.all_platforms": "全部平台",
         "order_list.filter.all_months": "全部月份",
-        "order_list.filter.month_note": "按付款时间；预售单按付定金时间",
+        "order_list.filter.month_note": "按付款时间",
         "order_list.filter.month_item": "{year} 年 {month} 月",
         "order_list.filter.close": "关闭",
         // 读屏：筛选按钮的展开状态（iOS 没有系统的「已展开」特性，用值表达；adaptation-a11y-spec §9）

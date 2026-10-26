@@ -13,7 +13,17 @@ public struct OrdersScreen: View {
     @ObservedObject var controller: OrderListController
     @ObservedObject var mask: AmountMaskStore
     @State var toast: CouliToastMessage?
-    @State var frames: [String: CGRect] = [:]
+    /// 各卡在视口里的框（只给「视口顶部那张卡」的记录用，不参与绘制）：放在不被观察的盒子里，写入不触发重绘。
+    /// 原为 @State：半屏开关的动画期间卡片框逐帧变化 → 写 State → 重算 body → 框再变，动画不断叠加、事件循环不空闲
+    /// （APP-08v-a 测试 v3 月份半屏用例复现，评审 r1 后修）。
+    @State var cardFrames = OrderCardFrameStore()
+    /// 列表视口高与头部高（空态在列表区上下居中用，评审 r1 S2-4）。
+    @State var viewportHeight: CGFloat = 0
+    @State var headerHeight: CGFloat = 0
+    /// 自购子 Tab 顶部待跟单卡区的高（含其下 12；没有卡时 0）：空态居中时一并扣掉（评审 r2 S2-1）。
+    @State var pendingHeight: CGFloat = 0
+    /// 没有订单时各档空态的自然高度（`EmptyStateDensity.rawValue` → 高）：按剩余高度挑档用（测试 v5 跟进）。
+    @State var emptyHeights: [Int: CGFloat] = [:]
     @AccessibilityFocusState var platformFocused: Bool
     @AccessibilityFocusState var monthFocused: Bool
     @FocusState var searchFocused: Bool
@@ -40,12 +50,31 @@ public struct OrdersScreen: View {
             titleBar
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: CouliSpacing.s3) {
-                        controls
-                        if snapshot.query.scope == OrderQuery.selfScope, let pending = config.pendingTrack {
-                            PendingTrackCardsView(service: pending, texts: texts, onClaim: config.onFindOrder)
+                    // 项间距由各项自己的下边距给（12）：没有待跟单卡时不多占一个间距（画板筛选行 → 首卡 18）
+                    VStack(alignment: .leading, spacing: 0) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            controls
+                                .background(GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear { headerHeight = geometry.size.height }
+                                        .onChange(of: geometry.size.height) { headerHeight = $0 }
+                                })
+                                .padding(.bottom, CouliSpacing.s3)
+                            if snapshot.query.scope == OrderQuery.selfScope, let pending = config.pendingTrack {
+                                OrderListPendingSlot(service: pending, texts: texts, onClaim: config.onFindOrder)
+                                    .background(GeometryReader { geometry in
+                                        Color.clear
+                                            .onAppear { pendingHeight = geometry.size.height }
+                                            .onChange(of: geometry.size.height) { pendingHeight = $0 }
+                                            .onDisappear { pendingHeight = 0 }
+                                    })
+                            }
+                            content
                         }
-                        content
+                        // 只用来显示的列表尾（断网缓存 / 翻页失败提示连同【重试】、翻页加载中、搜索条数、查询范围提示）放在惰性列表之外：
+                        // 常驻、不参与惰性估高。已找到的触发条件：这类可变高文字留在惰性列表页脚里时，列表停在中部开半屏，事件循环不空闲
+                        // （测试 v3 月份半屏用例；评审 r1 / r2 后修）。惰性列表里只留负责自动翻页的「上拉加载更多」
+                        listTail
                     }
                     .padding(.horizontal, CouliSpacing.s4)
                     .padding(.bottom, CouliSpacing.s6)
@@ -58,9 +87,14 @@ public struct OrdersScreen: View {
                     })
                 }
                 .coordinateSpace(name: OrderListSpace.name)
+                .background(GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { viewportHeight = geometry.size.height }
+                        .onChange(of: geometry.size.height) { viewportHeight = $0 }
+                })
                 .refreshable { await controller.refreshAndWait() }
                 .onPreferenceChange(OrderCardFramesKey.self) { value in
-                    frames = value
+                    cardFrames.frames = value
                     recordTop()
                 }
                 .onPreferenceChange(OrderListOffsetKey.self) { value in
@@ -75,6 +109,13 @@ public struct OrdersScreen: View {
                 .onAppear { restoreStep(proxy) }
             }
             .accessibilityIdentifier("orders.list")
+        }
+        .background(alignment: .top) {
+            // 600 内容列（头部 + 列表同一列；窄屏 = 全宽）的测量框
+            Color.clear
+                .frame(maxWidth: OrderLayout.maxContentWidth)
+                .couliProbe("orders.content", role: "column")
+                .frame(maxWidth: .infinity)
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
         .onAppear {
@@ -103,12 +144,30 @@ public struct OrdersScreen: View {
     }
 }
 
+/// 自购子 Tab 顶部的待跟单卡（APP-06v-b）：有卡时与下方隔 12，没卡时不占位。
+struct OrderListPendingSlot: View {
+    @ObservedObject var service: PendingTrackService
+    let texts: OrderTexts
+    let onClaim: () -> Void
+
+    var body: some View {
+        PendingTrackCardsView(service: service, texts: texts, onClaim: onClaim)
+            .padding(.bottom, service.state.cards.isEmpty ? 0 : CouliSpacing.s3)
+    }
+}
+
 /// 列表视图实例的挂载记号（StateObject：同一视图实例只建一次；Tab 外壳重建视图时新建一个）。
 @MainActor
 final class OrderListMount: ObservableObject {
     init(_ config: OrderListPageConfig) {
         config.viewMounted()
     }
+}
+
+/// 卡片框的存放处（引用类型、不发布变化）。
+@MainActor
+final class OrderCardFrameStore {
+    var frames: [String: CGRect] = [:]
 }
 
 /// 列表视口坐标系（ScrollView 自身的框：0 就是视口顶边）。
@@ -125,7 +184,7 @@ struct OrderCardFramesKey: PreferenceKey {
     }
 }
 
-/// 列表骨架（GUIDE 未出稿，按卡片结构自画）。
+/// 详情页加载骨架（旧卡结构；详情视觉归 APP-08v-b，这里不改）。
 struct OrderCardSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
@@ -140,5 +199,41 @@ struct OrderCardSkeleton: View {
             SkeletonBlock(height: 40)
         }
         .couliCard()
+    }
+}
+
+/// 列表加载骨架（brief §2.3，按新卡结构）：头行（徽标块 + 右侧时间块）、64 图块 + 右列三行、分隔线、两列数字块、胶囊块。
+/// `probe`：测量前缀（只给第一张，`orders.skeleton.0`）。
+struct OrderListSkeletonCard: View {
+    var probe: String?
+
+    private func block(_ name: String, width: CGFloat? = nil, height: CGFloat) -> some View {
+        SkeletonBlock(width: width, height: height).orderProbe(probe.map { "\($0).\(name)" })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+            HStack {
+                block("badge", width: 56, height: 20)
+                Spacer(minLength: CouliSpacing.s2)
+                block("time", width: 48, height: 14)
+            }
+            HStack(alignment: .top, spacing: CouliSpacing.s3) {
+                block("image", width: OrderLayout.imageSize, height: OrderLayout.imageSize)
+                VStack(alignment: .leading, spacing: CouliSpacing.s2) {
+                    block("line1", height: 16)
+                    block("line2", width: 64, height: 12)
+                    block("line3", width: 160, height: 12)
+                }
+            }
+            Rectangle().fill(CouliColor.borderSubtle).frame(height: 1).orderProbe(probe.map { "\($0).divider" })
+            HStack(alignment: .top, spacing: CouliSpacing.s4) {
+                block("amount1", width: 72, height: 36).frame(maxWidth: .infinity, alignment: .leading)
+                block("amount2", width: 72, height: 36).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            block("pill", width: 96, height: CouliGuideMetric.tagMinHeight)
+        }
+        .couliCard()
+        .orderProbe(probe.map { "\($0).card" })
     }
 }

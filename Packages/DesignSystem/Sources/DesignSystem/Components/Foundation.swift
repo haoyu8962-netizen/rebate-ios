@@ -155,6 +155,8 @@ public enum CouliIcon: String, Sendable, CaseIterable {
     case trend = "chart.line.uptrend.xyaxis"
     case copy = "doc.on.doc"
     case bell
+    /// 断网（APP-08v 断网提示条，brief §7「功能图标用系统图标集」）。
+    case wifiOff = "wifi.slash"
 
     var systemName: String {
         rawValue

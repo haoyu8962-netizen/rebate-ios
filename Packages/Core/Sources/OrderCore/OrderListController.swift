@@ -37,6 +37,9 @@ public struct OrderListSnapshot: Equatable {
     /// 第一页读取因身份暂时未知而中止、等身份确认后补取（FU-IOS-0712 整体重理）：没有结果时 phase = .error（「加载失败」+【重试】），
     /// 恢复任务据此等待而不放弃；补取或新一轮开始时清掉。
     public var identityPending = false
+    /// 「未跟单？去找回」置顶行（G-O04）：只 scope=self 且本轮第一页联网成功、响应 `claim_entry_pinned=true` 时为真；断网缓存、整页错误、
+    /// 新一轮清空重取时为假；刷新收到成功但解析不出的响应（保留旧列表与游标）时清为假。不发请求、不读本机时钟。
+    public var claimPinned = false
 
     public init(query: OrderQuery) {
         self.query = query
@@ -209,6 +212,7 @@ public final class OrderListController: ObservableObject {
             snapshot.earliestVisibleDate = nil
             snapshot.error = nil
             snapshot.staleAt = nil
+            snapshot.claimPinned = false
             snapshot.phase = .loading
         }
         // 禁用期内不发（执行层；页面显示 error.42901、【重试】置灰）
@@ -228,6 +232,8 @@ public final class OrderListController: ObservableObject {
         snapshot.refreshing = false
         if case let .success(data, traceId, _) = result {
             guard let page = OrderJSON.listData(JSONPick.parse(data)) else {
+                // 成功外壳但解析不出：保留旧列表与原游标（原行为），置顶退回不置顶（Android a 评审 r1 S2-1）
+                snapshot.claimPinned = false
                 failFirst(OrderErrorView(actionRaw: OrderErrorKind.errorTrace6, textKey: "error.50001",
                                          showTrace6: true, traceId: traceId), keepItems: keepItems)
                 return
@@ -237,6 +243,7 @@ public final class OrderListController: ObservableObject {
             snapshot.earliestVisibleDate = page.earliestVisibleDate
             snapshot.error = nil
             snapshot.staleAt = nil
+            snapshot.claimPinned = query.scope == OrderQuery.selfScope && page.claimEntryPinned
             snapshot.phase = page.items.isEmpty ? .empty : .content
             if OrderStaleCache.isCacheable(OrderStaleCache.kindList, query.params()), let env, ownerCurrent {
                 cache?.writeList(
@@ -284,6 +291,7 @@ public final class OrderListController: ObservableObject {
         snapshot.nextCursor = nil
         snapshot.earliestVisibleDate = cached.data.earliestVisibleDate
         snapshot.staleAt = cached.fetchedAt
+        snapshot.claimPinned = false
         snapshot.error = nil
         snapshot.phase = .stale
     }
@@ -297,6 +305,7 @@ public final class OrderListController: ObservableObject {
         }
         snapshot.items = []
         snapshot.nextCursor = nil
+        snapshot.claimPinned = false
         snapshot.error = view
         snapshot.phase = .error
     }

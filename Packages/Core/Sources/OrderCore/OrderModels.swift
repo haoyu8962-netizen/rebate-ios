@@ -127,6 +127,9 @@ public struct OrderListData: Equatable, Sendable {
     public var nextCursor: String?
     public var earliestVisibleDate: String?
     public var dropped = 0
+    /// 「未跟单？去找回」置顶（锁定契约 `claim_entry_pinned`，只 scope=self、服务端按 BR-ATTR-17 计算；G-O04）。只认 JSON 布尔 true，
+    /// 缺失 / null / 其他类型一律 false。断网缓存不写这个字段（与当时时间有关；读回为 false）。
+    public var claimEntryPinned = false
 }
 
 /// 日志出口（App 接到系统日志；不写订单号、金额与任何个人信息）。缺省丢弃。
@@ -159,7 +162,8 @@ public enum OrderJSON {
             items: items,
             nextCursor: JSONPick.nonEmpty(root["next_cursor"]),
             earliestVisibleDate: JSONPick.nonEmpty(root["earliest_visible_date"]),
-            dropped: dropped
+            dropped: dropped,
+            claimEntryPinned: JSONPick.bool(root["claim_entry_pinned"]) == true
         )
     }
 

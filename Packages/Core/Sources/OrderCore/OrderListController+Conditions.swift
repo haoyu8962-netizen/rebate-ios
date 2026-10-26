@@ -70,6 +70,8 @@ public extension OrderListController {
         guard check == .current else {
             // 新条件下没有结果：旧结果不留着冒充新条件的
             snapshot.items = []
+            // 新条件还没有新鲜的第一页：置顶退回不置顶（切到分享也不能留着自购的置顶，评审 r1 S2-1）
+            snapshot.claimPinned = false
             _ = admitFirst(check)
             env?.recheckIdentity()
             return true

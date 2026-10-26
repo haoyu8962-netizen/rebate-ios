@@ -59,6 +59,11 @@ public enum CouliColor {
     public static let statusSuccessText = token("status.success.text")
     public static let statusWarningText = token("status.warning.text")
     public static let statusErrorText = token("status.error.text")
+    /// 已结算松叶绿底（APP-08v 列表状态胶囊）。锁定令牌已有 `status.success.background`（浅 / 深），DS-02 的语义名表还没收这个名字：
+    /// 按 DS-02 做法在组件库以常量补上。TODO(DS-02-iOS)：语义名表补齐后并入 `usedPaths` 与三端对齐清单。
+    public static let statusSuccessBackground = token("status.success.background")
+    /// 警告浅底（APP-08v 断网提示条）。同上，TODO(DS-02-iOS)。
+    public static let statusWarningBackground = token("status.warning.background")
 
     public static let borderSubtle = token("border.subtle")
     public static let borderControl = token("border.control")

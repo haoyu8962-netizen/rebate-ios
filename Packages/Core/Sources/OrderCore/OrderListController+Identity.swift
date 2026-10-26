@@ -30,6 +30,8 @@ extension OrderListController: IdentityResumable {
         guard snapshot.items.isEmpty else { return }
         snapshot.nextCursor = nil
         snapshot.error = nil
+        // 整页错误态不置顶（G-O04；APP-08v-a 评审 r1 S2-1：身份未知时下拉刷新空列表 / 切分享）
+        snapshot.claimPinned = false
         snapshot.phase = .error
     }
 

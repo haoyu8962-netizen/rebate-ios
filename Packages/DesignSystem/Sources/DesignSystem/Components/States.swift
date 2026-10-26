@@ -3,33 +3,6 @@ import UIKit
 
 // MARK: - EmptyState / ErrorState
 
-/// 空态（GUIDE §3「空态 / 错误态」）：96 占位块 + 32 图标 → 说明 17/600 → 辅助 14 → 一个按钮（可省）。
-public struct EmptyState: View {
-    private let icon: CouliIcon
-    private let title: String
-    private let message: String?
-    private let actionTitle: String?
-    private let action: () -> Void
-
-    public init(
-        icon: CouliIcon = .search,
-        title: String,
-        message: String? = nil,
-        actionTitle: String? = nil,
-        action: @escaping () -> Void = {}
-    ) {
-        self.icon = icon
-        self.title = title
-        self.message = message
-        self.actionTitle = actionTitle
-        self.action = action
-    }
-
-    public var body: some View {
-        StateLayout(icon: icon, title: title, message: message, actionTitle: actionTitle, action: action)
-    }
-}
-
 /// 错误态：同空态结构，三角图标。出现时立即播报「标题，说明」，播报完把读屏焦点移到【重试】
 /// （adaptation-a11y-spec §10「加载失败：立即读，焦点到【重试】」）。
 /// 先播报再移焦：移焦会打断正在读的播报，所以等系统的「播报结束」通知（只认本错误态那一条）再移；
@@ -164,26 +137,32 @@ struct ErrorStateFocusCoordinator: Equatable {
     }
 }
 
-private struct StateLayout: View {
+/// 空态 / 错误态共用的排法（`EmptyState.swift` 也用）。
+struct StateLayout: View {
     let icon: CouliIcon
     let title: String
     let message: String?
     let actionTitle: String?
+    var actionKind = CouliButtonKind.secondary
+    var showsIllustration = true
+    var verticalPadding = CouliSpacing.s8
     let action: () -> Void
     /// 按钮的读屏焦点绑定（ErrorState 用来把焦点移到【重试】）；nil 时不绑定。
     var actionFocus: AccessibilityFocusState<Bool>.Binding?
 
     var body: some View {
         VStack(spacing: CouliSpacing.s3) {
-            RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                .fill(CouliColor.backgroundMuted)
-                .frame(width: CouliGuideMetric.emptyIllustration, height: CouliGuideMetric.emptyIllustration)
-                .overlay(
-                    CouliIconView(icon, size: CouliGuideMetric.emptyIcon)
-                        .foregroundColor(CouliColor.textSecondary)
-                )
-                .accessibilityHidden(true)
-                .padding(.bottom, CouliSpacing.s3)
+            if showsIllustration {
+                RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
+                    .fill(CouliColor.backgroundMuted)
+                    .frame(width: CouliGuideMetric.emptyIllustration, height: CouliGuideMetric.emptyIllustration)
+                    .overlay(
+                        CouliIconView(icon, size: CouliGuideMetric.emptyIcon)
+                            .foregroundColor(CouliColor.textSecondary)
+                    )
+                    .accessibilityHidden(true)
+                    .padding(.bottom, CouliSpacing.s3)
+            }
             VStack(spacing: CouliSpacing.s1) {
                 Text(verbatim: title)
                     .couliFont(.body, weight: .couliSemibold)
@@ -198,13 +177,13 @@ private struct StateLayout: View {
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             if let actionTitle {
-                CouliButton(actionTitle, kind: .secondary, action: action)
+                CouliButton(actionTitle, kind: actionKind, action: action)
                     .modifier(OptionalAccessibilityFocus(binding: actionFocus))
                     .padding(.top, CouliSpacing.s2)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, CouliSpacing.s8)
+        .padding(.vertical, verticalPadding)
         .padding(.horizontal, CouliSpacing.s4)
     }
 }
