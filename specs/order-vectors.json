@@ -337,5 +337,768 @@
     "reason=CANCELLED 在枚举里但未启用，BR-TEXT-05 没有对应文案行；不按 REFUND 或未知原因擅自写期望。",
     "执行层另验：真实 Router/页面、请求世代与出口、旧响应丢弃、状态恢复、复制走 ClipboardWriter、分享单零剪贴板写入和无选择菜单、真实图片状态、权限不自动弹框、42901 执行层与页面双重禁用、10405 强更持久化、trace6 实际末六位及无占位符文案、按账号缓存落盘/最近30条淘汰/删除失败待清理/冷启动恢复。纯函数结果不能替代 brief.md §0、§2.12 的这些验收。",
     "BR-ID-30 的查询起点由服务端下发；monthOptions 不计算 order.user_query_months。G10 refresh_ok 更新缓存并移除 stale 提示，不等于清空缓存。"
-  ]
+  ],
+  "visualOrders": {
+    "clock": {
+      "now": "2026-10-12T10:30:00+08:00",
+      "nowMillis": 1791772200000,
+      "staleAtMillis": 1791768600000,
+      "zone": "Asia/Shanghai"
+    },
+    "notes": [
+      "APP-08v-a：只新增视觉组；列表不补 rebate_min/max、actual、clawback、expected_credit_period。",
+      "UNKNOWN、INVALID、CREDITED 的 est 故意非零，验证不会泄漏或推算实返。",
+      "A/C 的 image_url 只由测试位图加载器解析；其他商品无图无原始标题。"
+    ],
+    "pages": {
+      "list_self": {
+        "items": [
+          {
+            "order_id": "A",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          },
+          {
+            "order_id": "B",
+            "platform": "taobao",
+            "title": "样例商品 B：预售电饭煲 4L",
+            "image_url": null,
+            "pay_amount_fen": 3000,
+            "quantity": 1,
+            "display_status": "DEPOSIT_PAID",
+            "reason": null,
+            "est_rebate_fen": null,
+            "paid_at": "2026-10-01T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3798765432109876543"
+          },
+          {
+            "order_id": "M",
+            "platform": "jd",
+            "title": "样例商品 M：收纳盒 3 个装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 987654,
+            "paid_at": "2026-09-25T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "309999999999"
+          },
+          {
+            "order_id": "C",
+            "platform": "jd",
+            "title": "样例商品 C：洗衣液 3kg",
+            "image_url": "https://img.example.test/order-v/C.png",
+            "pay_amount_fen": 3990,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 450,
+            "paid_at": "2026-09-20T14:03:00+08:00",
+            "is_other_product": false,
+            "order_no": "305678901234"
+          },
+          {
+            "order_id": "J",
+            "platform": "taobao",
+            "title": "样例商品 J：蓝牙耳机",
+            "image_url": null,
+            "pay_amount_fen": 8900,
+            "quantity": 1,
+            "display_status": "INVALID",
+            "reason": "REFUND",
+            "est_rebate_fen": 765432,
+            "paid_at": "2026-09-18T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3722222222222222222"
+          }
+        ],
+        "next_cursor": "visual-next-2",
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "list_self_pinned": {
+        "items": [
+          {
+            "order_id": "A",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          },
+          {
+            "order_id": "B",
+            "platform": "taobao",
+            "title": "样例商品 B：预售电饭煲 4L",
+            "image_url": null,
+            "pay_amount_fen": 3000,
+            "quantity": 1,
+            "display_status": "DEPOSIT_PAID",
+            "reason": null,
+            "est_rebate_fen": null,
+            "paid_at": "2026-10-01T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3798765432109876543"
+          },
+          {
+            "order_id": "M",
+            "platform": "jd",
+            "title": "样例商品 M：收纳盒 3 个装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 987654,
+            "paid_at": "2026-09-25T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "309999999999"
+          },
+          {
+            "order_id": "C",
+            "platform": "jd",
+            "title": "样例商品 C：洗衣液 3kg",
+            "image_url": "https://img.example.test/order-v/C.png",
+            "pay_amount_fen": 3990,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 450,
+            "paid_at": "2026-09-20T14:03:00+08:00",
+            "is_other_product": false,
+            "order_no": "305678901234"
+          },
+          {
+            "order_id": "J",
+            "platform": "taobao",
+            "title": "样例商品 J：蓝牙耳机",
+            "image_url": null,
+            "pay_amount_fen": 8900,
+            "quantity": 1,
+            "display_status": "INVALID",
+            "reason": "REFUND",
+            "est_rebate_fen": 765432,
+            "paid_at": "2026-09-18T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3722222222222222222"
+          }
+        ],
+        "next_cursor": "visual-next-2",
+        "earliest_visible_date": null,
+        "claim_entry_pinned": true
+      },
+      "list_share": {
+        "items": [
+          {
+            "order_id": "E",
+            "platform": "taobao",
+            "title": "样例商品 E：保温杯 500ml",
+            "image_url": null,
+            "pay_amount_fen": 5900,
+            "quantity": 1,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 180,
+            "paid_at": "2026-10-12T10:21:00+08:00",
+            "is_other_product": false,
+            "masked_order_no": "3712****67"
+          },
+          {
+            "order_id": "OTHER",
+            "platform": "taobao",
+            "title": null,
+            "image_url": null,
+            "pay_amount_fen": 2680,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 60,
+            "paid_at": "2026-10-02T10:00:00+08:00",
+            "is_other_product": true,
+            "masked_order_no": "3756****21"
+          },
+          {
+            "order_id": "F",
+            "platform": "jd",
+            "title": "样例商品 F：数据线 2 条装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "CREDITED",
+            "reason": null,
+            "est_rebate_fen": 98765,
+            "paid_at": "2026-09-18T10:00:00+08:00",
+            "is_other_product": false,
+            "masked_order_no": "3056****34"
+          },
+          {
+            "order_id": "G",
+            "platform": "pdd",
+            "title": "样例商品 G：衣架 20 个装",
+            "image_url": null,
+            "pay_amount_fen": 1580,
+            "quantity": 1,
+            "display_status": "CREDITED",
+            "reason": null,
+            "est_rebate_fen": 87654,
+            "paid_at": "2026-09-12T10:00:00+08:00",
+            "is_other_product": false,
+            "masked_order_no": "2510****45"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "list_self_empty": {
+        "items": [],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "list_share_empty": {
+        "items": [],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "search_self": {
+        "items": [
+          {
+            "order_id": "A",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "search_share_empty": {
+        "items": [],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "stress": {
+        "items": [
+          {
+            "order_id": "STRESS",
+            "platform": "taobao",
+            "title": "超长商品名：纯牛奶家庭装多规格组合用于验证列表只能单行省略而金额和订单号必须完整显示",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 8888888,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 9999999,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "short_number": {
+        "items": [
+          {
+            "order_id": "SHORT",
+            "platform": "jd",
+            "title": "样例商品 M：收纳盒 3 个装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 987654,
+            "paid_at": "2026-09-25T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "1234"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "null_amounts": {
+        "items": [
+          {
+            "order_id": "NULL",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": null,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": null,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "history": {
+        "items": [
+          {
+            "order_id": "A",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          },
+          {
+            "order_id": "B",
+            "platform": "taobao",
+            "title": "样例商品 B：预售电饭煲 4L",
+            "image_url": null,
+            "pay_amount_fen": 3000,
+            "quantity": 1,
+            "display_status": "DEPOSIT_PAID",
+            "reason": null,
+            "est_rebate_fen": null,
+            "paid_at": "2026-10-01T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3798765432109876543"
+          },
+          {
+            "order_id": "M",
+            "platform": "jd",
+            "title": "样例商品 M：收纳盒 3 个装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 987654,
+            "paid_at": "2026-09-25T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "309999999999"
+          },
+          {
+            "order_id": "C",
+            "platform": "jd",
+            "title": "样例商品 C：洗衣液 3kg",
+            "image_url": "https://img.example.test/order-v/C.png",
+            "pay_amount_fen": 3990,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 450,
+            "paid_at": "2026-09-20T14:03:00+08:00",
+            "is_other_product": false,
+            "order_no": "305678901234"
+          },
+          {
+            "order_id": "J",
+            "platform": "taobao",
+            "title": "样例商品 J：蓝牙耳机",
+            "image_url": null,
+            "pay_amount_fen": 8900,
+            "quantity": 1,
+            "display_status": "INVALID",
+            "reason": "REFUND",
+            "est_rebate_fen": 765432,
+            "paid_at": "2026-09-18T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3722222222222222222"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": "2026-09-01",
+        "claim_entry_pinned": false
+      },
+      "next_page": {
+        "items": [
+          {
+            "order_id": "C_PAGE_2",
+            "platform": "jd",
+            "title": "样例商品 C：洗衣液 3kg",
+            "image_url": "https://img.example.test/order-v/C.png",
+            "pay_amount_fen": 3990,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 450,
+            "paid_at": "2026-09-20T14:03:00+08:00",
+            "is_other_product": false,
+            "order_no": "305678901234"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "month_options": {
+        "items": [
+          {
+            "order_id": "A",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          },
+          {
+            "order_id": "B",
+            "platform": "taobao",
+            "title": "样例商品 B：预售电饭煲 4L",
+            "image_url": null,
+            "pay_amount_fen": 3000,
+            "quantity": 1,
+            "display_status": "DEPOSIT_PAID",
+            "reason": null,
+            "est_rebate_fen": null,
+            "paid_at": "2026-10-01T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3798765432109876543"
+          },
+          {
+            "order_id": "M",
+            "platform": "jd",
+            "title": "样例商品 M：收纳盒 3 个装",
+            "image_url": null,
+            "pay_amount_fen": 1990,
+            "quantity": 1,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 987654,
+            "paid_at": "2026-09-25T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "309999999999"
+          },
+          {
+            "order_id": "C",
+            "platform": "jd",
+            "title": "样例商品 C：洗衣液 3kg",
+            "image_url": "https://img.example.test/order-v/C.png",
+            "pay_amount_fen": 3990,
+            "quantity": 1,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 450,
+            "paid_at": "2026-09-20T14:03:00+08:00",
+            "is_other_product": false,
+            "order_no": "305678901234"
+          },
+          {
+            "order_id": "J",
+            "platform": "taobao",
+            "title": "样例商品 J：蓝牙耳机",
+            "image_url": null,
+            "pay_amount_fen": 8900,
+            "quantity": 1,
+            "display_status": "INVALID",
+            "reason": "REFUND",
+            "est_rebate_fen": 765432,
+            "paid_at": "2026-09-18T10:00:00+08:00",
+            "is_other_product": false,
+            "order_no": "3722222222222222222"
+          }
+        ],
+        "next_cursor": "visual-next-2",
+        "earliest_visible_date": "2026-07-01",
+        "claim_entry_pinned": false
+      }
+    },
+    "statusPages": {
+      "DEPOSIT_PAID": {
+        "items": [
+          {
+            "order_id": "STATUS_DEPOSIT_PAID",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "DEPOSIT_PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "PAID": {
+        "items": [
+          {
+            "order_id": "STATUS_PAID",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "PAID",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "WAITING": {
+        "items": [
+          {
+            "order_id": "STATUS_WAITING",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "WAITING",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "CREDITING": {
+        "items": [
+          {
+            "order_id": "STATUS_CREDITING",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "CREDITING",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "RIGHTS_PENDING": {
+        "items": [
+          {
+            "order_id": "STATUS_RIGHTS_PENDING",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "RIGHTS_PENDING",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "REVIEWING": {
+        "items": [
+          {
+            "order_id": "STATUS_REVIEWING",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "REVIEWING",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "NO_REBATE": {
+        "items": [
+          {
+            "order_id": "STATUS_NO_REBATE",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "NO_REBATE",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "CREDITED": {
+        "items": [
+          {
+            "order_id": "STATUS_CREDITED",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "CREDITED",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "CREDITED_PART_CLAWED": {
+        "items": [
+          {
+            "order_id": "STATUS_CREDITED_PART_CLAWED",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "CREDITED_PART_CLAWED",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "INVALID": {
+        "items": [
+          {
+            "order_id": "STATUS_INVALID",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "INVALID",
+            "reason": "REFUND",
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "CLAWED_BACK": {
+        "items": [
+          {
+            "order_id": "STATUS_CLAWED_BACK",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "CLAWED_BACK",
+            "reason": "REFUND",
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      },
+      "FUTURE_STATUS": {
+        "items": [
+          {
+            "order_id": "STATUS_FUTURE_STATUS",
+            "platform": "taobao",
+            "title": "样例商品 A：纯牛奶 250ml×12 盒",
+            "image_url": "https://img.example.test/order-v/A.png",
+            "pay_amount_fen": 4560,
+            "quantity": 2,
+            "display_status": "FUTURE_STATUS",
+            "reason": null,
+            "est_rebate_fen": 123,
+            "paid_at": "2026-10-12T09:05:00+08:00",
+            "is_other_product": false,
+            "order_no": "3741234567890123456"
+          }
+        ],
+        "next_cursor": null,
+        "earliest_visible_date": null,
+        "claim_entry_pinned": false
+      }
+    }
+  }
 }

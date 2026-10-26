@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "notes": [
+    "APP-08v-a iOS 测试 v3（评审 r1 S2-3）新增的独立组：不改三端共用的 specs/order-vectors.json（与 Android 逐字节一致的那份）。",
+    "Android / 鸿蒙要对齐时把 pages 原样并入各自 visualOrders.pages（键名不冲突）。",
+    "month_options_long：在 visualOrders.pages.month_options 的基础上只改 earliest_visible_date=2025-09-01、next_cursor=null；固定时钟 2026-10-12 时月份半屏为「全部」+ 2026-10…2025-09 共 14 个月（≥ 13）。"
+  ],
+  "pages": {
+    "month_options_long": {
+      "items": [
+        {
+          "order_id": "A",
+          "platform": "taobao",
+          "title": "样例商品 A：纯牛奶 250ml×12 盒",
+          "image_url": "https://img.example.test/order-v/A.png",
+          "pay_amount_fen": 4560,
+          "quantity": 2,
+          "display_status": "PAID",
+          "reason": null,
+          "est_rebate_fen": 123,
+          "paid_at": "2026-10-12T09:05:00+08:00",
+          "is_other_product": false,
+          "order_no": "3741234567890123456"
+        },
+        {
+          "order_id": "B",
+          "platform": "taobao",
+          "title": "样例商品 B：预售电饭煲 4L",
+          "image_url": null,
+          "pay_amount_fen": 3000,
+          "quantity": 1,
+          "display_status": "DEPOSIT_PAID",
+          "reason": null,
+          "est_rebate_fen": null,
+          "paid_at": "2026-10-01T10:00:00+08:00",
+          "is_other_product": false,
+          "order_no": "3798765432109876543"
+        },
+        {
+          "order_id": "M",
+          "platform": "jd",
+          "title": "样例商品 M：收纳盒 3 个装",
+          "image_url": null,
+          "pay_amount_fen": 1990,
+          "quantity": 1,
+          "display_status": "FUTURE_STATUS",
+          "reason": null,
+          "est_rebate_fen": 987654,
+          "paid_at": "2026-09-25T10:00:00+08:00",
+          "is_other_product": false,
+          "order_no": "309999999999"
+        },
+        {
+          "order_id": "C",
+          "platform": "jd",
+          "title": "样例商品 C：洗衣液 3kg",
+          "image_url": "https://img.example.test/order-v/C.png",
+          "pay_amount_fen": 3990,
+          "quantity": 1,
+          "display_status": "WAITING",
+          "reason": null,
+          "est_rebate_fen": 450,
+          "paid_at": "2026-09-20T14:03:00+08:00",
+          "is_other_product": false,
+          "order_no": "305678901234"
+        },
+        {
+          "order_id": "J",
+          "platform": "taobao",
+          "title": "样例商品 J：蓝牙耳机",
+          "image_url": null,
+          "pay_amount_fen": 8900,
+          "quantity": 1,
+          "display_status": "INVALID",
+          "reason": "REFUND",
+          "est_rebate_fen": 765432,
+          "paid_at": "2026-09-18T10:00:00+08:00",
+          "is_other_product": false,
+          "order_no": "3722222222222222222"
+        }
+      ],
+      "next_cursor": null,
+      "earliest_visible_date": "2025-09-01",
+      "claim_entry_pinned": false
+    }
+  }
+}

@@ -36,8 +36,10 @@ struct OrdersAppFixture {
     }
 
     /// `cacheFlag`：缓存目录之外的待清理标记（nil = 缺省文件标记；FU-IOS-0712 R1-01 用它在写入路径里插入交错）。
+    /// `configuration`：网络层用的会话配置（nil = 缺省 AppStubProtocol；APP-08v 视觉测试换成带查询串与断网的 OrderVisualStub）。
     static func make(
-        suiteName: String, defaults: UserDefaults, cacheFlag: OrderPendingClearFlag? = nil
+        suiteName: String, defaults: UserDefaults, cacheFlag: OrderPendingClearFlag? = nil,
+        configuration: URLSessionConfiguration? = nil
     ) -> OrdersAppFixture {
         let tokens = MemorySessionTokens(access: "at", refresh: "rt", scope: "full", account: "user-a")
         let store = CountingSessionTokens(tokens)
@@ -50,7 +52,8 @@ struct OrdersAppFixture {
         let network = AppNetwork(
             tokens: store, pendingBackend: MemoryPendingKeyBackend(), device: Device(),
             withdrawalRegistry: withdrawal, environmentRegistry: environmentSwitch,
-            credentialsReadable: { runner.credentialsReadable }, configuration: AppStubProtocol.configuration()
+            credentialsReadable: { runner.credentialsReadable },
+            configuration: configuration ?? AppStubProtocol.configuration()
         )
         let update = UpdateFixtures.makeUpdate()
         let environment = EnvironmentStore(defaultEnvironment: .test, defaults: defaults, registry: environmentSwitch)
