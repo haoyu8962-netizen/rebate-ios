@@ -407,6 +407,25 @@ print("platform=iOS Simulator,id=" + best[1])
 '
 }
 
+# $1 = "platform=iOS Simulator,id=<UDID>"
+fix_status_bar() {
+    local udid="${1##*id=}"
+    xcrun simctl boot "$udid" 2>/dev/null
+    xcrun simctl bootstatus "$udid" -b && xcrun simctl status_bar "$udid" override --time '9:41'
+}
+
+# $1 = "platform=iOS Simulator,id=<UDID>"
+wallet_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/wallet-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:WalletCoreTests/WalletVectorTests -only-testing:WalletCoreTests/WalletVisualFixtureTests \
+        -only-testing:CouliTests/WalletVisualOracleTests -only-testing:CouliTests/WalletVisualLayoutTests \
+        -only-testing:CouliTests/WalletVisualStateTests -only-testing:CouliTests/WalletVisualAdaptTests \
+        -only-testing:CouliTests/WalletVisualMoneyTests -only-testing:CouliTests/WalletVisualSnapshotTests \
+        -only-testing:CouliUITests/WalletVisualUITests
+}
+
 xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
@@ -490,8 +509,13 @@ if [ "$FAST" -eq 0 ]; then
     echo "    模拟器：$DEST"
     # FU-IOS-0712（F-IOS-10）：打开用例超时——UITests 每用例上限由测试包自己设（UITestTimeouts，480 秒），其余用例按 600 秒；
     # 卡住的用例在上限内判失败，不再单个跑上千秒
+    # APP-09v-a：钱包问号说明半屏基准是整屏截图（含状态栏），全量测试前先把状态栏时间固定为 9:41（覆盖保持到模拟器关机）
+    step "固定模拟器状态栏 9:41" fix_status_bar "$DEST"
     step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" \
         -test-timeouts-enabled YES -default-test-execution-time-allowance 600 test
+    # APP-09v-a：钱包视觉 a 组入口（tools/testing/wallet-visual-tests.sh：固定状态栏、同一模拟器、不并行）。入口脚本默认清单漏了
+    # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
+    step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
@@ -501,6 +525,7 @@ if [ "$FAST" -eq 0 ]; then
         --expect COULI_HOME_VISUAL_UITEST_APP11V_IOS_7a3c5e --expect DebugHomeVisual \
         --expect COULI_FAKE_PRODUCT_CARDS --expect DebugFakeProductImages \
         --expect COULI_FAKE_ORDER_VISUAL --expect DebugOrderLog \
+        --expect COULI_FAKE_WALLET_VISUAL --expect DebugWalletVisual --expect DebugWalletLog --expect debug.wallet.log \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi

@@ -173,6 +173,12 @@ final class AppWallet: ObservableObject, WalletEnv {
     }
 
     func earningsFlag() -> Bool? {
+        #if DEBUG
+        // APP-09v-a：WalletEarningsEntry 画板的 UI 测试（COULI_FAKE_WALLET_VISUAL earnings:true）；生产不变
+        if DebugWalletVisual.earnings {
+            return true
+        }
+        #endif
         let flags = configObject("features")?["flags"] as? [String: Any]
         guard let number = flags?[EarningsEntry.flagKey] as? NSNumber,
               CFGetTypeID(number) == CFBooleanGetTypeID()
@@ -185,7 +191,12 @@ final class AppWallet: ObservableObject, WalletEnv {
     }
 
     var earningsSince: String? {
-        Routes.all[WalletRoutes.earnings]?.sinceIOS
+        #if DEBUG
+        if DebugWalletVisual.earnings {
+            return "1.0.0"
+        }
+        #endif
+        return Routes.all[WalletRoutes.earnings]?.sinceIOS
     }
 
     func copy(_ text: String) -> Bool {

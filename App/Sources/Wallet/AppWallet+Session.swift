@@ -106,6 +106,10 @@ extension AppWallet {
     /// 经 Router 以 App 内来源打开。要实名的资金页（Withdraw、PayoutAccount、LaborAgreement）在本会话还没查过实名状态时，先取 GET /v1/me
     /// 再打开（守卫按查到的状态放行或去 RealName）。
     func open(_ route: String, params: [String: String], from page: UUID?) {
+        #if DEBUG
+        // APP-09v-a：钱包视觉 UI 测试的只读出口记录（交给 Router 之前记；只在注入生效时记录）
+        DebugWalletLog.route(route, params: params)
+        #endif
         let owner = currentOwner()
         if Routes.all[route]?.auth == "realname", realnameState?.key != owner.key, owner.account != nil {
             if let page {

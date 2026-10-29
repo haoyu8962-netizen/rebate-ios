@@ -68,16 +68,14 @@ public struct WalletScreen: View {
     @ViewBuilder func content(_ snapshot: WalletSnapshot, _ actions: WalletActions) -> some View {
         switch snapshot.phase {
         case .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel(Text(verbatim: texts.text("wallet.loading")))
-                .accessibilityIdentifier("wallet.loading")
+            WalletSkeleton(label: texts.text("wallet.loading"))
         case .error:
             ErrorState(
                 title: texts.text("wallet.load_failed"), message: snapshot.error?.message(texts),
                 retryTitle: texts.text("wallet.retry"), retry: actions.retry
             )
             .disabled(readGate.blocked)
+            .walletProbe("wallet.error", role: "state")
             .accessibilityIdentifier("wallet.error")
         case .content:
             if let summary = snapshot.summary {
@@ -86,6 +84,8 @@ public struct WalletScreen: View {
         }
     }
 
+    /// 内容列（brief §2.1）：断网 / 旧数据条 → 读取失败条 → 风控条 → 主卡 → 主卡下警告条（待抵扣 / 30306）→ 预估卡 → 入口行。
+    /// 左右 16、顶 8、块间 12；≥ 600 宽限宽 600 居中。
     func loaded(_ summary: WalletSummary, _ snapshot: WalletSnapshot, _ actions: WalletActions) -> some View {
         let view = WalletSummaryView.of(
             summary, masked: mask.hidden, nowMs: controller.displayNowMillis(), texts: texts
@@ -98,13 +98,20 @@ public struct WalletScreen: View {
                 }
                 hero(view, snapshot, actions)
                 if let negative = view.negativeLine {
-                    negativeStrip(negative.fen)
+                    negativeStrip(negative)
+                }
+                if let reason = view.withdrawReasonKey {
+                    disabledStrip(reason)
                 }
                 estimatedCard(view)
                 entries(actions)
             }
-            .padding(CouliSpacing.s4)
+            .padding(.horizontal, CouliSpacing.s4)
+            // WalletStale：断网条紧贴导航栏（上 0），其下到主卡 16；没有断网条时内容顶 8
+            .padding(.top, snapshot.staleAt == nil ? CouliSpacing.s2 : 0)
+            .padding(.bottom, CouliSpacing.s4)
             .frame(maxWidth: WalletLayout.maxContentWidth)
+            .walletProbe("wallet.content", role: "column")
             .frame(maxWidth: .infinity)
         }
         .refreshable { actions.retry() }
@@ -112,27 +119,23 @@ public struct WalletScreen: View {
         .accessibilityIdentifier("wallet.content")
     }
 
+    /// 旧数据提示文字（断网：「网络不可用，以下为 {time} 的数据」；其他读取失败：「更新于 {time}」）；不是旧数据时 nil。
+    func staleText(_ snapshot: WalletSnapshot) -> String? {
+        guard let at = snapshot.staleAt else { return nil }
+        let time = CouliFormat.timeListPast(epochMillis: at, nowEpochMillis: controller.displayNowMillis())
+        return texts.format(snapshot.staleNetwork ? "net.stale_data" : "wallet.updated_at", ["time": time])
+    }
+
     @ViewBuilder func banners(_ snapshot: WalletSnapshot, _ actions: WalletActions) -> some View {
-        if let at = snapshot.staleAt {
-            let time = CouliFormat.timeListPast(epochMillis: at, nowEpochMillis: controller.displayNowMillis())
-            let key = snapshot.staleNetwork ? "net.stale_data" : "wallet.updated_at"
-            // 设计稿 WalletStale：浅黄提示条（role=status）
-            HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                    .accessibilityHidden(true)
-                Text(verbatim: texts.format(key, ["time": time]))
-                    .couliFont(.footnote)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        if let text = staleText(snapshot) {
+            // 设计稿 WalletStale（W8）：警告浅底条、断网图标 20 + 14 警告字色，最先、紧贴导航栏（role=status）
+            WalletStrip(icon: snapshot.staleNetwork ? .wifiOff : .info, probe: "wallet.stale") {
+                WalletText(text, style: .footnote, probe: "wallet.stale.text")
             }
-            .foregroundColor(CouliColor.statusWarningText)
-            .padding(CouliSpacing.s3)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card).fill(CouliColor.statusWarningText.opacity(0.1))
-            )
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.updatesFrequently)
             .accessibilityIdentifier("wallet.stale")
+            .padding(.bottom, CouliSpacing.s1)
         }
         if let error = snapshot.error {
             NoticeBar(
@@ -142,36 +145,19 @@ public struct WalletScreen: View {
         }
     }
 
+    /// 风控提示条（W6 / W7，WalletRiskFrozen-v2）：警告浅底、两行都是警告字色（首行 600、次行 14）、图标与 › 20；整条一个按钮进 RiskNotice。
+    /// 文案维持现状（G-W03：原因类别 / 到期时间无字段，不取 getMe）。
     func riskBanner(_ banner: RiskBanner, _ actions: WalletActions) -> some View {
         Button {
             actions.entry(WalletRoutes.riskNotice)
         } label: {
-            // 设计稿 WalletRiskFrozen：浅黄提示条，警示图标 + 两行 + 右侧箭头
-            HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                    .foregroundColor(CouliColor.statusWarningText)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                    Text(verbatim: texts.format(banner.textKey ?? "", ["reason": banner.reasonText ?? ""]))
-                        .couliFont(.footnote, weight: .couliSemibold)
-                        .foregroundColor(CouliColor.statusWarningText)
-                    Text(verbatim: texts.text("wallet.risk_hint"))
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.statusWarningText)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                    .foregroundColor(CouliColor.statusWarningText)
-                    .accessibilityHidden(true)
+            WalletStrip(icon: .alert, probe: "wallet.risk", chevron: true) {
+                WalletText(texts.format(banner.textKey ?? "", ["reason": banner.reasonText ?? ""]), style: .footnote,
+                           weight: .couliSemibold, probe: "wallet.risk.title")
+                WalletText(texts.text("wallet.risk_hint"), style: .footnote, probe: "wallet.risk.hint")
             }
-            .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum, alignment: .leading)
-            .padding(CouliSpacing.s3)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card).fill(CouliColor.statusWarningText.opacity(0.1))
-            )
         }
-        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.card))
+        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.button))
         .accessibilityIdentifier("wallet.risk")
     }
 }

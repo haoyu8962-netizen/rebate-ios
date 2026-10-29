@@ -224,21 +224,24 @@ extension Notice {
 }
 
 /// 问号说明半屏（WalletNote*、WithdrawNoteNet）：标题 + 关闭 + 说明 +【知道了】。
+/// 钱包页按 WalletNote* 用正文 14/21 +【知道了】描边次按钮（W15）；缺省（提现页 WithdrawNoteNet）仍是正文 17 + 主按钮，本任务 a 组不改。
 struct WalletHelpSheet: View {
     let title: String
     let text: String
     let texts: WalletTexts
+    var bodyStyle: CouliTextStyle = .body
+    var okKind: CouliButtonKind = .primary
     let close: () -> Void
 
     var body: some View {
         CouliSheet(title: title, closeLabel: texts.text("wallet.help.close"), onClose: close) {
             Text(verbatim: text)
-                .couliFont(.body)
+                .couliFont(bodyStyle)
                 .foregroundColor(CouliColor.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("wallet.help.text")
         } actions: {
-            CouliButton(texts.text("wallet.help.ok"), fillsWidth: true, action: close)
+            CouliButton(texts.text("wallet.help.ok"), kind: okKind, fillsWidth: true, action: close)
                 .accessibilityIdentifier("wallet.help.ok")
         }
     }

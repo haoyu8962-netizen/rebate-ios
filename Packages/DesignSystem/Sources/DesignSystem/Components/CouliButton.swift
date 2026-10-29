@@ -30,6 +30,7 @@ public struct CouliButton: View {
     private let fillsWidth: Bool
     private let accessibilityLabel: String?
     private let labelProbeID: String?
+    private let minWidth: CGFloat?
     private let action: () -> Void
 
     public init(
@@ -41,9 +42,11 @@ public struct CouliButton: View {
         fillsWidth: Bool = false,
         accessibilityLabel: String? = nil,
         labelProbeID: String? = nil,
+        minWidth: CGFloat? = nil,
         action: @escaping () -> Void
     ) {
         self.labelProbeID = labelProbeID
+        self.minWidth = minWidth
         self.title = title
         self.kind = kind
         self.size = size
@@ -75,7 +78,7 @@ public struct CouliButton: View {
             }
             .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
-        .buttonStyle(CouliButtonStyle(kind: kind, size: size, enabled: isEnabled && !isLoading))
+        .buttonStyle(CouliButtonStyle(kind: kind, size: size, enabled: isEnabled && !isLoading, minWidth: minWidth))
         .disabled(!isEnabled || isLoading)
         .accessibilityLabel(Text(verbatim: accessibilityLabel ?? title))
         .accessibilityAddTraits(isLoading ? .updatesFrequently : [])
@@ -86,6 +89,8 @@ struct CouliButtonStyle: ButtonStyle {
     let kind: CouliButtonKind
     let size: CouliButtonSize
     let enabled: Bool
+    /// 视觉最小宽（APP-09v 钱包【提现】96，W3）；nil 时只有命中区下限 44（既有按钮不变）。
+    var minWidth: CGFloat?
 
     /// 主按钮令牌路径：button.primary.<default|pressed|disabled>.<part>。
     static func primaryToken(enabled: Bool, pressed: Bool, part: String) -> String {
@@ -129,7 +134,10 @@ struct CouliButtonStyle: ButtonStyle {
             .foregroundColor(Self.foreground(kind: kind, enabled: enabled, pressed: pressed))
             .padding(.horizontal, kind == .text ? CouliSpacing.s2 : horizontal)
             .padding(.vertical, vertical)
-            .frame(minWidth: CouliHitTarget.minimum, minHeight: kind == .text ? CouliHitTarget.minimum : minHeight)
+            .frame(
+                minWidth: max(CouliHitTarget.minimum, minWidth ?? 0),
+                minHeight: kind == .text ? CouliHitTarget.minimum : minHeight
+            )
             .background(
                 RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
                     .fill(background(pressed: pressed))

@@ -53,6 +53,8 @@
 #     （App/Sources/Debug/DebugFakeProductCards.swift）；只读记录 DebugPurchaseLog / 标识 debug.purchase.log（APP-06v-b）
 #   - 订单视觉 UI 测试的数据注入（APP-08v）：环境变量 COULI_FAKE_ORDER_VISUAL、类型名 DebugOrderVisual、只读记录 DebugOrderLog /
 #     标识 debug.order.log（App/Sources/Debug/DebugOrderVisual.swift）
+#   - 钱包视觉 UI 测试的摘要注入与只读记录（APP-09v-a）：环境变量 COULI_FAKE_WALLET_VISUAL、类型名 DebugWalletVisual、DebugWalletLog、
+#     标识 debug.wallet.log（App/Sources/Debug/DebugWalletVisual.swift）
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -183,6 +185,10 @@ HITS_LOG="$WORK/hits"
     echo "DebugOrderVisual"
     echo "DebugOrderLog"
     echo "debug.order.log"
+    echo "COULI_FAKE_WALLET_VISUAL"
+    echo "DebugWalletVisual"
+    echo "DebugWalletLog"
+    echo "debug.wallet.log"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

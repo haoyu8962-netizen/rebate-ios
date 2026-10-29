@@ -145,6 +145,8 @@ public enum CouliIcon: String, Sendable, CaseIterable {
     case user = "person"
     case wallet = "creditcard"
     case ledger = "list.bullet.rectangle"
+    /// 柱状图（APP-09v 钱包「收益看板」入口，W14；折线 `trend` 不变）。
+    case barChart = "chart.bar"
     case claim = "doc.text.magnifyingglass"
     case invite = "person.badge.plus"
     case heart

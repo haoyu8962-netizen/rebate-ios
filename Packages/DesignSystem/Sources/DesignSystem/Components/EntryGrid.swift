@@ -25,23 +25,34 @@ public struct EntryGrid: View {
     private let items: [EntryGridItem]
     private let columns: Int
     private let eager: Bool
+    private let padding: CGFloat
+    private let probeID: String?
+    private let cellProbePrefix: String?
     private let onSelect: (EntryGridItem) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// - Parameters:
     ///   - columns: 列数，默认 4（「我的」页）；钱包入口行用 2。
     ///   - eager: 一次建出全部格子（「我的」页：屏幕外的格子也在读屏树里，返回时位置稳定）；缺省按懒加载网格。
+    ///   - padding: 卡片内边距，缺省 16（`couliCard` 默认）；钱包入口行 8（APP-09v W13）。
+    ///   - probeID / cellProbePrefix: 布局测量编号（卡片 / 每格命中框 `<前缀>.<id>` 与图标 `<前缀>.<id>.icon`）；nil 时不量（缺省）。
     public init(
         title: String? = nil,
         items: [EntryGridItem],
         columns: Int = 4,
         eager: Bool = false,
+        padding: CGFloat = CouliSpacing.s4,
+        probeID: String? = nil,
+        cellProbePrefix: String? = nil,
         onSelect: @escaping (EntryGridItem) -> Void
     ) {
         self.title = title
         self.items = items
         self.columns = columns
         self.eager = eager
+        self.padding = padding
+        self.probeID = probeID
+        self.cellProbePrefix = cellProbePrefix
         self.onSelect = onSelect
     }
 
@@ -80,7 +91,8 @@ public struct EntryGrid: View {
                 }
             }
         }
-        .couliCard()
+        .couliCard(padding: padding)
+        .modifier(EntryGridProbe(id: probeID, role: "card"))
     }
 
     private func cell(_ item: EntryGridItem) -> some View {
@@ -89,6 +101,7 @@ public struct EntryGrid: View {
         } label: {
             VStack(spacing: CouliSpacing.s1) {
                 CouliIconView(item.icon)
+                    .modifier(EntryGridProbe(id: cellProbePrefix.map { "\($0).\(item.id).icon" }, role: "icon"))
                 Text(verbatim: item.title)
                     .couliFont(.footnote)
                     .multilineTextAlignment(.center)
@@ -98,10 +111,25 @@ public struct EntryGrid: View {
             .padding(.vertical, CouliSpacing.s2)
             .frame(maxWidth: .infinity, minHeight: CouliGuideMetric.gridCellMinHeight)
             .contentShape(Rectangle())
+            .modifier(EntryGridProbe(id: cellProbePrefix.map { "\($0).\(item.id)" }, role: "hit"))
         }
         .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.button))
         .accessibilityLabel(Text(verbatim: item.title))
         .modifier(OptionalIdentifier(identifier: item.accessibilityIdentifier))
+    }
+}
+
+/// 有测量编号才上报（没有编号或没有接收方时原样返回）。
+private struct EntryGridProbe: ViewModifier {
+    let id: String?
+    let role: String
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.couliProbe(id, role: role)
+        } else {
+            content
+        }
     }
 }
 

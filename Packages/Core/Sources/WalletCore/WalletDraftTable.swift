@@ -16,8 +16,11 @@ extension WalletDraftTexts {
         "wallet.earliest_label": "最早预计",
         "wallet.earliest": "{month}结算",
         "wallet.overdue": "入账核对中",
+        // G-W07（APP-09v，WalletStates ④ 设计稿措辞，BR-TEXT-14 待补键）：入账核对中时预估区右列的标签
+        "wallet.settle_progress": "结算进度",
         "wallet.paused": "其中 {amount} 暂缓入账",
-        "wallet.negative": "待抵扣 {amount}，后续返利将优先抵扣",
+        // G-W06（APP-09v）：待抵扣挪成主卡下警告条，首行只写金额，次行取契约键 error.30302
+        "wallet.negative": "待抵扣 {amount}",
         "wallet.estimate_note": "按联盟最新预估计算，以联盟结算金额为准",
         "wallet.draft.risk_paused": "提现已暂停",
         "wallet.draft.risk_paused_reason": "提现已暂停：{reason}",

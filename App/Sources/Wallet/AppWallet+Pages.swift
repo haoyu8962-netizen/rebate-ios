@@ -262,6 +262,9 @@ extension AppWallet {
     }
 
     func replace(page: UUID, route: String, params: [String: String]) -> Bool {
+        #if DEBUG
+        DebugWalletLog.route(route, params: params)
+        #endif
         guard router.path.last?.id == page else { return false }
         router.path.removeLast()
         router.open(RouteRequest(route: route, values: params.mapValues { .string($0) }, from: .inApp))

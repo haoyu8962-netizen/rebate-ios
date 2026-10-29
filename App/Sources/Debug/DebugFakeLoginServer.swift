@@ -92,12 +92,12 @@ final class DebugFakeLoginServer: URLProtocol {
 
     override func startLoading() {
         let path = request.url?.path ?? ""
-        var query: [String: String] = [:]
-        for item in URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
-            .queryItems ?? [] {
-            query[item.name] = item.value ?? ""
-        }
+        let query = Self.query(request)
         let body = Self.object(Self.bodyData(request))
+        // APP-09v-a：钱包视觉 UI 测试（COULI_FAKE_WALLET_VISUAL）——钱包类请求记进只读记录；注入的摘要先于一切场景回答
+        if answerWalletVisual(path: path) {
+            return
+        }
         // APP-12：「我的」场景（DebugFakeMe）先于其他场景：Me、申诉、同意记录、推送令牌、配置（kf 与 AI 公示），封禁场景下白名单外回 10006。
         if let me = DebugFakeMe.shared.answer(method: request.httpMethod ?? "GET", path: path, body: body) {
             answerOrders(.answer(code: me.code, data: me.data, headers: [:], delay: 0.3))
@@ -155,6 +155,26 @@ final class DebugFakeLoginServer: URLProtocol {
 
     private func homeOrDefault(path: String, body: [String: Any]) -> Reply {
         DebugFakeHome.answer(request) ?? Self.answer(path: path, body: body)
+    }
+
+    /// 请求的查询参数（同名取最后一个）。
+    private static func query(_ request: URLRequest) -> [String: String] {
+        var query: [String: String] = [:]
+        for item in URLComponents(url: request.url ?? URL(fileURLWithPath: "/"), resolvingAgainstBaseURL: false)?
+            .queryItems ?? [] {
+            query[item.name] = item.value ?? ""
+        }
+        return query
+    }
+
+    /// 钱包视觉注入（DebugWalletVisual）：记录钱包类请求；是注入的摘要请求时回答并返回 true。
+    private func answerWalletVisual(path: String) -> Bool {
+        DebugWalletLog.request(method: request.httpMethod ?? "GET", path: path)
+        guard let visual = DebugWalletVisual.summaryReply(method: request.httpMethod ?? "GET", path: path) else {
+            return false
+        }
+        answerWallet(visual)
+        return true
     }
 
     private func answerWallet(_ reply: DebugFakeWallet.Reply) {
