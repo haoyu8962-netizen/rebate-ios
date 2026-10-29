@@ -134,6 +134,10 @@ public struct OrderDraftTexts: OrderTexts {
         // 代拟：设计稿写「10月12日 10:30 提交，结果会通过站内信通知你」，OrderDetail 没有申诉提交时间（G08），去掉时间
         "order_detail.appeal_pending.desc": "结果会通过站内信通知你",
         "order_detail.appeal_progress": "查看申诉进度",
+        // 代拟（G-O08，三端同名）：未知状态卡内【刷新】，调现有重试（遵守 42901）。字典无键，TODO(N-31)
+        "order_detail.refresh": "刷新",
+        // 【问问 AI】整行卡（G-I02，三端同名 order_detail.ask_ai）。字典无键，TODO(N-31)
+        "order_detail.ask_ai": "问问 AI",
         "order_detail.copy.done": "已复制订单号",
         // 代拟：记 hash 失败不写剪贴板时的提示（APP-07 共性第 23 条；设计稿与规划都没有）
         "order_detail.copy.failed": "复制失败，请重试",

@@ -55,6 +55,8 @@ enum OrderKeys {
     static let appealTitle = "order_detail.appeal_pending.title"
     static let appealDesc = "order_detail.appeal_pending.desc"
     static let appealProgress = "order_detail.appeal_progress"
+    static let refresh = "order_detail.refresh"
+    static let askAI = "order_detail.ask_ai"
     static let notHappened = "order_timeline.not_happened"
     static let creditExpectedMonth = "order_timeline.credit_expected_month"
     static let hiddenSpoken = "amount_mask.hidden_spoken"

@@ -196,8 +196,11 @@ struct RootView: View {
                 #if DEBUG
                 // 截图用（APP-08）：`-CouliStartTab orders` 冷启动直接切到订单 Tab（窄屏截图时首页布局挡住 Tab 栏的点击）；
                 // APP-09：`-CouliStartTab me` 切到「我的」（钱包冒烟入口：「我的」宫格的【钱包】）
-                if let raw = UserDefaults.standard.string(forKey: "CouliStartTab"), let tab = ShellTab(rawValue: raw),
-                   tab == .orders || tab == .me {
+                // 只在冷启动第一次外壳出现时切一次（APP-08v-b 评审 r1 S2-4）：导航栈清空时栈底外壳会再触发 onAppear，
+                // 原写法会把刚由 Router 切到的 Tab（如订单详情【问问 AI】→ AgentChat）又切回启动 Tab。
+                if !DebugStartTab.applied, let raw = UserDefaults.standard.string(forKey: "CouliStartTab"),
+                   let tab = ShellTab(rawValue: raw), tab == .orders || tab == .me {
+                    DebugStartTab.applied = true
                     _ = routing.selectTab(tab)
                 }
                 #endif
@@ -309,3 +312,11 @@ private struct EnvironmentBlockedView: View {
         }
     }
 }
+
+#if DEBUG
+/// `-CouliStartTab` 只在本进程第一次外壳出现时生效（Debug / Staging 截图与冒烟用）。
+@MainActor
+enum DebugStartTab {
+    static var applied = false
+}
+#endif

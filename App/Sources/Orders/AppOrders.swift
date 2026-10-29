@@ -354,19 +354,18 @@ final class AppOrders: ObservableObject, OrderListEnv, PendingTrackEnv {
         let router = router
         page.onBack = { router.close(destination) }
         page.onOpen = { target in
-            router.open(RouteRequest(
-                route: target.route,
-                values: target.params.mapValues { .string($0) },
-                from: .inApp
-            ))
+            Self.exit(router, target.route, target.params.mapValues { .string($0) })
         }
         page.helpLinks = { [weak self] in self?.helpLinks() }
         // APP-12：详情【联系客服】（CONTACT_CS）改走统一客服出口；没接时仍打开帮助中心（onOpen 的 Help，接入前一致）
         page.onContactService = { [weak self] in
             guard let customerService = self?.customerService else { return false }
+            Self.recordCustomerService()
             customerService("OrderDetail")
             return true
         }
+        // G-I02：【问问 AI】打开 AgentChat 并带本单 context（不自动发送；与商品详情【问问 AI】同一路由）
+        page.onAskAI = { Self.exit(router, "AgentChat", ["context": .object(["order_id": .string(orderId)])]) }
         return page
     }
 

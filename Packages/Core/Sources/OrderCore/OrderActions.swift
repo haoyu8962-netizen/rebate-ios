@@ -82,6 +82,14 @@ public enum OrderDetailActions {
     ]
 
     public static func view(_ detail: OrderDetail) -> OrderActionsView {
+        // G-O08（BR-TEXT-05 细则「未知状态下不显示写动作按钮」）：未知编码时状态固有按钮与 reason.action 一律不出（服务端下发也忽略），
+        // 只留查看类【查看流水】；申诉中块是查看类，照旧。已知状态走下面原路径，不变。
+        if detail.summary.displayStatus == .unknown {
+            return OrderActionsView(
+                buttons: [OrderActionButton(actionRaw: "ledger", route: "Ledger", primary: true)],
+                appealPendingBlock: detail.appealPending
+            )
+        }
         var pairs: [(String, String)] = detail.reasonAction.compactMap { reasonActions[$0] }
         switch detail.summary.displayStatus {
         case .credited, .creditedPartClawed: pairs.append(("withdraw", "Withdraw"))

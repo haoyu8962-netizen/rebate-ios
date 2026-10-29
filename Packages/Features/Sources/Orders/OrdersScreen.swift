@@ -184,24 +184,6 @@ struct OrderCardFramesKey: PreferenceKey {
     }
 }
 
-/// 详情页加载骨架（旧卡结构；详情视觉归 APP-08v-b，这里不改）。
-struct OrderCardSkeleton: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            SkeletonBlock(width: 60, height: 20)
-            HStack(spacing: CouliSpacing.s3) {
-                SkeletonBlock(width: OrderLayout.imageSize, height: OrderLayout.imageSize)
-                VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-                    SkeletonBlock(height: 16)
-                    SkeletonBlock(width: 80, height: 14)
-                }
-            }
-            SkeletonBlock(height: 40)
-        }
-        .couliCard()
-    }
-}
-
 /// 列表加载骨架（brief §2.3，按新卡结构）：头行（徽标块 + 右侧时间块）、64 图块 + 右列三行、分隔线、两列数字块、胶囊块。
 /// `probe`：测量前缀（只给第一张，`orders.skeleton.0`）。
 struct OrderListSkeletonCard: View {

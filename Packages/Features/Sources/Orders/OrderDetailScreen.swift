@@ -16,6 +16,8 @@ public final class OrderDetailPageConfig: ObservableObject {
     public var onContactService: () -> Bool = { false }
     /// /v1/config.help_links（「查看说明」的目标；未配置为 nil）。
     public var helpLinks: () -> [String: Any]? = { nil }
+    /// 【问问 AI】（G-I02，与 Android 同）：打开 AgentChat 并带本单 context.order_id、不自动发送。nil = 不显示入口。
+    public var onAskAI: (() -> Void)?
     public var now: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
 
     public init(controller: OrderDetailController, texts: OrderTexts, mask: AmountMaskStore) {
@@ -25,15 +27,18 @@ public final class OrderDetailPageConfig: ObservableObject {
     }
 }
 
-/// 订单详情（OrderDetail 路由；设计稿 OrderDetail*、AdaptLargeTextOrderDetail）：状态与金额卡（标题 + 眼睛、金额格、预计结算月份 /
-/// 入账句 / 状态说明）→ 原因区「为什么没返利？」（直接显示，不进 AI、不发请求；「查看说明」）→ 申诉中块 → 商品卡（平台 +「查看商品」、
-/// 图 + 标题 + 件数、订单号 + 复制）→ 时间线 → 底部按钮（最多 2 个）。30701 空态；断网缓存显示提示条 +【重试】并可下拉刷新（共性第 26 条）；
-/// 会话换代后清空（共性第 1 条）。「问问 AI」本任务不显示（G18，TODO(APP-10)）。
+/// 订单详情（OrderDetail 路由；设计稿 OrderDetail*-v2、OrderDetailUnknown、OrderDetailReasonStates、AdaptLargeTextOrderDetail；
+/// APP-08v-b）：状态卡（图标 + 标题 + 眼睛、左返利右实付、提示；分隔线下原因区 / 差额行 / 申诉中块 / 卡内按钮 / 未知状态的
+/// 【刷新】与「查看流水」）→ 商品卡（来源 +「查看商品 ›」、图 + 标题 + 件数 + 单号【复制】）→ 时间线 →【问问 AI】整行卡；
+/// 底部固定栏只放状态固有的【去提现】（G-O06）。按钮集合、顺序、去向仍只来自 `OrderDetailActions`。30701 空态；断网缓存显示提示条 +
+/// 【重试】并可下拉刷新（共性第 26 条）；会话换代后清空（共性第 1 条）。
 public struct OrderDetailScreen: View {
     @ObservedObject var config: OrderDetailPageConfig
     @ObservedObject var controller: OrderDetailController
     @ObservedObject var mask: AmountMaskStore
     @State var toast: CouliToastMessage?
+    /// 底部固定栏所在处的底部安全区高（下内边距取 max(安全区, 16)）。
+    @State var bottomInset: CGFloat = 0
 
     public init(config: OrderDetailPageConfig) {
         self.config = config
@@ -76,8 +81,10 @@ public struct OrderDetailScreen: View {
         switch snapshot.phase {
         case .loading:
             ScrollView {
-                OrderCardSkeleton()
+                OrderDetailSkeleton()
                     .padding(CouliSpacing.s4)
+                    .frame(maxWidth: OrderLayout.maxContentWidth)
+                    .frame(maxWidth: .infinity)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: texts.text(OrderKeys.loading)))
@@ -106,28 +113,58 @@ public struct OrderDetailScreen: View {
 
     func loaded(_ detail: OrderDetail, snapshot: OrderDetailSnapshot) -> some View {
         let actions = OrderDetailActions.view(detail)
+        let split = OrderDetailActionSplit(detail: detail, actions: actions)
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: CouliSpacing.s3) {
                     if snapshot.phase == .stale, let at = snapshot.staleAt {
                         staleBanner(at, blocked: snapshot.blocked || snapshot.refreshing)
                     }
-                    statusCard(detail)
-                    reasonCard(detail)
-                    if actions.appealPendingBlock {
-                        appealBlock
-                    }
+                    statusCard(detail, actions: actions, split: split, snapshot: snapshot)
                     productCard(detail)
                     timelineCard(detail)
+                    if let onAskAI = config.onAskAI {
+                        askAIRow(onAskAI)
+                    }
                 }
                 .padding(CouliSpacing.s4)
                 .frame(maxWidth: OrderLayout.maxContentWidth)
+                .couliProbe("orderDetail.content", role: "content")
                 .frame(maxWidth: .infinity)
             }
             .refreshable { await controller.refreshAndWait() }
-            if !actions.buttons.isEmpty {
-                bottomBar(actions.buttons)
+            if !split.bar.isEmpty {
+                bottomBar(split.bar)
             }
+        }
+    }
+
+    /// 详情按钮的出口（位置挪了，去向与次数不变）：【联系客服】先交统一客服出口，没接时照旧经 Router 打开；其余经 Router 打开（无参数）。
+    func perform(_ button: OrderActionButton) {
+        if button.actionRaw == "contact_cs", config.onContactService() {
+            return
+        }
+        config.onOpen(RouteTarget(route: button.route, params: [:]))
+    }
+}
+
+/// 详情按钮的视图分区（G-O06；纯视图，按钮集合 / 顺序 / 主次数据仍是 `OrderDetailActions.view` 的结果）：状态固有的【去提现】
+/// （actionRaw = withdraw）进底部固定栏，其余（reason.action、扣回【查看流水】）进状态卡内。未知状态（G-O08）卡内不画按钮，
+/// 只有【刷新】与「查看流水」文字链（由 `unknownLedger` 给出规则层的 ledger 按钮）。
+struct OrderDetailActionSplit {
+    let card: [OrderActionButton]
+    let bar: [OrderActionButton]
+    let unknownLedger: OrderActionButton?
+
+    init(detail: OrderDetail, actions: OrderActionsView) {
+        if detail.summary.displayStatus == .unknown {
+            card = []
+            bar = []
+            unknownLedger = actions.buttons.first { $0.actionRaw == "ledger" }
+        } else {
+            card = actions.buttons.filter { $0.actionRaw != "withdraw" }
+            bar = actions.buttons.filter { $0.actionRaw == "withdraw" }
+            unknownLedger = nil
         }
     }
 }
