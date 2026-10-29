@@ -179,3 +179,13 @@ func settle(_ rounds: Int = 20) async {
         try? await Task.sleep(nanoseconds: 2_000_000)
     }
 }
+
+/// 观察窗（FU-IOS-0733）：「什么都不该发生」的断言等满 `seconds` 再判——在途的异步请求（如实名查询 GET /v1/me）与其后的导航都已落定。
+/// 主线程在等待期间照常执行其他任务。
+@MainActor
+func quietWindow(_ seconds: TimeInterval = 1.5) async {
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline {
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+}

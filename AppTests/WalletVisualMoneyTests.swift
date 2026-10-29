@@ -70,14 +70,14 @@ final class WalletVisualMoneyTests: WalletVisualTestCase {
         }
     }
 
-    /// 置灰的三种情形（待抵扣、withdraw_enabled=false、断网旧数据）：回调不导航、不发请求。
+    /// 置灰的三种情形（待抵扣、withdraw_enabled=false、断网旧数据）：回调不导航、不发请求（同步判 + 等 1.5 秒观察窗后再判）。
     func testDisabledWithdrawDoesNothing() async throws {
         for summary in ["negative", "disabled"] {
             let (page, _) = try await openWallet(summary, waitFor: nil)
-            try assertWithdrawInert(page, summary)
+            try await assertWithdrawInert(page, summary)
         }
         let (page, _) = try await openStale(waitFor: nil)
-        try assertWithdrawInert(page, "断网旧数据")
+        try await assertWithdrawInert(page, "断网旧数据")
     }
 
     /// 眼睛：只切本机偏好，不发请求、不换路由；再点恢复原值。
@@ -126,14 +126,22 @@ final class WalletVisualMoneyTests: WalletVisualTestCase {
         }
     }
 
+    /// FU-IOS-0733（评审 r2 S2-1，变异 M1a）：点下之后先同步判一次，再等满观察窗（在途的实名查询与其后的导航都已落定）判零导航、零请求。
+    /// 原来只同步判：执行器放行时生产出口先异步取 GET /v1/me 再导航，同步那一刻什么都看不到。
     private func assertWithdrawInert(_ page: WalletVisualHost, _ name: String, file: StaticString = #filePath,
-                                     line: UInt = #line) throws {
+                                     line: UInt = #line) async throws {
         let controller = try XCTUnwrap(page.controller, file: file, line: line)
         XCTAssertFalse(controller.state.withdrawEnabled, "\(name)：置灰", file: file, line: line)
         let before = WalletStubProtocol.requests.count
         let path = page.fixture.router.path
+        let tab = page.fixture.router.tabRoot
         WalletActions.make(controller, controller.state).withdraw()
         XCTAssertEqual(page.fixture.router.path, path, "\(name)：不导航", file: file, line: line)
         XCTAssertEqual(WalletStubProtocol.requests.count, before, "\(name)：不发请求", file: file, line: line)
+        await quietWindow()
+        XCTAssertEqual(page.fixture.router.path, path, "\(name)：观察窗后零导航（栈）", file: file, line: line)
+        XCTAssertEqual(page.fixture.router.tabRoot, tab, "\(name)：观察窗后零导航（Tab）", file: file, line: line)
+        let after = WalletStubProtocol.requests.dropFirst(before).map { "\($0.method) \($0.path)" }
+        XCTAssertEqual(after, [], "\(name)：观察窗后零请求（含 GET /v1/me）", file: file, line: line)
     }
 }

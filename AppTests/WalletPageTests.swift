@@ -108,14 +108,21 @@ final class WalletPageTests: XCTestCase {
             if to.contains("withdraw_enabled") {
                 XCTAssertEqual(view.withdrawReasonKey, "error.30306")
             }
-            // 置灰时点【提现】零导航
+            // 置灰时点【提现】零导航、零请求（FU-IOS-0733：等满 1.5 秒观察窗——实名查询与其后的导航都已落定——再判）
             let before = fixture.router.path.count
+            let path = fixture.router.path
+            let tab = fixture.router.tabRoot
+            let requests = WalletStubProtocol.requests.count
             WalletActions.make(controller, controller.state).withdraw()
             if enabled {
                 await waitUntil("可点时进提现页") { fixture.router.path.count > before }
             } else {
-                await settle()
+                await quietWindow()
                 XCTAssertEqual(fixture.router.path.count, before, "置灰时零导航")
+                XCTAssertEqual(fixture.router.path, path, "置灰时零导航（栈）：\(to)")
+                XCTAssertEqual(fixture.router.tabRoot, tab, "置灰时零导航（Tab）：\(to)")
+                let after = WalletStubProtocol.requests.dropFirst(requests).map { "\($0.method) \($0.path)" }
+                XCTAssertEqual(after, [], "置灰时零请求（含 GET /v1/me）：\(to)")
             }
             fixture.router.path.removeAll()
         }
