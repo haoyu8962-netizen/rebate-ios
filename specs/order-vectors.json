@@ -237,7 +237,229 @@
     {"name":"G08_G09_first_known_primary","detail":{"display_status":"INVALID","reason":"BLACKLIST","reason_action":["FUTURE_ACTION","APPEAL"],"appeal_pending":false,"order_no":"3712345678901234567"},"expect":{"buttons":[{"actionRaw":"appeal","route":"Appeal","primary":true}],"appealPendingBlock":false}},
     {"name":"G09_max_two","detail":{"display_status":"CREDITED","reason":null,"reason_action":["CONTACT_CS","APPEAL","REAUTH"],"appeal_pending":false,"order_no":"3712345678901234567"},"expect":{"buttons":[{"actionRaw":"contact_cs","route":"Help","primary":true},{"actionRaw":"appeal","route":"Appeal","primary":false}],"appealPendingBlock":false}},
     {"name":"G08_appeal_pending_block","detail":{"display_status":"INVALID","reason":"BLACKLIST","reason_action":["APPEAL"],"appeal_pending":true,"order_no":"3712345678901234567"},"expect":{"buttons":[{"actionRaw":"appeal","route":"Appeal","primary":true}],"appealPendingBlock":true}},
-    {"name":"refund_no_buttons","detail":{"display_status":"INVALID","reason":"REFUND","reason_action":[],"appeal_pending":false,"order_no":"3712345678901234567"},"expect":{"buttons":[],"appealPendingBlock":false}}
+    {"name":"refund_no_buttons","detail":{"display_status":"INVALID","reason":"REFUND","reason_action":[],"appeal_pending":false,"order_no":"3712345678901234567"},"expect":{"buttons":[],"appealPendingBlock":false}},
+    {
+      "name": "G_O08_unknown_empty",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_claim",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "CLAIM"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_reauth",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "REAUTH"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_appeal",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "APPEAL"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_contact",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_all_pending",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "CLAIM",
+          "APPEAL",
+          "REAUTH",
+          "CONTACT_CS",
+          "FUTURE_ACTION"
+        ],
+        "appeal_pending": true,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": true
+      }
+    },
+    {
+      "name": "G_O08_unknown_share",
+      "detail": {
+        "display_status": "FUTURE_STATUS",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "APPEAL"
+        ],
+        "appeal_pending": true,
+        "masked_order_no": "3712****67"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": true
+      }
+    },
+    {
+      "name": "G_O08_unknown_literal",
+      "detail": {
+        "display_status": "UNKNOWN",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "APPEAL"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_case",
+      "detail": {
+        "display_status": "credited",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "APPEAL"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    },
+    {
+      "name": "G_O08_unknown_blank",
+      "detail": {
+        "display_status": "",
+        "reason": "BLACKLIST",
+        "reason_action": [
+          "APPEAL"
+        ],
+        "appeal_pending": false,
+        "order_no": "3712345678901234567"
+      },
+      "expect": {
+        "buttons": [
+          {
+            "actionRaw": "ledger",
+            "route": "Ledger",
+            "primary": true
+          }
+        ],
+        "appealPendingBlock": false
+      }
+    }
   ],
   "viewProduct": [
     {"name":"AC_S1_104_O7","detail":{"platform":"taobao","product_key":"tb:9007","is_other_product":false,"order_no":"3712345678901234567"},"expect":{"show":true,"route":"ProductDetail","params":{"platform":"taobao","product_key":"tb:9007"}}},
@@ -1098,6 +1320,1387 @@
         "next_cursor": null,
         "earliest_visible_date": null,
         "claim_entry_pinned": false
+      }
+    },
+    "details": {
+      "detail_estimated": {
+        "order_id": "C",
+        "platform": "jd",
+        "title": "样例商品 C：洗衣液 3kg",
+        "image_url": "https://img.example.test/order-v/C.png",
+        "pay_amount_fen": 3990,
+        "quantity": 1,
+        "display_status": "WAITING",
+        "reason": null,
+        "est_rebate_fen": 450,
+        "paid_at": "2026-09-20T14:03:00+08:00",
+        "is_other_product": false,
+        "order_no": "305678901234",
+        "product_key": "fixture:C",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": "2026-10",
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-20T14:03:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-28T10:12:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-10"
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_settled": {
+        "order_id": "H",
+        "platform": "taobao",
+        "title": "样例商品 H：电动牙刷",
+        "image_url": null,
+        "pay_amount_fen": 12900,
+        "quantity": 1,
+        "display_status": "CREDITED",
+        "reason": "PRICE_COMPARE",
+        "est_rebate_fen": 450,
+        "paid_at": "2026-08-03T20:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "3711111111111111111",
+        "product_key": "fixture:H",
+        "actual_fen": 320,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": true,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-03T20:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-09T09:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_part_clawed": {
+        "order_id": "L",
+        "platform": "taobao",
+        "title": "样例商品 L：床上四件套",
+        "image_url": null,
+        "pay_amount_fen": 15900,
+        "quantity": 2,
+        "display_status": "CREDITED_PART_CLAWED",
+        "reason": "PART_REFUND",
+        "est_rebate_fen": 540,
+        "paid_at": "2026-08-12T21:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3733333333333333333",
+        "product_key": "fixture:L",
+        "actual_fen": 140,
+        "clawback_fen": 400,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-12T21:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-18T09:40:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "part_clawed_back",
+            "at": "2026-10-09T14:30:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_no_rebate": {
+        "order_id": "J",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 8900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "REFUND",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:J",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T21:40:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "invalid",
+            "at": "2026-09-22T11:05:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_blacklist": {
+        "order_id": "R",
+        "platform": "taobao",
+        "title": "样例商品 R：电动剃须刀",
+        "image_url": null,
+        "pay_amount_fen": 12900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "BLACKLIST",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-10-02T20:30:00+08:00",
+        "is_other_product": false,
+        "order_no": "3768888888888888888",
+        "product_key": "fixture:R",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [
+          "APPEAL"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-10-02T20:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "invalid",
+            "at": "2026-10-06T09:30:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_appeal_pending": {
+        "order_id": "R",
+        "platform": "taobao",
+        "title": "样例商品 R：电动剃须刀",
+        "image_url": null,
+        "pay_amount_fen": 12900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "BLACKLIST",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-10-02T20:30:00+08:00",
+        "is_other_product": false,
+        "order_no": "3768888888888888888",
+        "product_key": "fixture:R",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": true,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-10-02T20:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "invalid",
+            "at": "2026-10-06T09:30:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_presale": {
+        "order_id": "B",
+        "platform": "taobao",
+        "title": "样例商品 B：预售电饭煲 4L",
+        "image_url": null,
+        "pay_amount_fen": 3000,
+        "quantity": 1,
+        "display_status": "DEPOSIT_PAID",
+        "reason": null,
+        "est_rebate_fen": null,
+        "paid_at": "2026-10-01T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3798765432109876543",
+        "product_key": "fixture:B",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "deposit_paid",
+            "at": "2026-10-01T20:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "final_paid",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_rights_pending": {
+        "order_id": "K",
+        "platform": "taobao",
+        "title": "样例商品 K：空气炸锅 4L",
+        "image_url": null,
+        "pay_amount_fen": 9900,
+        "quantity": 1,
+        "display_status": "RIGHTS_PENDING",
+        "reason": null,
+        "est_rebate_fen": 456,
+        "paid_at": "2026-09-03T19:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3755555555555555555",
+        "product_key": "fixture:K",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-03T19:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-08T16:20:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reviewing": {
+        "order_id": "S",
+        "platform": "taobao",
+        "title": "样例商品 S：电热水壶 1.7L",
+        "image_url": null,
+        "pay_amount_fen": 8900,
+        "quantity": 1,
+        "display_status": "REVIEWING",
+        "reason": null,
+        "est_rebate_fen": 310,
+        "paid_at": "2026-09-10T20:30:00+08:00",
+        "is_other_product": false,
+        "order_no": "3767777777777777777",
+        "product_key": "fixture:S",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-10T20:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-15T11:02:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_crediting": {
+        "order_id": "S",
+        "platform": "taobao",
+        "title": "样例商品 S：电热水壶 1.7L",
+        "image_url": null,
+        "pay_amount_fen": 8900,
+        "quantity": 1,
+        "display_status": "CREDITING",
+        "reason": null,
+        "est_rebate_fen": 310,
+        "paid_at": "2026-09-10T20:30:00+08:00",
+        "is_other_product": false,
+        "order_no": "3767777777777777777",
+        "product_key": "fixture:S",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": true,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-10T20:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-15T11:02:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_clawed_back": {
+        "order_id": "T",
+        "platform": "jd",
+        "title": "样例商品 T：蓝牙音箱",
+        "image_url": null,
+        "pay_amount_fen": 19900,
+        "quantity": 1,
+        "display_status": "CLAWED_BACK",
+        "reason": "REFUND",
+        "est_rebate_fen": 98765,
+        "paid_at": "2026-08-20T13:10:00+08:00",
+        "is_other_product": false,
+        "order_no": "306666666666",
+        "product_key": "fixture:T",
+        "actual_fen": null,
+        "clawback_fen": 800,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-20T13:10:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-24T10:05:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "clawed_back",
+            "at": "2026-10-10T14:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_share": {
+        "order_id": "OTHER",
+        "platform": "taobao",
+        "title": null,
+        "image_url": null,
+        "pay_amount_fen": 2680,
+        "quantity": 1,
+        "display_status": "WAITING",
+        "reason": null,
+        "est_rebate_fen": 60,
+        "paid_at": "2026-10-02T10:00:00+08:00",
+        "is_other_product": true,
+        "masked_order_no": "3756****21",
+        "product_key": null,
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": "2026-11",
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-10-02T18:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-10-08T15:12:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-11"
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_price_compare_no_rebate": {
+        "order_id": "U",
+        "platform": "pdd",
+        "title": "样例商品 U：手机支架",
+        "image_url": null,
+        "pay_amount_fen": 3990,
+        "quantity": 1,
+        "display_status": "NO_REBATE",
+        "reason": "PRICE_COMPARE",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-20T21:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "260920-111122223333444",
+        "product_key": "fixture:U",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": true,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-20T21:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-24T10:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_price_compare_risk": {
+        "order_id": "A",
+        "platform": "taobao",
+        "title": "样例商品 A：纯牛奶 250ml×12 盒",
+        "image_url": "https://img.example.test/order-v/A.png",
+        "pay_amount_fen": 4560,
+        "quantity": 2,
+        "display_status": "PAID",
+        "reason": null,
+        "est_rebate_fen": 123,
+        "paid_at": "2026-10-12T09:05:00+08:00",
+        "is_other_product": false,
+        "order_no": "3741234567890123456",
+        "product_key": "fixture:A",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-10-12T09:05:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_unknown": {
+        "order_id": "M",
+        "platform": "jd",
+        "title": "样例商品 M：收纳盒 3 个装",
+        "image_url": null,
+        "pay_amount_fen": 1990,
+        "quantity": 1,
+        "display_status": "FUTURE_STATUS",
+        "reason": null,
+        "est_rebate_fen": 987654,
+        "paid_at": "2026-09-25T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "309999999999",
+        "product_key": "fixture:M",
+        "actual_fen": 88765,
+        "clawback_fen": 77765,
+        "reason_action": [
+          "CLAIM",
+          "REAUTH",
+          "APPEAL",
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_stress": {
+        "order_id": "A",
+        "platform": "taobao",
+        "title": "超长商品完整名称：家庭装纯牛奶无添加每日早餐营养组合十二盒装，需要在订单详情完整展示",
+        "image_url": "https://img.example.test/order-v/A.png",
+        "pay_amount_fen": 8888888,
+        "quantity": 2,
+        "display_status": "PAID",
+        "reason": null,
+        "est_rebate_fen": 9999999,
+        "paid_at": "2026-10-12T09:05:00+08:00",
+        "is_other_product": false,
+        "order_no": "3741234567890123456",
+        "product_key": "fixture:A",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-10-12T09:05:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_clawed_two": {
+        "order_id": "T",
+        "platform": "jd",
+        "title": "样例商品 T：蓝牙音箱",
+        "image_url": null,
+        "pay_amount_fen": 19900,
+        "quantity": 1,
+        "display_status": "CLAWED_BACK",
+        "reason": "PUNISH",
+        "est_rebate_fen": 98765,
+        "paid_at": "2026-08-20T13:10:00+08:00",
+        "is_other_product": false,
+        "order_no": "306666666666",
+        "product_key": "fixture:T",
+        "actual_fen": null,
+        "clawback_fen": 800,
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-20T13:10:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-24T10:05:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "clawed_back",
+            "at": "2026-10-10T14:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_null_money": {
+        "order_id": "H",
+        "platform": "taobao",
+        "title": "样例商品 H：电动牙刷",
+        "image_url": null,
+        "pay_amount_fen": null,
+        "quantity": 1,
+        "display_status": "CREDITED",
+        "reason": "PRICE_COMPARE",
+        "est_rebate_fen": 450,
+        "paid_at": "2026-08-03T20:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "3711111111111111111",
+        "product_key": "fixture:H",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": true,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-03T20:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-09T09:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          }
+        ]
+      }
+    },
+    "reasonDetails": {
+      "detail_reason_01": {
+        "order_id": "reason-1",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "RIGHTS",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-1",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_02": {
+        "order_id": "reason-2",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "PUNISH",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-2",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_03": {
+        "order_id": "reason-3",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "COMMISSION_ZERO",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-3",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_04": {
+        "order_id": "reason-4",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "EXPIRED_CLICK",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-4",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_05": {
+        "order_id": "reason-5",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "OTHER_TLJ",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-5",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_06": {
+        "order_id": "reason-6",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "PRESALE_UNPAID",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-6",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_07": {
+        "order_id": "reason-7",
+        "platform": "taobao",
+        "title": "样例商品 J：蓝牙耳机",
+        "image_url": null,
+        "pay_amount_fen": 5900,
+        "quantity": 1,
+        "display_status": "INVALID",
+        "reason": "OTHER",
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-18T10:00:00+08:00",
+        "is_other_product": false,
+        "order_no": "3722222222222222222",
+        "product_key": "fixture:reason-7",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-18T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_08": {
+        "order_id": "T",
+        "platform": "jd",
+        "title": "样例商品 T：蓝牙音箱",
+        "image_url": null,
+        "pay_amount_fen": 8900,
+        "quantity": 1,
+        "display_status": "CLAWED_BACK",
+        "reason": "PUNISH",
+        "est_rebate_fen": 98765,
+        "paid_at": "2026-08-20T13:10:00+08:00",
+        "is_other_product": false,
+        "order_no": "306666666666",
+        "product_key": "fixture:T",
+        "actual_fen": null,
+        "clawback_fen": 320,
+        "reason_action": [
+          "CONTACT_CS"
+        ],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-20T13:10:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-24T10:05:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          },
+          {
+            "node": "clawed_back",
+            "at": "2026-10-10T14:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_09": {
+        "order_id": "H",
+        "platform": "taobao",
+        "title": "样例商品 H：电动牙刷",
+        "image_url": null,
+        "pay_amount_fen": 7900,
+        "quantity": 1,
+        "display_status": "CREDITED",
+        "reason": "PRICE_PROTECT",
+        "est_rebate_fen": 450,
+        "paid_at": "2026-08-03T20:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "3711111111111111111",
+        "product_key": "fixture:H",
+        "actual_fen": 260,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-03T20:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-09T09:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_10": {
+        "order_id": "H",
+        "platform": "taobao",
+        "title": "样例商品 H：电动牙刷",
+        "image_url": null,
+        "pay_amount_fen": 9900,
+        "quantity": 1,
+        "display_status": "CREDITED",
+        "reason": "SETTLE_DIFF",
+        "est_rebate_fen": 450,
+        "paid_at": "2026-08-03T20:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "3711111111111111111",
+        "product_key": "fixture:H",
+        "actual_fen": 350,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-08-03T20:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-08-09T09:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-09"
+          },
+          {
+            "node": "credited",
+            "at": "2026-09-25T10:00:00+08:00",
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_11": {
+        "order_id": "C",
+        "platform": "jd",
+        "title": "样例商品 C：洗衣液 3kg",
+        "image_url": "https://img.example.test/order-v/C.png",
+        "pay_amount_fen": 7950,
+        "quantity": 1,
+        "display_status": "WAITING",
+        "reason": "PART_REFUND",
+        "est_rebate_fen": 270,
+        "paid_at": "2026-09-20T14:03:00+08:00",
+        "is_other_product": false,
+        "order_no": "305678901234",
+        "product_key": "fixture:C",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-20T14:03:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-28T10:12:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": "2026-10"
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
+      },
+      "detail_reason_12": {
+        "order_id": "U",
+        "platform": "pdd",
+        "title": "样例商品 U：手机支架",
+        "image_url": null,
+        "pay_amount_fen": 1990,
+        "quantity": 1,
+        "display_status": "NO_REBATE",
+        "reason": null,
+        "est_rebate_fen": 765432,
+        "paid_at": "2026-09-20T21:15:00+08:00",
+        "is_other_product": false,
+        "order_no": "260920-111122223333444",
+        "product_key": "fixture:U",
+        "actual_fen": null,
+        "clawback_fen": null,
+        "reason_action": [],
+        "expected_credit_period": null,
+        "credit_overdue": false,
+        "appeal_pending": false,
+        "is_price_compare": false,
+        "timeline": [
+          {
+            "node": "paid",
+            "at": "2026-09-20T21:15:00+08:00",
+            "period": null
+          },
+          {
+            "node": "received",
+            "at": "2026-09-24T10:30:00+08:00",
+            "period": null
+          },
+          {
+            "node": "credit_expected",
+            "at": null,
+            "period": null
+          },
+          {
+            "node": "credited",
+            "at": null,
+            "period": null
+          }
+        ]
       }
     }
   }

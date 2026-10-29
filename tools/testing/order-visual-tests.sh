@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # APP-08v 订单视觉测试入口：固定指定模拟器的状态栏时间，不并行。
+# a 组 + b 组（APP-08v-b 起）。
 # 用法：bash tools/testing/order-visual-tests.sh <UDID> [其余 xcodebuild 参数]
 # 录缺图时在命令前加 TEST_RUNNER_COULI_RECORD_SNAPSHOTS=1；默认只比对，不覆盖已有基准。
 set -euo pipefail
@@ -29,7 +30,15 @@ if [[ $# -eq 0 ]]; then
     -only-testing:CouliTests/OrderListVisualReviewR1Tests \
     -only-testing:CouliTests/OrderListVisualReviewR2Tests \
     -only-testing:CouliUITests/OrderListVisualUITests \
-    -only-testing:CouliUITests/OrderListVisualReviewR2UITests
+    -only-testing:CouliUITests/OrderListVisualReviewR2UITests \
+    -only-testing:OrderCoreTests/OrderDetailVisualRulesTests \
+    -only-testing:CouliTests/OrderDetailVisualOracleTests \
+    -only-testing:CouliTests/OrderDetailVisualLayoutTests \
+    -only-testing:CouliTests/OrderDetailVisualActionTests \
+    -only-testing:CouliTests/OrderDetailVisualAdaptTests \
+    -only-testing:CouliTests/OrderDetailVisualSnapshotTests \
+    -only-testing:CouliTests/OrderDetailVisualReviewR1Tests \
+    -only-testing:CouliUITests/OrderDetailVisualUITests
 fi
 
 exec xcodebuild -scheme Couli -configuration Debug "$@" \
