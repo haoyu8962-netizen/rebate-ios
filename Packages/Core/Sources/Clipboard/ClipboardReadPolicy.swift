@@ -43,6 +43,9 @@ public struct ClipboardReadState: Sendable, Equatable {
     public var readThisForeground = false
     /// Android 设备级开关「打开 App 自动识别剪贴板」。
     public var androidAutoSwitch = true
+    /// 本机开关「打开 App 自动识别剪贴板」（BR-ID-16 2026-10-30「默认开启」；iOS 用这一字段，与 Android / 鸿蒙 importGate.enabled 同名）。
+    /// 关闭时 iOS 不探测（detectPatterns 也不做），探测结果迟到也不出提示条。
+    public var enabled = true
     /// Android 窗口已获得焦点。
     public var androidWindowFocused = true
     /// iOS changeCount 自上次判定以来变了（没变化就跳过，AC-S1-03 c）。
@@ -70,7 +73,7 @@ public struct ClipboardReadDecision: Sendable, Equatable {
 
 /// 读取判定（brief §2.1、§3；BR-ID-16、CAP-X-02；规则空白 G05、G06、G12、G13）。三端同名、同一套向量。顺序：隐私（基本模式 / 版本过期）
 /// → 敏感路由与浮层 → 鸿蒙只给 PasteButton → 触发事件（冷启动进入前台、经过后台再回前台；Android 另有等焦点的 window_focus）→ 本次前台
-/// 已判定 → 配置开关 → 网页抑制 → Android 设备级开关与窗口焦点 → iOS changeCount 与 detectPatterns。
+/// 已判定 → 配置开关 → 网页抑制 → Android 设备级开关与窗口焦点 → iOS 本机开关（`enabled`）→ iOS changeCount 与 detectPatterns。
 public enum ClipboardReadPolicy {
     public static let platformIOS = "ios"
     public static let platformAndroid = "android"
@@ -138,6 +141,9 @@ public enum ClipboardReadPolicy {
             }
             return state.androidWindowFocused ? ClipboardReadDecision(actionRaw: actionRead) : skip(reasonNoFocus)
         case platformIOS:
+            if !state.enabled {
+                return skip(reasonSwitchOff)
+            }
             guard state.iosChangeCountChanged else { return skip(reasonUnchanged) }
             guard let hit = state.iosDetectHit else { return ClipboardReadDecision(actionRaw: actionDetect) }
             return hit ? ClipboardReadDecision(actionRaw: actionShowPrompt) : skip(reasonNoDetectHit)
@@ -158,6 +164,7 @@ public enum ClipboardReadPolicy {
         parsed.webSuppressed = flag(state["webSuppressed"]) ?? false
         parsed.readThisForeground = flag(state["readThisForeground"]) ?? false
         parsed.androidAutoSwitch = flag(state["androidAutoSwitch"]) ?? true
+        parsed.enabled = flag(state["enabled"]) ?? true
         parsed.androidWindowFocused = flag(state["androidWindowFocused"]) ?? true
         parsed.iosChangeCountChanged = flag(state["iosChangeCountChanged"]) ?? true
         parsed.iosDetectHit = flag(state["iosDetectHit"])

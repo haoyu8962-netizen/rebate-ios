@@ -17,6 +17,8 @@ public struct SettingsActions {
     public let enableFull: () -> Void
     public let retryMe: () -> Void
     public let closeSub: () -> Void
+    /// 剪贴板开关（FU-X-CLIP-DEFAULT-ON C8）：捕获渲染时的执行器与版本。
+    public let clipboardAuto: (Bool) -> Void
 
     public static func make(_ controller: SettingsController, _ state: SettingsState) -> SettingsActions {
         let version = state.version
@@ -35,7 +37,8 @@ public struct SettingsActions {
             login: { [weak controller] in controller?.openLogin(version: version) },
             enableFull: { [weak controller] in controller?.enableFull(version: version) },
             retryMe: { [weak controller] in controller?.retryMe() },
-            closeSub: { [weak controller] in controller?.closeSub() }
+            closeSub: { [weak controller] in controller?.closeSub() },
+            clipboardAuto: { [weak controller] on in controller?.clipboardAuto(on, version: version) }
         )
     }
 }
@@ -198,6 +201,12 @@ struct SettingsBody: View {
         case SettingsItems.idAgreement:
             MeRow(title: title, identifier: identifier) { actions.row(row) }
                 .accessibilityFocused($agreementFocused)
+        case SettingsItems.idClipboard:
+            // 默认开启、品牌色轨道（MeSwitchRow），切换直接生效、不出弹层（BR-ID-16 2026-10-30）
+            MeSwitchRow(
+                title: title, subtitle: texts.text(key + ".desc"), isOn: controller.clipboardAutoOn, texts: texts,
+                identifier: identifier, onChange: actions.clipboardAuto
+            )
         case SettingsItems.idResetTip:
             // R1-06：按 resetTip 闸门置灰（执行器发布禁用期开始 / 结束），执行层另拦
             MeRow(

@@ -53,6 +53,15 @@ extension AppMe: MeEnv, CustomerServicePorts, PushReportState {
         (writer ?? clipboard?.writer)?.write(text) ?? false
     }
 
+    /// 设置页剪贴板开关（FU-X-CLIP-DEFAULT-ON）：与首页自动识别是同一个开关实例（`clipboard.autoSwitch`）。没接剪贴板时按默认开启显示、切换不做事。
+    func clipboardAutoOn() -> Bool {
+        clipboard?.autoSwitch.isOn ?? true
+    }
+
+    func setClipboardAuto(_ on: Bool) {
+        clipboard?.autoSwitch.set(on)
+    }
+
     func configObject(_ key: String) -> Any? {
         guard let text = config.store.value(key: key), let data = text.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])

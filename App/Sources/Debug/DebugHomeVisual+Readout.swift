@@ -77,8 +77,6 @@ extension DebugHomeVisual {
             "sectionRequests": counts.sections,
             "parseRequests": clipboard?.parseCount ?? 0,
             "clipboardReads": clipboard?.readCount ?? 0,
-            // 用途说明半屏【开启】的实际次数（ClipboardConsentNotice；返回 / 遮罩 / 下滑 /【暂不开启】都不计）
-            "consentRequests": clipboard?.consentNotice.enableCount ?? 0,
             "promptIdentity": identity,
             "unexpectedRequests": images.unexpected,
             "pasteControlClass": pasteControlClass(),

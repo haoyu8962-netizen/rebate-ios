@@ -30,12 +30,6 @@ enum ClipboardDraftTexts {
         "clipboard.card_list.close": "关闭",
         // ⑤ 网络失败结果上的【重试】（HomeClipboardResults-v3 ⑤；与 Android / 鸿蒙同键同字）：用本次已提取的候选再发一次，不再读剪贴板
         "clipboard.retry": "重试",
-        // 首次用途说明半屏（HomeClipboardConsent-v3；BR-TEXT-14 表 D clipboard.consent.*，.body 为占位措辞、等法务定稿；三端同键同字）
-        "clipboard.consent.title": "开启回到 App 自动查返利？",
-        "clipboard.consent.body": "开启后，回到可用页面时会读取剪贴板，在这台设备上提取商品链接、口令或好友邀请码：商品会提交到凑狸的服务查询优惠，"
-            + "邀请码要你确认后才绑定。系统支持并允许时才会自动识别，否则可以用粘贴入口；可以随时在设置里关闭",
-        "clipboard.consent.enable": "开启",
-        "clipboard.consent.not_now": "暂不开启",
         // 登录验证码页邀请码行【粘贴】（LoginCodeInvite）旁的读屏说明与抽不到时的轻提示（BR-INV-04「未识别到邀请码」）
         "clipboard.login_invite.paste_label": "粘贴邀请码",
         "clipboard.login_invite.not_found": "未识别到邀请码",

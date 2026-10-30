@@ -13,7 +13,8 @@ import UIKit
 /// 剪贴板识别的 App 接线（APP-07；brief §2、§3 iOS；BR-ID-16、BR-INV-04；03 §4.6）。
 ///
 /// - 读取时机（`watcher`）：场景生命周期 `sceneActive` / `sceneBackground`（CouliApp 的 scenePhase），冷启动进入前台或经过后台再回来才算一次，
-///   每次最多判定 1 次。前提由 `readState` 现取：本机已同意当前版本隐私政策、配置开关 clipboard.enabled.ios 不为 false（G05）、当前路由与
+///   每次最多判定 1 次。前提由 `readState` 现取：本机已同意当前版本隐私政策、本机开关「打开 App 自动识别剪贴板」开启（`autoSwitch`，
+///   BR-ID-16 2026-10-30 默认开启、不再有首次用途说明与功能同意，FU-X-CLIP-DEFAULT-ON）、配置开关 clipboard.enabled.ios 不为 false（G05）、当前路由与
 ///   浮层不在敏感清单、栈顶网页容器没有经 setAutoDetect(false) 抑制（G06）；另外只在首页 Tab 根页判定（A01 同口径，提示条只在首页显示）。
 /// - 判定方式（brief §3 iOS）：先比 changeCount（没变化跳过；App 自写后记下的 changeCount 也跳过），变化了才 detectPatterns；命中出商品提示条，
 ///   条内是系统粘贴控件。用户点了才拿到文本，再做本地分类（App 自写 hash 排除）：商品 → parse；只有邀请内容且是游客 → 邀请提示条（G07）。
@@ -75,8 +76,9 @@ final class AppClipboard: ObservableObject {
     /// 诊断（不含内容）：商品粘贴入口发起系统读取的次数（首页常驻卡、SearchTyping、商品提示条共用，R2-02）。
     var readCount = 0
 
-    /// 首次用途说明半屏（APP-11v-b 版式；生产触发随 BR-ID-16 iOS 系列接，见 ClipboardConsentNotice）。
-    let consentNotice = ClipboardConsentNotice()
+    /// 本机开关「打开 App 自动识别剪贴板」（设备级；设置页经 AppMe 读写同一实例）。关闭立即作废自动识别出的提示条，挂起的探测回来复核时
+    /// 读取策略按 switch_off 跳过；之后回前台零探测。手动粘贴不看它。
+    let autoSwitch: ClipboardAutoSwitch
     let ledger: ClipboardWriteLedger
     let history: PromptHistory
     let writer: ClipboardWriter
@@ -153,9 +155,11 @@ final class AppClipboard: ObservableObject {
         router: Router,
         deps: Deps,
         clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
-        pendingInvite: PendingInviteCode = PendingInviteCode()
+        pendingInvite: PendingInviteCode = PendingInviteCode(),
+        autoSwitch: ClipboardAutoSwitch = ClipboardAutoSwitch(store: MemoryClipboardHashStore())
     ) {
         self.system = system
+        self.autoSwitch = autoSwitch
         self.pendingInvite = pendingInvite
         self.store = store
         self.router = router
@@ -176,6 +180,7 @@ final class AppClipboard: ObservableObject {
             MainActor.assumeIsolated { self?.tabChanged(next) }
         }.store(in: &subscriptions)
         publishOwner()
+        watchAutoSwitch()
     }
 
     // MARK: - 生命周期入口（CouliApp scenePhase）
@@ -337,16 +342,6 @@ final class AppClipboard: ObservableObject {
         prompt = nil
         guard watcher.inForeground, homeRoot(), overlayClear(), !blockActive else { return nil }
         return startRead(entry: ManualPasteAction.entryHome)
-    }
-
-    /// 商品提示条的粘贴控件此刻可用（界面置灰用；执行层另在 beginPromptPaste 拦）：没有限流、没有在途读取或 parse。
-    var promptPasteEnabled: Bool {
-        !blocked && !busy
-    }
-
-    /// 点击与交付在同一时刻（测试与同步调用方）。
-    func promptPasted(_ id: Int64, text: String?) {
-        beginPromptPaste(id)?(text)
     }
 
     // MARK: - 归属快照（网络线程只读它）

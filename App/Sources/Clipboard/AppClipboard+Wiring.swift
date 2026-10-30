@@ -13,6 +13,9 @@ extension AppClipboard {
         records: ClipboardRecordsCleaner = .shared
     ) -> AppClipboard {
         let client = network.client
+        #if DEBUG
+        ClipboardAutoSwitch.debugResetIfRequested()
+        #endif
         let clipboard = AppClipboard(
             system: system, store: records.store, api: client, router: routing.router,
             deps: Deps(
@@ -26,7 +29,8 @@ extension AppClipboard {
                 serverForced: { routing.update.onServerForced() },
                 networkForced: { routing.update.on10405(minSupported: $0) }
             ),
-            pendingInvite: login.pendingInvite
+            pendingInvite: login.pendingInvite,
+            autoSwitch: .makeLive()
         )
         clipboard.connect(privacy: privacy, login: login, records: records)
         return clipboard
@@ -71,7 +75,7 @@ final class ClipboardInvalidationCleaner: EnvironmentSwitchCleaning {
     }
 }
 
-/// 读取前提（brief §2.1）：隐私、敏感浮层、配置开关、网页抑制、changeCount。
+/// 读取前提（brief §2.1）：隐私、敏感浮层、配置开关、网页抑制、本机开关、changeCount。
 extension AppClipboard {
     // MARK: - 前提
 
@@ -123,11 +127,33 @@ extension AppClipboard {
             consent: consentRaw(), event: event, route: path.last?.route ?? (tab.route ?? RoutePolicy.home)
         )
         state.overlay = currentOverlay()
+        state.enabled = autoSwitch.isOn
         state.configEnabled = configEnabled()
         state.webSuppressed = path.last.map { suppressedWeb.contains($0.id) } ?? false
         state.readThisForeground = watcher.readThisForeground
         state.iosChangeCountChanged = String(system.changeCount) != store.read(Self.lastChangeKey)
         return state
+    }
+}
+
+/// 本机开关（FU-X-CLIP-DEFAULT-ON）与提示条粘贴控件的小工具。
+extension AppClipboard {
+    /// 构造时订阅本机开关：关闭时立即撤下自动识别出的提示条（挂起的探测由 `detected` 复核时按开关跳过）；打开后下一次回前台照常判定。
+    func watchAutoSwitch() {
+        autoSwitch.observe { [weak self] on in
+            guard !on else { return }
+            self?.prompt = nil
+        }
+    }
+
+    /// 商品提示条的粘贴控件此刻可用（界面置灰用；执行层另在 beginPromptPaste 拦）：没有限流、没有在途读取或 parse。
+    var promptPasteEnabled: Bool {
+        !blocked && !busy
+    }
+
+    /// 点击与交付在同一时刻（测试与同步调用方）。
+    func promptPasted(_ id: Int64, text: String?) {
+        beginPromptPaste(id)?(text)
     }
 }
 

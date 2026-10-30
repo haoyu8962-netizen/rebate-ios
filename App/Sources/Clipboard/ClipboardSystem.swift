@@ -102,3 +102,29 @@ final class ClipboardRecordsCleaner: EnvironmentSwitchCleaning {
         withdrawal.register(cleaner)
     }
 }
+
+/// 本机开关「打开 App 自动识别剪贴板」的生产存储（FU-X-CLIP-DEFAULT-ON；BR-ID-16 2026-10-30「关闭态本机保留」）：Application Support 下
+/// 单独的小文件 `clipboard-switch.json`，**不是** `clipboard-records.json`——撤回同意的清理项（ClipboardRecordsCleaner）会删记录文件，而关闭态
+/// 必须跨撤回保留。不登记任何清理注册表：登录、退出、切换账号、切换环境、撤回同意都不清（设备级用户设置）。
+extension ClipboardAutoSwitch {
+    static let liveFileName = "clipboard-switch.json"
+
+    static func liveStore() -> ClipboardFileStore {
+        ClipboardFileStore(file: ClientFile(name: liveFileName))
+    }
+
+    /// 生产实例：每次调用都从同一个本机文件读（重启即重新读）。
+    static func makeLive() -> ClipboardAutoSwitch {
+        ClipboardAutoSwitch(store: liveStore())
+    }
+
+    #if DEBUG
+    /// UI 测试输入 `-CouliClipboardSwitchReset 1`：在 AppClipboard 组装之前把本机开关清回「从未选择」。Release 不编译。
+    static let debugResetArgument = "CouliClipboardSwitchReset"
+
+    static func debugResetIfRequested(_ defaults: UserDefaults = .standard) {
+        guard defaults.bool(forKey: debugResetArgument) else { return }
+        try? liveStore().write(key, nil)
+    }
+    #endif
+}

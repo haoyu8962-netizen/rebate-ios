@@ -38,7 +38,9 @@ public struct SettingsModel: Equatable, Sendable {
 }
 
 /// 设置页条目（brief §2.3，G01、G02、G07、G30、G32）。groups 只描述顶层行（group 空串 = 未分组）；footer：basic → enable_full，guest →
-/// login_prompt，member → logout。修改昵称、通知设置、协议选择半屏是页内子页（route 为 nil）。剪贴板开关只在 Android。
+/// login_prompt，member → logout。修改昵称、通知设置、协议选择半屏是页内子页（route 为 nil）。剪贴板开关「打开 App 自动识别剪贴板」
+/// 三端都显示（BR-ID-16 2026-10-30、BR-ID-02 细则；FU-X-CLIP-DEFAULT-ON C8）：游客在「关于凑狸」后，已登录在「通用」组「重新显示下单须知」后；
+/// 基本模式不显示。
 public enum SettingsItems {
     public static let idPrivacy = "隐私中心"
     public static let idAgreement = "用户协议与隐私政策"
@@ -67,10 +69,9 @@ public enum SettingsItems {
 
     // swiftlint:disable:next function_parameter_count
     public static func model(
-        level: String, platform: String, phoneBound: Bool?, nicknameEditable: Bool, serviceSwitchAvailable: Bool,
+        level: String, platform _: String, phoneBound: Bool?, nicknameEditable: Bool, serviceSwitchAvailable: Bool,
         deleteAccountAvailable: Bool
     ) -> SettingsModel {
-        let android = platform == MePlatform.android
         if level == MeLevel.basic {
             // 基本模式只有五项（四行 +【开启完整功能】），不显示剪贴板开关（BR-ID-02、BR-ID-16）
             let rows = [
@@ -80,11 +81,10 @@ public enum SettingsItems {
             return SettingsModel(groups: [SettingsGroup(name: "", rows: rows)], footer: footerEnableFull)
         }
         if level != MeLevel.member {
-            var rows = [SettingsRow(idPrivacy, "PrivacyCenter"), agreementRow, SettingsRow(idAbout, "About")]
-            if android {
-                rows.append(SettingsRow(idClipboard, nil))
-            }
-            rows += [SettingsRow(idClearCache, nil), SettingsRow(idHelp, "Help")]
+            let rows = [
+                SettingsRow(idPrivacy, "PrivacyCenter"), agreementRow, SettingsRow(idAbout, "About"),
+                SettingsRow(idClipboard, nil), SettingsRow(idClearCache, nil), SettingsRow(idHelp, "Help"),
+            ]
             return SettingsModel(groups: [SettingsGroup(name: "", rows: rows)], footer: footerLogin)
         }
         // G07：只按 phone_bound；未绑定可点 → BindPhone，已绑定不可点（换手机号不在本任务）
@@ -96,13 +96,11 @@ public enum SettingsItems {
         if deleteAccountAvailable {
             account.append(SettingsRow(idDelete, "DeleteAccount"))
         }
-        var general = [
+        let general = [
             SettingsRow(idNotify, nil, serviceSwitchAvailable: serviceSwitchAvailable), SettingsRow(idResetTip, nil),
+            SettingsRow(idClipboard, nil), SettingsRow(idClearCache, nil), SettingsRow(idHelp, "Help"),
+            SettingsRow(idAbout, "About"),
         ]
-        if android {
-            general.append(SettingsRow(idClipboard, nil))
-        }
-        general += [SettingsRow(idClearCache, nil), SettingsRow(idHelp, "Help"), SettingsRow(idAbout, "About")]
         return SettingsModel(
             groups: [
                 SettingsGroup(name: groupAccount, rows: account),

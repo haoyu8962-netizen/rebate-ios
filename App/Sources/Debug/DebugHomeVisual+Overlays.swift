@@ -3,13 +3,13 @@ import Clipboard
 import Foundation
 import HomeCore
 
-/// 首页视觉 UI 测试的 b 组浮层场景（APP-11v-b；只在 Debug / Staging 编译）：弹窗、用途说明、剪贴板识别结果。
-/// 只经真实出口推进：弹窗由真实弹窗状态机弹出；用途说明经 `ClipboardConsentNotice.present`（生产触发随 BR-ID-16 iOS 系列接）；
+/// 首页视觉 UI 测试的 b 组浮层场景（APP-11v-b；只在 Debug / Staging 编译）：弹窗、剪贴板识别结果（首次用途说明场景随
+/// FU-X-CLIP-DEFAULT-ON 删除）。只经真实出口推进：弹窗由真实弹窗状态机弹出；
 /// 30132 与网络失败经用户粘贴的交付回调走真实识别 / parse；识别卡（单张）经剪贴板结果出口 `show(.cardList)`（iOS 单卡平时直接进详情，
 /// 打不开详情时才落到这张卡；版式两者同一组件）。
 extension DebugHomeVisual {
     static let overlayScenes: Set = [
-        "popup", "consent", "clipboard_card", "clipboard_no_price", "clipboard_material", "clipboard_30132",
+        "popup", "clipboard_card", "clipboard_no_price", "clipboard_material", "clipboard_30132",
         "clipboard_network",
     ]
 
@@ -35,8 +35,6 @@ extension DebugHomeVisual {
     private func start(_ scene: String, clipboard: AppClipboard) {
         let origin = clipboard.currentOrigin()
         switch scene {
-        case "consent":
-            clipboard.consentNotice.present()
         case "clipboard_card", "clipboard_material":
             clipboard.show(
                 origin,
@@ -64,8 +62,6 @@ extension DebugHomeVisual {
         switch scene {
         case "popup":
             return state.popup != nil
-        case "consent":
-            return clipboard.consentNotice.shown
         case "clipboard_30132":
             if case .unrecognized = clipboard.result?.kind {
                 return true

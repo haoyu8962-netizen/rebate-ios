@@ -103,6 +103,10 @@ public protocol MeEnv: AnyObject {
     func tipsReset()
     /// 本机时钟。
     func nowMillis() -> Int64
+    /// 设置页剪贴板开关「打开 App 自动识别剪贴板」的当前值（设备级本机开关，BR-ID-16 2026-10-30；从未选择 = 开启）。
+    func clipboardAutoOn() -> Bool
+    /// 用户在设置页切换剪贴板开关：直接生效（不出弹层、不发请求，FU-X-CLIP-DEFAULT-ON C2、C3、C8）。
+    func setClipboardAuto(_ on: Bool)
     /// 服务端校准后的时钟（显示用，BR-TEXT-11）。
     func displayNowMillis() -> Int64
 }
@@ -309,6 +313,13 @@ public enum MeResultInput {
 }
 
 public extension MeEnv {
+    /// 缺省：没有接剪贴板的环境按默认开启显示、切换不做事（DetachedMeEnv 等）。
+    func clipboardAutoOn() -> Bool {
+        true
+    }
+
+    func setClipboardAuto(_: Bool) {}
+
     func check(_ identity: MeIdentity) -> IdentityCheck {
         isCurrent(identity) ? .current : .stale
     }

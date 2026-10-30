@@ -24,7 +24,8 @@ public struct SettingsState: Equatable, Sendable {
 
 /// 设置页执行器（Settings 路由；brief §2.3，G01、G02、G07、G30、G32；BR-ID-02）。构造时固定身份（共性第 18 条：身份变了 App 重建本执行器，子页随之
 /// 关闭、输入清空）；行、子页、半屏、确认框的回调都捕获渲染时的执行器与版本，执行时核对身份与版本（鸿蒙 R2-02 / H22）：
-/// - 条目只按 `SettingsItems`（基本模式五项、游客五项、已登录三组；iOS 没有剪贴板开关）；
+/// - 条目只按 `SettingsItems`（基本模式五项、游客六项、已登录三组；剪贴板开关三端都有，基本模式没有）；
+/// - 剪贴板开关（FU-X-CLIP-DEFAULT-ON）：值经 `MeEnv` 读写设备级本机开关，打开 / 关闭都直接生效，不出半屏、确认框，不发请求；
 /// - 修改昵称、通知设置是页内子页（不注册路由，G32），子页执行器只按已登录身份建；
 /// - 「重新显示下单须知」调 resetTip jump_tip（42901 执行层 + 页面）；清除缓存先确认；【退出登录】先确认，确认才调已有 logout()。
 @MainActor
@@ -373,5 +374,21 @@ extension SettingsState {
     init(version: Int) {
         self.init()
         self.version = version
+    }
+}
+
+/// 剪贴板开关「打开 App 自动识别剪贴板」（FU-X-CLIP-DEFAULT-ON C8；BR-ID-16 2026-10-30）。
+public extension SettingsController {
+    /// 当前值（渲染用；设备级，不随本执行器的身份）。
+    var clipboardAutoOn: Bool {
+        deps.env.clipboardAutoOn()
+    }
+
+    /// 开关被切换（渲染时的版本）：核对身份与页面版本、本页确有这一行（基本模式没有），直接生效；不出半屏、确认框，不发请求。
+    func clipboardAuto(_ on: Bool, version: Int) {
+        let hasRow = model().groups.contains { group in group.rows.contains { $0.id == SettingsItems.idClipboard } }
+        guard bound(version), hasRow else { return }
+        objectWillChange.send()
+        deps.env.setClipboardAuto(on)
     }
 }

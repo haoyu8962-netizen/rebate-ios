@@ -50,6 +50,7 @@ public struct MeDraftTexts: MeTexts {
         SettingsItems.idAbout: "settings.about",
         SettingsItems.idHelp: "settings.help",
         SettingsItems.idClearCache: "settings.clear_cache",
+        SettingsItems.idClipboard: "settings.clipboard_auto",
         SettingsItems.idNickname: "settings.nickname",
         SettingsItems.idPhone: "settings.phone",
         SettingsItems.idAuth: "me.grid.auth",

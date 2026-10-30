@@ -34,6 +34,7 @@
 #     启动参数 CouliFakeTradeNoExternal、假安装状态键 CouliFakeInstalled（App/Sources/Debug/DebugJumpPorts.swift）
 #   - 剪贴板调试计数（APP-07）：标记 COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a、启动参数 CouliClipboardDiagnostics
 #     （App/Sources/Debug/DebugClipboard.swift）
+#   - 剪贴板本机开关重置（FU-X-CLIP-DEFAULT-ON）：启动参数 CouliClipboardSwitchReset（App/Sources/Clipboard/ClipboardSystem.swift 的 #if DEBUG）
 #   - 订单本机假服务（APP-08）：标记 COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19、类型名 DebugFakeOrders、启动参数 CouliFakeOrders
 #     （App/Sources/Debug/DebugFakeOrders.swift）
 #   - 「我的」本机假服务与假推送令牌来源（APP-12）：标记 COULI_FAKE_ME_SERVER_APP12_IOS_2b9e47、类型名 DebugFakeMe、DebugPushTokenSource、
@@ -146,6 +147,7 @@ HITS_LOG="$WORK/hits"
     echo "CouliFakeInstalled"
     echo "COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a"
     echo "CouliClipboardDiagnostics"
+    echo "CouliClipboardSwitchReset"
     echo "COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19"
     echo "DebugFakeOrders"
     echo "CouliFakeOrders"
