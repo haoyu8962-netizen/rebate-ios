@@ -218,13 +218,14 @@ struct WalletHelpButton: View {
 
 extension Notice {
     /// 轻提示（DesignSystem 的 Toast）。
+    /// 「已经处理完成」用信息图标次文字色（W62，位置不变，G-W18）；其余仍是成功勾。
     func toast(_ texts: WalletTexts) -> CouliToastMessage {
-        CouliToastMessage(message(texts))
+        CouliToastMessage(message(texts), icon: key == SensitiveOutcome.alreadyDoneKey ? .info : .success)
     }
 }
 
 /// 问号说明半屏（WalletNote*、WithdrawNoteNet）：标题 + 关闭 + 说明 +【知道了】。
-/// 钱包页按 WalletNote* 用正文 14/21 +【知道了】描边次按钮（W15）；缺省（提现页 WithdrawNoteNet）仍是正文 17 + 主按钮，本任务 a 组不改。
+/// 钱包页、提现页（WalletNote*、WithdrawNoteNet）都传正文 14/21 +【知道了】描边次按钮（W15、W45）。
 struct WalletHelpSheet: View {
     let title: String
     let text: String

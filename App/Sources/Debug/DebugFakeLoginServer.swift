@@ -174,6 +174,10 @@ final class DebugFakeLoginServer: URLProtocol {
         // APP-09v-b：注入的提现记录（列表按游标、详情按单号）同样先于通用样例
         guard let visual = DebugWalletVisual.summaryReply(method: method, path: path)
             ?? DebugWalletVisual.recordsReply(method: method, path: path, query: query)
+            ?? DebugWalletVisual.rulesReply(method: method, path: path)
+            ?? DebugWalletVisual.configReply(method: method, path: path, base: {
+                DebugFakeMe.shared.answer(method: method, path: path, body: [:])?.data ?? DebugFakeSearch.config()
+            })
         else {
             return false
         }

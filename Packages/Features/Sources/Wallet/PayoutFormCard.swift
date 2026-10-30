@@ -131,13 +131,16 @@ extension PayoutAccountScreen {
 
     /// 字段旁的错误提示：可访问焦点与滚动目标（`payout.err.<字段>`）；出现后（或错误事件编号变化时）按 `FieldErrorCue` 定位一次。
     func fieldErrorText(_ text: String, field: String) -> some View {
-        Text(verbatim: text)
-            .couliFont(.footnote)
-            .foregroundColor(CouliColor.statusErrorText)
-            .accessibilityFocused($focusedField, equals: field)
-            .accessibilityIdentifier("payout.fieldError.\(field)")
-            .id(FieldScrollRequest.anchor(field))
-            .task(id: errorCue.event) { await locate(field, text: text) }
+        // 字段错误共用样式（W50 / W82）：16 三角 + 14 红字；读屏与定位仍在文字上
+        HStack(alignment: .top, spacing: CouliSpacing.s1) {
+            WalletErrorIcon(probe: "payout.fieldError.\(field).icon")
+            RecordText(text, style: .footnote, color: CouliColor.statusErrorText,
+                       probe: "payout.fieldError.\(field).text")
+                .accessibilityFocused($focusedField, equals: field)
+                .accessibilityIdentifier("payout.fieldError.\(field)")
+        }
+        .id(FieldScrollRequest.anchor(field))
+        .task(id: errorCue.event) { await locate(field, text: text) }
     }
 
     /// 首个错误字段的错误视图已出现：滚动到它、移读屏焦点，并按事件编号播报一次（重绘不重复）。

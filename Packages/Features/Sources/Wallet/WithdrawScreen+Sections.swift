@@ -13,15 +13,19 @@ extension WithdrawScreen {
     }
 
     /// 放弃确认里附的上一笔明细（设计稿 WithdrawAbandonConfirm：上一笔金额、收款账号两行）；账号取不到时只列金额。
-    func pendingDetail(_ flowState: FlowState, _ snapshot: WithdrawSnapshot) -> String {
-        guard let pending = flowState.pending else { return "" }
+    func pendingDetail(_ flowState: FlowState, _ snapshot: WithdrawSnapshot) -> AbandonDetail {
+        guard let pending = flowState.pending else { return .rows([]) }
         let object = WalletJSON.parse(Data(pending.summary.utf8)) as? [String: Any]
-        let amount = object.flatMap { WalletJSON.int64($0["amount_fen"]) }.map(WalletMoney.text) ?? ""
-        var lines = [texts.text("pending_confirm.withdraw.amount_label") + "  " + amount]
+        let fen = object.flatMap { WalletJSON.int64($0["amount_fen"]) }
+        var rows = [AbandonDetail.Row(
+            label: texts.text("pending_confirm.withdraw.amount_label"), value: fen.map(WalletMoney.text) ?? "",
+            spoken: fen.map(WalletMoney.spoken) ?? ""
+        )]
         if let account = snapshot.payout?.line(texts) {
-            lines.append(texts.text("pending_confirm.payout_label") + "  " + account)
+            rows.append(AbandonDetail.Row(label: texts.text("pending_confirm.payout_label"), value: account,
+                                          spoken: WalletAnnounce.masked(account, texts: texts)))
         }
-        return lines.joined(separator: "\n")
+        return .rows(rows)
     }
 
     func pendingCard(_ pending: PendingView, _ snapshot: WithdrawSnapshot, _ flowState: FlowState,
@@ -40,7 +44,7 @@ extension WithdrawScreen {
 
     @ViewBuilder func notices(_ snapshot: WithdrawSnapshot, _ flowState: FlowState, _ actions: WithdrawActions,
                               _ flowActions: FlowActions) -> some View {
-        writeNotices(flowState, flowActions)
+        writeNotices(flowState, flowActions, amountCardShown: snapshot.rules != nil)
         if let error = snapshot.readError {
             NoticeBar(
                 text: error.message(texts), noticeId: error.id, retryTitle: texts.text("wallet.retry"),
@@ -60,9 +64,12 @@ extension WithdrawScreen {
 
     /// 写操作（提交、确认、放弃）的结局：错误条与被拦下的手动补办入口。与 rules 读取状态无关，加载中、读取失败时同样显示（共性第 76 条，
     /// iOS R2-02：确认得到 3xxxx / 20903、放弃 completed 原结果 3xxxx 时用户要看到上一笔的明确结局）。
-    @ViewBuilder func writeNotices(_ flowState: FlowState, _ flowActions: FlowActions) -> some View {
-        if let error = flowState.error {
+    /// G-W13：金额类错误在金额卡显示时挪到金额框下（`fieldError`），这里不重复；金额卡不在（加载中、读取失败）时仍在这里，用户总能看到结局。
+    @ViewBuilder func writeNotices(_ flowState: FlowState, _ flowActions: FlowActions,
+                                   amountCardShown: Bool = false) -> some View {
+        if let error = flowState.error, !(amountCardShown && WithdrawErrorPlacement.belowAmountBox(error.key)) {
             NoticeBar(text: error.message(texts), noticeId: error.id, identifier: "withdraw.flowError")
+                .walletProbe("withdraw.flowError", role: "notice")
         }
         if let route = flowState.guideRoute {
             GuideEntry(texts: texts, route: route, action: flowActions.openGuide)
@@ -76,68 +83,72 @@ extension WithdrawScreen {
         }
     }
 
-    /// 页头（设计稿 Withdraw：「可提现余额」一行、大号金额一行、剩余次数一行）。文案仍是契约键 withdraw.balance_line，按 {amount} 拆开排版。
+    /// 余额卡（W37，设计稿 Withdraw：标签 14 → 34/700 等宽大数 → 次数 12）。文案仍是契约键 withdraw.balance_line，按 {amount} 拆开排版；
+    /// 整卡一个读屏元素（A11yFocusWithdraw）。
     func header(_ display: WithdrawRulesDisplay) -> some View {
         let slot = "\u{1}"
         let parts = texts.format("withdraw.balance_line", ["amount": slot]).components(separatedBy: slot)
         let label = (parts.first ?? "").trimmingCharacters(in: .whitespaces)
         let suffix = parts.dropFirst().joined().trimmingCharacters(in: .whitespaces)
-        return VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+        let counts = texts.format("withdraw.remaining_counts", [
+            "daily": "\(display.dailyRemaining)", "monthly": "\(display.monthlyRemaining)",
+        ])
+        return VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 if !label.isEmpty {
-                    Text(verbatim: label)
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.textSecondary)
+                    RecordText(label, style: .footnote, color: CouliColor.textSecondary,
+                               probe: "withdraw.balance.label")
                 }
-                Text(verbatim: WalletMoney.text(display.balanceFen) + (suffix.isEmpty ? "" : " " + suffix))
-                    .couliFont(.display, weight: .couliBold, monospacedDigits: true)
-                    .foregroundColor(CouliColor.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s1) {
+                    WalletAmount(text: WalletMoney.text(display.balanceFen), style: .display, weight: .couliBold,
+                                 probe: "withdraw.balance.amount")
+                        .foregroundColor(CouliColor.textPrimary)
+                    if !suffix.isEmpty {
+                        RecordText(suffix, style: .footnote, color: CouliColor.textSecondary)
+                    }
+                }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: texts.format(
-                "withdraw.balance_line", ["amount": WalletMoney.spoken(display.balanceFen)]
-            )))
-            .accessibilityIdentifier("withdraw.balance")
-            Text(verbatim: texts.format("withdraw.remaining_counts", [
-                "daily": "\(display.dailyRemaining)", "monthly": "\(display.monthlyRemaining)",
-            ]))
-            .couliFont(.footnote)
-            .foregroundColor(CouliColor.textSecondary)
-            .accessibilityIdentifier("withdraw.remaining")
+            RecordText(counts, style: .caption, color: CouliColor.textSecondary, probe: "withdraw.balance.counts")
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .couliCard()
+        .walletProbe("withdraw.balance", role: "card")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: texts.format(
+            "withdraw.balance_line", ["amount": WalletMoney.spoken(display.balanceFen)]
+        ) + PriceTerms.spokenPause + counts))
+        .accessibilityIdentifier("withdraw.balance")
     }
 
-    /// block 引导（设计稿 WithdrawRealName；其余 block_code 套用同一版式，G28）：金额框下方的浅黄提示块，警示图标 + 原因句 + 引导按钮。
+    /// block 引导（W46，设计稿 WithdrawRealName；其余 block_code 套用同一版式，G28）：金额卡内的警告提示块，图标 + 原因句 + 文字下方描边按钮；
+    /// 纯提示码无按钮；30309 有「提现规则」配置时出【查看提现规则】，去向同页底（G-W15，不改 WithdrawBlockGuide）。
     @ViewBuilder func guideCard(_ snapshot: WithdrawSnapshot, _ actions: WithdrawActions) -> some View {
         let guide = snapshot.guide
         if guide.actionRaw != WithdrawBlockGuide.none {
-            VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-                HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                    CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                        .foregroundColor(CouliColor.statusWarningText)
-                        .accessibilityHidden(true)
-                    Text(verbatim: texts.text(guide.textKey))
-                        .couliFont(.footnote, weight: .couliSemibold)
-                        .foregroundColor(CouliColor.statusWarningText)
-                        .fixedSize(horizontal: false, vertical: true)
+            WalletWarningBlock(iconProbe: "withdraw.guide.icon") {
+                VStack(alignment: .leading, spacing: CouliSpacing.s2) {
+                    RecordText(texts.text(guide.textKey), style: .footnote, weight: .couliMedium,
+                               color: CouliColor.statusWarningText, probe: "withdraw.guide.text")
                         .accessibilityIdentifier("withdraw.guide")
-                }
-                if let button = guide.buttonKey {
-                    CouliButton(texts.text(button), kind: .secondary, size: .compact, action: actions.guide)
-                        .fixedSize()
-                        .padding(.leading, CouliSpacing.s5)
-                        .accessibilityIdentifier("withdraw.guide.button")
+                    if let button = guide.buttonKey {
+                        CouliButton(texts.text(button), kind: .secondary, size: .compact,
+                                    labelProbeID: "withdraw.guide.button.label", weight: .couliMedium,
+                                    action: actions.guide)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .walletProbe("withdraw.guide.button", role: "button")
+                            .accessibilityIdentifier("withdraw.guide.button")
+                    } else if guide.textKey == "error.30309", snapshot.helpTarget != nil {
+                        CouliButton(texts.text("withdraw.guide.rules"), kind: .secondary, size: .compact,
+                                    labelProbeID: "withdraw.guide.rules.label", weight: .couliMedium,
+                                    action: actions.rules)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .walletProbe("withdraw.guide.rules", role: "button")
+                            .accessibilityIdentifier("withdraw.guide.rules")
+                    }
                 }
             }
-            .padding(CouliSpacing.s3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                    .fill(CouliColor.statusWarningText.opacity(0.1))
-            )
+            .walletProbe("withdraw.guide", role: "guide")
         }
     }
 
@@ -145,99 +156,108 @@ extension WithdrawScreen {
                     _ actions: WithdrawActions) -> some View {
         let editable = display.amountEditable && flowState.pending == nil && flowState.phase == .editing
         return VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            Text(verbatim: texts.text("withdraw.amount_label"))
-                .couliFont(.footnote, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textSecondary)
+            RecordText(texts.text("withdraw.amount_label"), style: .footnote, color: CouliColor.textSecondary)
             // 设计稿：金额框占满一行余下宽度、【全部提现】在右；放不下（窄屏 + 大字号）时【全部提现】换到下一行
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: CouliSpacing.s3) {
-                    amountField(snapshot, display, editable: editable, actions)
+                HStack(spacing: CouliSpacing.s2) {
+                    amountField(display, flowState, editable: editable, actions)
                     allButton(display, editable: editable, actions)
                 }
                 VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-                    amountField(snapshot, display, editable: editable, actions)
+                    amountField(display, flowState, editable: editable, actions)
                     allButton(display, editable: editable, actions)
                 }
             }
-            guideCard(snapshot, actions)
+            fieldError(flowState)
             if let fen = display.maxLineFen {
-                Text(verbatim: texts.format("withdraw.max_line", ["amount": WalletMoney.text(fen)]))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
+                RecordText(texts.format("withdraw.max_line", ["amount": WalletMoney.text(fen)]), style: .caption,
+                           color: CouliColor.textSecondary, monospacedDigits: true, probe: "withdraw.max")
                     .accessibilityIdentifier("withdraw.max")
             }
             if !display.quick.isEmpty {
                 quickRow(display.quick, editable: editable, actions)
             }
-            fieldError(flowState)
             if snapshot.estimate != .hidden {
-                Divider()
+                RecordDivider()
+                    .walletProbe("withdraw.divider", role: "divider")
             }
             estimateRow(snapshot.estimate)
+            guideCard(snapshot, actions)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .couliCard()
+        .walletProbe("withdraw.amountCard", role: "card")
     }
 
     func allButton(_ display: WithdrawRulesDisplay, editable: Bool, _ actions: WithdrawActions) -> some View {
-        CouliButton(texts.text("withdraw.all"), kind: .text, size: .compact,
-                    isEnabled: display.allEnabled && editable, action: actions.fillAll)
+        WithdrawLinkButton(title: texts.text("withdraw.all"), probe: "withdraw.all",
+                           isEnabled: display.allEnabled && editable, action: actions.fillAll)
             .fixedSize()
             .accessibilityIdentifier("withdraw.all")
     }
 
-    func amountField(_ snapshot: WithdrawSnapshot, _ display: WithdrawRulesDisplay, editable: Bool,
-                     _ actions: WithdrawActions) -> some View {
-        HStack(spacing: CouliSpacing.s1) {
-            Text(verbatim: PriceTerms.yuanSign)
-                .couliFont(.title, weight: .couliBold)
-                .accessibilityHidden(true)
-            TextField(
-                display.amountEditable ? "" : texts.text("withdraw.realname_placeholder"),
-                text: Binding(get: { snapshot.amountText }, set: actions.amount)
-            )
-            .keyboardType(.decimalPad)
-            .couliFont(.title, weight: .couliBold, monospacedDigits: true)
-            .disabled(!editable)
-            .accessibilityLabel(Text(verbatim: texts.text("withdraw.amount_label")))
-            .accessibilityIdentifier("withdraw.input")
-        }
-        .padding(.horizontal, CouliSpacing.s3)
-        .frame(minWidth: 160, maxWidth: .infinity, minHeight: CouliHitTarget.minimum + CouliSpacing.s3)
-        // 设计稿：带边框的金额框；不可输入（待确认、提交中、30304）时浅底
-        .background(
-            RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                .fill(editable ? Color.clear : CouliColor.backgroundMuted)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous).stroke(CouliColor.borderControl)
+    func amountField(_ display: WithdrawRulesDisplay, _ flowState: FlowState,
+                     editable: Bool, _ actions: WithdrawActions) -> some View {
+        WithdrawAmountBox(
+            text: Binding(get: { controller.state.amountText }, set: actions.amount),
+            placeholder: display.amountEditable ? nil : texts.text("withdraw.realname_placeholder"),
+            label: texts.text("withdraw.amount_label"), editable: editable,
+            muted: display.amountEditable && !editable, hasError: hasAmountError(flowState)
         )
     }
 
     func quickRow(_ quick: [Int64], editable: Bool, _ actions: WithdrawActions) -> some View {
-        CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s2) {
+        CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: 0) {
             ForEach(quick, id: \.self) { fen in
-                CouliButton(WalletMoney.text(fen), kind: .secondary, size: .compact, isEnabled: editable,
-                            accessibilityLabel: texts.format(
-                                "withdraw.spoken.amount",
-                                ["amount": WalletMoney.spoken(fen)]
-                            )) {
+                WithdrawQuickChip(
+                    fen: fen,
+                    spoken: texts.format("withdraw.spoken.amount", ["amount": WalletMoney.spoken(fen)]),
+                    isEnabled: editable
+                ) {
                     actions.quick(fen)
                 }
-                .accessibilityIdentifier("withdraw.quick.\(fen)")
             }
         }
     }
 
+    /// 金额框要不要画红边：字段错误，或金额类提交错误（G-W13）。
+    func hasAmountError(_ flowState: FlowState) -> Bool {
+        flowState.fieldErrorKey != nil || amountError(flowState) != nil
+    }
+
+    /// 金额框下显示的提交错误（G-W13）：说的是提交时的金额，用户改了金额就不再显示（只管显示，`flow.error` 不动）。
+    func amountError(_ flowState: FlowState) -> Notice? {
+        guard let error = flowState.error, WithdrawErrorPlacement.belowAmountBox(error.key),
+              error.id != staleAmountErrorId else { return nil }
+        return error
+    }
+
+    /// 金额框下的错误（W49、W50）：字段错误（20001）与金额类提交错误（G-W13）同一位置，16 三角 + 14 红字；按事件编号播报一次。
     @ViewBuilder func fieldError(_ flowState: FlowState) -> some View {
         if let key = flowState.fieldErrorKey {
-            Text(verbatim: texts.text(key))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.statusErrorText)
-                .fixedSize(horizontal: false, vertical: true)
+            fieldErrorRow(texts.text(key), event: flowState.fieldErrorId, focus: false)
+        } else if let error = amountError(flowState) {
+            fieldErrorRow(error.message(texts), event: error.id, focus: true)
+        }
+    }
+
+    /// `focus`：字段错误由页面的 `onChange(fieldErrorId)` 移读屏焦点；金额类提交错误没有这个事件，在这里移一次。
+    func fieldErrorRow(_ text: String, event: Int, focus: Bool) -> some View {
+        HStack(alignment: .top, spacing: CouliSpacing.s1) {
+            WalletErrorIcon(probe: "withdraw.fieldError.icon")
+            RecordText(text, style: .footnote, color: CouliColor.statusErrorText, probe: "withdraw.fieldError.text")
                 .accessibilityFocused($fieldErrorFocused)
                 .accessibilityIdentifier("withdraw.fieldError")
-                .task(id: flowState.fieldErrorId) { WalletAnnounce.post(texts.text(key), assertive: true) }
+        }
+        .walletProbe("withdraw.fieldError", role: "error")
+        .task(id: event) {
+            // 从收款账号页、规则页返回时 task 会重跑：同一事件只播报、移焦点一次
+            guard spokenFieldError != event else { return }
+            spokenFieldError = event
+            WalletAnnounce.post(text, assertive: true)
+            if focus {
+                fieldErrorFocused = true
+            }
         }
     }
 
@@ -247,20 +267,34 @@ extension WithdrawScreen {
             EmptyView()
         case .calculating:
             // 「计算中…」不播报，只读结果（A11yAnnounce）
-            Text(verbatim: texts.text("withdraw.estimate.calculating"))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .accessibilityHidden(true)
-                .accessibilityIdentifier("withdraw.calculating")
+            HStack(spacing: CouliSpacing.s2) {
+                WalletSpinner(probe: "withdraw.calculating.spinner")
+                RecordText(texts.text("withdraw.estimate.calculating"), style: .footnote,
+                           color: CouliColor.textSecondary, probe: "withdraw.calculating")
+            }
+            .frame(minHeight: WithdrawMetric.estimateRowMinHeight)
+            .walletProbe("withdraw.estimate.row", role: "row")
+            .accessibilityHidden(true)
+            .accessibilityIdentifier("withdraw.calculating")
         case let .shown(line, _):
             HStack(spacing: CouliSpacing.s1) {
-                Text(verbatim: estimateText(line))
-                    .couliFont(.footnote, monospacedDigits: true)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("withdraw.estimate")
-                WalletHelpButton(label: texts.text("wallet.help.fee_tax_label")) { feeHelp = true }
+                WithdrawEstimateText(line: estimateText(line), net: estimateNet(line))
+                WalletIconButton(.help, base: CouliGuideMetric.iconInline - 2, relativeTo: .footnote,
+                                 label: texts.text("wallet.help.fee_tax_label"), probe: "withdraw.estimate.help") {
+                    feeHelp = true
+                }
             }
+            .frame(minHeight: WithdrawMetric.estimateRowMinHeight)
+            .walletProbe("withdraw.estimate.row", role: "row")
+        }
+    }
+
+    func estimateNet(_ line: EstimateLine) -> String {
+        switch line {
+        case .hidden:
+            ""
+        case let .netOnly(net), let .full(net, _, _):
+            WalletMoney.text(net)
         }
     }
 

@@ -427,6 +427,22 @@ wallet_visual_tests() {
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"
+# APP-09v-c：提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh 带参数时不走默认清单，这里显式给全 14 个类；同一 DerivedData，不重复构建）
+withdraw_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/withdraw-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:WalletCoreTests/WalletVectorTests -only-testing:WalletCoreTests/WithdrawVisualFixtureTests \
+        -only-testing:CouliTests/WithdrawVisualFundsGuardTests -only-testing:CouliTests/WithdrawVisualMoneyTests \
+        -only-testing:CouliTests/WithdrawVisualOracleTests -only-testing:CouliTests/WithdrawVisualLayoutTests \
+        -only-testing:CouliTests/WithdrawVisualPendingTests -only-testing:CouliTests/WithdrawVisualStateTests \
+        -only-testing:CouliTests/WithdrawVisualAdaptTests -only-testing:CouliTests/WithdrawVisualPayoutSharedTests \
+        -only-testing:CouliTests/WithdrawVisualSnapshotTests -only-testing:CouliTests/WithdrawVisualErrorTests \
+        -only-testing:CouliUITests/WithdrawVisualUITests -only-testing:CouliUITests/WithdrawVisualLookUITests \
+        -only-testing:CouliUITests/WithdrawVisualAmountUITests
+}
+
+# $1 = "platform=iOS Simulator,id=<UDID>"
 # APP-09v-b：提现记录视觉 b 组（tools/testing/records-visual-tests.sh 默认清单 10 个类，这里显式给全；同一 DerivedData，不重复构建）
 records_visual_tests() {
     local udid="${1##*id=}"
@@ -530,6 +546,7 @@ if [ "$FAST" -eq 0 ]; then
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
     step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
     step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
+    step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" withdraw_visual_tests "$DEST"
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \

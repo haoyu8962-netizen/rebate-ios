@@ -31,7 +31,8 @@ public struct FlowActions {
     }
 }
 
-/// 待确认卡（WithdrawPendingConfirm / PayoutAccountPendingConfirm 一族）：alert 角色、标题 + 说明 + 两个按钮（在途时都置灰）+ 卡内提示。
+/// 待确认卡（WithdrawPendingConfirm / PayoutAccountPendingConfirm 一族，W56–W59）：白卡 → 警告提示块（标题 + 说明）→ 灰底明细（有才画）→
+/// 两个等宽按钮（在途时都置灰）→ 忙碌状态行 / 警告提示块 → 注释与链接同行。
 struct PendingCard: View {
     let texts: WalletTexts
     let pending: PendingView
@@ -47,7 +48,7 @@ struct PendingCard: View {
     let actionsEnabled: Bool
     let actions: FlowActions
     var extra: AnyView?
-    /// 说明行右侧的链接（提现：【查看提现记录 ›】）。
+    /// 注释行右侧的链接（提现：【查看提现记录 ›】）。
     var link: Link?
 
     struct Link {
@@ -55,26 +56,21 @@ struct PendingCard: View {
         let action: () -> Void
     }
 
+    /// 在途时执行器把提示设成 `error.40901`，与状态行同一句：只画状态行、只播报一次。
+    private static let busyKey = "error.40901"
+
     var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            // 设计稿 WithdrawPendingConfirm：白卡里先是浅黄警示块（三角 + 标题 + 说明），再是明细浅底块、两个等宽按钮、说明
-            HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                    .accessibilityHidden(true)
+            WalletWarningBlock(iconProbe: "pending.icon") {
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                    Text(verbatim: texts.text("pending_confirm.title"))
-                        .couliFont(.footnote, weight: .couliSemibold)
-                    Text(verbatim: desc)
-                        .couliFont(.footnote)
+                    RecordText(texts.text("pending_confirm.title"), style: .footnote, weight: .couliSemibold,
+                               color: CouliColor.statusWarningText, probe: "pending.title")
+                    RecordText(desc, style: .footnote, color: CouliColor.statusWarningText,
+                               monospacedDigits: true, probe: "pending.desc")
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .foregroundColor(CouliColor.statusWarningText)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(CouliSpacing.s3)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card).fill(CouliColor.statusWarningText.opacity(0.1))
-            )
+            .walletProbe("pending.alert", role: "alert")
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("pending.text")
@@ -89,7 +85,11 @@ struct PendingCard: View {
                 extra
                     .padding(CouliSpacing.s3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: CouliRadius.card).fill(CouliColor.backgroundMuted))
+                    .background(
+                        RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
+                            .fill(CouliColor.backgroundMuted)
+                    )
+                    .walletProbe("pending.detail", role: "detail")
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: CouliSpacing.s3) {
@@ -101,36 +101,79 @@ struct PendingCard: View {
                     confirmButton
                 }
             }
-            if let notice {
-                Text(verbatim: notice.message(texts))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("pending.notice")
-                    .task(id: notice.id) { WalletAnnounce.post(notice.message(texts), assertive: notice.assertive) }
+            if busy {
+                busyRow
             }
-            CouliFlowLayout(horizontalSpacing: CouliSpacing.s3, verticalSpacing: CouliSpacing.s1) {
-                Text(verbatim: note)
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let link {
-                    CouliButton(link.title, kind: .text, size: .compact, action: link.action)
-                        .fixedSize()
-                        .accessibilityIdentifier("pending.records")
-                        .couliFlowPushTrailing(.inlineOnly)
-                }
+            if let notice, !(busy && notice.key == Self.busyKey) {
+                noticeBlock(notice)
             }
+            noteRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .couliCard()
+        .walletProbe("pending.card", role: "card")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pending.card")
     }
 
+    /// 忙碌状态行（W58，role=status）：16 转圈 +「正在处理，请稍候」。
+    private var busyRow: some View {
+        let text = texts.text(Self.busyKey)
+        return HStack(spacing: CouliSpacing.s2) {
+            WalletSpinner(probe: "pending.busy.spinner")
+            RecordText(text, style: .footnote, color: CouliColor.textSecondary, probe: "pending.busy.text")
+        }
+        .walletProbe("pending.busy", role: "status")
+        .accessibilityElement(children: .combine)
+        .task(id: notice?.id) {
+            if let notice, notice.key == Self.busyKey {
+                WalletAnnounce.post(notice.message(texts), assertive: notice.assertive)
+            }
+        }
+    }
+
+    /// 卡内警告提示块（W59 / G-W17：40901、retry_later、cannot_confirm）。
+    private func noticeBlock(_ notice: Notice) -> some View {
+        let text = notice.message(texts)
+        return WalletWarningBlock(iconProbe: "pending.noticeBlock.icon") {
+            RecordText(text, style: .footnote, color: CouliColor.statusWarningText, probe: "pending.noticeBlock.text")
+                .accessibilityIdentifier("pending.notice")
+        }
+        .walletProbe("pending.noticeBlock", role: "notice")
+        .task(id: notice.id) { WalletAnnounce.post(text, assertive: notice.assertive) }
+    }
+
+    /// 注释 12 与链接同一行（W57）；放不下时链接换到下一行。
+    @ViewBuilder private var noteRow: some View {
+        let noteText = RecordText(note, style: .caption, color: CouliColor.textSecondary, probe: "pending.note")
+        if let link {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: CouliSpacing.s3) {
+                    noteText
+                    Spacer(minLength: 0)
+                    linkButton(link)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    noteText
+                    linkButton(link)
+                }
+            }
+        } else {
+            noteText
+        }
+    }
+
+    private func linkButton(_ link: Link) -> some View {
+        WithdrawLinkButton(title: link.title, probe: "pending.records", inset: 0, chevron: true, action: link.action)
+            .fixedSize()
+            .accessibilityIdentifier("pending.records")
+    }
+
     var abandonButton: some View {
         CouliButton(abandonTitle, kind: .secondary, isEnabled: actionsEnabled && !blocked, fillsWidth: true,
-                    action: actions.askAbandon)
+                    labelProbeID: "pending.abandon.label", horizontalPadding: CouliSpacing.s2,
+                    weight: .couliMedium, mutedWhenDisabled: true, action: actions.askAbandon)
+            .walletProbe("pending.abandon", role: "button")
             .accessibilityIdentifier("pending.abandon")
     }
 
@@ -138,30 +181,84 @@ struct PendingCard: View {
         CouliButton(
             confirmTitle,
             kind: .primary,
-            isLoading: busy,
             isEnabled: actionsEnabled && !blocked,
             fillsWidth: true,
+            labelProbeID: "pending.confirm.label",
+            horizontalPadding: CouliSpacing.s2,
             action: actions.confirm
         )
+        .walletProbe("pending.confirm", role: "button")
         .accessibilityIdentifier("pending.confirm")
     }
 }
 
-/// 弹窗构造（WithdrawAbandonConfirm、WithdrawBlocked / PayoutAccountBlocked）。
+/// 放弃确认弹窗里的上一笔：提现是灰底明细（标签左、值右，W61），收款账号是一句附注。
+enum AbandonDetail {
+    struct Row {
+        let label: String
+        let value: String
+        let spoken: String
+    }
+
+    case rows([Row])
+    case note(String)
+}
+
+/// 灰底明细块 / 附注（测量 `abandon.detail`、`abandon.detail.<n>.label` / `.value`、`abandon.note`）。
+private struct AbandonDetailView: View {
+    let detail: AbandonDetail
+
+    var body: some View {
+        switch detail {
+        case let .rows(rows):
+            VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    CouliFlowLayout(horizontalSpacing: CouliSpacing.s3, verticalSpacing: 0) {
+                        RecordText(row.label, style: .footnote, color: CouliColor.textSecondary,
+                                   probe: "abandon.detail.\(index).label")
+                        RecordText(row.value, style: .footnote, color: CouliColor.textPrimary, monospacedDigits: true,
+                                   probe: "abandon.detail.\(index).value")
+                            .couliFlowPushTrailing(.inlineOnly)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: row.label + PriceTerms.spokenPause + row.spoken))
+                }
+            }
+            .padding(CouliSpacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
+                    .fill(CouliColor.backgroundMuted)
+            )
+            .walletProbe("abandon.detail", role: "detail")
+        case let .note(text):
+            RecordText(text, style: .footnote, color: CouliColor.textSecondary, probe: "abandon.note")
+        }
+    }
+}
+
+/// 弹窗构造（W60、W61，WithdrawAbandonConfirm、WithdrawBlocked / PayoutAccountBlocked）：标题居中。主次槽位见 G-W16。
 @MainActor
 enum FlowDialogs {
-    static func abandon(_ texts: WalletTexts, detail: String, actions: FlowActions) -> CouliDialog {
+    private static let probe = "flow.dialog"
+
+    static func abandon(_ texts: WalletTexts, title: String, detail: AbandonDetail,
+                        actions: FlowActions) -> CouliDialog {
         CouliDialog(
-            title: texts.text("pending_confirm.abandon"),
+            title: title,
+            centeredTitle: true,
+            probeID: probe,
+            onEscape: actions.cancelAbandon,
             // 设计稿 WithdrawAbandonConfirm：主按钮是更稳妥的【再想想】，【确定放弃】为次按钮
             primary: CouliDialogAction(texts.text("pending_confirm.abandon.cancel"), action: actions.cancelAbandon),
             secondary: CouliDialogAction(texts.text("pending_confirm.abandon.ok"), action: actions.abandon)
         ) {
-            Text(verbatim: texts.text("pending_confirm.abandon.confirm") + "\n" + detail)
-                .couliFont(.body)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("abandon.dialog")
+            VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                RecordText(texts.text("pending_confirm.abandon.confirm"), style: .footnote,
+                           color: CouliColor.textPrimary)
+                    .accessibilityIdentifier("abandon.dialog")
+                AbandonDetailView(detail: detail)
+            }
         }
     }
 
@@ -169,13 +266,13 @@ enum FlowDialogs {
                      appeal: @escaping () -> Void) -> CouliDialog {
         CouliDialog(
             title: texts.text(titleKey),
+            centeredTitle: true,
+            probeID: probe,
+            onEscape: ok,
             primary: CouliDialogAction(texts.text("cs.appeal_entry"), action: appeal),
             secondary: CouliDialogAction(texts.text("withdraw.risk_blocked.ok"), action: ok)
         ) {
-            Text(verbatim: desc)
-                .couliFont(.body)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            RecordText(desc, style: .footnote, color: CouliColor.textPrimary)
                 .accessibilityIdentifier("risk.dialog")
         }
     }

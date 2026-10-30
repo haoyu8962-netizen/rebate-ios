@@ -31,7 +31,11 @@ public struct CouliButton: View {
     private let accessibilityLabel: String?
     private let labelProbeID: String?
     private let minWidth: CGFloat?
+    private let horizontalPadding: CGFloat?
+    private let weight: Font.Weight
+    private let mutedWhenDisabled: Bool
     private let action: () -> Void
+    @Environment(\.couliButtonLabelProbe) private var inheritedLabelProbe
 
     public init(
         _ title: String,
@@ -43,9 +47,15 @@ public struct CouliButton: View {
         accessibilityLabel: String? = nil,
         labelProbeID: String? = nil,
         minWidth: CGFloat? = nil,
+        horizontalPadding: CGFloat? = nil,
+        weight: Font.Weight = .couliSemibold,
+        mutedWhenDisabled: Bool = false,
         action: @escaping () -> Void
     ) {
         self.labelProbeID = labelProbeID
+        self.horizontalPadding = horizontalPadding
+        self.weight = weight
+        self.mutedWhenDisabled = mutedWhenDisabled
         self.minWidth = minWidth
         self.title = title
         self.kind = kind
@@ -67,18 +77,19 @@ public struct CouliButton: View {
                         .accessibilityHidden(true)
                 }
                 Text(verbatim: title)
-                    .couliFont(size == .regular ? .body : .footnote, weight: .couliSemibold)
+                    .couliFont(size == .regular ? .body : .footnote, weight: weight)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     // 按钮字测量（APP-06v G-D13：200% 底栏排法的测试依据）；nil 或没有接收方时不加任何视图。
                     .couliTextNaturalProbe(
-                        labelProbeID, role: "button-label", text: title,
-                        style: size == .regular ? .body : .footnote, weight: .couliSemibold
+                        labelProbeID ?? inheritedLabelProbe, role: "button-label", text: title,
+                        style: size == .regular ? .body : .footnote, weight: weight
                     )
             }
             .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
-        .buttonStyle(CouliButtonStyle(kind: kind, size: size, enabled: isEnabled && !isLoading, minWidth: minWidth))
+        .buttonStyle(CouliButtonStyle(kind: kind, size: size, enabled: isEnabled && !isLoading, minWidth: minWidth,
+                                      horizontalPadding: horizontalPadding, mutedWhenDisabled: mutedWhenDisabled))
         .disabled(!isEnabled || isLoading)
         .accessibilityLabel(Text(verbatim: accessibilityLabel ?? title))
         .accessibilityAddTraits(isLoading ? .updatesFrequently : [])
@@ -91,6 +102,10 @@ struct CouliButtonStyle: ButtonStyle {
     let enabled: Bool
     /// 视觉最小宽（APP-09v 钱包【提现】96，W3）；nil 时只有命中区下限 44（既有按钮不变）。
     var minWidth: CGFloat?
+    /// 左右内边距（APP-09v-c 待确认卡两等宽按钮按稿 8，七个字才放得下一行）；nil 时按尺寸取令牌（既有按钮不变）。
+    var horizontalPadding: CGFloat?
+    /// 次按钮不可用时取禁用实底、去描边（WithdrawPendingBusy）；缺省 false = 白底描边（既有按钮不变）。
+    var mutedWhenDisabled = false
 
     /// 主按钮令牌路径：button.primary.<default|pressed|disabled>.<part>。
     static func primaryToken(enabled: Bool, pressed: Bool, part: String) -> String {
@@ -116,7 +131,8 @@ struct CouliButtonStyle: ButtonStyle {
         case .primary:
             CouliColor.token(Self.primaryToken(enabled: enabled, pressed: pressed, part: "background"))
         case .secondary:
-            pressed ? CouliColor.backgroundMuted : CouliColor.backgroundSurface
+            mutedDisabled ? CouliColor.token("button.primary.disabled.background")
+                : (pressed ? CouliColor.backgroundMuted : CouliColor.backgroundSurface)
         case .text:
             pressed ? CouliColor.brandSubtle : .clear
         case .inverse:
@@ -125,10 +141,15 @@ struct CouliButtonStyle: ButtonStyle {
         }
     }
 
+    private var mutedDisabled: Bool {
+        mutedWhenDisabled && !enabled
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let minHeight = size == .regular ? CouliComponentMetric.buttonMinHeight : CouliHitTarget.minimum
-        let horizontal = size == .regular ? CouliComponentMetric.buttonPaddingInline : CouliSpacing.s4
+        let horizontal = horizontalPadding
+            ?? (size == .regular ? CouliComponentMetric.buttonPaddingInline : CouliSpacing.s4)
         let vertical = size == .regular ? CouliComponentMetric.buttonPaddingBlock : CouliSpacing.s2
         return configuration.label
             .foregroundColor(Self.foreground(kind: kind, enabled: enabled, pressed: pressed))
@@ -145,11 +166,23 @@ struct CouliButtonStyle: ButtonStyle {
             .overlay(
                 RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
                     .strokeBorder(
-                        kind == .secondary ? CouliColor.borderControl : .clear,
+                        kind == .secondary && !mutedDisabled ? CouliColor.borderControl : .clear,
                         lineWidth: CouliComponentMetric.controlBorderWidth
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous))
             .modifier(CouliFocusRing(cornerRadius: CouliRadius.button, onBrand: kind == .inverse))
+    }
+}
+
+public extension EnvironmentValues {
+    /// 按钮字的测量编号（环境传入）：`labelProbeID` 没给时用它。只影响测量上报，不改外观（缺省 nil）。
+    @Entry var couliButtonLabelProbe: String?
+}
+
+public extension View {
+    /// 给这个视图里的 `CouliButton` 指定按钮字测量编号（APP-09v-c 提现页【提交】：调用字面锁定，不能多加实参）。
+    func couliButtonLabelProbe(_ id: String?) -> some View {
+        environment(\.couliButtonLabelProbe, id)
     }
 }

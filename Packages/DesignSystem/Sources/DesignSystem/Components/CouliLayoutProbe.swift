@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 布局原始测量的接收方（APP-11v）：组件把实际布局框（屏幕坐标）、文字的无约束自然宽度与字号报给它。
 ///
@@ -137,6 +138,8 @@ struct CouliProbeModifier: ViewModifier {
                             .onAppear { probe.report(record(frame), from: instance) }
                             .onChange(of: frame) { probe.report(record($0), from: instance) }
                             .onChange(of: natural) { _ in probe.report(record(frame), from: instance) }
+                            // 框与自然宽不变、只有文字变（输入框的当前内容）时也要报新文字（APP-09v-c）
+                            .onChange(of: text) { _ in probe.report(record(frame), from: instance) }
                     }
                 )
                 .onDisappear { probe.remove(id, from: instance) }
@@ -262,8 +265,35 @@ struct CouliTextNaturalProbeModifier: ViewModifier {
                         })
                         .accessibilityHidden(true)
                 }
-                .modifier(CouliProbeModifier(id: id, role: role, card: "", text: text, natural: natural,
+                .modifier(CouliProbeModifier(id: id, role: role, card: "", text: text,
+                                             natural: natural > 0 ? natural : fontNatural,
                                              fontSize: size, base: style.baseSize))
+        } else {
+            content
+        }
+    }
+
+    /// 隐藏副本的布局回调没到时（放进 `ViewThatFits`、按钮样式等容器里可能一直不来，APP-09v-c 实测恒为 0）按同一字体量的单行宽度。
+    private var fontNatural: CGFloat {
+        let uiWeight: UIFont.Weight = switch weight {
+        case .couliBold: .bold
+        case .couliSemibold: .semibold
+        case .couliMedium: .medium
+        default: .regular
+        }
+        return (text as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: size, weight: uiWeight)]).width
+    }
+}
+
+/// 弹窗测量：没有编号时原样返回，不加任何视图。
+struct DialogProbe: ViewModifier {
+    let id: String?
+    let part: String
+    var text = ""
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.couliProbe("\(id).\(part)", role: "dialog", text: text)
         } else {
             content
         }

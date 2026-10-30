@@ -90,7 +90,8 @@ public struct PayoutAccountScreen: View {
         }
         .couliDialog(isPresented: flowState.abandonConfirmKey != nil) {
             FlowDialogs.abandon(
-                texts, detail: texts.text("pending_confirm.payout_account.abandon_note"), actions: flowActions
+                texts, title: texts.text("pending_confirm.abandon"),
+                detail: .note(texts.text("pending_confirm.payout_account.abandon_note")), actions: flowActions
             )
         }
         .couliDialog(isPresented: flowState.riskDialog != nil, restoreFocusTo: $saveFocused) {

@@ -81,6 +81,8 @@ extension WalletDraftTexts {
         "withdraw.guide.payout": "去绑定收款账号",
         "withdraw.guide.labor": "去签署劳务协议",
         "withdraw.guide.help": "提现规则",
+        // G-W15（APP-09v-c）：30309 引导框里的规则入口，画板措辞，去向同页底「提现规则」
+        "withdraw.guide.rules": "查看提现规则",
         // BR-TEXT-14 表 C（措辞取自设计稿 WithdrawBlocked）
         "withdraw.risk_blocked.desc": "这笔提现没有提交，金额没有冻结，可提现余额不变，已填的金额保留在本页。如有疑问，可以联系客服申诉，客服核实后会帮你登记。",
         "withdraw.risk_blocked.ok": "知道了",

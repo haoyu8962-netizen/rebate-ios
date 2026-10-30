@@ -24,6 +24,8 @@ public struct CouliDialog: View {
     private let centeredTitle: Bool
     private let primary: CouliDialogAction
     private let secondary: CouliDialogAction?
+    private let probeID: String?
+    private let onEscape: (() -> Void)?
     @AccessibilityFocusState private var titleFocused: Bool
 
     public init(title: String, message: String? = nil, primary: CouliDialogAction,
@@ -32,15 +34,22 @@ public struct CouliDialog: View {
         self.message = message
         content = nil
         centeredTitle = false
+        probeID = nil
+        onEscape = nil
         self.primary = primary
         self.secondary = secondary
     }
 
     /// 自定义正文（如首启隐私弹窗的要点列表与协议链接，APP-02b）。正文同样放不下时滚动，标题与按钮行固定。
-    /// - Parameter centeredTitle: 标题居中（设计稿 LaunchPrivacy、LaunchSecondNotice 等）。
+    /// - Parameters:
+    ///   - centeredTitle: 标题居中（设计稿 LaunchPrivacy、LaunchSecondNotice 等）。
+    ///   - probeID: 测量编号前缀（缺省 nil 不报、外观不变）：`.panel` 面板、`.title` 标题框、`.primary` / `.secondary` 按钮（text = 按钮字）。
+    ///   - onEscape: 读屏「返回」手势（缺省 nil 不处理）；传安全选项的回调，与对应按钮同一个。
     public init(
         title: String,
         centeredTitle: Bool = false,
+        probeID: String? = nil,
+        onEscape: (() -> Void)? = nil,
         primary: CouliDialogAction,
         secondary: CouliDialogAction? = nil,
         @ViewBuilder content: () -> some View
@@ -49,6 +58,8 @@ public struct CouliDialog: View {
         message = nil
         self.content = AnyView(content())
         self.centeredTitle = centeredTitle
+        self.probeID = probeID
+        self.onEscape = onEscape
         self.primary = primary
         self.secondary = secondary
     }
@@ -63,6 +74,7 @@ public struct CouliDialog: View {
                 .frame(maxWidth: centeredTitle ? .infinity : nil)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityFocused($titleFocused)
+                .modifier(DialogProbe(id: probeID, part: "title", text: title))
             if let content {
                 ScrollingBody {
                     content
@@ -86,8 +98,10 @@ public struct CouliDialog: View {
             RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous).fill(CouliColor.backgroundSurface)
                 .couliShadow(.floating)
         )
+        .modifier(DialogProbe(id: probeID, part: "panel"))
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
+        .modifier(DialogEscape(action: onEscape))
         .task {
             // 等面板挂上无障碍树、底层隐藏生效后再把读屏焦点放到标题（adaptation-a11y-spec §4）。
             try? await Task.sleep(nanoseconds: ModalFocus.titleFocusDelayNanos)
@@ -95,20 +109,25 @@ public struct CouliDialog: View {
         }
     }
 
+    private func button(_ action: CouliDialogAction, kind: CouliButtonKind, part: String) -> some View {
+        CouliButton(action.title, kind: kind, fillsWidth: true, action: action.action)
+            .modifier(DialogProbe(id: probeID, part: part, text: action.title))
+    }
+
     private var buttons: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: CouliSpacing.s3) {
                 if let secondary {
-                    CouliButton(secondary.title, kind: .secondary, fillsWidth: true, action: secondary.action)
+                    button(secondary, kind: .secondary, part: "secondary")
                         .frame(maxWidth: .infinity)
                 }
-                CouliButton(primary.title, kind: .primary, fillsWidth: true, action: primary.action)
+                button(primary, kind: .primary, part: "primary")
                     .frame(maxWidth: .infinity)
             }
             VStack(spacing: CouliSpacing.s3) {
-                CouliButton(primary.title, kind: .primary, fillsWidth: true, action: primary.action)
+                button(primary, kind: .primary, part: "primary")
                 if let secondary {
-                    CouliButton(secondary.title, kind: .secondary, fillsWidth: true, action: secondary.action)
+                    button(secondary, kind: .secondary, part: "secondary")
                 }
             }
         }

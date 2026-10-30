@@ -52,6 +52,10 @@ public struct WithdrawScreen: View {
     @ObservedObject var context: WalletPageContext
     @State var toast: CouliToastMessage?
     @State var feeHelp = false
+    /// 改金额后不再显示的金额类提交错误（事件编号），见 `amountError`。
+    @State var staleAmountErrorId: Int?
+    /// 金额框下的错误已经播报到哪个事件。
+    @State var spokenFieldError: Int?
     @AccessibilityFocusState var submitFocused: Bool
     @AccessibilityFocusState var fieldErrorFocused: Bool
 
@@ -89,7 +93,8 @@ public struct WithdrawScreen: View {
             }
         }
         .couliDialog(isPresented: flowState.abandonConfirmKey != nil) {
-            FlowDialogs.abandon(texts, detail: pendingDetail(flowState, snapshot), actions: flowActions)
+            FlowDialogs.abandon(texts, title: texts.text("pending_confirm.withdraw.abandon"),
+                                detail: pendingDetail(flowState, snapshot), actions: flowActions)
         }
         .couliDialog(isPresented: flowState.riskDialog != nil, restoreFocusTo: $submitFocused) {
             FlowDialogs.risk(texts, titleKey: flowState.riskDialog?.titleKey ?? "error.44001",
@@ -111,6 +116,8 @@ public struct WithdrawScreen: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .onChange(of: flowState.fieldErrorId) { _ in fieldErrorFocused = true }
+        // 同上，读执行器此刻的错误
+        .onChange(of: snapshot.amountText) { _ in staleAmountErrorId = flow.state.error?.id }
         .task { controller.start() }
     }
 
@@ -136,7 +143,8 @@ public struct WithdrawScreen: View {
                         readStatus(snapshot, actions)
                             .frame(minHeight: 240)
                     }
-                    .padding(CouliSpacing.s4)
+                    .padding(.top, CouliSpacing.s2)
+                    .padding(.horizontal, CouliSpacing.s4)
                     .frame(maxWidth: WalletLayout.maxContentWidth)
                     .frame(maxWidth: .infinity)
                 }
@@ -157,7 +165,8 @@ public struct WithdrawScreen: View {
                         infoCard(snapshot, display, actions)
                     }
                 }
-                .padding(CouliSpacing.s4)
+                .padding(.top, CouliSpacing.s2)
+                .padding(.horizontal, CouliSpacing.s4)
                 .frame(maxWidth: WalletLayout.maxContentWidth)
                 .frame(maxWidth: .infinity)
             }
@@ -173,10 +182,12 @@ public struct WithdrawScreen: View {
                 retryTitle: texts.text("wallet.retry"), retry: actions.retry
             )
             .disabled(readGate.blocked)
+            .walletProbe("withdraw.error", role: "error")
             .accessibilityIdentifier("withdraw.error")
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity)
+                .walletProbe("withdraw.loading", role: "loading")
                 .accessibilityLabel(Text(verbatim: texts.text("wallet.loading")))
                 .accessibilityIdentifier("withdraw.loading")
         }

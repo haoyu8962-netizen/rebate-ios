@@ -13,7 +13,9 @@ import SwiftUI
 /// - `earnings: true`：只在 Debug 把收益看板开关当作打开、Earnings 路由 since 当作 "1.0.0"（生产 since=null 不变）；
 /// - APP-09v-b 可选键 `records`：`{"pages": {"<游标>": <列表报文>, …}（"" = 第一页）, "details": {"<withdrawal_id>": <详情报文>},
 ///   "nowMillis": <Int>}`——`GET /v1/withdrawals` 无 cursor 回 `pages[""]`、有 cursor 回 `pages[<游标>]`（缺页 50001），
-///   `GET /v1/withdrawals/{id}` 回 `details[id]`（没有 30701）；两类回答带 `Date` 响应头 = nowMillis（生产据此校准显示时钟）。
+///   `GET /v1/withdrawals/{id}` 回 `details[id]`（没有 30701）；两类回答带 `Date` 响应头 = nowMillis（生产据此校准显示时钟）；
+/// - APP-09v-c 可选键 `withdraw`：`{"rules": <WithdrawRules 报文>, "helpLinks": {"withdraw_rules": {…}}}`——
+///   `GET /v1/withdrawals/rules` 回 `rules`（先于通用样例）；假服务 `GET /v1/config` 的 `help_links` 并入 `helpLinks`（生产不变）。
 enum DebugWalletVisual {
     static let environmentKey = "COULI_FAKE_WALLET_VISUAL"
 
@@ -71,6 +73,26 @@ enum DebugWalletVisual {
             return .answer(code: 30701, data: "null", headers: headers)
         }
         return .answer(code: 0, data: DebugFakeWallet.json(detail), headers: headers)
+    }
+
+    private static var withdraw: [String: Any]? {
+        payload?["withdraw"] as? [String: Any]
+    }
+
+    /// 注入的提现规则（APP-09v-c）；不是 rules 请求或没注入时 nil。
+    static func rulesReply(method: String, path: String) -> DebugFakeWallet.Reply? {
+        guard method == "GET", path == "/v1/withdrawals/rules", let rules = withdraw?["rules"] as? [String: Any]
+        else { return nil }
+        return .answer(code: 0, data: DebugFakeWallet.json(rules), headers: [:])
+    }
+
+    /// 配置里并入注入的 `help_links`（APP-09v-c）；不是配置请求或没注入时 nil。`base` = 假服务本来要回的配置。
+    static func configReply(method: String, path: String, base: () -> String) -> DebugFakeWallet.Reply? {
+        guard method == "GET", path == "/v1/config", let links = withdraw?["helpLinks"] as? [String: Any],
+              var config = (try? JSONSerialization.jsonObject(with: Data(base().utf8))) as? [String: Any]
+        else { return nil }
+        config["help_links"] = (config["help_links"] as? [String: Any] ?? [:]).merging(links) { $1 }
+        return .answer(code: 0, data: DebugFakeWallet.json(config), headers: [:])
     }
 
     /// HTTP 日期（RFC 7231，GMT）。
