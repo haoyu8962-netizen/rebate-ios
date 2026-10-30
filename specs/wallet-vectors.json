@@ -2210,5 +2210,421 @@
         "withdraw.sla_text": "人工审核，工作日 24 小时内处理，节假日顺延"
       }
     }
+  },
+  "visualWithdraw": {
+    "clock": {
+      "nowMillis": 1791772200000
+    },
+    "rules": {
+      "normal": {
+        "can_withdraw": true,
+        "block_code": null,
+        "block_reason": null,
+        "max_withdrawable_fen": 1200,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": [
+          500,
+          1000
+        ]
+      },
+      "estimated": {
+        "can_withdraw": true,
+        "block_code": null,
+        "block_reason": null,
+        "max_withdrawable_fen": 1200,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": 0,
+        "est_tax_fen": 0,
+        "est_net_fen": 1000,
+        "quick_amounts_fen": [
+          500,
+          1000
+        ]
+      },
+      "independent": {
+        "can_withdraw": true,
+        "block_code": null,
+        "block_reason": null,
+        "max_withdrawable_fen": 1200,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": 34,
+        "est_tax_fen": 56,
+        "est_net_fen": 876,
+        "quick_amounts_fen": [
+          500,
+          1000
+        ]
+      },
+      "stress": {
+        "can_withdraw": true,
+        "block_code": null,
+        "block_reason": null,
+        "max_withdrawable_fen": 99999999900,
+        "withdrawable_fen": 99999999999,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": 12345,
+        "est_tax_fen": 67890,
+        "est_net_fen": 87654321098,
+        "quick_amounts_fen": [
+          100,
+          10000,
+          1000000,
+          100000000
+        ]
+      },
+      "blocked_30301": {
+        "can_withdraw": false,
+        "block_code": 30301,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30302": {
+        "can_withdraw": false,
+        "block_code": 30302,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30304": {
+        "can_withdraw": false,
+        "block_code": 30304,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30305": {
+        "can_withdraw": false,
+        "block_code": 30305,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30306": {
+        "can_withdraw": false,
+        "block_code": 30306,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30307": {
+        "can_withdraw": false,
+        "block_code": 30307,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30308": {
+        "can_withdraw": false,
+        "block_code": 30308,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_30309": {
+        "can_withdraw": false,
+        "block_code": 30309,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_10004": {
+        "can_withdraw": false,
+        "block_code": 10004,
+        "block_reason": null,
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_below_min": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "below_min",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_not_multiple": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "not_multiple",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_above_max": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "above_max",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_above_method_max": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "above_method_max",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_net_too_small": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "net_too_small",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_daily_count": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "daily_count",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_monthly_count": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "monthly_count",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_payee_daily_users": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "payee_daily_users",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_self_purchase_required": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "self_purchase_required",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_account_frozen": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "account_frozen",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_payee_daily_count": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "payee_daily_count",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      },
+      "blocked_future": {
+        "can_withdraw": false,
+        "block_code": 30303,
+        "block_reason": "future",
+        "max_withdrawable_fen": 0,
+        "withdrawable_fen": 1234,
+        "daily_remaining": 1,
+        "monthly_remaining": 10,
+        "est_fee_fen": null,
+        "est_tax_fen": null,
+        "est_net_fen": null,
+        "quick_amounts_fen": []
+      }
+    },
+    "payout": {
+      "bound": {
+        "payout_method": "alipay",
+        "masked_account": "138****5678",
+        "masked_payee_name": "**三",
+        "change_remaining_this_month": 2
+      },
+      "empty": {}
+    },
+    "pending": {
+      "withdraw": {
+        "key": "visual-withdraw-original",
+        "operationId": "createWithdrawal",
+        "body": "{\"amount_fen\":1000}",
+        "account": "withdraw-visual-user",
+        "summary": "{\"amount_fen\":1000}",
+        "stateRaw": "unknown",
+        "everUnknown": true
+      },
+      "payout": {
+        "key": "visual-payout-original",
+        "operationId": "savePayoutAccount",
+        "body": "{\"payout_method\":\"alipay\",\"alipay_logon_id\":\"13800005678\",\"payee_name\":\"张三\"}",
+        "account": "withdraw-visual-user",
+        "summary": "{\"method\":\"alipay\",\"account\":\"138****5678\",\"payee\":\"**三\"}",
+        "stateRaw": "unknown",
+        "everUnknown": true
+      }
+    },
+    "pageStates": [
+      "blocked_30301",
+      "blocked_30302",
+      "blocked_30304",
+      "blocked_30305",
+      "blocked_30306",
+      "blocked_30307",
+      "blocked_30308",
+      "blocked_30309",
+      "blocked_10004",
+      "blocked_below_min",
+      "blocked_not_multiple",
+      "blocked_above_max",
+      "blocked_above_method_max",
+      "blocked_net_too_small",
+      "blocked_daily_count",
+      "blocked_monthly_count",
+      "blocked_payee_daily_users",
+      "blocked_self_purchase_required",
+      "blocked_account_frozen",
+      "blocked_payee_daily_count",
+      "blocked_future"
+    ],
+    "boards": [
+      "Withdraw",
+      "WithdrawCalculating",
+      "WithdrawEstimateFailed",
+      "WithdrawNoteNet",
+      "WithdrawRealName",
+      "WithdrawPageStates",
+      "WithdrawSubmitting",
+      "WithdrawBlocked",
+      "WithdrawPendingConfirm",
+      "WithdrawPendingBusy",
+      "WithdrawPendingStill",
+      "WithdrawAbandonConfirm",
+      "WithdrawAbandoned",
+      "WithdrawAbandonCompleted-v2",
+      "WithdrawDark",
+      "WithdrawWechat"
+    ]
   }
 }
