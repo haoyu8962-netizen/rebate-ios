@@ -782,5 +782,1433 @@
         "withdraw_enabled": true
       }
     }
+  },
+  "visualWithdrawRecords": {
+    "description": "APP-09v-b 提现记录视觉；独立 visual 组，旧判定与 a 的 visualWallet 不改。金额仅为服务端 fixture。",
+    "clock": {
+      "nowMillis": 1791772200000,
+      "zone": "Asia/Shanghai"
+    },
+    "details": {
+      "pending": {
+        "withdrawal_id": "PENDING",
+        "status": "PENDING_REVIEW",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "failed": {
+        "withdrawal_id": "FAILED",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 800,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 800,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-08T11:30:00+08:00",
+        "channel_order_id": null
+      },
+      "paid": {
+        "withdrawal_id": "PAID",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 500,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 500,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-09-27T15:20:00+08:00",
+        "channel_order_id": "20260928200040011100"
+      },
+      "rejected": {
+        "withdrawal_id": "REJECTED",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 600,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 600,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_INFO_INVALID",
+        "fail_action": null,
+        "created_at": "2026-09-25T09:20:00+08:00",
+        "channel_order_id": null
+      },
+      "auto_deciding": {
+        "withdrawal_id": "AUTO_DECIDING",
+        "status": "PENDING_REVIEW",
+        "review_mode": null,
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "auto_waiting": {
+        "withdrawal_id": "AUTO_WAITING",
+        "status": "PAYING",
+        "review_mode": "auto",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "paying": {
+        "withdrawal_id": "PAYING",
+        "status": "PAYING",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "approved": {
+        "withdrawal_id": "APPROVED",
+        "status": "APPROVED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "auto_review": {
+        "withdrawal_id": "AUTO_REVIEW",
+        "status": "PENDING_REVIEW",
+        "review_mode": "auto",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "failed_other": {
+        "withdrawal_id": "FAILED_OTHER",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "tax": {
+        "withdrawal_id": "TAX",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 80,
+        "net_fen": 920,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": "TAX20261012000001"
+      },
+      "manual": {
+        "withdrawal_id": "MANUAL",
+        "status": "PAID_MANUAL",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "bank_card",
+        "payout_channel_name": "招商银行",
+        "masked_account": "尾号 1234",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": "MANUAL202610120001"
+      },
+      "unknown": {
+        "withdrawal_id": "UNKNOWN",
+        "status": "FUTURE_STATUS",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": "MUST_NOT_COPY"
+      },
+      "wechat": {
+        "withdrawal_id": "WECHAT",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "wechat",
+        "payout_channel_name": "微信零钱",
+        "masked_account": "**三",
+        "reason_code": null,
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "independent": {
+        "withdrawal_id": "INDEPENDENT",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 12345,
+        "fee_fen": 123,
+        "tax_fen": 456,
+        "net_fen": 9876,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": "12345678901234567890123456789012"
+      },
+      "stress": {
+        "withdrawal_id": "STRESS",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 999999999999,
+        "fee_fen": 123456789,
+        "tax_fen": 987654321,
+        "net_fen": 876543210987,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": "12345678901234567890123456789012"
+      },
+      "boundary": {
+        "withdrawal_id": "BOUNDARY",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-09-30T16:01:00Z",
+        "channel_order_id": null
+      },
+      "focus": {
+        "withdrawal_id": "FOCUS",
+        "status": "PAID_API",
+        "review_mode": "manual",
+        "amount_fen": 700,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 700,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": null,
+        "fail_action": null,
+        "created_at": "2026-09-01T08:00:00+08:00",
+        "channel_order_id": "FOCUS202609010001"
+      },
+      "reject_negative_balance": {
+        "withdrawal_id": "REJECT_NEGATIVE_BALANCE",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "NEGATIVE_BALANCE",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "reject_risk_suspect": {
+        "withdrawal_id": "REJECT_RISK_SUSPECT",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "RISK_SUSPECT",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "reject_order_abnormal": {
+        "withdrawal_id": "REJECT_ORDER_ABNORMAL",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "ORDER_ABNORMAL",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "reject_payee_info_invalid": {
+        "withdrawal_id": "REJECT_PAYEE_INFO_INVALID",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_INFO_INVALID",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "reject_user_request": {
+        "withdrawal_id": "REJECT_USER_REQUEST",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "USER_REQUEST",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "reject_other": {
+        "withdrawal_id": "REJECT_OTHER",
+        "status": "REJECTED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "OTHER",
+        "fail_action": null,
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "fail_payee_not_exist": {
+        "withdrawal_id": "FAIL_PAYEE_NOT_EXIST",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_NOT_EXIST",
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "fail_payee_user_info_error": {
+        "withdrawal_id": "FAIL_PAYEE_USER_INFO_ERROR",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_USER_INFO_ERROR",
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      },
+      "fail_payee_account_status_error": {
+        "withdrawal_id": "FAIL_PAYEE_ACCOUNT_STATUS_ERROR",
+        "status": "FAILED",
+        "review_mode": "manual",
+        "amount_fen": 1000,
+        "fee_fen": 0,
+        "tax_fen": 0,
+        "net_fen": 1000,
+        "payout_channel": "alipay",
+        "payout_channel_name": "支付宝",
+        "masked_account": "138****5678",
+        "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+        "fail_action": "change_payout_account",
+        "created_at": "2026-10-12T10:00:00+08:00",
+        "channel_order_id": null
+      }
+    },
+    "pages": {
+      "list": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          },
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "empty": {
+        "items": [],
+        "next_cursor": null
+      },
+      "same_month": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "APPROVED",
+            "status": "APPROVED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "pinned": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          },
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "next": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FOCUS",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 700,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 700,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-01T08:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "pagination": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": "next /?&="
+      },
+      "pending": {
+        "items": [
+          {
+            "withdrawal_id": "PENDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "failed": {
+        "items": [
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "paid": {
+        "items": [
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "rejected": {
+        "items": [
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "auto_deciding": {
+        "items": [
+          {
+            "withdrawal_id": "AUTO_DECIDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": null,
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "auto_waiting": {
+        "items": [
+          {
+            "withdrawal_id": "AUTO_WAITING",
+            "status": "PAYING",
+            "review_mode": "auto",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "paying": {
+        "items": [
+          {
+            "withdrawal_id": "PAYING",
+            "status": "PAYING",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "approved": {
+        "items": [
+          {
+            "withdrawal_id": "APPROVED",
+            "status": "APPROVED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "auto_review": {
+        "items": [
+          {
+            "withdrawal_id": "AUTO_REVIEW",
+            "status": "PENDING_REVIEW",
+            "review_mode": "auto",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "failed_other": {
+        "items": [
+          {
+            "withdrawal_id": "FAILED_OTHER",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "tax": {
+        "items": [
+          {
+            "withdrawal_id": "TAX",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 80,
+            "net_fen": 920,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "manual": {
+        "items": [
+          {
+            "withdrawal_id": "MANUAL",
+            "status": "PAID_MANUAL",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "bank_card",
+            "payout_channel_name": "招商银行",
+            "masked_account": "尾号 1234",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "unknown": {
+        "items": [
+          {
+            "withdrawal_id": "UNKNOWN",
+            "status": "FUTURE_STATUS",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "wechat": {
+        "items": [
+          {
+            "withdrawal_id": "WECHAT",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "wechat",
+            "payout_channel_name": "微信零钱",
+            "masked_account": "**三",
+            "reason_code": null,
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "independent": {
+        "items": [
+          {
+            "withdrawal_id": "INDEPENDENT",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 12345,
+            "fee_fen": 123,
+            "tax_fen": 456,
+            "net_fen": 9876,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "stress": {
+        "items": [
+          {
+            "withdrawal_id": "STRESS",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 999999999999,
+            "fee_fen": 123456789,
+            "tax_fen": 987654321,
+            "net_fen": 876543210987,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "boundary": {
+        "items": [
+          {
+            "withdrawal_id": "BOUNDARY",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-30T16:01:00Z"
+          }
+        ],
+        "next_cursor": null
+      },
+      "focus": {
+        "items": [
+          {
+            "withdrawal_id": "FOCUS",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 700,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 700,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-01T08:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_negative_balance": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_NEGATIVE_BALANCE",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "NEGATIVE_BALANCE",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_risk_suspect": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_RISK_SUSPECT",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "RISK_SUSPECT",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_order_abnormal": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_ORDER_ABNORMAL",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "ORDER_ABNORMAL",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_payee_info_invalid": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_PAYEE_INFO_INVALID",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_user_request": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_USER_REQUEST",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "USER_REQUEST",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "reject_other": {
+        "items": [
+          {
+            "withdrawal_id": "REJECT_OTHER",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "OTHER",
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "fail_payee_not_exist": {
+        "items": [
+          {
+            "withdrawal_id": "FAIL_PAYEE_NOT_EXIST",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_NOT_EXIST",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "fail_payee_user_info_error": {
+        "items": [
+          {
+            "withdrawal_id": "FAIL_PAYEE_USER_INFO_ERROR",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_USER_INFO_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "fail_payee_account_status_error": {
+        "items": [
+          {
+            "withdrawal_id": "FAIL_PAYEE_ACCOUNT_STATUS_ERROR",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-12T10:00:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "board_auto_deciding": {
+        "items": [
+          {
+            "withdrawal_id": "AUTO_DECIDING",
+            "status": "PENDING_REVIEW",
+            "review_mode": null,
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          },
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "board_auto_waiting": {
+        "items": [
+          {
+            "withdrawal_id": "AUTO_WAITING",
+            "status": "PAYING",
+            "review_mode": "auto",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          },
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      },
+      "board_paying": {
+        "items": [
+          {
+            "withdrawal_id": "PAYING",
+            "status": "PAYING",
+            "review_mode": "manual",
+            "amount_fen": 1000,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 1000,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-10-12T10:00:00+08:00"
+          },
+          {
+            "withdrawal_id": "FAILED",
+            "status": "FAILED",
+            "review_mode": "manual",
+            "amount_fen": 800,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 800,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_ACCOUNT_STATUS_ERROR",
+            "fail_action": "change_payout_account",
+            "created_at": "2026-10-08T11:30:00+08:00"
+          },
+          {
+            "withdrawal_id": "PAID",
+            "status": "PAID_API",
+            "review_mode": "manual",
+            "amount_fen": 500,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 500,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": null,
+            "fail_action": null,
+            "created_at": "2026-09-27T15:20:00+08:00"
+          },
+          {
+            "withdrawal_id": "REJECTED",
+            "status": "REJECTED",
+            "review_mode": "manual",
+            "amount_fen": 600,
+            "fee_fen": 0,
+            "tax_fen": 0,
+            "net_fen": 600,
+            "payout_channel": "alipay",
+            "payout_channel_name": "支付宝",
+            "masked_account": "138****5678",
+            "reason_code": "PAYEE_INFO_INVALID",
+            "fail_action": null,
+            "created_at": "2026-09-25T09:20:00+08:00"
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    "differences": {
+      "G-W09": "保持 WithdrawalText 现行分支，另立三端 FU",
+      "G-W10": "不伪造审核期限、延迟、到账时间、hold_days、微信状态；缺字段稿不对照",
+      "G-W11": "已到账收起句维持已转入渠道账号到账金额",
+      "G-W18": "记录页不注入上一次提交已经处理完成提示"
+    },
+    "config": {
+      "texts": {
+        "withdraw.sla_text": "人工审核，工作日 24 小时内处理，节假日顺延"
+      }
+    }
   }
 }
