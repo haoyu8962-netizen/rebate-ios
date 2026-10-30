@@ -146,6 +146,8 @@ struct StateLayout: View {
     var actionKind = CouliButtonKind.secondary
     var showsIllustration = true
     var verticalPadding = CouliSpacing.s8
+    /// 图标的测量编号（缺省 nil 不量）。
+    var iconProbeID: String?
     let action: () -> Void
     /// 按钮的读屏焦点绑定（ErrorState 用来把焦点移到【重试】）；nil 时不绑定。
     var actionFocus: AccessibilityFocusState<Bool>.Binding?
@@ -159,6 +161,7 @@ struct StateLayout: View {
                     .overlay(
                         CouliIconView(icon, size: CouliGuideMetric.emptyIcon)
                             .foregroundColor(CouliColor.textSecondary)
+                            .modifier(OptionalProbe(id: iconProbeID, role: "icon"))
                     )
                     .accessibilityHidden(true)
                     .padding(.bottom, CouliSpacing.s3)
@@ -185,6 +188,20 @@ struct StateLayout: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, verticalPadding)
         .padding(.horizontal, CouliSpacing.s4)
+    }
+}
+
+/// 有编号时上报测量，没有时原样返回。
+private struct OptionalProbe: ViewModifier {
+    let id: String?
+    let role: String
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.couliProbe(id, role: role)
+        } else {
+            content
+        }
     }
 }
 

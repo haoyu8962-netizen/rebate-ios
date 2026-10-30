@@ -10,6 +10,9 @@ extension WalletDraftTexts {
         "withdraw_records.channel_line": "{date} · {account}",
         "withdraw_records.expand": "展开详情",
         "withdraw_records.collapse": "收起详情",
+        // 代拟（APP-09v-b）：读屏读记录行的展开状态（iOS 没有系统的「已展开」特性，用值表达；同订单筛选 order_list.filter.*）
+        "withdraw_records.expanded": "已展开",
+        "withdraw_records.collapsed": "已收起",
         "withdraw_records.end": "没有更多记录了",
         "withdraw_records.empty.title": "还没有提现记录",
         "withdraw_records.empty.desc": "申请提现后可以在这里查看进度",

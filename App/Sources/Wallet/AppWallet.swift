@@ -200,10 +200,16 @@ final class AppWallet: ObservableObject, WalletEnv {
     }
 
     func copy(_ text: String) -> Bool {
-        (writer ?? clipboard?.writer)?.write(text) ?? false
+        #if DEBUG
+        DebugWalletLog.copy(text)
+        #endif
+        return (writer ?? clipboard?.writer)?.write(text) ?? false
     }
 
     func contactService(from route: String) {
+        #if DEBUG
+        DebugWalletLog.contact(route)
+        #endif
         customerService(route)
     }
 

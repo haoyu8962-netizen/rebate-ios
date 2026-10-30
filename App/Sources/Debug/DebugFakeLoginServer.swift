@@ -95,7 +95,7 @@ final class DebugFakeLoginServer: URLProtocol {
         let query = Self.query(request)
         let body = Self.object(Self.bodyData(request))
         // APP-09v-a：钱包视觉 UI 测试（COULI_FAKE_WALLET_VISUAL）——钱包类请求记进只读记录；注入的摘要先于一切场景回答
-        if answerWalletVisual(path: path) {
+        if answerWalletVisual(path: path, query: query) {
             return
         }
         // APP-12：「我的」场景（DebugFakeMe）先于其他场景：Me、申诉、同意记录、推送令牌、配置（kf 与 AI 公示），封禁场景下白名单外回 10006。
@@ -168,9 +168,13 @@ final class DebugFakeLoginServer: URLProtocol {
     }
 
     /// 钱包视觉注入（DebugWalletVisual）：记录钱包类请求；是注入的摘要请求时回答并返回 true。
-    private func answerWalletVisual(path: String) -> Bool {
-        DebugWalletLog.request(method: request.httpMethod ?? "GET", path: path)
-        guard let visual = DebugWalletVisual.summaryReply(method: request.httpMethod ?? "GET", path: path) else {
+    private func answerWalletVisual(path: String, query: [String: String]) -> Bool {
+        let method = request.httpMethod ?? "GET"
+        DebugWalletLog.request(method: method, path: path)
+        // APP-09v-b：注入的提现记录（列表按游标、详情按单号）同样先于通用样例
+        guard let visual = DebugWalletVisual.summaryReply(method: method, path: path)
+            ?? DebugWalletVisual.recordsReply(method: method, path: path, query: query)
+        else {
             return false
         }
         answerWallet(visual)

@@ -426,6 +426,19 @@ wallet_visual_tests() {
         -only-testing:CouliUITests/WalletVisualUITests
 }
 
+# $1 = "platform=iOS Simulator,id=<UDID>"
+# APP-09v-b：提现记录视觉 b 组（tools/testing/records-visual-tests.sh 默认清单 10 个类，这里显式给全；同一 DerivedData，不重复构建）
+records_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/records-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:WalletCoreTests/WalletVectorTests -only-testing:WalletCoreTests/RecordsVisualFixtureTests \
+        -only-testing:CouliTests/WithdrawRecordsTests -only-testing:CouliTests/RecordsVisualLayoutTests \
+        -only-testing:CouliTests/RecordsVisualStateTests -only-testing:CouliTests/RecordsVisualPagingTests \
+        -only-testing:CouliTests/RecordsVisualAdaptTests -only-testing:CouliTests/RecordsVisualMoneyTests \
+        -only-testing:CouliTests/RecordsVisualSnapshotTests -only-testing:CouliUITests/RecordsVisualUITests
+}
+
 xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
@@ -516,6 +529,7 @@ if [ "$FAST" -eq 0 ]; then
     # APP-09v-a：钱包视觉 a 组入口（tools/testing/wallet-visual-tests.sh：固定状态栏、同一模拟器、不并行）。入口脚本默认清单漏了
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
     step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
+    step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \

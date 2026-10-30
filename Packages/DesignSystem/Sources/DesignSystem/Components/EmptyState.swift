@@ -20,11 +20,13 @@ public struct EmptyState: View {
     private let actionTitle: String?
     private let actionKind: CouliButtonKind
     private let density: EmptyStateDensity
+    private let iconProbeID: String?
     private let action: () -> Void
 
     /// - Parameters:
     ///   - actionKind: 按钮外观，缺省描边次按钮（既有空态不变）；订单空态画板为实心主按钮（APP-08v OrdersEmpty）。
     ///   - density: 疏密档，缺省完整（既有空态不变）。
+    ///   - iconProbeID: 图标的测量编号（APP-09v-b 提现记录空态）；缺省 nil 不量、外观不变。
     public init(
         icon: CouliIcon = .search,
         title: String,
@@ -32,8 +34,10 @@ public struct EmptyState: View {
         actionTitle: String? = nil,
         actionKind: CouliButtonKind = .secondary,
         density: EmptyStateDensity = .regular,
+        iconProbeID: String? = nil,
         action: @escaping () -> Void = {}
     ) {
+        self.iconProbeID = iconProbeID
         self.icon = icon
         self.title = title
         self.message = message
@@ -46,6 +50,7 @@ public struct EmptyState: View {
     public var body: some View {
         StateLayout(icon: icon, title: title, message: message, actionTitle: actionTitle, actionKind: actionKind,
                     showsIllustration: density == .regular,
-                    verticalPadding: density == .compact ? CouliSpacing.s3 : CouliSpacing.s8, action: action)
+                    verticalPadding: density == .compact ? CouliSpacing.s3 : CouliSpacing.s8, iconProbeID: iconProbeID,
+                    action: action)
     }
 }

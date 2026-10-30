@@ -10,7 +10,10 @@ import SwiftUI
 /// 仅在本机假服务（`-CouliFakeLoginServer`）打开时生效：
 /// - `GET /v1/wallet/summary` 原样回注入的 `summary`（先于 `-CouliFakeWallet wallet=…` 的通用样例）；`offline: true` 时这条按传输层失败
 ///   结束（生产读断网缓存）；其余钱包类接口照旧由 DebugFakeWallet 回答；
-/// - `earnings: true`：只在 Debug 把收益看板开关当作打开、Earnings 路由 since 当作 "1.0.0"（生产 since=null 不变）。
+/// - `earnings: true`：只在 Debug 把收益看板开关当作打开、Earnings 路由 since 当作 "1.0.0"（生产 since=null 不变）；
+/// - APP-09v-b 可选键 `records`：`{"pages": {"<游标>": <列表报文>, …}（"" = 第一页）, "details": {"<withdrawal_id>": <详情报文>},
+///   "nowMillis": <Int>}`——`GET /v1/withdrawals` 无 cursor 回 `pages[""]`、有 cursor 回 `pages[<游标>]`（缺页 50001），
+///   `GET /v1/withdrawals/{id}` 回 `details[id]`（没有 30701）；两类回答带 `Date` 响应头 = nowMillis（生产据此校准显示时钟）。
 enum DebugWalletVisual {
     static let environmentKey = "COULI_FAKE_WALLET_VISUAL"
 
@@ -49,11 +52,42 @@ enum DebugWalletVisual {
         }
         return .answer(code: 0, data: DebugFakeWallet.json(summary), headers: [:])
     }
+
+    /// 注入的提现记录回答（APP-09v-b）；不是记录请求或没注入 `records` 时 nil。
+    static func recordsReply(method: String, path: String, query: [String: String]) -> DebugFakeWallet.Reply? {
+        guard let records = payload?["records"] as? [String: Any], method == "GET",
+              path.hasPrefix("/v1/withdrawals"), path != "/v1/withdrawals/rules"
+        else { return nil }
+        let headers = (records["nowMillis"] as? NSNumber).map { ["Date": httpDate($0.int64Value)] } ?? [:]
+        if path == "/v1/withdrawals" {
+            let pages = records["pages"] as? [String: Any] ?? [:]
+            guard let page = pages[query["cursor"] ?? ""] else {
+                return .answer(code: 50001, data: "null", headers: headers)
+            }
+            return .answer(code: 0, data: DebugFakeWallet.json(page), headers: headers)
+        }
+        let id = String(path.dropFirst("/v1/withdrawals/".count)).removingPercentEncoding ?? ""
+        guard let detail = (records["details"] as? [String: Any])?[id] else {
+            return .answer(code: 30701, data: "null", headers: headers)
+        }
+        return .answer(code: 0, data: DebugFakeWallet.json(detail), headers: headers)
+    }
+
+    /// HTTP 日期（RFC 7231，GMT）。
+    static func httpDate(_ millis: Int64) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(millis) / 1000))
+    }
 }
 
 /// 钱包页视觉 UI 测试的只读记录（只在注入生效时记录与显示）：
 /// - `request:<方法> <路径>`：假服务收到的每个钱包类请求；
-/// - `route:<路由名>[?<参数按键名排序 k=v&…>]`：钱包类页面每调用一次 App 出口 `AppWallet.open` / `replace` 记一条（交给 Router 之前记）。
+/// - `route:<路由名>[?<参数按键名排序 k=v&…>]`：钱包类页面每调用一次 App 出口 `AppWallet.open` / `replace` 记一条（交给 Router 之前记）；
+/// - APP-09v-b：`copy:<文本>`（`AppWallet.copy` 每调用一次一条）、`contact:<来源路由名>`（`AppWallet.contactService` 每调用一次一条），
+///   都在交给系统 / 客服出口之前同步追加。
 /// UI 测试读根视图左上角 1×1 的只读元素 `debug.wallet.log`：accessibilityValue = 全部记录按发生顺序以「 | 」连接。不影响任何回答与界面。
 @MainActor
 final class DebugWalletLog: ObservableObject {
@@ -76,6 +110,18 @@ final class DebugWalletLog: ObservableObject {
         guard DebugWalletVisual.isActive else { return }
         let query = params.keys.sorted().map { "\($0)=\(params[$0] ?? "")" }.joined(separator: "&")
         shared.entries.append("route:" + route + (query.isEmpty ? "" : "?" + query))
+    }
+
+    /// 统一剪贴板写入口（主线程）：同步追加。
+    static func copy(_ text: String) {
+        guard DebugWalletVisual.isActive else { return }
+        shared.entries.append("copy:" + text)
+    }
+
+    /// 客服出口（主线程）：同步追加。
+    static func contact(_ route: String) {
+        guard DebugWalletVisual.isActive else { return }
+        shared.entries.append("contact:" + route)
     }
 
     var value: String {
