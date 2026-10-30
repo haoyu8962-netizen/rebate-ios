@@ -223,26 +223,6 @@
       "category": "large"
     },
     {
-      "name": "HomeClipboardConsent-v3-light",
-      "page": "guest_v3",
-      "scene": "consent",
-      "level": "guest",
-      "dark": false,
-      "width": 390,
-      "height": 844,
-      "category": "large"
-    },
-    {
-      "name": "HomeClipboardConsent-v3-dark",
-      "page": "guest_v3",
-      "scene": "consent",
-      "level": "guest",
-      "dark": true,
-      "width": 390,
-      "height": 844,
-      "category": "large"
-    },
-    {
       "name": "HomeClipboardCard-v3-light",
       "page": "main_v3",
       "scene": "clipboard_card",

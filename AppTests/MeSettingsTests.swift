@@ -23,7 +23,10 @@ final class MeSettingsTests: MeTestCase {
     func testGuestItemsAndPagesOpenWithout10001() throws {
         let fixture = make(account: nil)
         let controller = try settings(fixture)
-        XCTAssertEqual(ids(controller), ["隐私中心", "用户协议与隐私政策", "关于凑狸", "清除缓存", "帮助中心"])
+        // FU-X-CLIP-DEFAULT-ON（test-change）：BR-ID-16 2026-10-30「设置项三端都显示……已同意隐私政策的游客也显示」，iOS 游客也有剪贴板开关
+        XCTAssertEqual(
+            ids(controller), ["隐私中心", "用户协议与隐私政策", "关于凑狸", SettingsItems.idClipboard, "清除缓存", "帮助中心"]
+        )
         XCTAssertEqual(controller.model().footer, SettingsItems.footerLogin)
         for (row, route) in [("隐私中心", "PrivacyCenter"), ("关于凑狸", "About"), ("帮助中心", "Help")] {
             let current = try settings(fixture)
@@ -61,7 +64,12 @@ final class MeSettingsTests: MeTestCase {
         let model = controller.model()
         XCTAssertEqual(model.groups.map(\.name), ["账号与安全", "隐私", "通用"])
         XCTAssertFalse(ids(controller).contains("注销账号"))
-        XCTAssertFalse(ids(controller).contains(SettingsItems.idClipboard), "剪贴板开关只在 Android")
+        // FU-X-CLIP-DEFAULT-ON（test-change）：原「剪贴板开关只在 Android」随 BR-ID-16 2026-10-17 / 10-30 作废，三端都显示
+        XCTAssertEqual(
+            model.groups.first { $0.name == SettingsItems.groupGeneral }?.rows.map(\.id)
+                .filter { $0 == SettingsItems.idClipboard },
+            [SettingsItems.idClipboard], "已登录：剪贴板开关在「通用」组，恰好一行"
+        )
         XCTAssertEqual(model.groups[0].rows.first { $0.id == "手机号" }?.clickable, false)
         XCTAssertEqual(model.footer, SettingsItems.footerLogout)
     }

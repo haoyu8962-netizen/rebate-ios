@@ -249,6 +249,9 @@ final class ClipboardVectorTests: XCTestCase {
         ]
         if platform == "ios" {
             state["iosChangeCountChanged"] = true
+            // FU-X-CLIP-DEFAULT-ON（test-change）：iOS 本机开关「打开 App 自动识别剪贴板」的中性前提为开启（BR-ID-16 2026-10-30
+            // 默认开启）；字段名与 Android / 鸿蒙 importGate.fields.enabled 同名。显式值覆盖补值。
+            state["enabled"] = true
         }
         if platform == "android" {
             state["androidAutoSwitch"] = true

@@ -32,8 +32,10 @@ enum HomeVisualFiles {
         )))
         let data = try Data(contentsOf: root.appendingPathComponent("specs/home-sdui-vectors.json"))
         XCTAssertEqual(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), manifest.fixtureSHA256)
-        XCTAssertEqual(manifest.cases.count, 44)
-        XCTAssertEqual(Set(manifest.cases.map(\.name)).count, 44)
+        // FU-X-CLIP-DEFAULT-ON（test-change）：剪贴板用途说明弹层停用（变更记录 §2 第 1、5 行），HomeClipboardConsent-v3 两例删除，44 → 42
+        XCTAssertEqual(manifest.cases.count, 42)
+        XCTAssertEqual(Set(manifest.cases.map(\.name)).count, 42)
+        XCTAssertFalse(manifest.cases.contains { $0.scene == "consent" })
         return manifest.cases
     }
 
@@ -149,7 +151,6 @@ class HomeVisualUITestCase: XCTestCase {
         let sectionRequests: Int
         let parseRequests: Int
         let clipboardReads: Int
-        let consentRequests: Int
         let promptIdentity: String?
         let unexpectedRequests: Int
         let pasteControlClass: String

@@ -44,7 +44,6 @@ final class HomeVisualBehaviorTests: HomeVisualUITestCase {
         XCTAssertGreaterThan(after.sectionRequests, before.sectionRequests)
         XCTAssertEqual(after.parseRequests, before.parseRequests)
         XCTAssertEqual(after.clipboardReads, before.clipboardReads)
-        XCTAssertEqual(after.consentRequests, before.consentRequests)
         XCTAssertEqual(after.promptIdentity, before.promptIdentity)
         XCTAssertEqual(after.nativeRevision, before.nativeRevision)
         XCTAssertEqual(element("clipboard.invitePrompt").label, text)

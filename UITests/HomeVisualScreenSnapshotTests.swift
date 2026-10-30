@@ -17,7 +17,8 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
     private func matrix(overlays: Bool) throws {
         let cases = try HomeVisualFiles.cases()
         let selection = ProcessInfo.processInfo.environment["COULI_HOME_VISUAL_CASE"]
-        let floating: Set = ["popup", "consent", "clipboard_card", "clipboard_no_price", "clipboard_material",
+        // FU-X-CLIP-DEFAULT-ON（test-change）：consent 场景随用途说明弹层删除
+        let floating: Set = ["popup", "clipboard_card", "clipboard_no_price", "clipboard_material",
                              "clipboard_30132", "clipboard_network", "invite"]
         for item in cases where item.width <= 390 && floating.contains(item.scene) == overlays &&
             (selection == nil || item.name == selection) {
@@ -79,7 +80,7 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
 
     private func assertSceneMarker(_ scene: String) {
         let markers = [
-            "invalid": "home.loadFailed", "popup": "home.popup.close", "consent": "clipboard.consent.sheet",
+            "invalid": "home.loadFailed", "popup": "home.popup.close",
             "clipboard_card": "clipboard.cardList", "clipboard_no_price": "clipboard.cardList",
             "clipboard_material": "clipboard.cardList", "clipboard_30132": "clipboard.searchByName",
             "clipboard_network": "clipboard.retry", "invite": "clipboard.invite.confirm",
