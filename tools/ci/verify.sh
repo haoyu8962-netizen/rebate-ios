@@ -427,7 +427,7 @@ wallet_visual_tests() {
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"
-# APP-09v-c：提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh 带参数时不走默认清单，这里显式给全 14 个类；同一 DerivedData，不重复构建）
+# APP-09v-c：提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh 带参数时不走默认清单，这里显式给全 14 个类 + APP-09v-d 二次验证半屏 8 个类；同一 DerivedData，不重复构建）
 withdraw_visual_tests() {
     local udid="${1##*id=}"
     bash tools/testing/withdraw-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
@@ -439,7 +439,11 @@ withdraw_visual_tests() {
         -only-testing:CouliTests/WithdrawVisualAdaptTests -only-testing:CouliTests/WithdrawVisualPayoutSharedTests \
         -only-testing:CouliTests/WithdrawVisualSnapshotTests -only-testing:CouliTests/WithdrawVisualErrorTests \
         -only-testing:CouliUITests/WithdrawVisualUITests -only-testing:CouliUITests/WithdrawVisualLookUITests \
-        -only-testing:CouliUITests/WithdrawVisualAmountUITests
+        -only-testing:CouliUITests/WithdrawVisualAmountUITests \
+        -only-testing:CouliTests/StepUpVisualOracleTests -only-testing:CouliTests/StepUpVisualFundsGuardTests \
+        -only-testing:CouliTests/StepUpVisualMoneyTests -only-testing:CouliTests/StepUpVisualActionTests \
+        -only-testing:CouliTests/StepUpVisualLayoutTests -only-testing:CouliTests/StepUpVisualAdaptTests \
+        -only-testing:CouliTests/StepUpVisualSnapshotTests -only-testing:CouliUITests/StepUpVisualUITests
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"

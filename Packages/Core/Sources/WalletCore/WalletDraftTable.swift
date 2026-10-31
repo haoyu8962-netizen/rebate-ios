@@ -113,5 +113,7 @@ extension WalletDraftTexts {
         // 代拟（iOS I01，同 Android A01）：本机取不到当前账号的手机号时不发码
         "step_up.no_phone": "暂时无法发送验证码，请稍后再试",
         "step_up.sending": "正在发送验证码…",
+        // 契约未收录（G-W19）：二次验证格下一行与登录倒计时同键同句，占位符 {sec} 同 iOS 登录草稿
+        "login.code.countdown": "{sec} 秒后可重新获取",
     ]
 }

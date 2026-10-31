@@ -175,6 +175,7 @@ final class DebugFakeLoginServer: URLProtocol {
         guard let visual = DebugWalletVisual.summaryReply(method: method, path: path)
             ?? DebugWalletVisual.recordsReply(method: method, path: path, query: query)
             ?? DebugWalletVisual.rulesReply(method: method, path: path)
+            ?? DebugWalletVisual.smsReply(method: method, path: path)
             ?? DebugWalletVisual.configReply(method: method, path: path, base: {
                 DebugFakeMe.shared.answer(method: method, path: path, body: [:])?.data ?? DebugFakeSearch.config()
             })

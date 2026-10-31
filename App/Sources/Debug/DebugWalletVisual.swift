@@ -15,7 +15,8 @@ import SwiftUI
 ///   "nowMillis": <Int>}`——`GET /v1/withdrawals` 无 cursor 回 `pages[""]`、有 cursor 回 `pages[<游标>]`（缺页 50001），
 ///   `GET /v1/withdrawals/{id}` 回 `details[id]`（没有 30701）；两类回答带 `Date` 响应头 = nowMillis（生产据此校准显示时钟）；
 /// - APP-09v-c 可选键 `withdraw`：`{"rules": <WithdrawRules 报文>, "helpLinks": {"withdraw_rules": {…}}}`——
-///   `GET /v1/withdrawals/rules` 回 `rules`（先于通用样例）；假服务 `GET /v1/config` 的 `help_links` 并入 `helpLinks`（生产不变）。
+///   `GET /v1/withdrawals/rules` 回 `rules`（先于通用样例）；假服务 `GET /v1/config` 的 `help_links` 并入 `helpLinks`（生产不变）；
+/// - APP-09v-d `withdraw` 可选键 `smsResendSec: <Int>`：`POST /v1/auth/sms-codes` 回这个 `resend_after_sec`（把倒计时缩短，测【重新获取】）。
 enum DebugWalletVisual {
     static let environmentKey = "COULI_FAKE_WALLET_VISUAL"
 
@@ -38,10 +39,11 @@ enum DebugWalletVisual {
         payload?["earnings"] as? Bool == true
     }
 
-    /// 钱包类请求（只读记录要记的范围，与 DebugFakeWallet 接管的路径相同）。
+    /// 钱包类请求（只读记录要记的范围：DebugFakeWallet 接管的路径，加发码 `/v1/auth/sms-codes`，APP-09v-d）。
     static func isWalletPath(_ path: String) -> Bool {
         path.hasPrefix("/v1/wallet/") || path.hasPrefix("/v1/withdrawals") || path == "/v1/me"
             || path == "/v1/me/payout-account" || path == "/v1/auth/step-up" || path == "/v1/idempotency-keys/abandon"
+            || path == "/v1/auth/sms-codes"
     }
 
     /// 注入的摘要回答；不是摘要请求或没注入时 nil。
@@ -84,6 +86,14 @@ enum DebugWalletVisual {
         guard method == "GET", path == "/v1/withdrawals/rules", let rules = withdraw?["rules"] as? [String: Any]
         else { return nil }
         return .answer(code: 0, data: DebugFakeWallet.json(rules), headers: [:])
+    }
+
+    /// 注入的发码倒计时（APP-09v-d）；不是发码请求或没注入 `smsResendSec` 时 nil。
+    static func smsReply(method: String, path: String) -> DebugFakeWallet.Reply? {
+        guard method == "POST", path == "/v1/auth/sms-codes",
+              let seconds = (withdraw?["smsResendSec"] as? NSNumber)?.int64Value
+        else { return nil }
+        return .answer(code: 0, data: "{\"resend_after_sec\":\(seconds),\"expires_in_sec\":300}", headers: [:])
     }
 
     /// 配置里并入注入的 `help_links`（APP-09v-c）；不是配置请求或没注入时 nil。`base` = 假服务本来要回的配置。

@@ -125,6 +125,8 @@ struct WithdrawLinkButton: View {
     var inset = CouliSpacing.s2
     var chevron = false
     var isEnabled = true
+    var hitMinimum = CouliHitTarget.minimum
+    var ringInside = false
     let action: () -> Void
 
     var body: some View {
@@ -139,11 +141,11 @@ struct WithdrawLinkButton: View {
             }
             .walletProbe(probe, role: "link")
             .padding(.horizontal, inset)
-            .frame(minWidth: CouliHitTarget.minimum, minHeight: CouliHitTarget.minimum)
+            .frame(minWidth: hitMinimum, minHeight: hitMinimum)
             .contentShape(Rectangle())
             .walletProbe(probe + ".hit", role: "hit")
         }
-        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
+        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small, ringInside: ringInside))
         .disabled(!isEnabled)
         .accessibilityLabel(Text(verbatim: title))
     }

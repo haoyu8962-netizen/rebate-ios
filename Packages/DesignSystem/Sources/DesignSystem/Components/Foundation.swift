@@ -249,6 +249,9 @@ struct CouliFocusRing: ViewModifier {
     let cornerRadius: CGFloat
     /// 狸橙实底上用白色描一圈底，保证焦点环对比。
     var onBrand = false
+    /// 环画在控件框内（缺省 false = 框外留 focus.offset）。框外的环哪怕透明也算进无障碍框，比真实命中区每边大 4；
+    /// 命中区贴着邻控件、滚动边的按钮用（APP-09v-d【重新获取】）。
+    var inside = false
     @Environment(\.isFocused) private var isFocused
 
     func body(content: Content) -> some View {
@@ -259,7 +262,7 @@ struct CouliFocusRing: ViewModifier {
                     RoundedRectangle(cornerRadius: cornerRadius + CouliFocus.offset, style: .continuous)
                         .strokeBorder(onBrand ? CouliColor.backgroundSurface : .clear, lineWidth: CouliFocus.width * 2)
                 )
-                .padding(-CouliFocus.offset - CouliFocus.width)
+                .padding(inside ? 0 : -CouliFocus.offset - CouliFocus.width)
                 .opacity(isFocused ? 1 : 0)
                 .allowsHitTesting(false)
         )
@@ -270,10 +273,12 @@ struct CouliFocusRing: ViewModifier {
 public struct CouliPlainButtonStyle: ButtonStyle {
     let cornerRadius: CGFloat
     let onBrand: Bool
+    let ringInside: Bool
 
-    public init(cornerRadius: CGFloat = CouliRadius.small, onBrand: Bool = false) {
+    public init(cornerRadius: CGFloat = CouliRadius.small, onBrand: Bool = false, ringInside: Bool = false) {
         self.cornerRadius = cornerRadius
         self.onBrand = onBrand
+        self.ringInside = ringInside
     }
 
     public func makeBody(configuration: Configuration) -> some View {
@@ -282,7 +287,7 @@ public struct CouliPlainButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(configuration.isPressed && !onBrand ? CouliColor.backgroundMuted : .clear)
             )
-            .modifier(CouliFocusRing(cornerRadius: cornerRadius, onBrand: onBrand))
+            .modifier(CouliFocusRing(cornerRadius: cornerRadius, onBrand: onBrand, inside: ringInside))
     }
 }
 
