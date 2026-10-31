@@ -32,7 +32,15 @@ if [[ $# -eq 0 ]]; then
     -only-testing:CouliTests/WithdrawVisualErrorTests \
     -only-testing:CouliUITests/WithdrawVisualUITests \
     -only-testing:CouliUITests/WithdrawVisualLookUITests \
-    -only-testing:CouliUITests/WithdrawVisualAmountUITests
+    -only-testing:CouliUITests/WithdrawVisualAmountUITests \
+    -only-testing:CouliTests/StepUpVisualOracleTests \
+    -only-testing:CouliTests/StepUpVisualFundsGuardTests \
+    -only-testing:CouliTests/StepUpVisualMoneyTests \
+    -only-testing:CouliTests/StepUpVisualActionTests \
+    -only-testing:CouliTests/StepUpVisualLayoutTests \
+    -only-testing:CouliTests/StepUpVisualAdaptTests \
+    -only-testing:CouliTests/StepUpVisualSnapshotTests \
+    -only-testing:CouliUITests/StepUpVisualUITests
 fi
 
 exec xcodebuild -scheme Couli -configuration Debug "$@" \

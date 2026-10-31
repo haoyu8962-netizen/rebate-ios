@@ -73,7 +73,9 @@ final class OrderListVisualReviewR2Tests: OrderVisualTestCase {
                 && host.orders.listConfig?.pendingTrack?.state.cards.count == 1
                 && host.probes["orders.filter.month"] != nil
         }
-        let image = try XCTUnwrap(shot, "\(name)：页面没有稳定")
+        try await refreshProbes(page)
+        let settled = await page.stable()
+        let image = try XCTUnwrap(settled ?? shot, "\(name)：页面没有稳定")
         let header = try rect("orders.filter.month").maxY
         let content = try rect("orders.content")
         let visibleBottom = canvas.height - canvas.bottom
@@ -114,6 +116,20 @@ final class OrderListVisualReviewR2Tests: OrderVisualTestCase {
         )
 
         assertCentered(empty, below: pendingBottom, visibleBottom: visibleBottom, name: name)
+    }
+
+    /// 测量可能停在旧值：一帧内框变两次时 SwiftUI 丢弃后一次 onChange（日志「onChange(of: CGRect) action tried to update multiple times
+    /// per frame」），之后框不再变就不会重报，页面是对的、`orders.empty` 却差几十点（v3 实测 25 次红 4～6 次，与这条日志一一对应）。
+    /// 分两帧把列表挪 1pt 再挪回，让所有测量按实际框重报一次；不改任何判据。
+    private func refreshProbes(_ page: OrderVisualHost) async throws {
+        let window = try XCTUnwrap(page.window, "没有窗口")
+        let scroller = try XCTUnwrap(Self.listScrollView(in: window), "订单列表没有可滚动的滚动视图")
+        let origin = scroller.contentOffset
+        for offset in [CGPoint(x: origin.x, y: origin.y + 1), origin] {
+            scroller.setContentOffset(offset, animated: false)
+            window.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(100))
+        }
     }
 
     /// D10-366（320 × AX3，已知差异）：从首屏开始，每次把列表滚动视图往下滚固定距离（画布高 × `dragRatio`，到底为止），最多 `maxDrags` 次，
