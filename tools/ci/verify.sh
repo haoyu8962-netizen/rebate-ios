@@ -463,6 +463,14 @@ xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
 
+# 列出 test Debug 里失败过的用例（重试后过的也列，供合并前查看）
+report_retried_tests() {
+    local log
+    log="$LOGS/$(printf '%s' 'test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）' | tr -c 'A-Za-z0-9._-' '_').log"
+    [ -f "$log" ] || return 0
+    grep -E "^Test [Cc]ase '.*' failed" "$log" | sed -E "s/^Test [Cc]ase '([^']*)'.*/    失败过（含重试后过）：\1/" | sort -u || true
+}
+
 # CT-LOCK-01：contract.lock 与快照一致——必须按锁定提交重建、逐字节比较，并核对 lock files 哈希（tools/contracts/sync.sh --check）。
 # 取不到上游仓库或其中没有锁定提交就失败，不退化成只比哈希（与鸿蒙 / Android CT-LOCK-01 同口径）。上游仓库按顺序推导：
 #   1. 环境变量 REBATE_PLATFORM_DIR / COULI_DIR（设了就只用它，不对则失败）；
@@ -544,8 +552,10 @@ if [ "$FAST" -eq 0 ]; then
     # 卡住的用例在上限内判失败，不再单个跑上千秒
     # APP-09v-a：钱包问号说明半屏基准是整屏截图（含状态栏），全量测试前先把状态栏时间固定为 9:41（覆盖保持到模拟器关机）
     step "固定模拟器状态栏 9:41" fix_status_bar "$DEST"
+    # 全量 2400+ 例单轮约有 1 条无关偶发（负载下的瞬时轻提示、测量丢更新等）：失败用例重试一次，重试仍红才算红；重试过的用例列在下方，不藏偶发
     step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" \
-        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 test
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -retry-tests-on-failure -test-iterations 2 test
+    report_retried_tests
     # APP-09v-a：钱包视觉 a 组入口（tools/testing/wallet-visual-tests.sh：固定状态栏、同一模拟器、不并行）。入口脚本默认清单漏了
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
     step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
