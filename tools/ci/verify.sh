@@ -523,6 +523,7 @@ report_retried_tests() {
     local log failed money
     log="$LOGS/$(printf '%s' 'test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）' | tr -c 'A-Za-z0-9._-' '_').log"
     [ -f "$log" ] || return 0
+    [ ! -s "$CRASH_RERUN_LIST" ] || sed 's/^/    testmanagerd 崩溃后重跑：/' "$CRASH_RERUN_LIST"
     failed="$(retried_tests_in "$log")"
     [ -n "$failed" ] || return 0
     printf '%s\n' "$failed" | sed 's/^/    失败过（含重试后过）：/'
@@ -530,6 +531,39 @@ report_retried_tests() {
     [ -z "$money" ] && return 0
     printf '%s\n' "$money" | sed 's/^/    金额相关用例首轮红，不吃重试：/'
     return 1
+}
+
+# 模拟器 testmanagerd 偶发段错误（Xcode 27.2 + iOS 26.5 运行时，同一崩溃点）：在跑的用例记「Lost connection to testmanagerd」，
+# xcodebuild 的失败重试不接这种失败。只有全部失败都是这一种时才重跑这几例（D10-512 的延伸）：重跑不吃失败重试，只再容一次崩溃；
+# 金额相关用例不重跑，首轮红即算红；重跑名单留在 verify 主输出。
+readonly TEST_DEBUG_RESULT="$LOGS/test-debug.xcresult"
+readonly CRASH_RERUN_LIST="$LOGS/crash-rerun.txt"
+crashed_tests_in() {
+    xcrun xcresulttool get test-results summary --path "$1" --compact | python3 "$ROOT/tools/ci/testmanagerd-crashed-tests.py"
+}
+test_debug() {
+    local code=0 round crashed result="$TEST_DEBUG_RESULT" test
+    local -a only
+    rm -rf "$TEST_DEBUG_RESULT" "$LOGS"/test-debug-rerun-*.xcresult "$CRASH_RERUN_LIST"
+    : >"$CRASH_RERUN_LIST"
+    xcb "$@" -resultBundlePath "$result" -retry-tests-on-failure -test-iterations 2 test || code=$?
+    for round in 1 2 3; do
+        [ "$code" -ne 0 ] || return 0
+        [ "$round" -lt 3 ] || break
+        crashed="$(crashed_tests_in "$result")" || return "$code"
+        [ -n "$crashed" ] || return "$code"
+        if printf '%s\n' "$crashed" | grep -E "$NO_RETRY_TEST_PATTERN"; then
+            echo "金额相关用例被 testmanagerd 崩溃打断，不重跑"
+            return "$code"
+        fi
+        printf '%s\n' "$crashed" | tee -a "$CRASH_RERUN_LIST"
+        only=()
+        while IFS= read -r test; do only+=("-only-testing:$test"); done <<<"$crashed"
+        result="$LOGS/test-debug-rerun-$round.xcresult"
+        code=0
+        xcb "$@" -resultBundlePath "$result" test-without-building "${only[@]}" || code=$?
+    done
+    return "$code"
 }
 
 # CT-LOCK-01：contract.lock 与快照一致——必须按锁定提交重建、逐字节比较，并核对 lock files 哈希（tools/contracts/sync.sh --check）。
@@ -612,10 +646,11 @@ if [ "$FAST" -eq 0 ]; then
     # FU-IOS-0712（F-IOS-10）：打开用例超时——UITests 每用例上限由测试包自己设（UITestTimeouts，480 秒），其余用例按 600 秒；
     # 卡住的用例在上限内判失败，不再单个跑上千秒
     # APP-09v-a：钱包问号说明半屏基准是整屏截图（含状态栏），全量测试前先把状态栏时间固定为 9:41（覆盖保持到模拟器关机）
+    step "testmanagerd 崩溃名单解析自测" python3 "$ROOT/tools/ci/testmanagerd-crashed-tests.py" --selftest
     step "固定模拟器状态栏 9:41" fix_status_bar "$DEST"
     # 全量 2400+ 例单轮约有 1 条无关偶发（负载下的瞬时轻提示、测量丢更新等）：失败用例重试一次，重试仍红才算红；重试过的用例列在下方，不藏偶发
-    step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" \
-        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -retry-tests-on-failure -test-iterations 2 test
+    step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" test_debug -configuration Debug -destination "$DEST" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600
     # 不走 step：step 把输出写进日志，这份名单要留在 verify 主输出（D10-512）
     if report_retried_tests; then
         RESULTS+=("PASS  金额相关用例未靠重试过关（D10-512）")
