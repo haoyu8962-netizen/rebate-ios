@@ -463,12 +463,24 @@ xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
 
-# 列出 test Debug 里失败过的用例（重试后过的也列，供合并前查看）
+# 列出 test Debug 里失败过的用例（重试后过的也列，合并时看；D10-512）。
+# 金额相关用例不吃重试：类名或用例名含下面任一词的，首轮红即算红（approvals #24「不得削弱资金测试」）。
+# 名单：Money Amount Fen Rebate FormatVector Funds。同一用例连续两次合并前验都靠重试才过的转缺陷单，不再算偶发。
+readonly NO_RETRY_TEST_PATTERN='Money|Amount|Fen|Rebate|FormatVector|Funds'
+retried_tests_in() {
+    grep -E "^Test [Cc]ase '[^']*' failed" "$1" | sed -E "s/^Test [Cc]ase '([^']*)'.*/\\1/" | sort -u || true
+}
 report_retried_tests() {
-    local log
+    local log failed money
     log="$LOGS/$(printf '%s' 'test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）' | tr -c 'A-Za-z0-9._-' '_').log"
     [ -f "$log" ] || return 0
-    grep -E "^Test [Cc]ase '.*' failed" "$log" | sed -E "s/^Test [Cc]ase '([^']*)'.*/    失败过（含重试后过）：\1/" | sort -u || true
+    failed="$(retried_tests_in "$log")"
+    [ -n "$failed" ] || return 0
+    printf '%s\n' "$failed" | sed 's/^/    失败过（含重试后过）：/'
+    money="$(printf '%s\n' "$failed" | grep -E "$NO_RETRY_TEST_PATTERN" || true)"
+    [ -z "$money" ] && return 0
+    printf '%s\n' "$money" | sed 's/^/    金额相关用例首轮红，不吃重试：/'
+    return 1
 }
 
 # CT-LOCK-01：contract.lock 与快照一致——必须按锁定提交重建、逐字节比较，并核对 lock files 哈希（tools/contracts/sync.sh --check）。
@@ -555,7 +567,14 @@ if [ "$FAST" -eq 0 ]; then
     # 全量 2400+ 例单轮约有 1 条无关偶发（负载下的瞬时轻提示、测量丢更新等）：失败用例重试一次，重试仍红才算红；重试过的用例列在下方，不藏偶发
     step "test Debug（包测试含格式向量、组件快照与 Router 向量 + App 单测 + UITests 冒烟）" xcb -configuration Debug -destination "$DEST" \
         -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -retry-tests-on-failure -test-iterations 2 test
-    report_retried_tests
+    # 不走 step：step 把输出写进日志，这份名单要留在 verify 主输出（D10-512）
+    if report_retried_tests; then
+        RESULTS+=("PASS  金额相关用例未靠重试过关（D10-512）")
+    else
+        RESULTS+=("FAIL  金额相关用例未靠重试过关（D10-512）")
+        summary
+        exit 1
+    fi
     # APP-09v-a：钱包视觉 a 组入口（tools/testing/wallet-visual-tests.sh：固定状态栏、同一模拟器、不并行）。入口脚本默认清单漏了
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
     step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
