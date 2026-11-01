@@ -2626,5 +2626,162 @@
       "WithdrawDark",
       "WithdrawWechat"
     ]
+  },
+  "visualPayout": {
+    "note": "APP-09v-e 收款账号 / 实名 / 劳务协议视觉夹具（只新增，不改已有组）。固定时钟 2026-10-12 10:30 +08:00。实名与劳务协议为 Debug 手写接口形状（G-W24：视觉任务不接锁定契约的 submitRealname / recordConsent / getLaborAgreement / signLaborAgreement）；labor.resign 只登记形状，改版提示待 FU，不拍不对照。微信零钱不造（G-W10）。",
+    "clock": {
+      "nowMillis": 1791772200000
+    },
+    "payout": {
+      "unbound": {},
+      "boundAlipay": {
+        "payout_method": "alipay",
+        "masked_account": "138****5678",
+        "masked_payee_name": "**三",
+        "change_remaining_this_month": 2
+      },
+      "boundBank": {
+        "payout_method": "bank_card",
+        "masked_account": "尾号 1234",
+        "bank_name": "招商银行",
+        "masked_payee_name": "**三",
+        "change_remaining_this_month": 2
+      },
+      "boundExhausted": {
+        "payout_method": "alipay",
+        "masked_account": "138****5678",
+        "masked_payee_name": "**三",
+        "change_remaining_this_month": 0
+      },
+      "boundStress": {
+        "payout_method": "alipay",
+        "masked_account": "zhangsan.payout.visual.stress***@example-mail.com",
+        "masked_payee_name": "**三",
+        "change_remaining_this_month": 1
+      }
+    },
+    "forms": {
+      "alipay": {
+        "alipayAccount": "13800005678",
+        "payeeName": "张三"
+      },
+      "bank": {
+        "cardNo": "6214830000001234",
+        "bankName": "招商银行",
+        "payeeName": "张三"
+      }
+    },
+    "saveErrors": {
+      "changeLimit": {
+        "code": 30303,
+        "data": {
+          "reason": "payout_account_change_limit"
+        }
+      },
+      "verifyLimit": {
+        "code": 30303,
+        "data": {
+          "reason": "payout_account_verify_limit"
+        }
+      },
+      "payeeMismatch": {
+        "code": 30307,
+        "data": {}
+      },
+      "accountTaken": {
+        "code": 30308,
+        "data": {}
+      },
+      "busy": {
+        "code": 40901,
+        "data": {}
+      }
+    },
+    "realname": {
+      "form": {
+        "name": "张三",
+        "idNo": "11010119900101123x"
+      },
+      "errors": {
+        "verifyFailed": {
+          "code": 30406,
+          "data": {}
+        },
+        "idTaken": {
+          "code": 30405,
+          "data": {}
+        },
+        "age": {
+          "code": 30407,
+          "data": {}
+        },
+        "dailyLimit": {
+          "code": 30410,
+          "data": {}
+        },
+        "server": {
+          "code": 50301,
+          "data": {}
+        },
+        "fields": {
+          "code": 20001,
+          "data": {
+            "fields": [
+              "name",
+              "id_no"
+            ]
+          }
+        }
+      }
+    },
+    "labor": {
+      "first": {
+        "version": "v1",
+        "text": "劳务协议（视觉夹具正文）\n第 1 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 2 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 3 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 4 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 5 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 6 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 7 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 8 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 9 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 10 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 11 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 12 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 13 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 14 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 15 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 16 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 17 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 18 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 19 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 20 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 21 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 22 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 23 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。\n第 24 条 视觉夹具条款：本段只用于截图与布局测试，不是法务定稿的协议正文，滚动区内应能完整读到每一条。",
+        "text_sha256": "visual-labor-v1-sha256-fixture",
+        "need_sign": true
+      },
+      "resign": {
+        "version": "v2",
+        "text_url": "https://example.invalid/labor/v2.txt",
+        "text_sha256": "visual-labor-v2-sha256-fixture",
+        "need_sign": true,
+        "signed_version": "v1",
+        "signed_at": "2026-09-01T10:00:00+08:00",
+        "pendingFu": "G-W24"
+      },
+      "signFailed": {
+        "code": 50301,
+        "data": {}
+      }
+    },
+    "boards": [
+      "PayoutAccount",
+      "PayoutAccountBank-v2",
+      "PayoutAccountBound",
+      "PayoutAccountBoundBank",
+      "PayoutAccountBlocked",
+      "PayoutAccountErrors",
+      "PayoutAccountPendingConfirm",
+      "PayoutAccountPendingBusy",
+      "PayoutAccountPendingAbandonConfirm",
+      "PayoutAccountPendingStill",
+      "PayoutAccountPendingAbandoned",
+      "PayoutAccountPendingCompleted",
+      "PayoutAccountBoundDark",
+      "RealName",
+      "RealNameConsent-v2",
+      "RealNameErrors",
+      "RealNameDark",
+      "LaborAgreement-v2",
+      "LaborAgreementResign",
+      "LaborAgreementDark"
+    ],
+    "notCompared": [
+      "PayoutAccountWechat-v2",
+      "PayoutAccountWechatAuthorizing-v2",
+      "PayoutAccountWechatAuthFailed-v2",
+      "PayoutAccountWechatBound"
+    ]
   }
 }
