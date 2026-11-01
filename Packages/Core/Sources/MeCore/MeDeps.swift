@@ -50,6 +50,8 @@ public protocol MeEnv: AnyObject {
     func isCurrent(_ identity: MeIdentity) -> Bool
     func check(_ identity: MeIdentity) -> IdentityCheck
     func recheckIdentity()
+    /// 此刻的会话作用域（full / deletion_only；没有会话或读不出为空串，按 full 对待）。F-X-14：自动读取前现取，不看进入时的值。
+    func sessionScope() -> String
     /// 经 Router 以 App 内来源打开（路由名都在 routes.json）。`page` 是发起页（只在它仍在栈顶时打开，nil = Tab 根或不核对）。
     func open(_ route: String, params: [String: String], from page: UUID?)
     /// 经 APP-07 统一写入口写剪贴板（先记自写 hash 并确认落盘，记不下就不写）；返回是否写入。

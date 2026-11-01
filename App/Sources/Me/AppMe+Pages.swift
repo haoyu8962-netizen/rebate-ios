@@ -126,7 +126,7 @@ extension AppMe {
         if tabHost.controller.hasLeft || tabHost.controller.identity != identity {
             tabHost.replace(MeTabController(deps: deps, identity: identity))
         }
-        tabHost.controller.refresh()
+        tabHost.controller.autoRefresh()
         tabHost.controller.checkGuideBar()
     }
 

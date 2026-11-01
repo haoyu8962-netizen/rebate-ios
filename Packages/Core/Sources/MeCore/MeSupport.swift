@@ -60,6 +60,10 @@ public final class MeRequests {
 final class DetachedMeEnv: MeEnv {
     static let shared = DetachedMeEnv()
 
+    func sessionScope() -> String {
+        ""
+    }
+
     func identity() -> MeIdentity {
         .none
     }

@@ -7,6 +7,8 @@ import Foundation
 /// 快照版本与身份，执行前核对（APP-09 第 4、63 条）。
 @MainActor
 public final class MeTabController: ObservableObject, MeReader {
+    static let deletionOnly = "deletion_only"
+
     public static let route = "Me"
     public static let login = "Login"
     public static let copied = "invite.copy_code.done"
@@ -44,9 +46,16 @@ public final class MeTabController: ObservableObject, MeReader {
         return deps.repo.refresh(identity, page: self, pull: pull)
     }
 
+    /// 自动同步（进入 Tab、回前台、从子页返回、身份确认后补读；F-X-14，Android `autoRefresh`、鸿蒙 FU-HM-0721 同法）：受限登录（deletion_only）
+    /// 不读——不发 getMe、不动快照；其余照常 `refresh`。下拉与【重试】是用户主动读取，仍走 `refresh`。作用域现取，读不出按 full。
+    @discardableResult
+    public func autoRefresh() -> Bool {
+        deps.env.sessionScope() != Self.deletionOnly && refresh()
+    }
+
     public func resumeAfterIdentityConfirmed() {
         guard !left, deps.repo.state.me == nil, deps.repo.inFlight == 0 else { return }
-        refresh()
+        autoRefresh()
     }
 
     /// 页面显示的规则（MeView）。只用本执行器身份的快照。
