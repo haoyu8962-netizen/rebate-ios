@@ -480,6 +480,21 @@ xcb() {
     xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$DD" "$@"
 }
 
+# 视觉组第二遍是否要跑：VERIFY_ALL_VISUAL=1、算不出改动范围或没有改动（主干上）时全跑，否则看改动是否碰钱包相关路径
+readonly VISUAL_GROUP_PATHS='^(Packages/Features/Sources/Wallet/|Packages/Core/Sources/WalletCore/|Packages/DesignSystem/|App/Sources/Wallet/|App/Sources/Debug/(DebugWallet|DebugFakeWallet)|AppTests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|UITests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|specs/wallet-vectors|tools/testing/(wallet|records|withdraw|payout)-visual)'
+changed_paths() {
+    local base
+    base="$(git merge-base origin/main HEAD 2>/dev/null)" || return 1
+    { git diff --name-only "$base" HEAD && git status --porcelain | cut -c4-; } | sort -u
+}
+visual_groups_needed() {
+    local changed
+    [ "${VERIFY_ALL_VISUAL:-0}" = 1 ] && return 0
+    changed="$(changed_paths)" || return 0
+    [ -n "$changed" ] || return 0
+    printf '%s\n' "$changed" | grep -qE "$VISUAL_GROUP_PATHS"
+}
+
 # 列出 test Debug 里失败过的用例（重试后过的也列，合并时看；D10-512）。
 # 金额相关用例不吃重试：类名或用例名含下面任一词的，首轮红即算红（approvals #24「不得削弱资金测试」）。
 # 名单：Money Amount Fen Rebate FormatVector Funds。同一用例连续两次合并前验都靠重试才过的转缺陷单，不再算偶发。
@@ -594,10 +609,16 @@ if [ "$FAST" -eq 0 ]; then
     fi
     # APP-09v-a：钱包视觉 a 组入口（tools/testing/wallet-visual-tests.sh：固定状态栏、同一模拟器、不并行）。入口脚本默认清单漏了
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
-    step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
-    step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
-    step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" withdraw_visual_tests "$DEST"
-    step "收款账号实名劳务视觉 e 组（tools/testing/payout-visual-tests.sh）" payout_visual_tests "$DEST"
+    # 四组的类都已在上面的 test Debug 里跑过；这里是不并行的第二遍，只在改动碰钱包相关路径时跑（省约 56 分钟）
+    if visual_groups_needed; then
+        step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
+        step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
+        step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" withdraw_visual_tests "$DEST"
+        step "收款账号实名劳务视觉 e 组（tools/testing/payout-visual-tests.sh）" payout_visual_tests "$DEST"
+    else
+        echo "    视觉 a / b / c / e 组：改动未碰钱包相关路径，已由 test Debug 覆盖，跳过（VERIFY_ALL_VISUAL=1 强制全跑）"
+        RESULTS+=("SKIP  视觉 a / b / c / e 组第二遍（已由 test Debug 覆盖）")
+    fi
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
