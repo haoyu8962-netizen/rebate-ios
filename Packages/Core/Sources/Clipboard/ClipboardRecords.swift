@@ -145,6 +145,9 @@ public protocol SystemClipboard: AnyObject {
 /// （共性第 23、25 条）；写入后记下 changeCount（iOS 第一道排除）。
 @MainActor
 public final class ClipboardWriter {
+    /// 写入成功的旁路（不带内容）：只供 App 的 Debug 只读记录用（APP-12v `debug.me.log` 的 `copy`）；生产为 nil。
+    public static var writeObserver: (() -> Void)?
+
     private let system: SystemClipboard
     private let ledger: ClipboardWriteLedger
 
@@ -158,6 +161,7 @@ public final class ClipboardWriter {
         guard ledger.record(text) else { return false }
         system.write(text)
         ledger.recordChangeCount(system.changeCount)
+        Self.writeObserver?()
         return true
     }
 }

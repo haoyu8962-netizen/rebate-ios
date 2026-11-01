@@ -30,6 +30,7 @@ enum MeDraftTable {
         "me.bell": "消息中心",
         "me.guide_bar.close": "关闭提示",
         "me.amount_hidden": "金额已隐藏",
+        "me.amount_shown": "金额已显示",
         "invite.copy_code.done": "已复制邀请码",
         "me.copy_failed": "复制失败，请重试",
         "me.load_failed": "资料没有加载出来",

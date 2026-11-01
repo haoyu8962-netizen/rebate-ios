@@ -30,7 +30,13 @@ public struct MeTabActions {
                 }
             },
             withdraw: { [weak controller] in controller?.withdraw(version: version) },
-            toggleMask: { [weak controller] in controller?.toggleMask() },
+            // G-M13：只有用户点眼睛才播一次；别处改偏好、进入、回前台都不走这里（所以不用 onChange）
+            toggleMask: { [weak controller] in
+                guard let controller, controller.alive, let mask = controller.deps.mask else { return }
+                controller.toggleMask()
+                MeAnnounce.post(controller.deps.texts.text(mask.hidden ? "me.amount_hidden" : "me.amount_shown"),
+                                assertive: false)
+            },
             openGuide: { [weak controller] in controller?.openGuide() },
             closeGuide: { [weak controller] in controller?.closeGuide() },
             tap: { [weak controller] cell in controller?.tap(cell) }
@@ -38,7 +44,7 @@ public struct MeTabActions {
     }
 }
 
-/// 「我的」Tab 根（设计稿 Me、MeGuest、MeHidden、MeMinor；AdaptBackRestore）：
+/// 「我的」Tab 根（设计稿 Me、MeGuest、MeHidden、MeMinor；AdaptBackRestore；APP-12v 视觉）：
 /// - 已登录：标题「我的」+ 铃铛 → 通知引导条 → 身份卡（默认头像、昵称、我的邀请码【复制】、邀请人：已绑定 / 未绑定）→ 余额卡（可提现余额 + 眼睛 +
 ///   【提现】、预估收益）→ 宫格三组；资料加载失败显示错误态与【重试】（不回落游客）；下拉刷新；
 /// - 游客：还没有登录 +【登录 / 注册】→ 宫格只有「帮助中心」「设置」（没有铃铛、余额卡与其他宫格）。
@@ -72,7 +78,7 @@ struct MeTabBody: View {
     @ObservedObject var mask: AmountMaskStore
     @ObservedObject var readGate: RetryAfterGate
     let scroll: MeScrollMemory
-    @State private var toast: CouliToastMessage?
+    @StateObject private var notices = MeToastQueue()
 
     var texts: MeTexts {
         controller.deps.texts
@@ -86,18 +92,21 @@ struct MeTabBody: View {
             titleBar(view, actions)
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                    VStack(alignment: .leading, spacing: 0) {
                         // 顶部锚点：没滚动时记它（滚回顶部，不把引导条滚出去）
                         Color.clear.frame(height: 0)
                             .id("me.section.top")
                             .background(MeSectionTops.reader("me.section.top"))
-                        if view.loginPrompt {
-                            guestCard(actions)
-                                .id("me.section.guest")
-                        } else {
-                            memberBody(snapshot, view, actions)
+                        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                            if view.loginPrompt {
+                                guestCard(actions)
+                                    .id("me.section.guest")
+                            } else {
+                                memberBody(snapshot, view, actions)
+                            }
+                            grid(view, actions)
                         }
-                        grid(view, actions)
+                        .padding(.top, CouliSpacing.s2)
                     }
                     .padding(.horizontal, CouliSpacing.s4)
                     .padding(.bottom, CouliSpacing.s4)
@@ -126,15 +135,18 @@ struct MeTabBody: View {
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(view.loginPrompt ? "me.guestPage" : "me.page")
-        .couliToast($toast)
-        // 闭包里不读本次渲染捕获的 `snapshot` / `controller`（iOS 16 上是上一帧的值，首次提示会丢、之后会显示上一条，R3-01）：
-        // 复制提示用回调给的新值；读取失败读执行时的 repo.state 与此刻的执行器
-        .onChange(of: controller.toast) { notice in
-            let current = host.controller
-            guard let notice, current.toast?.id == notice.id else { return }
-            showToast(notice) { current.consumeToast($0) }
+        .couliToast($notices.current, topInset: CouliHitTarget.minimum)
+        // 复制结果用发布值，不用 onChange：消费本身也改这个值，一帧里变两次时 onChange 会丢后一次（连按复制丢提示）。
+        // 发布时新值还没落到属性上，所以消费放到下一拍。读取失败读执行时的 repo.state 与此刻的执行器（闭包里不读本次渲染捕获的 `snapshot`，R3-01）
+        .onReceive(controller.$toast) { notice in
+            guard let notice else { return }
+            let current = controller
+            notices.enqueueResult(notice, texts: current.deps.texts, owner: current)
+            Task { @MainActor in current.consumeToast(notice.id) }
         }
         .onChange(of: snapshot.error) { _ in showReadError() }
+        // 执行器换了（换身份、撤回同意、退出、新的一次进入）：`@StateObject` 不随它重建，排队与正在显示的提示在这里作废
+        .onChange(of: ObjectIdentifier(controller)) { _ in notices.drop() }
     }
 
     /// 已有资料时的读取失败 → 轻提示（带 trace6）。只消费此刻有效的执行器（这一次进入、身份仍是当前身份）自己发起的失败；设置页发起的
@@ -145,71 +157,59 @@ struct MeTabBody: View {
         guard let error = state.error, state.me != nil, current.alive, state.identity == current.identity,
               state.errorSource == ObjectIdentifier(current)
         else { return }
-        showToast(error) { repo.consumeError($0) }
+        notices.enqueueFailure(error.message(current.deps.texts), owner: current)
+        repo.consumeError(error.id)
     }
 
-    private func showToast(_ notice: MeNotice, consume: (Int) -> Void) {
-        toast = MeToastMessage.make(notice, texts: texts)
-        consume(notice.id)
-    }
-
+    /// 标题栏：高 44，「我的」22/600 左对齐；铃铛视觉 24、命中 44。G04：没有未读数，不画红点、不读「有未读」。
     private func titleBar(_ view: MeViewModel, _ actions: MeTabActions) -> some View {
         HStack(spacing: CouliSpacing.s2) {
-            Text(verbatim: texts.text("me.title"))
-                .couliFont(.title, weight: .couliSemibold)
+            MeText(texts.text("me.title"), style: .title, weight: .couliSemibold, probe: "me.title")
                 .foregroundColor(CouliColor.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: CouliSpacing.s2)
             if view.bell {
-                // G04：没有未读数，不画红点、不读「有未读」
                 Button(action: actions.bell) {
                     CouliIconView(.bell)
                         .foregroundColor(CouliColor.textPrimary)
+                        .meProbe("me.bell.icon", role: "icon")
                         .couliHitTarget()
+                        .meProbe("me.bell.hit", role: "hit")
                 }
                 .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
+                // 图标贴页边 16，命中区向外溢出
+                .padding(.trailing, (CouliComponentMetric.iconDefault - CouliHitTarget.minimum) / 2)
                 .accessibilityLabel(Text(verbatim: texts.text("me.bell")))
                 .accessibilityIdentifier("me.bell")
             }
         }
         .padding(.horizontal, CouliSpacing.s4)
-        .padding(.vertical, CouliSpacing.s2)
         .frame(minHeight: CouliHitTarget.minimum)
         .meContentWidth()
+        .meProbe("me.titleBar", role: "bar")
     }
 
+    /// 游客卡（设计稿 MeGuest）：白卡内边距 16、纵向 16，头像 56 + 右栏（17/600、14 次文字）→ 通栏【登录 / 注册】。
     private func guestCard(_ actions: MeTabActions) -> some View {
-        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+        VStack(alignment: .leading, spacing: CouliSpacing.s4) {
             HStack(spacing: CouliSpacing.s3) {
-                avatar
+                MeAvatar()
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                    Text(verbatim: texts.text("me.guest.title"))
-                        .couliFont(.title, weight: .couliSemibold)
+                    MeText(texts.text("me.guest.title"), style: .body, weight: .couliSemibold, probe: "me.guest.title")
                         .foregroundColor(CouliColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(verbatim: texts.text("me.guest.desc"))
-                        .couliFont(.footnote)
+                    MeText(texts.text("me.guest.desc"), style: .footnote, probe: "me.guest.desc")
                         .foregroundColor(CouliColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             CouliButton(texts.text("me.guest.login"), fillsWidth: true, action: actions.login)
+                .meProbe("me.guest.login", role: "button")
                 .accessibilityIdentifier("me.login")
         }
-        .couliCard(padding: CouliSpacing.s5)
+        .couliCard(padding: CouliSpacing.s4)
+        .meProbe("me.guest", role: "card")
         .background(MeSectionTops.reader("me.section.guest"))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("me.guest")
-    }
-
-    var avatar: some View {
-        ZStack {
-            Circle().fill(CouliColor.backgroundMuted)
-            CouliIconView(.user, size: CouliGuideMetric.iconMedium + CouliSpacing.s3)
-                .foregroundColor(CouliColor.textSecondary)
-        }
-        .frame(width: CouliSpacing.s16, height: CouliSpacing.s16)
-        .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -220,7 +220,10 @@ struct MeTabBody: View {
         if let me = snapshot.identity == controller.identity ? snapshot.me : nil {
             identityCard(me, view, actions)
                 .id("me.section.identity")
-            balanceCard(view, actions)
+            MeHeroCard(view: view, texts: texts, actions: actions)
+                .background(MeSectionTops.reader("me.section.balance"))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("me.balance")
                 .id("me.section.balance")
         } else if snapshot.phase == .error, snapshot.identity == controller.identity {
             ErrorState(
@@ -229,15 +232,41 @@ struct MeTabBody: View {
             )
             .disabled(readGate.blocked)
             .frame(minHeight: CouliSpacing.s16 * 4)
+            .meProbe("me.error", role: "state")
             .accessibilityIdentifier("me.error")
         } else {
-            VStack(spacing: CouliSpacing.s3) {
-                SkeletonBlock(height: CouliSpacing.s16 + CouliSpacing.s8)
-                SkeletonBlock(height: CouliSpacing.s16 * 2)
+            MeSkeleton()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: texts.text("me.loading")))
+                .accessibilityIdentifier("me.loading")
+        }
+    }
+}
+
+/// 加载骨架（无稿，brief §2-10）：身份卡块（56 圆 + 两条横块）→ 余额卡块 → 一组宫格块，块都用 `background.muted`；读屏由调用方整块读「加载中」。
+private struct MeSkeleton: View {
+    private let card = RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
+
+    var body: some View {
+        VStack(spacing: CouliSpacing.s3) {
+            HStack(spacing: CouliSpacing.s3) {
+                Circle().fill(CouliColor.backgroundMuted)
+                    .frame(width: CouliSpacing.s12 + CouliSpacing.s2, height: CouliSpacing.s12 + CouliSpacing.s2)
+                    .meProbe("me.skeleton.avatar", role: "skeleton")
+                VStack(alignment: .leading, spacing: CouliSpacing.s2) {
+                    SkeletonBlock(width: CouliSpacing.s12 * 2, height: CouliSpacing.s4)
+                        .meProbe("me.skeleton.name", role: "skeleton")
+                    SkeletonBlock(width: CouliSpacing.s12 * 3, height: CouliSpacing.s3)
+                        .meProbe("me.skeleton.invite", role: "skeleton")
+                }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: texts.text("me.loading")))
-            .accessibilityIdentifier("me.loading")
+            .couliCard(padding: CouliSpacing.s4)
+            card.fill(CouliColor.backgroundMuted)
+                .frame(height: CouliSpacing.s12 * 3 + CouliSpacing.s8)
+                .meProbe("me.skeleton.balance", role: "skeleton")
+            card.fill(CouliColor.backgroundMuted)
+                .frame(height: CouliSpacing.s12 * 2 + CouliSpacing.s6)
+                .meProbe("me.skeleton.grid", role: "skeleton")
         }
     }
 }

@@ -447,6 +447,22 @@ withdraw_visual_tests() {
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"
+# APP-12v：「我的」视觉（tools/testing/me-visual-tests.sh 带参数时不走默认清单，这里显式给全 16 项；同一 DerivedData，不重复构建）
+me_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/me-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:MeCoreTests/MeVectorTests -only-testing:CouliTests/MeVisualFixtureTests \
+        -only-testing:CouliTests/MeVisualFundsGuardTests -only-testing:CouliTests/MeVisualOracleTests \
+        -only-testing:CouliTests/MeVisualLayoutTests -only-testing:CouliTests/MeVisualPaletteTests \
+        -only-testing:CouliTests/MeVisualStateTests -only-testing:CouliTests/MeVisualRestrictedTests \
+        -only-testing:CouliTests/MeVisualAdaptTests -only-testing:CouliTests/MeVisualNoticeTests -only-testing:CouliTests/MeVisualBehaviorTests \
+        -only-testing:CouliTests/MeVisualMoneyTests -only-testing:CouliTests/MeVisualSnapshotTests \
+        -only-testing:CouliTests/MeTabTests -only-testing:CouliUITests/MeVisualUITests \
+        -only-testing:CouliUITests/MeVisualMoneyUITests
+}
+
+# $1 = "platform=iOS Simulator,id=<UDID>"
 # APP-09v-e：收款账号 / 实名 / 劳务视觉 e 组（tools/testing/payout-visual-tests.sh 带参数时不走默认清单，这里显式给全；同一 DerivedData，不重复构建）
 payout_visual_tests() {
     local udid="${1##*id=}"
@@ -482,17 +498,18 @@ xcb() {
 
 # 视觉组第二遍是否要跑：VERIFY_ALL_VISUAL=1、算不出改动范围或没有改动（主干上）时全跑，否则看改动是否碰钱包相关路径
 readonly VISUAL_GROUP_PATHS='^(Packages/Features/Sources/Wallet/|Packages/Core/Sources/WalletCore/|Packages/DesignSystem/|App/Sources/Wallet/|App/Sources/Debug/(DebugWallet|DebugFakeWallet)|AppTests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|UITests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|specs/wallet-vectors|tools/testing/(wallet|records|withdraw|payout)-visual)'
+readonly ME_VISUAL_PATHS='^(Packages/Features/Sources/Me/|Packages/Core/Sources/MeCore/|Packages/DesignSystem/|App/Sources/Me/|App/Sources/Debug/DebugMeVisual|AppTests/Me|UITests/Me|specs/me-vectors|tools/testing/me-visual)'
 changed_paths() {
     local base
     base="$(git merge-base origin/main HEAD 2>/dev/null)" || return 1
     { git diff --name-only "$base" HEAD && git status --porcelain | cut -c4-; } | sort -u
 }
 visual_groups_needed() {
-    local changed
+    local changed pattern="${1:-$VISUAL_GROUP_PATHS}"
     [ "${VERIFY_ALL_VISUAL:-0}" = 1 ] && return 0
     changed="$(changed_paths)" || return 0
     [ -n "$changed" ] || return 0
-    printf '%s\n' "$changed" | grep -qE "$VISUAL_GROUP_PATHS"
+    printf '%s\n' "$changed" | grep -qE "$pattern"
 }
 
 # 列出 test Debug 里失败过的用例（重试后过的也列，合并时看；D10-512）。
@@ -618,6 +635,12 @@ if [ "$FAST" -eq 0 ]; then
     else
         echo "    视觉 a / b / c / e 组：改动未碰钱包相关路径，已由 test Debug 覆盖，跳过（VERIFY_ALL_VISUAL=1 强制全跑）"
         RESULTS+=("SKIP  视觉 a / b / c / e 组第二遍（已由 test Debug 覆盖）")
+    fi
+    if visual_groups_needed "$ME_VISUAL_PATHS"; then
+        step "「我的」视觉（tools/testing/me-visual-tests.sh）" me_visual_tests "$DEST"
+    else
+        echo "    「我的」视觉组：改动未碰相关路径，已由 test Debug 覆盖，跳过"
+        RESULTS+=("SKIP  「我的」视觉第二遍（已由 test Debug 覆盖）")
     fi
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \

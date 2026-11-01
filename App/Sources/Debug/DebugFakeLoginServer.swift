@@ -170,6 +170,11 @@ final class DebugFakeLoginServer: URLProtocol {
     /// 钱包视觉注入（DebugWalletVisual）：记录钱包类请求；是注入的摘要请求时回答并返回 true。
     private func answerWalletVisual(path: String, query: [String: String]) -> Bool {
         let method = request.httpMethod ?? "GET"
+        // APP-12v：「我的」视觉 UI 测试（COULI_FAKE_ME_VISUAL）——getMe 记进只读记录；注入的 Me 先于 `-CouliFakeMe me=…`
+        if let me = DebugMeVisual.reply(method: method, path: path) {
+            answerOrders(.answer(code: 0, data: me, headers: [:], delay: 0.3))
+            return true
+        }
         DebugWalletLog.request(method: method, path: path)
         // APP-09v-b：注入的提现记录（列表按游标、详情按单号）同样先于通用样例
         guard let visual = DebugWalletVisual.summaryReply(method: method, path: path)

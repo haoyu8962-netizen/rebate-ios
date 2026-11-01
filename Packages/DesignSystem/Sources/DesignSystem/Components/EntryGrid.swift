@@ -26,6 +26,9 @@ public struct EntryGrid: View {
     private let columns: Int
     private let eager: Bool
     private let padding: CGFloat
+    private let contentInsets: EdgeInsets?
+    private let titleInset: CGFloat
+    private let titleSpacing: CGFloat
     private let probeID: String?
     private let cellProbePrefix: String?
     private let onSelect: (EntryGridItem) -> Void
@@ -35,13 +38,19 @@ public struct EntryGrid: View {
     ///   - columns: 列数，默认 4（「我的」页）；钱包入口行用 2。
     ///   - eager: 一次建出全部格子（「我的」页：屏幕外的格子也在读屏树里，返回时位置稳定）；缺省按懒加载网格。
     ///   - padding: 卡片内边距，缺省 16（`couliCard` 默认）；钱包入口行 8（APP-09v W13）。
-    ///   - probeID / cellProbePrefix: 布局测量编号（卡片 / 每格命中框 `<前缀>.<id>` 与图标 `<前缀>.<id>.icon`）；nil 时不量（缺省）。
+    ///   - contentInsets: 四边不等的卡片内边距（「我的」APP-12v：上 16、左右下 8）；给了就不用 `padding`，缺省 nil。
+    ///   - titleInset / titleSpacing: 标题左右缩进（缺省 0）、标题到格子的间距（缺省 12），缺省外观不变。
+    ///   - probeID / cellProbePrefix: 布局测量编号（卡片、标题 `<probeID>.title`、每格命中框 `<前缀>.<id>` 与图标 `<前缀>.<id>.icon`）；
+    ///     nil 时不量（缺省）。
     public init(
         title: String? = nil,
         items: [EntryGridItem],
         columns: Int = 4,
         eager: Bool = false,
         padding: CGFloat = CouliSpacing.s4,
+        contentInsets: EdgeInsets? = nil,
+        titleInset: CGFloat = 0,
+        titleSpacing: CGFloat = CouliSpacing.s3,
         probeID: String? = nil,
         cellProbePrefix: String? = nil,
         onSelect: @escaping (EntryGridItem) -> Void
@@ -51,6 +60,9 @@ public struct EntryGrid: View {
         self.columns = columns
         self.eager = eager
         self.padding = padding
+        self.contentInsets = contentInsets
+        self.titleInset = titleInset
+        self.titleSpacing = titleSpacing
         self.probeID = probeID
         self.cellProbePrefix = cellProbePrefix
         self.onSelect = onSelect
@@ -58,12 +70,15 @@ public struct EntryGrid: View {
 
     public var body: some View {
         let columns = dynamicTypeSize >= .accessibility1 ? min(columns, 2) : columns
-        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+        VStack(alignment: .leading, spacing: titleSpacing) {
             if let title {
                 Text(verbatim: title)
                     .couliFont(.body, weight: .couliSemibold)
                     .foregroundColor(CouliColor.textPrimary)
                     .accessibilityAddTraits(.isHeader)
+                    .couliTextNaturalProbe(probeID.map { "\($0).title" }, role: "title", text: title, style: .body,
+                                           weight: .couliSemibold)
+                    .padding(.horizontal, titleInset)
             }
             if eager {
                 VStack(spacing: 0) {
@@ -91,7 +106,8 @@ public struct EntryGrid: View {
                 }
             }
         }
-        .couliCard(padding: padding)
+        .padding(contentInsets ?? EdgeInsets(top: padding, leading: padding, bottom: padding, trailing: padding))
+        .couliCard(padding: 0)
         .modifier(EntryGridProbe(id: probeID, role: "card"))
     }
 

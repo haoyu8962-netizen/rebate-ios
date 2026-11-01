@@ -311,15 +311,18 @@ public struct CouliToastMessage: Equatable, Sendable {
     public let text: String
     /// 左侧图标类型（缺省成功勾，既有调用不变）。
     public let icon: CouliToastIcon
+    /// 不走 Toast 自己的礼貌播报（调用方另有唯一播报出口，如「我的」刷新失败要 assertive；缺省 false，既有调用不变）。
+    public let silent: Bool
 
     public init(_ text: String) {
         self.init(text, icon: .success)
     }
 
-    public init(_ text: String, icon: CouliToastIcon) {
+    public init(_ text: String, icon: CouliToastIcon, silent: Bool = false) {
         id = UUID()
         self.text = text
         self.icon = icon
+        self.silent = silent
     }
 }
 
@@ -327,7 +330,7 @@ public struct CouliToastMessage: Equatable, Sendable {
 /// 同一个请求（id 不变）重绘不重复播报；置空不播报。
 enum ToastAnnouncement {
     static func text(previous: CouliToastMessage?, current: CouliToastMessage?) -> String? {
-        guard let current, current.id != previous?.id else {
+        guard let current, current.id != previous?.id, !current.silent else {
             return nil
         }
         return current.text

@@ -35,6 +35,9 @@ struct RootView: View {
         } else if let width = DebugLayoutWidth.value {
             // 截图用（APP-05a）：`-CouliDebugLayoutWidth 320` 把根布局限制为窄屏宽度（模拟器没有 320pt 宽机型）。
             gatedByEnvironment.frame(width: width).frame(maxWidth: .infinity)
+        } else if DebugMeVisual.isActive {
+            // APP-12v：「我的」视觉 UI 测试的只读记录（getMe、路由、复制、轻提示、播报），见 DebugMeVisual
+            gatedByEnvironment.overlay(alignment: .topLeading) { DebugMeLogReadout(router: router, me: me) }
         } else if DebugWalletVisual.isActive {
             // APP-09v-a：钱包视觉 UI 测试的只读记录（钱包类请求、App 出口路由），见 DebugWalletVisual
             gatedByEnvironment.overlay(alignment: .topLeading) { DebugWalletLogReadout() }
