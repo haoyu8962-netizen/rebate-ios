@@ -8,6 +8,16 @@ public enum CouliSheetTitleStyle: Sendable {
     case standard
     /// 约 20/700（APP-06v 授权半屏、下单须知画板；令牌没有 20 档，按画板字号、随系统字号缩放，行高取 title 档倍数）。
     case prominent
+    /// 22/600（title 档；APP-09v-e 实名单独同意半屏）。
+    case title
+
+    var textStyle: CouliTextStyle {
+        self == .title ? .title : .body
+    }
+
+    var weight: Font.Weight {
+        self == .prominent ? .couliBold : .couliSemibold
+    }
 }
 
 struct SheetTitleFont: ViewModifier {
@@ -18,11 +28,27 @@ struct SheetTitleFont: ViewModifier {
         switch style {
         case .standard:
             content.couliFont(.body, weight: .couliSemibold)
+        case .title:
+            content.couliFont(.title, weight: .couliSemibold)
         case .prominent:
             let lineHeight = prominentSize * CouliTextStyle.title.lineHeightMultiple
             content
                 .font(.system(size: prominentSize, weight: .couliBold))
                 .lineSpacing(max(lineHeight - CouliFontMetrics.lineHeight(prominentSize), 0))
+        }
+    }
+}
+
+/// 正文区：放得下时按内容高；放不下时占满剩余高度并滚动（头部与操作区固定，adaptation-a11y-spec §4）。
+struct ScrollingBody<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView {
+                content
+            }
         }
     }
 }

@@ -159,6 +159,8 @@ public enum CouliIcon: String, Sendable, CaseIterable {
     case bell
     /// 断网（APP-08v 断网提示条，brief §7「功能图标用系统图标集」）。
     case wifiOff = "wifi.slash"
+    /// 盾牌对勾（APP-09v-e 实名头部方块、单独同意要点）。
+    case shieldCheck = "checkmark.shield"
 
     var systemName: String {
         rawValue

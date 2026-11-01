@@ -57,6 +57,8 @@ public struct PayoutAccountScreen: View {
     @AccessibilityFocusState var focusedField: String?
     @State var errorCue = FieldErrorCue()
     @State var scrollRequest: FieldScrollRequest?
+    /// 用户改过内容后不再按字段显示的提交错误（G-W13）：只管显示，`flow.error` 不动。
+    @State var staleSubmitErrorId: Int?
 
     public init(controller: PayoutAccountController, gates: WalletGates, context: WalletPageContext) {
         self.controller = controller
@@ -125,6 +127,8 @@ public struct PayoutAccountScreen: View {
             errorCue.arm(event: "L\(id)", errors: controller.state.localErrors,
                          order: FieldErrorCue.payoutOrder(method: controller.state.form.method))
         }
+        .onChange(of: flowState.error?.id) { _ in cueSubmitError() }
+        .onChange(of: snapshot.form) { [old = snapshot.form] form in retireSubmitError(from: old, to: form) }
         .task { controller.start() }
     }
 
@@ -140,11 +144,12 @@ public struct PayoutAccountScreen: View {
                         if let pending = flowState.pending {
                             payoutPending(pending, flowState, flowActions)
                         }
-                        writeNotices(flowState, flowActions)
+                        writeNotices(snapshot, flowState, flowActions)
                         readStatus(snapshot, actions)
                             .frame(minHeight: 240)
                     }
-                    .padding(CouliSpacing.s4)
+                    .padding(.top, CouliSpacing.s2)
+                    .padding([.horizontal, .bottom], CouliSpacing.s4)
                     .frame(maxWidth: WalletLayout.maxContentWidth)
                     .frame(maxWidth: .infinity)
                 }
@@ -179,7 +184,8 @@ public struct PayoutAccountScreen: View {
                     formCard(snapshot, flowState, actions)
                 }
             }
-            .padding(CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s2)
+            .padding([.horizontal, .bottom], CouliSpacing.s4)
             .frame(maxWidth: WalletLayout.maxContentWidth)
             .frame(maxWidth: .infinity)
         }
@@ -199,11 +205,13 @@ public struct PayoutAccountScreen: View {
                     GuideEntry(texts: texts, route: route, action: actions.openGuide)
                 }
             }
+            .walletProbe("payout.error", role: "error")
             .accessibilityIdentifier("payout.error")
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel(Text(verbatim: texts.text("wallet.loading")))
+                .walletProbe("payout.loading", role: "loading")
                 .accessibilityIdentifier("payout.loading")
         }
     }

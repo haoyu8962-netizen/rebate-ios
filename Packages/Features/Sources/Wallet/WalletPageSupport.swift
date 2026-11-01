@@ -82,6 +82,42 @@ enum WalletAnnounce {
     }
 }
 
+/// 提示条语气（brief §2 提示条统一写法）：`plain` 是既有写法（缺省，钱包 / 提现 / 记录页外观不变）；其余圆角 12、20 图标、14 字。
+enum NoticeTone {
+    case plain
+    case neutral
+    case warning
+    case error
+
+    var icon: CouliIcon {
+        self == .neutral ? .info : .alert
+    }
+
+    var background: Color {
+        switch self {
+        case .plain, .neutral: CouliColor.backgroundMuted
+        case .warning: CouliColor.statusWarningBackground
+        case .error: CouliColor.token("status.error.background")
+        }
+    }
+
+    var ink: Color {
+        switch self {
+        case .plain, .neutral: CouliColor.textPrimary
+        case .warning: CouliColor.statusWarningText
+        case .error: CouliColor.statusErrorText
+        }
+    }
+
+    var iconInk: Color {
+        switch self {
+        case .plain: CouliColor.statusWarningText
+        case .neutral: CouliColor.textSecondary
+        case .warning, .error: ink
+        }
+    }
+}
+
 /// 页内提示条（错误、限流、旧数据说明）：出现或换成新的一条时按 `assertive` 播报一次；可带【重试】。
 struct NoticeBar: View {
     let text: String
@@ -91,16 +127,21 @@ struct NoticeBar: View {
     var retryEnabled = true
     var retry: () -> Void = {}
     var identifier = "wallet.notice"
+    var tone = NoticeTone.plain
+
+    /// 带语气的条才报测量（`<identifier>` / `.icon` / `.text`）。
+    private var probe: String? {
+        tone == .plain ? nil : identifier
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: CouliSpacing.s3) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
-                .foregroundColor(CouliColor.statusWarningText)
+        let plain = tone == .plain
+        HStack(alignment: plain ? .center : .top, spacing: plain ? CouliSpacing.s3 : CouliSpacing.s2) {
+            CouliIconView(tone.icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                .foregroundColor(tone.iconInk)
+                .walletProbe(probe.map { $0 + ".icon" }, role: "icon")
                 .accessibilityHidden(true)
-            Text(verbatim: text)
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            label
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier(identifier + ".text")
             if let retryTitle {
@@ -111,12 +152,27 @@ struct NoticeBar: View {
         }
         .padding(CouliSpacing.s3)
         .background(
-            RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous).fill(CouliColor.backgroundMuted)
+            RoundedRectangle(cornerRadius: plain ? CouliRadius.card : CouliRadius.button, style: .continuous)
+                .fill(tone.background)
         )
+        .walletProbe(probe, role: "notice")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
         .task(id: noticeId) {
             WalletAnnounce.post(text, assertive: assertive)
+        }
+    }
+
+    @ViewBuilder private var label: some View {
+        if let probe {
+            let strong = tone == .warning || tone == .error
+            RecordText(text, style: .footnote, weight: strong ? .couliMedium : .regular, color: tone.ink,
+                       probe: probe + ".text")
+        } else {
+            Text(verbatim: text)
+                .couliFont(.footnote)
+                .foregroundColor(tone.ink)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -182,16 +238,20 @@ struct WalletInfoRow: View {
     let value: String
     var spokenValue: String?
     var identifier: String?
+    /// 测量编号（`.label` / `.value`，缺省不报）。
+    var probe: String?
 
     var body: some View {
         CouliFlowLayout(horizontalSpacing: CouliSpacing.s3, verticalSpacing: CouliSpacing.s1) {
             Text(verbatim: label)
                 .couliFont(.footnote)
                 .foregroundColor(CouliColor.textSecondary)
+                .couliTextNaturalProbe(probe.map { $0 + ".label" }, role: "text", text: label, style: .footnote)
             Text(verbatim: value)
                 .couliFont(.footnote, monospacedDigits: true)
                 .foregroundColor(CouliColor.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
+                .couliTextNaturalProbe(probe.map { $0 + ".value" }, role: "text", text: value, style: .footnote)
                 .couliFlowPushTrailing(.inlineOnly)
         }
         .accessibilityElement(children: .ignore)

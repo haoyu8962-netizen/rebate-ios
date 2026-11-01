@@ -56,6 +56,8 @@
 #     标识 debug.order.log（App/Sources/Debug/DebugOrderVisual.swift）
 #   - 钱包视觉 UI 测试的摘要注入与只读记录（APP-09v-a）：环境变量 COULI_FAKE_WALLET_VISUAL、类型名 DebugWalletVisual、DebugWalletLog、
 #     标识 debug.wallet.log（App/Sources/Debug/DebugWalletVisual.swift）
+#   - 收款账号 / 实名 / 劳务视觉（APP-09v-e）：只读记录项 backend:realname.submit、backend:labor.current、backend:labor.sign；
+#     环境变量里的 payout 键只被 DebugWalletVisual 读，由上一条的类型名覆盖（短键名会被内联，strings 看不到）
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -191,6 +193,9 @@ HITS_LOG="$WORK/hits"
     echo "DebugWalletVisual"
     echo "DebugWalletLog"
     echo "debug.wallet.log"
+    echo "backend:realname.submit"
+    echo "backend:labor.current"
+    echo "backend:labor.sign"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys

@@ -176,6 +176,7 @@ final class DebugFakeLoginServer: URLProtocol {
             ?? DebugWalletVisual.recordsReply(method: method, path: path, query: query)
             ?? DebugWalletVisual.rulesReply(method: method, path: path)
             ?? DebugWalletVisual.smsReply(method: method, path: path)
+            ?? DebugWalletVisual.payoutReply(method: method, path: path)
             ?? DebugWalletVisual.configReply(method: method, path: path, base: {
                 DebugFakeMe.shared.answer(method: method, path: path, body: [:])?.data ?? DebugFakeSearch.config()
             })

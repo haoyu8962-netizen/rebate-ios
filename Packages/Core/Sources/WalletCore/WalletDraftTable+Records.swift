@@ -115,7 +115,7 @@ extension WalletDraftTexts {
         "payout.payee_placeholder": "请输入收款人姓名",
         "payout.payee_note": "须与实名认证的姓名一致",
         "payout.step_up_note": "保存时需要短信验证",
-        "payout.bank_note": "保存时会核对姓名、身份证号与银行卡是否一致，并需要短信验证",
+        "payout.bank_note": "保存时需要短信验证",
         "payout.save": "保存",
         "payout.saving": "保存中…",
         "payout.current": "当前收款账号",

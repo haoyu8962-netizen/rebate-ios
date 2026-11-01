@@ -17,6 +17,9 @@ import SwiftUI
 /// - APP-09v-c 可选键 `withdraw`：`{"rules": <WithdrawRules 报文>, "helpLinks": {"withdraw_rules": {…}}}`——
 ///   `GET /v1/withdrawals/rules` 回 `rules`（先于通用样例）；假服务 `GET /v1/config` 的 `help_links` 并入 `helpLinks`（生产不变）；
 /// - APP-09v-d `withdraw` 可选键 `smsResendSec: <Int>`：`POST /v1/auth/sms-codes` 回这个 `resend_after_sec`（把倒计时缩短，测【重新获取】）。
+/// - APP-09v-e 可选键 `payout`：`{"account": <PayoutAccount 报文>, "saveError": {"code": <Int>, "data": {…}}}`——
+///   `GET /v1/me/payout-account` 回 `account`（先于 `-CouliFakeWallet payout=…`）；`PUT` 过了 step-up 后回 `saveError`
+///   （`save=` 开关只有 30307 / 44001）。
 enum DebugWalletVisual {
     static let environmentKey = "COULI_FAKE_WALLET_VISUAL"
 
@@ -96,6 +99,24 @@ enum DebugWalletVisual {
         return .answer(code: 0, data: "{\"resend_after_sec\":\(seconds),\"expires_in_sec\":300}", headers: [:])
     }
 
+    private static var payout: [String: Any]? {
+        payload?["payout"] as? [String: Any]
+    }
+
+    /// 注入的收款账号（APP-09v-e）；不是读账号请求或没注入时 nil。
+    static func payoutReply(method: String, path: String) -> DebugFakeWallet.Reply? {
+        guard method == "GET", path == "/v1/me/payout-account", let account = payout?["account"] as? [String: Any]
+        else { return nil }
+        return .answer(code: 0, data: DebugFakeWallet.json(account), headers: [:])
+    }
+
+    /// 注入的保存失败（APP-09v-e，过了 step-up 才用）；没注入时 nil。
+    static var payoutSaveError: (code: Int, data: String)? {
+        guard let failure = payout?["saveError"] as? [String: Any], let code = failure["code"] as? Int
+        else { return nil }
+        return (code, DebugFakeWallet.json(failure["data"] as? [String: Any] ?? [:]))
+    }
+
     /// 配置里并入注入的 `help_links`（APP-09v-c）；不是配置请求或没注入时 nil。`base` = 假服务本来要回的配置。
     static func configReply(method: String, path: String, base: () -> String) -> DebugFakeWallet.Reply? {
         guard method == "GET", path == "/v1/config", let links = withdraw?["helpLinks"] as? [String: Any],
@@ -119,7 +140,9 @@ enum DebugWalletVisual {
 /// - `request:<方法> <路径>`：假服务收到的每个钱包类请求；
 /// - `route:<路由名>[?<参数按键名排序 k=v&…>]`：钱包类页面每调用一次 App 出口 `AppWallet.open` / `replace` 记一条（交给 Router 之前记）；
 /// - APP-09v-b：`copy:<文本>`（`AppWallet.copy` 每调用一次一条）、`contact:<来源路由名>`（`AppWallet.contactService` 每调用一次一条），
-///   都在交给系统 / 客服出口之前同步追加。
+///   都在交给系统 / 客服出口之前同步追加；
+/// - APP-09v-e：`backend:realname.submit`、`backend:labor.current`、`backend:labor.sign`（实名 / 劳务不走网络管线，由
+///   FakeRealName / FakeLabor 记）。**只记动作名，不记入参**（身份证号、姓名不进记录）。
 /// UI 测试读根视图左上角 1×1 的只读元素 `debug.wallet.log`：accessibilityValue = 全部记录按发生顺序以「 | 」连接。不影响任何回答与界面。
 @MainActor
 final class DebugWalletLog: ObservableObject {
@@ -135,6 +158,21 @@ final class DebugWalletLog: ObservableObject {
         DispatchQueue.main.async {
             MainActor.assumeIsolated { shared.entries.append(entry) }
         }
+    }
+
+    /// 实名 / 劳务假后端（任意线程）：只收下面三个动作名，在主线程按调用顺序追加。
+    nonisolated static func backend(_ action: BackendAction) {
+        guard DebugWalletVisual.isActive else { return }
+        let entry = action.rawValue
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { shared.entries.append(entry) }
+        }
+    }
+
+    enum BackendAction: String, Sendable {
+        case realnameSubmit = "backend:realname.submit"
+        case laborCurrent = "backend:labor.current"
+        case laborSign = "backend:labor.sign"
     }
 
     /// App 出口（主线程）：同步追加，先于随后的请求记录。

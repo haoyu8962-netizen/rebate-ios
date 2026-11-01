@@ -1,4 +1,5 @@
 import DesignSystem
+import Foundation
 import SwiftUI
 import WalletCore
 
@@ -12,121 +13,124 @@ extension PayoutAccountScreen {
         let bank = form.method == WalletJSON.bankCard
         // 设计稿 PayoutAccount / PayoutAccountBank：说明在卡外；收款方式一张卡；字段一张卡；保存说明为卡外浅底条
         return VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            Text(verbatim: texts.text("payout.intro"))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            RecordText(texts.text("payout.intro"), style: .footnote, color: CouliColor.textSecondary,
+                       probe: "payout.intro")
                 .padding(.horizontal, CouliSpacing.s1)
             methodGroup(form.method, error: errors.contains(PayoutAccountForm.payoutMethod) ? flowState : nil,
                         editable: editable, actions)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .couliCard()
-            VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                .couliCard(padding: 0)
+                .walletProbe("payout.methodCard", role: "card")
+            VStack(alignment: .leading, spacing: WalletFieldMetric.fieldGap) {
                 if bank {
-                    field("payout.card_no", "payout.card_no_placeholder", form.cardNo, PayoutAccountForm.cardNo,
+                    field("payout.card_no", "payout.card_no_placeholder", \.cardNo, PayoutAccountForm.cardNo,
                           errors, flowState, editable: editable, keyboard: .numberPad, set: actions.card)
-                    field("payout.bank_name", "payout.bank_name_placeholder", form.bankName,
+                    field("payout.bank_name", "payout.bank_name_placeholder", \.bankName,
                           PayoutAccountForm.bankName, errors, flowState, editable: editable, set: actions.bank)
                 } else {
-                    field("payout.alipay_account", "payout.alipay_placeholder", form.alipayLogonId,
+                    field("payout.alipay_account", "payout.alipay_placeholder", \.alipayLogonId,
                           PayoutAccountForm.alipayLogonId, errors, flowState, editable: editable,
                           keyboard: .emailAddress, set: actions.logon)
                 }
-                field("payout.payee", "payout.payee_placeholder", form.payeeName, PayoutAccountForm.payeeName,
-                      errors, flowState, editable: editable, set: actions.payee)
-                Text(verbatim: texts.text("payout.payee_note"))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
+                field("payout.payee", "payout.payee_placeholder", \.payeeName, PayoutAccountForm.payeeName,
+                      errors, flowState, editable: editable, note: texts.text("payout.payee_note"),
+                      set: actions.payee)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .couliCard()
-            HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.info, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .accessibilityHidden(true)
-                Text(verbatim: texts.text(bank ? "payout.bank_note" : "payout.step_up_note"))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(CouliSpacing.s3)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous).fill(CouliColor.backgroundMuted)
-            )
-            .accessibilityElement(children: .combine)
+            .walletProbe("payout.formCard", role: "card")
+            WalletInfoStrip(text: texts.text(bank ? "payout.bank_note" : "payout.step_up_note"),
+                            probe: "payout.saveNote")
         }
     }
 
     func methodGroup(_ method: String, error: FlowState?, editable: Bool, _ actions: PayoutActions) -> some View {
         let errorText = error.map { texts.text($0.fieldErrorKey ?? "error.20001") }
-        return VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-            Text(verbatim: texts.text("payout.method"))
-                .couliFont(.footnote, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textSecondary)
-            ForEach([WalletJSON.alipay, WalletJSON.bankCard], id: \.self) { value in
-                let key = value == WalletJSON.alipay ? "payout.alipay" : "payout.bank"
-                if value == WalletJSON.bankCard {
-                    Divider()
-                }
-                Button {
-                    actions.method(value)
-                } label: {
-                    HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                        RadioMark(selected: method == value)
-                        VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                            Text(verbatim: texts.text(key))
-                                .couliFont(.body)
-                                .foregroundColor(CouliColor.textPrimary)
-                            Text(verbatim: texts.text(key + "_desc"))
-                                .couliFont(.footnote)
-                                .foregroundColor(CouliColor.textSecondary)
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
-                .disabled(!editable)
-                .accessibilityAddTraits(method == value ? [.isSelected, .isButton] : .isButton)
-                .accessibilityHint(Text(verbatim: errorText ?? ""))
-                .accessibilityIdentifier(value == WalletJSON.alipay ? "payout.method.alipay" : "payout.method.bank")
-            }
+        return VStack(alignment: .leading, spacing: 0) {
+            RecordText(texts.text("payout.method"), style: .footnote, color: CouliColor.textSecondary,
+                       probe: "payout.method.label")
+                .padding(.top, CouliSpacing.s3)
+            // 两项展开写，不用 ForEach：保守写法，这里没有崩溃记录（见 consentSheet 的说明）
+            methodRow(WalletJSON.alipay, method, "payout.alipay", errorText, editable: editable, actions)
+            RecordDivider()
+                .walletProbe("payout.method.divider", role: "divider")
+            methodRow(WalletJSON.bankCard, method, "payout.bank", errorText, editable: editable, actions)
             if let errorText {
                 fieldErrorText(errorText, field: PayoutAccountForm.payoutMethod)
+                    .padding(.bottom, CouliSpacing.s3)
+            }
+        }
+        .padding(.horizontal, CouliSpacing.s4)
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private func methodRow(_ value: String, _ method: String, _ key: String, _ errorText: String?, editable: Bool,
+                           _ actions: PayoutActions) -> some View {
+        let selected = method == value
+        let probe = value == WalletJSON.alipay ? "payout.method.alipay" : "payout.method.bank"
+        return Button {
+            actions.method(value)
+        } label: {
+            HStack(alignment: .center, spacing: CouliSpacing.s3) {
+                RadioMark(selected: selected)
+                    .walletProbe(probe + ".radio", role: "radio")
+                VStack(alignment: .leading, spacing: 2) {
+                    RecordText(texts.text(key), style: .body, weight: selected ? .couliSemibold : .regular,
+                               color: CouliColor.textPrimary, probe: probe + ".title")
+                    RecordText(texts.text(key + "_desc"), style: .caption, color: CouliColor.textSecondary,
+                               probe: probe + ".desc")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .walletProbe(probe, role: "row")
+            .padding(.vertical, CouliSpacing.s3)
+            .frame(minHeight: CouliHitTarget.minimum)
+            .contentShape(Rectangle())
+            .walletProbe(probe + ".hit", role: "hit")
+        }
+        .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))
+        .disabled(!editable)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityHint(Text(verbatim: errorText ?? ""))
+        .accessibilityIdentifier(probe)
+    }
+
+    // swiftlint:disable function_parameter_count
+    /// `path`：表单里的这一格。框内文字对回时读执行器当前值，不读这次渲染的快照（`WalletInputField`）。
+    func field(_ labelKey: String, _ placeholderKey: String, _ path: KeyPath<PayoutForm, String>, _ name: String,
+               _ errors: Set<String>, _ flowState: FlowState, editable: Bool, keyboard: UIKeyboardType = .default,
+               note: String? = nil, set: @escaping (String) -> Void) -> some View {
+        let form = controller.state.form
+        let submitted = submitError(flowState, form).flatMap { $0.field == name ? $0.notice : nil }
+        let hasError = errors.contains(name) || submitted != nil
+        let errorText = submitted?.message(texts) ?? (hasError ? texts.text(flowState.fieldErrors.contains(name)
+                ? (flowState.fieldErrorKey ?? "error.20001") : "error.20001") : nil)
+        return VStack(alignment: .leading, spacing: WalletFieldMetric.gap) {
+            WalletFieldLabel(text: texts.text(labelKey), probe: "payout.field.\(name).label")
+            WalletInputField(
+                placeholder: texts.text(placeholderKey), label: texts.text(labelKey),
+                identifier: "payout.field.\(name)", probe: "payout.field.\(name).box", value: form[keyPath: path],
+                current: { [controller] in controller.state.form[keyPath: path] }, keyboard: keyboard,
+                hasError: hasError, hint: errorText ?? "", set: set,
+                reveal: { revealInput(name) }
+            )
+            .autocorrectionDisabled(true)
+            .disabled(!editable)
+            .id(WalletFieldMetric.anchor(name))
+            if let errorText {
+                fieldErrorText(errorText, field: name)
+            }
+            if let note {
+                RecordText(note, style: .caption, color: CouliColor.textSecondary, probe: "payout.payeeNote")
             }
         }
     }
 
-    // swiftlint:disable:next function_parameter_count
-    func field(_ labelKey: String, _ placeholderKey: String, _ value: String, _ name: String, _ errors: Set<String>,
-               _ flowState: FlowState, editable: Bool, keyboard: UIKeyboardType = .default,
-               set: @escaping (String) -> Void) -> some View {
-        let hasError = errors.contains(name)
-        let errorText = hasError ? texts.text(flowState.fieldErrors.contains(name)
-            ? (flowState.fieldErrorKey ?? "error.20001") : "error.20001") : nil
-        return VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-            Text(verbatim: texts.text(labelKey))
-                .couliFont(.footnote, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textSecondary)
-            TextField(texts.text(placeholderKey), text: Binding(get: { value }, set: set))
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-                .couliFont(.body)
-                .padding(CouliSpacing.s3)
-                .frame(minHeight: CouliHitTarget.minimum)
-                .background(RoundedRectangle(cornerRadius: CouliRadius.button)
-                    .stroke(hasError ? CouliColor.statusErrorText : CouliColor.borderControl))
-                .disabled(!editable)
-                .accessibilityLabel(Text(verbatim: texts.text(labelKey)))
-                .accessibilityHint(Text(verbatim: errorText ?? ""))
-                .accessibilityIdentifier("payout.field.\(name)")
-            if let errorText {
-                fieldErrorText(errorText, field: name)
-            }
-        }
+    // swiftlint:enable function_parameter_count
+
+    /// 焦点字段滚到可视区中部：键盘升起后底栏上移，否则字段留在底栏后面（下一个字段中部也露出来，不用先滚动）。
+    func revealInput(_ name: String) {
+        scrollRequest = FieldScrollRequest(event: UUID().uuidString, anchor: WalletFieldMetric.anchor(name))
     }
 
     /// 字段旁的错误提示：可访问焦点与滚动目标（`payout.err.<字段>`）；出现后（或错误事件编号变化时）按 `FieldErrorCue` 定位一次。
@@ -161,25 +165,5 @@ struct FieldScrollRequest: Equatable {
 
     static func anchor(_ field: String) -> String {
         "payout.err.\(field)"
-    }
-}
-
-/// 单选圆点（设计稿 PayoutAccount：未选空心圆、选中品牌色实心圆 + 白点）；读屏由按钮的 isSelected 表达。
-struct RadioMark: View {
-    let selected: Bool
-    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 22
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(selected ? CouliColor.brandPrimary : CouliColor.borderControl, lineWidth: 1.5)
-            if selected {
-                Circle().fill(CouliColor.brandPrimary)
-                Circle().fill(CouliColor.backgroundSurface).frame(width: size / 3, height: size / 3)
-            }
-        }
-        .frame(width: size, height: size)
-        .padding(.top, 1)
-        .accessibilityHidden(true)
     }
 }

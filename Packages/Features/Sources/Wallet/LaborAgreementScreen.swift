@@ -48,17 +48,16 @@ public struct LaborAgreementScreen: View {
         ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-                    Text(verbatim: texts.text("labor.intro"))
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    RecordText(texts.text("labor.intro"), style: .footnote, color: CouliColor.textSecondary,
+                               probe: "labor.intro")
+                        .padding(.horizontal, CouliSpacing.s1)
                     agreement(snapshot, actions)
-                    Text(verbatim: texts.text("labor.signed_note"))
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    RecordText(texts.text("labor.signed_note"), style: .caption, color: CouliColor.textSecondary,
+                               probe: "labor.signedNote")
+                        .padding(.horizontal, CouliSpacing.s1)
                 }
-                .padding(CouliSpacing.s4)
+                .padding(.top, CouliSpacing.s2)
+                .padding(.horizontal, CouliSpacing.s4)
                 .frame(maxWidth: WalletLayout.maxContentWidth)
                 .frame(maxWidth: .infinity)
             }
@@ -67,30 +66,45 @@ public struct LaborAgreementScreen: View {
                 if snapshot.showsRecheck {
                     CouliButton(texts.text("wallet.retry"), kind: .text, action: actions.recheck)
                 }
-                CheckRow(title: texts.text("labor.check"), checked: snapshot.checked, action: actions.toggle,
-                         identifier: "labor.check")
+                CheckRow(title: texts.text("labor.check"), spoken: checkSpoken(snapshot), checked: snapshot.checked,
+                         action: actions.toggle, identifier: "labor.check", probe: "labor.check")
                     .disabled(snapshot.phase != .content)
                 CouliButton(texts.text("labor.sign"), isLoading: snapshot.showsSigning,
                             isEnabled: controller.signEnabled && !gate.blocked, fillsWidth: true, action: actions.sign)
+                    .walletProbe("labor.sign", role: "button")
                     .accessibilityIdentifier("labor.sign")
             }
-            .padding(CouliSpacing.s4)
+            .padding([.top, .bottom], CouliSpacing.s3)
+            .padding(.horizontal, CouliSpacing.s4)
             .frame(maxWidth: WalletLayout.maxContentWidth)
             .frame(maxWidth: .infinity)
-            .background(CouliColor.backgroundSurface.ignoresSafeArea(edges: .bottom))
         }
         .task { controller.load() }
     }
 
+    /// 勾选框读屏带版本号（brief §4.2）。
+    func checkSpoken(_ snapshot: LaborSnapshot) -> String? {
+        snapshot.version.map {
+            texts.text("labor.check") + PriceTerms.spokenPause + texts.format("labor.version", ["version": $0])
+        }
+    }
+
     func agreement(_ snapshot: LaborSnapshot, _ actions: LaborActions) -> some View {
-        VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-            Text(verbatim: texts.text("labor.name"))
-                .couliFont(.body, weight: .couliSemibold)
-                .accessibilityAddTraits(.isHeader)
-            if let version = snapshot.version {
-                Text(verbatim: texts.format("labor.version", ["version": version]))
-                    .couliFont(.footnote)
+        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+            HStack(alignment: .center, spacing: CouliSpacing.s3) {
+                CouliIconView(.orders, size: 24, relativeTo: .body)
                     .foregroundColor(CouliColor.textSecondary)
+                    .walletProbe("labor.docIcon", role: "icon")
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    RecordText(texts.text("labor.name"), style: .body, weight: .couliSemibold,
+                               color: CouliColor.textPrimary, probe: "labor.name")
+                        .accessibilityAddTraits(.isHeader)
+                    if let version = snapshot.version {
+                        RecordText(texts.format("labor.version", ["version": version]), style: .caption,
+                                   color: CouliColor.textSecondary, probe: "labor.version")
+                    }
+                }
             }
             switch snapshot.phase {
             case .unavailable:
@@ -104,32 +118,33 @@ public struct LaborAgreementScreen: View {
             case .error:
                 if let error = snapshot.error {
                     NoticeBar(text: error.message(texts), noticeId: error.id, retryTitle: texts.text("wallet.retry"),
-                              retry: actions.retry, identifier: "labor.error")
+                              retry: actions.retry, identifier: "labor.error", tone: .error)
                 }
             case .content:
-                // 设计稿：全文放在浅底区内、区内上下滚动（读屏读到全文）
-                ScrollView {
-                    Text(verbatim: snapshot.text ?? "")
-                        .couliFont(.footnote)
-                        .foregroundColor(CouliColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(CouliSpacing.s3)
-                        .accessibilityLabel(Text(verbatim: texts.text("labor.fulltext_label") + PriceTerms.spokenPause
-                                + (snapshot.text ?? "")))
-                        .accessibilityIdentifier("labor.text")
-                }
-                .frame(minHeight: 160, idealHeight: 380, maxHeight: 380)
-                .background(
-                    RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                        .fill(CouliColor.backgroundMuted)
-                )
+                fullText(snapshot.text ?? "")
             }
             if let error = snapshot.error, snapshot.phase == .content {
-                NoticeBar(text: error.message(texts), noticeId: error.id, identifier: "labor.signError")
+                NoticeBar(text: error.message(texts), noticeId: error.id, identifier: "labor.signError", tone: .error)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .couliCard()
+        .walletProbe("labor.card", role: "card")
+    }
+
+    /// 设计稿：全文放在浅底区内、高 360、区内上下滚动（读屏读到全文）。
+    func fullText(_ text: String) -> some View {
+        ScrollView {
+            RecordText(text, style: .footnote, color: CouliColor.textPrimary, probe: "labor.textBody")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(CouliSpacing.s4)
+                .accessibilityLabel(Text(verbatim: texts.text("labor.fulltext_label") + PriceTerms.spokenPause + text))
+                .accessibilityIdentifier("labor.text")
+        }
+        .frame(height: 360)
+        .background(
+            RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous).fill(CouliColor.backgroundMuted)
+        )
+        .walletProbe("labor.textArea", role: "text-area")
     }
 }

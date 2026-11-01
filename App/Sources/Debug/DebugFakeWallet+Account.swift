@@ -47,11 +47,13 @@ extension DebugFakeWallet {
         } else {
             account = alipay(maskLogon(body["alipay_logon_id"] as? String ?? ""))
         }
-        let outcome: (code: Int, data: String) = switch state["outcome"] ?? state["save"] {
-        case "30307": (30307, "null")
-        case "44001": (44001, "null")
-        default: (0, Self.json(account))
-        }
+        let outcome: (code: Int, data: String) = DebugWalletVisual.payoutSaveError ?? {
+            switch state["outcome"] ?? state["save"] {
+            case "30307": (30307, "null")
+            case "44001": (44001, "null")
+            default: (0, Self.json(account))
+            }
+        }()
         if outcome.code == 0 {
             payout = account
         }
@@ -142,6 +144,7 @@ final class FakeRealName: RealNameBackend, @unchecked Sendable {
     }
 
     func submit(name: String, idNo: String, idempotencyKey _: String, owner _: RequestOwnership?) async -> ApiResult {
+        DebugWalletLog.backend(.realnameSubmit)
         try? await Task.sleep(nanoseconds: 300_000_000)
         if name.isEmpty {
             return DebugFakeWallet.failure(20001, data: "{\"fields\":[\"name\"]}")
@@ -169,6 +172,7 @@ final class FakeLabor: LaborBackend, @unchecked Sendable {
     }
 
     func current(owner _: RequestOwnership?) async -> ApiResult {
+        DebugWalletLog.backend(.laborCurrent)
         try? await Task.sleep(nanoseconds: 300_000_000)
         let signed = fake.lock.withLock { fake.labor(fake.options) }
         let data: [String: Any] = [
@@ -179,6 +183,7 @@ final class FakeLabor: LaborBackend, @unchecked Sendable {
     }
 
     func sign(version: String, textSha256: String, owner _: RequestOwnership?) async -> ApiResult {
+        DebugWalletLog.backend(.laborSign)
         try? await Task.sleep(nanoseconds: 300_000_000)
         guard version == DebugFakeWallet.laborVersion, textSha256 == DebugFakeWallet.sha256(DebugFakeWallet.laborText)
         else { return DebugFakeWallet.failure(20001) }

@@ -134,20 +134,6 @@ public struct CouliDialog: View {
     }
 }
 
-/// 正文区：放得下时按内容高；放不下时占满剩余高度并滚动（头部与操作区固定，adaptation-a11y-spec §4）。
-struct ScrollingBody<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView {
-                content
-            }
-        }
-    }
-}
-
 /// 底部半屏（GUIDE §3「半屏」）：上两角圆角 24、把手、标题 → 关闭 → 正文 → 操作；模态，焦点进标题。
 /// 正文放不下时只有正文滚动，头部与 `actions` 固定可见。
 /// `showsTitle == false`（APP-11v HomeClipboardCard-v3：单张识别卡无标题）：只有把手与右上关闭，标题不画也不另读一遍，
@@ -160,13 +146,18 @@ public struct CouliSheet<Content: View, Actions: View>: View {
     private let titleLeading: AnyView?
     private let showsClose: Bool
     private let closeID: String?
+    private let probeID: String?
+    private let topPadding: CGFloat
     private let onClose: () -> Void
     private let content: Content
     private let actions: Actions
     @AccessibilityFocusState private var titleFocused: Bool
     @AccessibilityFocusState private var closeFocused: Bool
 
-    /// - Parameter closeLabel: 关闭按钮读屏名称（字典文案）。
+    /// - Parameters:
+    ///   - closeLabel: 关闭按钮读屏名称（字典文案）。
+    ///   - probeID: 测量编号前缀（缺省 nil 不报、外观不变）：`.panel` 面板、`.handle` 把手、`.title` 标题。
+    ///   - topPadding: 面板上内边距（缺省不变）。
     public init(
         title: String,
         closeLabel: String,
@@ -175,6 +166,8 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         titleLeading: AnyView? = nil,
         showsClose: Bool = true,
         closeID: String? = nil,
+        probeID: String? = nil,
+        topPadding: CGFloat = CouliSpacing.s3,
         onClose: @escaping () -> Void,
         @ViewBuilder content: () -> Content,
         @ViewBuilder actions: () -> Actions
@@ -186,6 +179,8 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         self.titleLeading = titleLeading
         self.showsClose = showsClose
         self.closeID = closeID
+        self.probeID = probeID
+        self.topPadding = topPadding
         self.onClose = onClose
         self.content = content()
         self.actions = actions()
@@ -196,6 +191,7 @@ public struct CouliSheet<Content: View, Actions: View>: View {
             Capsule()
                 .fill(CouliColor.borderSubtle)
                 .frame(width: CouliGuideMetric.sheetHandleWidth, height: CouliGuideMetric.sheetHandleHeight)
+                .modifier(DialogProbe(id: probeID, part: "handle"))
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
             HStack(alignment: .top) {
@@ -208,6 +204,8 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                             .modifier(SheetTitleFont(style: titleStyle))
                             .foregroundColor(CouliColor.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .couliTextNaturalProbe(probeID.map { $0 + ".title" }, role: "text", text: title,
+                                                   style: titleStyle.textStyle, weight: titleStyle.weight)
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityFocused($titleFocused)
                     }
@@ -233,7 +231,7 @@ public struct CouliSheet<Content: View, Actions: View>: View {
             VStack(spacing: CouliSpacing.s3) { actions }
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, CouliSpacing.s3)
+        .padding(.top, topPadding)
         .padding(.horizontal, CouliSpacing.s4)
         .padding(.bottom, CouliSpacing.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,6 +241,7 @@ public struct CouliSheet<Content: View, Actions: View>: View {
                 .ignoresSafeArea(edges: .bottom)
                 .couliShadow(.floating)
         )
+        .modifier(DialogProbe(id: probeID, part: "panel"))
         .accessibilityElement(children: .contain)
         .modifier(SheetPaneName(name: showsTitle ? nil : title))
         .accessibilityAddTraits(.isModal)

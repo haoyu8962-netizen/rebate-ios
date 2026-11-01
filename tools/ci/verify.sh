@@ -447,6 +447,23 @@ withdraw_visual_tests() {
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"
+# APP-09v-e：收款账号 / 实名 / 劳务视觉 e 组（tools/testing/payout-visual-tests.sh 带参数时不走默认清单，这里显式给全；同一 DerivedData，不重复构建）
+payout_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/payout-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:WalletCoreTests/WalletVectorTests -only-testing:WalletCoreTests/PayoutVisualFixtureTests \
+        -only-testing:CouliTests/PayoutVisualOracleTests -only-testing:CouliTests/PayoutVisualFundsGuardTests \
+        -only-testing:CouliTests/PayoutVisualMoneyTests -only-testing:CouliTests/PayoutVisualPrivacyTests \
+        -only-testing:CouliTests/PayoutVisualConsentCrashTests -only-testing:CouliTests/PayoutVisualLayoutTests \
+        -only-testing:CouliTests/PayoutVisualErrorTests -only-testing:CouliTests/IdentityVisualLayoutTests \
+        -only-testing:CouliTests/LaborVisualLayoutTests -only-testing:CouliTests/PayoutVisualAdaptTests \
+        -only-testing:CouliTests/PayoutVisualSnapshotTests -only-testing:CouliTests/PayoutAccountTests \
+        -only-testing:CouliTests/WithdrawVisualPayoutSharedTests -only-testing:CouliTests/WithdrawVisualFundsGuardTests \
+        -only-testing:CouliUITests/PayoutVisualUITests -only-testing:CouliUITests/PayoutVisualInputUITests
+}
+
+# $1 = "platform=iOS Simulator,id=<UDID>"
 # APP-09v-b：提现记录视觉 b 组（tools/testing/records-visual-tests.sh 默认清单 10 个类，这里显式给全；同一 DerivedData，不重复构建）
 records_visual_tests() {
     local udid="${1##*id=}"
@@ -580,6 +597,7 @@ if [ "$FAST" -eq 0 ]; then
     step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
     step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
     step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" withdraw_visual_tests "$DEST"
+    step "收款账号实名劳务视觉 e 组（tools/testing/payout-visual-tests.sh）" payout_visual_tests "$DEST"
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \
         --expect COULI_DEBUG_ONLY_ROUTE_TABLE --expect COULI_UPDATE_CHECK_EXAMPLE_5B7E3D91 --expect couli-debug --expect test.couli.invalid \
@@ -590,6 +608,7 @@ if [ "$FAST" -eq 0 ]; then
         --expect COULI_FAKE_PRODUCT_CARDS --expect DebugFakeProductImages \
         --expect COULI_FAKE_ORDER_VISUAL --expect DebugOrderLog \
         --expect COULI_FAKE_WALLET_VISUAL --expect DebugWalletVisual --expect DebugWalletLog --expect debug.wallet.log \
+        --expect backend:realname.submit --expect backend:labor.current --expect backend:labor.sign \
         "$PRODUCTS/Debug-iphonesimulator/Couli.app"
     step "Generated 包 Release 一致性测试 + 优化对象标记" generated_release_conformance "$DEST"
 fi
