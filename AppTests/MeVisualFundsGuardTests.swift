@@ -128,13 +128,34 @@ final class MeVisualFundsGuardTests: XCTestCase {
 
     /// 草稿表只新增（me.amount_shown，G-M16）：去掉这一行后与底版逐字节一致。
     /// test-change（D10-561 ①，#24）：另放行 notify.not_asked（G-S14）、settings.delete_account（G-S05）两个新键各一行，已有草稿仍比原哈希。
+    /// test-change（APP-12w-b，D10-403 ⑥ G-P07、G-P16；tests-b-ios-handback §4）：`cs.safety` 只许是定稿句或旧句这两个整行值，比对前还原成旧句；
+    /// 放行新键 `privacy.system_permissions.purpose.push`。F-IOS-68 ④ 收紧：整行匹配（含 me.amount_shown，原来是 contains）、
+    /// 值里不许反斜杠（防插值）、文件头不许 BOM（解码会吃掉 BOM）。原哈希不变。
     func testDraftTableOnlyAdds() throws {
         let path = "Packages/Core/Sources/MeCore/MeDraftTable.swift"
-        let text = try XCTUnwrap(String(bytes: read(path), encoding: .utf8))
-        let kept = text.components(separatedBy: "\n").filter { !$0.contains("\"me.amount_shown\"") }
-        let added = #"^\s*"(notify\.not_asked|settings\.delete_account)": "[^"]*",$"#
-        XCTAssertEqual(digest(try droppingLines(of: Data(kept.joined(separator: "\n").utf8), matching: added)),
+        let data = try read(path)
+        XCTAssertFalse(data.starts(with: [0xEF, 0xBB, 0xBF]), "文件头出现 BOM")
+        let text = try XCTUnwrap(String(bytes: data, encoding: .utf8))
+        let safety = #"        "cs.safety": "客服不会向你索要验证码或密码","#
+        let original = #"        "cs.safety": "客服不会向你索要登录验证码和密码","#
+        let lines = text.components(separatedBy: "\n")
+        XCTAssertEqual(lines.filter { $0 == safety || $0 == original }.count, 1, "cs.safety 只改这一行的值")
+        let restored = lines.map { $0 == safety ? original : $0 }.joined(separator: "\n")
+        let added = #"^\s*"(me\.amount_shown|notify\.not_asked|settings\.delete_account"#
+            + #"|privacy\.system_permissions\.purpose\.push)": "[^"\\]*",$"#
+        XCTAssertEqual(digest(try droppingLines(of: Data(restored.utf8), matching: added)),
                        "1188ce7f79435b7ee164a4000b170665b54296f0353faa2287ba165788a669f1", "已有草稿被改")
+    }
+
+    /// F-IOS-68 ④（S2-1、S2-3）：放行的 `idDelete` 映射只许在 settingsKeys 的 resetTip 之后；文件头不许 BOM。
+    func testDraftTextsAllowedLineStaysPut() throws {
+        let path = "Packages/Core/Sources/MeCore/MeDraftTexts.swift"
+        let data = try read(path)
+        XCTAssertFalse(data.starts(with: [0xEF, 0xBB, 0xBF]), "文件头出现 BOM")
+        let text = try XCTUnwrap(String(bytes: data, encoding: .utf8))
+        XCTAssertTrue(text.contains("SettingsItems.idResetTip: \"settings.reset_tip\",\n"
+                + "        SettingsItems.idDelete: \"settings.delete_account\",\n"), "放行行的位置")
+        XCTAssertEqual(text.components(separatedBy: "SettingsItems.idDelete:").count, 2, "放行行只有一处")
     }
 
     /// 回调捕获渲染时值（共性第 63 条）：版本与码在渲染时取出，【提现】、复制带它们执行。

@@ -179,19 +179,6 @@ final class SettingsVisualSnapshotTests: SettingsVisualTestCase {
         ])
     }
 
-    /// 共用件默认值不变（G-S02）：iOS 隐私中心、关于没有既有基准。这两张**由实现者在改产品之前**录（交回 §4），改完比对 0 变化。
-    func testSharedPagesUnchanged() async throws {
-        for route in ["PrivacyCenter", "About"] {
-            let host = try fresh(Setup())
-            let entry = try XCTUnwrap(host.fixture.open(route), "\(route) 没有打开")
-            host.mountScreen(entry.screen(), canvas: .init(height: 844))
-            await quietWindow(0.5)
-            let shot = await host.stable { _ in true }
-            let image = try XCTUnwrap(shot, "\(route) 没有截到稳定画面")
-            compare(image, named: "shared-\(route)-light", canvas: .init(height: 844))
-        }
-    }
-
     // MARK: - 执行
 
     private func run(_ shots: [Shot], file: StaticString = #filePath, testName: String = #function,

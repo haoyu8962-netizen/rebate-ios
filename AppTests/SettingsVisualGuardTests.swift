@@ -66,7 +66,10 @@ final class SettingsVisualGuardTests: XCTestCase {
     func testSubControllersOnlyAddSystemStatus() throws {
         let path = "Packages/Core/Sources/MeCore/SettingsSubControllers.swift"
         let text = try XCTUnwrap(String(bytes: read(path), encoding: .utf8))
-        let kept = text.components(separatedBy: "\n").filter { !$0.contains("systemStatus") }.joined(separator: "\n")
+        // test-change（F-IOS-68 ④，tests-b-ios-handback §4）：只认这三行的整行形状（原来含这个词的任意行都放行），原哈希不变
+        let allowed = #"^\s*(/// systemStatus：[^\n]*|public var systemStatus: String\?|state\.systemStatus = status)$"#
+        let kept = text.components(separatedBy: "\n")
+            .filter { $0.range(of: allowed, options: .regularExpression) == nil }.joined(separator: "\n")
         XCTAssertEqual(digest(kept), "9bdfd0fc97ce0da2a7d078a1887f5d639f47a6e4d35c27daa9c3b460a41dfc8a", path)
     }
 
