@@ -77,7 +77,8 @@ final class MeVectorTests: XCTestCase {
         XCTAssertTrue(try array(vectors["sources"], "sources").count > 0, "sources")
         XCTAssertTrue(try array(vectors["gaps"], "gaps").count > 0, "gaps")
         XCTAssertTrue(
-            Set(vectors.keys.filter { $0 != "visualMe" }) == Set(groups + ["version", "sources", "gaps"]),
+            Set(vectors.keys.filter { $0 != "visualMe" && $0 != "visualSettings" })
+                == Set(groups + ["version", "sources", "gaps"]),
             "manifest.groups"
         )
 

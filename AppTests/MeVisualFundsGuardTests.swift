@@ -17,6 +17,14 @@ final class MeVisualFundsGuardTests: XCTestCase {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// test-change（D10-561 ①，#24）：去掉整行匹配 `pattern` 的行（只放行形状确定的单行，同行捎带别的改动不算匹配）。
+    private func droppingLines(of data: Data, matching pattern: String) throws -> Data {
+        let text = try XCTUnwrap(String(bytes: data, encoding: .utf8))
+        let kept = text.components(separatedBy: "\n")
+            .filter { $0.range(of: pattern, options: .regularExpression) == nil }
+        return Data(kept.joined(separator: "\n").utf8)
+    }
+
     /// 「我的」功能目录全部源码（实现者可以拆文件，守卫跟着走）。
     private func featureSources() throws -> [(name: String, text: String)] {
         let url = WalletVisualData.repo().appendingPathComponent(feature)
@@ -39,6 +47,7 @@ final class MeVisualFundsGuardTests: XCTestCase {
     /// test-change（v2）：MeTabController.swift、App/Sources/Me/AppMe.swift、AppMe+Pages.swift 解钉——编排裁定 iOS 受限会话自动读 getMe
     /// 是真缺陷，
     /// 在本任务单独修（F-X-14、followups.md:151、03 受限会话不拉取），改动点就在这三个文件。解钉后由 `testExecutorLinesKept` 钉住其余逻辑。
+    /// test-change（D10-561 ①，#24）：MeDraftTexts.swift 只放行 G-S05 的 `SettingsItems.idDelete` 标题映射这一行，原哈希不变。
     func testLogicFilesByteIdentical() throws {
         let pinned: [String: String] = [
             "Packages/Core/Sources/MeCore/MeView.swift":
@@ -63,8 +72,14 @@ final class MeVisualFundsGuardTests: XCTestCase {
             "App/Sources/Me/MeRouteViews.swift": "3a32258056218f8c4b0f97f86ed93f02c1302a14740bd5de27d3990b11da9a72",
             "App/Sources/Me/MeSystem.swift": "e7dc880181250359f034368ef803ac2b75d0a33e620fcd644aaf480f063ffbaa",
         ]
+        let allowedLine = [
+            "Packages/Core/Sources/MeCore/MeDraftTexts.swift":
+                #"^\s*SettingsItems\.idDelete: "settings\.delete_account",$"#,
+        ]
         for (path, expected) in pinned.sorted(by: { $0.key < $1.key }) {
-            XCTAssertEqual(digest(try read(path)), expected, "\(path) 被改（brief §5）")
+            let data = try read(path)
+            let body = try allowedLine[path].map { try droppingLines(of: data, matching: $0) } ?? data
+            XCTAssertEqual(digest(body), expected, "\(path) 被改（brief §5）")
         }
     }
 
@@ -112,11 +127,13 @@ final class MeVisualFundsGuardTests: XCTestCase {
     }
 
     /// 草稿表只新增（me.amount_shown，G-M16）：去掉这一行后与底版逐字节一致。
+    /// test-change（D10-561 ①，#24）：另放行 notify.not_asked（G-S14）、settings.delete_account（G-S05）两个新键各一行，已有草稿仍比原哈希。
     func testDraftTableOnlyAdds() throws {
         let path = "Packages/Core/Sources/MeCore/MeDraftTable.swift"
         let text = try XCTUnwrap(String(bytes: read(path), encoding: .utf8))
         let kept = text.components(separatedBy: "\n").filter { !$0.contains("\"me.amount_shown\"") }
-        XCTAssertEqual(digest(Data(kept.joined(separator: "\n").utf8)),
+        let added = #"^\s*"(notify\.not_asked|settings\.delete_account)": "[^"]*",$"#
+        XCTAssertEqual(digest(try droppingLines(of: Data(kept.joined(separator: "\n").utf8), matching: added)),
                        "1188ce7f79435b7ee164a4000b170665b54296f0353faa2287ba165788a669f1", "已有草稿被改")
     }
 
