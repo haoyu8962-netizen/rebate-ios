@@ -22,10 +22,16 @@ public enum MeAnnounceProbe {
 /// 一次性提示 → 轻提示请求（每次都是新请求：显示、重新计时、播报一次）。
 @MainActor
 enum MeToastMessage {
+    /// 成功类带对勾，错误、限流类不带（G-S06）。关于页「已复制诊断信息」不属设置一族，保持原有对勾。
+    private static let successKeys: Set<String> = [
+        SettingsController.clearedKey, SettingsController.savedKey, SettingsController.resetDoneKey,
+        "deletion.cancelled_toast", AboutController.copiedKey,
+    ]
+
     static func make(_ notice: MeNotice, texts: MeTexts) -> CouliToastMessage {
         let text = notice.message(texts)
         MeAnnounceProbe.toast?(text)
-        return CouliToastMessage(text)
+        return CouliToastMessage(text, icon: successKeys.contains(notice.key) ? .success : .none)
     }
 }
 
@@ -94,12 +100,20 @@ struct MeRow: View {
     /// 可点但暂不可用（如 42901 禁用期）：置灰、不响应。
     var enabled = true
     var identifier: String
+    /// 版式（缺省现状；设置一族传 `.settings`，G-S02）。
+    var style = MeListStyle.standard
+    /// 动作行不画箭头（BR-ATTR-21：点了不跳页），读屏仍是按钮。
+    var showsChevron = true
+    /// `.settings` 版式的最小行高。
+    var settingsMinHeight = SettingsRowContent.cardRowHeight
+    /// 测量编号：行框，`.title`、`.value`、`.chevron`（只在 `.settings` 版式上报）。
+    var probe: String?
     var action: () -> Void = {}
 
     var body: some View {
         if clickable {
             Button(action: action) {
-                content(chevron: true)
+                content(chevron: showsChevron)
             }
             .buttonStyle(CouliPlainButtonStyle(cornerRadius: 0))
             .disabled(!enabled)
@@ -111,7 +125,18 @@ struct MeRow: View {
         }
     }
 
+    @ViewBuilder
     private func content(chevron: Bool) -> some View {
+        switch style {
+        case .standard:
+            standardContent(chevron: chevron)
+        case .settings:
+            SettingsRowContent(title: title, value: value, chevron: chevron, enabled: enabled,
+                               minHeight: settingsMinHeight, probe: probe)
+        }
+    }
+
+    private func standardContent(chevron: Bool) -> some View {
         HStack(alignment: .center, spacing: CouliSpacing.s3) {
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 Text(verbatim: title)
@@ -146,7 +171,7 @@ struct MeRow: View {
     }
 }
 
-/// 开关行（个性化推荐、服务类推送）：整行一个读屏节点，读作「{名称}，开关，已打开 / 已关闭」（A11yFocusStyles）。
+/// 开关行（个性化推荐、服务类推送）：整行一个读屏节点，读作「{名称}，开关，已打开 / 已关闭」（A11yFocusStyles），有副标题时作读屏说明（G-S12）。
 struct MeSwitchRow: View {
     let title: String
     var subtitle: String?
@@ -154,10 +179,70 @@ struct MeSwitchRow: View {
     var enabled = true
     let texts: MeTexts
     let identifier: String
+    /// 版式（缺省现状；设置一族传 `.settings`，G-S02）。
+    var style = MeListStyle.standard
+    /// 测量编号：行框，`.title`、`.subtitle`（只在 `.settings` 版式上报）。
+    var probe: String?
+    /// 测量编号：系统开关本身。
+    var controlProbe: String?
     let onChange: (Bool) -> Void
 
+    private var binding: Binding<Bool> {
+        Binding(get: { isOn }, set: { onChange($0) })
+    }
+
     var body: some View {
-        Toggle(isOn: Binding(get: { isOn }, set: { onChange($0) })) {
+        row
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: title))
+            .accessibilityValue(Text(verbatim: texts.text("me.switch.role") + PriceTerms.spokenPause
+                    + texts.text(isOn ? "me.switch.on" : "me.switch.off")))
+            .accessibilityHint(Text(verbatim: subtitle ?? ""))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                if enabled {
+                    onChange(!isOn)
+                }
+            }
+            .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder
+    private var row: some View {
+        switch style {
+        case .standard:
+            standardRow
+        case .settings:
+            settingsRow
+        }
+    }
+
+    /// 标题 17 + 副标题 12（纵向 2、上下 8）；开关在右、垂直居中，不挤压文字。无副标题时 min 44。
+    private var settingsRow: some View {
+        HStack(alignment: .center, spacing: CouliSpacing.s3) {
+            VStack(alignment: .leading, spacing: CouliSpacing.s1 / 2) {
+                MeText(title, style: .body, probe: probe.map { $0 + ".title" })
+                    .foregroundColor(enabled ? CouliColor.textPrimary : CouliColor.textSecondary)
+                if let subtitle {
+                    MeText(subtitle, style: .caption, probe: probe.map { $0 + ".subtitle" })
+                        .foregroundColor(CouliColor.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(isOn: binding) { Text(verbatim: title) }
+                .labelsHidden()
+                .tint(CouliColor.brandPrimary)
+                .disabled(!enabled)
+                .fixedSize()
+                .meProbe(controlProbe, role: "switch")
+        }
+        .padding(.vertical, subtitle == nil ? 0 : CouliSpacing.s2)
+        .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
+        .meProbe(probe, role: "row")
+    }
+
+    private var standardRow: some View {
+        Toggle(isOn: binding) {
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 Text(verbatim: title)
                     .couliFont(.body)
@@ -176,38 +261,51 @@ struct MeSwitchRow: View {
         .padding(.horizontal, CouliSpacing.s4)
         .padding(.vertical, CouliSpacing.s3)
         .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: title))
-        .accessibilityValue(Text(verbatim: texts.text("me.switch.role") + PriceTerms.spokenPause
-                + texts.text(isOn ? "me.switch.on" : "me.switch.off")))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction {
-            if enabled {
-                onChange(!isOn)
-            }
-        }
-        .accessibilityIdentifier(identifier)
     }
 }
 
 /// 白卡片分组（标题可空）。
 struct MeGroup<Content: View>: View {
     var title: String?
+    /// 版式（缺省现状；设置一族传 `.settings`，G-S02）。
+    var style = MeListStyle.standard
+    /// 测量编号：卡框，`.title`（只在 `.settings` 版式上报）。
+    var probe: String?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             if let title, !title.isEmpty {
-                Text(verbatim: title)
-                    .couliFont(.footnote, weight: .couliSemibold)
+                label(title)
                     .foregroundColor(CouliColor.textSecondary)
                     .padding(.horizontal, CouliSpacing.s1)
                     .accessibilityAddTraits(.isHeader)
             }
-            VStack(spacing: 0) {
-                content()
+            switch style {
+            case .standard:
+                VStack(spacing: 0) {
+                    content()
+                }
+                .couliCard(padding: 0)
+            case .settings:
+                VStack(spacing: 0) {
+                    content()
+                }
+                .padding(.vertical, CouliSpacing.s1)
+                .padding(.horizontal, CouliSpacing.s4)
+                .couliCard(padding: 0)
+                .meProbe(probe, role: "card")
             }
-            .couliCard(padding: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func label(_ title: String) -> some View {
+        switch style {
+        case .standard:
+            Text(verbatim: title).couliFont(.footnote, weight: .couliSemibold)
+        case .settings:
+            MeText(title, style: .caption, probe: probe.map { $0 + ".title" })
         }
     }
 }

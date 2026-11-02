@@ -28,13 +28,14 @@ public struct CouliDialog: View {
     private let onEscape: (() -> Void)?
     @AccessibilityFocusState private var titleFocused: Bool
 
-    public init(title: String, message: String? = nil, primary: CouliDialogAction,
-                secondary: CouliDialogAction? = nil) {
+    /// `centeredTitle`、`probeID` 同自定义正文版（缺省不变），测量多一个 `.message`（带设计字号）。
+    public init(title: String, message: String? = nil, centeredTitle: Bool = false, probeID: String? = nil,
+                primary: CouliDialogAction, secondary: CouliDialogAction? = nil) {
         self.title = title
         self.message = message
         content = nil
-        centeredTitle = false
-        probeID = nil
+        self.centeredTitle = centeredTitle
+        self.probeID = probeID
         onEscape = nil
         self.primary = primary
         self.secondary = secondary
@@ -87,6 +88,8 @@ public struct CouliDialog: View {
                         .couliFont(.footnote)
                         .foregroundColor(CouliColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .couliTextNaturalProbe(probeID.map { $0 + ".message" }, role: "dialog", text: message,
+                                               style: .footnote)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

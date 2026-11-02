@@ -56,6 +56,7 @@ public struct MeDraftTexts: MeTexts {
         SettingsItems.idAuth: "me.grid.auth",
         SettingsItems.idNotify: "settings.notify",
         SettingsItems.idResetTip: "settings.reset_tip",
+        SettingsItems.idDelete: "settings.delete_account",
         SettingsItems.groupAccount: "settings.group.account",
         SettingsItems.groupPrivacy: "settings.group.privacy",
         SettingsItems.groupGeneral: "settings.group.general",

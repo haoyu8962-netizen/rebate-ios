@@ -170,6 +170,8 @@ public final class NicknameController: ObservableObject {
 public struct NotifySettingsState: Equatable, Sendable {
     /// 系统通知已开启（nil = 还在查）。
     public var systemGranted: Bool?
+    /// systemStatus：系统通知的原始状态（G-S14：not_asked 与已拒绝画法不同；nil = 还在查）。
+    public var systemStatus: String?
     /// 服务类推送开关（nil = 没有后端或还没取到）。
     public var service: Bool?
     public var loading = false
@@ -249,6 +251,7 @@ public final class NotifySettingsController: ObservableObject {
             let status = await deps.env.permissionStatus("push")
             guard alive, systemSeq == mine else { return }
             state.systemGranted = status == "granted"
+            state.systemStatus = status
         }
     }
 

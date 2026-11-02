@@ -77,7 +77,9 @@ struct SettingsBody: View {
     var body: some View {
         let state = controller.state
         let actions = SettingsActions.make(controller, state)
-        Group {
+        // 不用 Group：Group 的修饰器分发到每个分支，轻提示桥跟着分支走；保存昵称后提示只闪一下（变异已证实问题在这个容器）。
+        // 推断是「关子页 + 出提示」同一拍到达、提示被将要拆掉的昵称分支收下，真机未核。ZStack 是单一容器，桥不随分支换。
+        ZStack {
             switch state.sub {
             case .nickname:
                 if let nickname = controller.nickname {
@@ -123,7 +125,7 @@ struct SettingsBody: View {
 
     private func list(_ model: SettingsModel, _ actions: SettingsActions) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: CouliSpacing.s4) {
+            VStack(alignment: .leading, spacing: CouliSpacing.s5) {
                 if controller.identity.member {
                     accountNotice(actions)
                 }
@@ -132,16 +134,19 @@ struct SettingsBody: View {
                 }
                 footer(model.footer, actions)
             }
-            .padding(CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s2)
+            .padding([.horizontal, .bottom], CouliSpacing.s4)
             .meContentWidth()
         }
     }
 
     private func groupView(_ group: SettingsGroup, _ actions: SettingsActions) -> some View {
-        MeGroup(title: MeDraftTexts.settingsKey(group.name).map(texts.text)) {
+        let key = MeDraftTexts.settingsKey(group.name)
+        let probe = key ?? "settings.group.main"
+        return MeGroup(title: key.map(texts.text), style: .settings, probe: probe) {
             ForEach(Array(group.rows.enumerated()), id: \.offset) { index, row in
                 if index > 0 {
-                    Divider().padding(.leading, CouliSpacing.s4)
+                    SettingsDivider(probe: "\(probe).divider.\(index - 1)")
                 }
                 settingsRow(row, actions)
             }
@@ -150,7 +155,7 @@ struct SettingsBody: View {
 
     private func logoutDialog(_ dialog: MeDialog, _ actions: SettingsActions) -> CouliDialog {
         CouliDialog(
-            title: texts.text("settings.logout.confirm"),
+            title: texts.text("settings.logout.confirm"), centeredTitle: true, probeID: "settings.dialog.logout",
             primary: CouliDialogAction(texts.text("settings.logout.confirm_ok")) { actions.confirmLogout(dialog) },
             secondary: CouliDialogAction(texts.text("settings.logout.confirm_cancel")) { actions.cancelDialog(dialog) }
         )
@@ -159,6 +164,7 @@ struct SettingsBody: View {
     private func clearDialog(_ dialog: MeDialog, _ actions: SettingsActions) -> CouliDialog {
         CouliDialog(
             title: texts.text("settings.clear_cache"), message: texts.text("settings.clear_cache.confirm"),
+            centeredTitle: true, probeID: "settings.dialog.clear",
             primary: CouliDialogAction(texts.text("settings.clear_cache.confirm_ok")) { actions.confirmClear(dialog) },
             secondary: CouliDialogAction(texts.text("settings.clear_cache.confirm_cancel")) {
                 actions.cancelDialog(dialog)
@@ -188,32 +194,39 @@ struct SettingsBody: View {
         let me = repo.me(of: controller.identity)
         switch row.id {
         case SettingsItems.idNickname:
-            MeRow(title: title, value: me?.nickname ?? "", clickable: row.clickable, identifier: identifier) {
+            MeRow(title: title, value: me?.nickname ?? "", clickable: row.clickable, identifier: identifier,
+                  style: .settings, probe: identifier) {
                 actions.row(row)
             }
         case SettingsItems.idPhone:
             let value = me.map { texts.text($0.phoneBound ? "settings.phone.bound" : "settings.phone.unbound") } ?? ""
-            MeRow(title: title, value: value, clickable: row.clickable, identifier: identifier) { actions.row(row) }
+            MeRow(title: title, value: value, clickable: row.clickable, identifier: identifier, style: .settings,
+                  probe: identifier) { actions.row(row) }
         case SettingsItems.idClearCache:
             let size = controller.state.cacheBytes.map(CacheSize.text) ?? texts.text("settings.clear_cache.unknown")
-            MeRow(title: title, value: size, identifier: identifier) { actions.row(row) }
-                .accessibilityFocused($clearFocused)
+            MeRow(title: title, value: size, identifier: identifier, style: .settings, probe: identifier) {
+                actions.row(row)
+            }
+            .accessibilityFocused($clearFocused)
         case SettingsItems.idAgreement:
-            MeRow(title: title, identifier: identifier) { actions.row(row) }
+            MeRow(title: title, identifier: identifier, style: .settings, probe: identifier) { actions.row(row) }
                 .accessibilityFocused($agreementFocused)
         case SettingsItems.idClipboard:
             // 默认开启、品牌色轨道（MeSwitchRow），切换直接生效、不出弹层（BR-ID-16 2026-10-30）
             MeSwitchRow(
                 title: title, subtitle: texts.text(key + ".desc"), isOn: controller.clipboardAutoOn, texts: texts,
-                identifier: identifier, onChange: actions.clipboardAuto
+                identifier: identifier, style: .settings, probe: identifier, controlProbe: identifier + ".switch",
+                onChange: actions.clipboardAuto
             )
         case SettingsItems.idResetTip:
-            // R1-06：按 resetTip 闸门置灰（执行器发布禁用期开始 / 结束），执行层另拦
+            // R1-06：按 resetTip 闸门置灰（执行器发布禁用期开始 / 结束），执行层另拦；动作行不画箭头（BR-ATTR-21）
             MeRow(
-                title: title, clickable: row.clickable, enabled: !controller.resetTipBlocked, identifier: identifier
+                title: title, clickable: row.clickable, enabled: !controller.resetTipBlocked, identifier: identifier,
+                style: .settings, showsChevron: false, probe: identifier
             ) { actions.row(row) }
         default:
-            MeRow(title: title, clickable: row.clickable, identifier: identifier) { actions.row(row) }
+            MeRow(title: title, clickable: row.clickable, identifier: identifier, style: .settings,
+                  probe: identifier) { actions.row(row) }
         }
     }
 
@@ -221,29 +234,57 @@ struct SettingsBody: View {
     private func footer(_ footer: String, _ actions: SettingsActions) -> some View {
         switch footer {
         case SettingsItems.footerEnableFull:
-            CouliButton(texts.text("privacy.basic_mode.enable"), fillsWidth: true, action: actions.enableFull)
-                .accessibilityIdentifier("settings.enableFull")
+            basicFooter(actions)
         case SettingsItems.footerLogin:
-            VStack(spacing: CouliSpacing.s3) {
-                Text(verbatim: texts.text("settings.guest_footer"))
-                    .couliFont(.footnote)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-                CouliButton(texts.text("settings.go_login"), fillsWidth: true, action: actions.login)
-                    .accessibilityIdentifier("settings.login")
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("settings.guestFooter")
+            guestFooter(actions)
         default:
             CouliButton(
                 texts.text("settings.logout"), kind: .secondary, isLoading: controller.state.busy, fillsWidth: true,
-                action: actions.askLogout
+                labelProbeID: "settings.logout.label", weight: .couliMedium, action: actions.askLogout
             )
+            .meProbe("settings.logout.button", role: "button")
             .accessibilityFocused($logoutFocused)
             .accessibilityIdentifier("settings.logout")
         }
+    }
+
+    /// 基本模式：提示条 + 通栏主按钮（G-S08 ④；提示条是静态文字，不新增动作）。
+    private func basicFooter(_ actions: SettingsActions) -> some View {
+        VStack(spacing: CouliSpacing.s5) {
+            SettingsNoticeBar(
+                icon: .info, iconColor: CouliColor.textSecondary, background: CouliColor.backgroundMuted,
+                probe: "settings.basic.notice"
+            ) {
+                MeText(texts.text("privacy.basic_mode.notice"), style: .footnote, weight: .couliMedium,
+                       probe: "settings.basic.notice.text")
+                    .foregroundColor(CouliColor.textPrimary)
+            }
+            .accessibilityElement(children: .combine)
+            CouliButton(texts.text("privacy.basic_mode.enable"), fillsWidth: true,
+                        labelProbeID: "settings.enableFull.label", action: actions.enableFull)
+                .meProbe("settings.enableFull.button", role: "button")
+                .accessibilityIdentifier("settings.enableFull")
+        }
+    }
+
+    /// 游客：居中说明 + 文字链接（G-S08 ①；回调不变，标识挂在命中区上）。
+    private func guestFooter(_ actions: SettingsActions) -> some View {
+        VStack(spacing: CouliSpacing.s2) {
+            Text(verbatim: texts.text("settings.guest_footer"))
+                .couliFont(.footnote)
+                .foregroundColor(CouliColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .couliTextNaturalProbe("settings.guest.text", role: "text", text: texts.text("settings.guest_footer"),
+                                       style: .footnote)
+                .frame(maxWidth: .infinity)
+            SettingsTextLink(title: texts.text("settings.go_login"), color: CouliColor.textLink,
+                             probe: "settings.guest.link", hitProbe: "settings.guest.link.hit", action: actions.login)
+                .accessibilityIdentifier("settings.login")
+        }
+        .padding(.top, CouliSpacing.s2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings.guestFooter")
     }
 
     private func agreementSheet(_ sheet: Int, _ actions: SettingsActions) -> some View {
@@ -253,19 +294,25 @@ struct SettingsBody: View {
         ).groups.flatMap(\.rows).first { $0.id == SettingsItems.idAgreement }?.choices ?? []
         return CouliSheet(
             title: texts.text("settings.agreement"), closeLabel: texts.text("me.close"),
+            closeID: "settings.sheet.close", probeID: "settings.sheet",
             onClose: { actions.closeSheet(sheet) },
-            content: { EmptyView() },
-            actions: {
-                ForEach(choices, id: \.type) { choice in
-                    CouliButton(
-                        texts
-                            .text(choice
-                                .type == "agreement" ? "settings.agreement.user" : "settings.agreement.privacy"),
-                        kind: .secondary, fillsWidth: true
-                    ) { actions.agreement(choice, sheet) }
-                        .accessibilityIdentifier("settings.agreement." + choice.type)
+            content: {
+                VStack(spacing: 0) {
+                    ForEach(Array(choices.enumerated()), id: \.element.type) { index, choice in
+                        if index > 0 {
+                            SettingsDivider(probe: "settings.agreement.divider")
+                        }
+                        let title = choice.type == "agreement" ? "settings.agreement.user"
+                            : "settings.agreement.privacy"
+                        MeRow(title: texts.text(title), identifier: "settings.agreement." + choice.type,
+                              style: .settings, settingsMinHeight: CouliHitTarget.minimum,
+                              probe: "settings.agreement." + choice.type) {
+                            actions.agreement(choice, sheet)
+                        }
+                    }
                 }
-            }
+            },
+            actions: { EmptyView() }
         )
         .accessibilityIdentifier("settings.agreementSheet")
     }

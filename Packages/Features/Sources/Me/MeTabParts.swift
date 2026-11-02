@@ -29,18 +29,21 @@ struct MeText: View {
     let text: String
     let style: CouliTextStyle
     var weight: Font.Weight = .regular
+    var monospacedDigits = false
     let probe: String?
 
-    init(_ text: String, style: CouliTextStyle, weight: Font.Weight = .regular, probe: String? = nil) {
+    init(_ text: String, style: CouliTextStyle, weight: Font.Weight = .regular, monospacedDigits: Bool = false,
+         probe: String? = nil) {
         self.text = text
         self.style = style
         self.weight = weight
+        self.monospacedDigits = monospacedDigits
         self.probe = probe
     }
 
     var body: some View {
         Text(verbatim: text)
-            .couliFont(style, weight: weight)
+            .couliFont(style, weight: weight, monospacedDigits: monospacedDigits)
             .fixedSize(horizontal: false, vertical: true)
             .couliLineBox(style)
             .couliTextNaturalProbe(probe, role: "text", text: text, style: style, weight: weight)
