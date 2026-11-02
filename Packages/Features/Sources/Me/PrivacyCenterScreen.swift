@@ -79,19 +79,23 @@ struct PrivacyCenterBody: View {
     private func withdrawDialog(_ dialog: MeDialog, _ actions: PrivacyCenterActions) -> CouliDialog {
         CouliDialog(
             title: texts.text("privacy.withdraw.confirm.title"), message: texts.text("privacy.withdraw.confirm.body"),
+            centeredTitle: true, probeID: "privacy.dialog.withdraw",
             primary: CouliDialogAction(texts.text("privacy.withdraw.confirm.cancel")) { actions.cancelWithdraw(dialog)
             },
             secondary: CouliDialogAction(texts.text("privacy.withdraw.confirm.ok")) { actions.confirmWithdraw(dialog) }
         )
     }
 
+    /// 画板：内容上 8、左右 16、底 16，块间 12（「系统权限」分节头上另有 8）。
     private func scroll(_ model: PrivacyCenterModel, _ state: PrivacyCenterState,
                         _ actions: PrivacyCenterActions) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: CouliSpacing.s4) {
+            VStack(alignment: .leading, spacing: CouliSpacing.s3) {
                 sections(model, state, actions)
             }
-            .padding(CouliSpacing.s4)
+            .padding(.horizontal, CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s2)
+            .padding(.bottom, CouliSpacing.s4)
             .meContentWidth()
         }
     }
@@ -104,11 +108,13 @@ struct PrivacyCenterBody: View {
         }
         documents(actions)
         if model.personalizationSwitch {
-            MeGroup {
+            MeGroup(style: .settings, probe: "privacy.personalization.card") {
                 MeSwitchRow(
                     title: texts.text("privacy_center.personalization"),
                     subtitle: texts.text("privacy_center.personalization_desc"), isOn: state.personalizationOn,
-                    enabled: !withdraw.busy, texts: texts, identifier: "privacy.personalization",
+                    enabled: !withdraw.busy, texts: texts, identifier: "privacy.personalization", style: .settings,
+                    probe: "privacy.personalization", controlProbe: "privacy.personalization.control",
+                    settingsVerticalPadding: CouliSpacing.s3, settingsTextSpacing: CouliSpacing.s1,
                     onChange: actions.personalization
                 )
             }
@@ -125,17 +131,15 @@ struct PrivacyCenterBody: View {
     }
 
     private var basicNotice: some View {
-        Text(verbatim: texts.text("privacy.basic_mode.notice"))
-            .couliFont(.footnote)
-            .foregroundColor(CouliColor.statusWarningText)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(CouliSpacing.s3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
-                    .fill(CouliColor.statusWarningText.opacity(0.1))
-            )
-            .accessibilityIdentifier("privacy.basicNotice")
+        SettingsNoticeBar(
+            icon: .info, iconColor: CouliColor.textSecondary, background: CouliColor.backgroundMuted,
+            probe: "privacy.basic.notice"
+        ) {
+            MeText(texts.text("privacy.basic_mode.notice"), style: .footnote, probe: "privacy.basic.notice.text")
+                .foregroundColor(CouliColor.textPrimary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("privacy.basicNotice")
     }
 
     private func documents(_ actions: PrivacyCenterActions) -> some View {
@@ -146,12 +150,14 @@ struct PrivacyCenterBody: View {
             DocumentRow(key: "privacy_center.privacy_policy", type: "privacy", id: "privacy.policy"),
             DocumentRow(key: "privacy_center.agreement", type: "agreement", id: "privacy.agreement"),
         ]
-        return MeGroup {
+        return MeGroup(style: .settings, probe: "privacy.docs") {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 if index > 0 {
-                    Divider().padding(.leading, CouliSpacing.s4)
+                    SettingsDivider(probe: "privacy.docs.divider.\(index - 1)")
                 }
-                MeRow(title: texts.text(row.key), clickable: !withdraw.busy, identifier: row.id) {
+                // 隐私中心列表行是 border-box：节距 44，不是设置页的 52
+                MeRow(title: texts.text(row.key), clickable: !withdraw.busy, identifier: row.id, style: .settings,
+                      settingsMinHeight: CouliHitTarget.minimum, probe: row.probe) {
                     actions.document(row.type)
                 }
             }
@@ -160,73 +166,83 @@ struct PrivacyCenterBody: View {
 
     private func permissions(_ model: PrivacyCenterModel, _ state: PrivacyCenterState,
                              _ actions: PrivacyCenterActions) -> some View {
-        VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-            Text(verbatim: texts.text("privacy.system_permissions.title"))
-                .couliFont(.footnote, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textSecondary)
-                .padding(.horizontal, CouliSpacing.s1)
-                .accessibilityAddTraits(.isHeader)
-            Text(verbatim: texts.text("privacy.system_permissions.hint"))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, CouliSpacing.s1)
+        VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+            VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                MeText(texts.text("privacy.system_permissions.title"), style: .footnote, weight: .couliSemibold,
+                       probe: "privacy.permissions.title")
+                    .foregroundColor(CouliColor.textSecondary)
+                    .accessibilityAddTraits(.isHeader)
+                MeText(texts.text("privacy.system_permissions.hint"), style: .caption,
+                       probe: "privacy.permissions.hint")
+                    .foregroundColor(CouliColor.textSecondary)
+            }
+            .padding(.horizontal, CouliSpacing.s1)
             if !model.permissionRows.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(model.permissionRows.enumerated()), id: \.offset) { index, row in
+                    // 只调显示顺序：契约是相册在前，画板通知在前；哪几行由模型定
+                    let rows = model.permissionRows.filter { $0.type == "push" }
+                        + model.permissionRows.filter { $0.type != "push" }
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                         if index > 0 {
-                            Divider().padding(.leading, CouliSpacing.s4)
+                            SettingsDivider(probe: "privacy.permissions.divider.\(index - 1)")
                         }
-                        MeRow(
-                            title: texts.text("privacy_center.permission." + row.type),
-                            value: state.permissionStatus[row.type] == nil ? nil : texts.text(row.statusKey),
-                            subtitle: row.purposeKey.map(texts.text), clickable: !withdraw.busy,
-                            identifier: "privacy.permission." + row.type
+                        // G-P16：push 用途是画板短句（草稿，W-06 回写前），其余沿用契约 purpose_key
+                        PrivacyPermissionRow(
+                            type: row.type, name: texts.text("privacy_center.permission." + row.type),
+                            purpose: (row.type == "push" ? "privacy.system_permissions.purpose.push" : row.purposeKey)
+                                .map(texts.text),
+                            status: state.permissionStatus[row.type] == nil ? nil : texts.text(row.statusKey),
+                            clickable: !withdraw.busy
                         ) {
                             actions.permission(row.type)
                         }
                     }
                 }
+                .padding(.horizontal, CouliSpacing.s4)
                 .couliCard(padding: 0)
+                .meProbe("privacy.permissions.card", role: "card")
             }
         }
+        .padding(.top, CouliSpacing.s2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("privacy.permissions")
     }
 
     private func withdrawSection(_ actions: PrivacyCenterActions) -> some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            Text(verbatim: texts.text("privacy_center.withdraw_title"))
-                .couliFont(.body, weight: .couliSemibold)
-                .foregroundColor(CouliColor.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-            Text(verbatim: texts.text("privacy_center.withdraw_desc"))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                MeText(texts.text("privacy_center.withdraw_title"), style: .body, weight: .couliSemibold,
+                       probe: "privacy.withdraw.title")
+                    .foregroundColor(CouliColor.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                MeText(texts.text("privacy_center.withdraw_desc"), style: .footnote, probe: "privacy.withdraw.desc")
+                    .foregroundColor(CouliColor.textSecondary)
+            }
             CouliButton(
                 texts.text("privacy_center.withdraw"), kind: .secondary, isLoading: withdraw.busy,
-                isEnabled: !withdraw.busy, fillsWidth: true, action: actions.askWithdraw
+                isEnabled: !withdraw.busy, fillsWidth: true, weight: .couliMedium, action: actions.askWithdraw
             )
+            .meProbe("privacy.withdraw.button", role: "button")
             .accessibilityFocused($withdrawFocused)
             .accessibilityIdentifier("privacy.withdraw")
         }
         .couliCard()
+        .meProbe("privacy.withdraw.card", role: "card")
     }
 
+    /// G-P08：卡内只有标题和按钮，不再显示副句（草稿键保留）。
     private func enableFullSection(_ actions: PrivacyCenterActions) -> some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            Text(verbatim: texts.text("privacy_center.basic_title"))
-                .couliFont(.body, weight: .couliSemibold)
+            MeText(texts.text("privacy_center.basic_title"), style: .body, weight: .couliSemibold,
+                   probe: "privacy.basic.title")
                 .foregroundColor(CouliColor.textPrimary)
-            Text(verbatim: texts.text("privacy_center.basic_desc"))
-                .couliFont(.footnote)
-                .foregroundColor(CouliColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             CouliButton(texts.text("privacy.basic_mode.enable"), fillsWidth: true, action: actions.enableFull)
+                .meProbe("privacy.enableFull.button", role: "button")
                 .accessibilityIdentifier("privacy.enableFull")
         }
         .couliCard()
+        .meProbe("privacy.basic.card", role: "card")
     }
 }
 
@@ -235,4 +251,9 @@ private struct DocumentRow {
     let key: String
     let type: String
     let id: String
+
+    /// 测量编号：`privacy.row.<标识末段>`（collect、share、policy、agreement）。
+    var probe: String {
+        "privacy.row." + (id.components(separatedBy: ".").last ?? id)
+    }
 }

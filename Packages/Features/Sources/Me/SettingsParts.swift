@@ -65,13 +65,15 @@ struct SettingsNoticeBar<Content: View>: View {
     let iconColor: Color
     let background: Color
     let probe: String
+    /// 图标的测量编号（缺省 `probe.icon`）。
+    var iconProbe: String?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
             CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(iconColor)
-                .meProbe(probe + ".icon", role: "icon")
+                .meProbe(iconProbe ?? probe + ".icon", role: "icon")
                 .accessibilityHidden(true)
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,15 +88,30 @@ struct SettingsNoticeBar<Content: View>: View {
 /// 测量：`probe` = 文字，`hitProbe` = 命中框。
 struct SettingsTextLink: View {
     private static let hitTop = CouliSpacing.s1
-    private static let hitBottom = CouliHitTarget.minimum - hitTop
-        - CouliTextStyle.footnote.baseSize * CouliTextStyle.footnote.lineHeightMultiple
+    private static let lineHeight = CouliTextStyle.footnote.baseSize * CouliTextStyle.footnote.lineHeightMultiple
+    private static let hitBottomAtDefault = CouliHitTarget.minimum - hitTop - lineHeight
     private static let hitSide = CouliSpacing.s3
 
-    let title: String
-    let color: Color
-    let probe: String
-    let hitProbe: String
-    let action: () -> Void
+    private let title: String
+    private let color: Color
+    private let probe: String
+    private let hitProbe: String
+    private let action: () -> Void
+    /// 文字行高随系统字号变：小于默认字号时下方多扩一点，命中高仍 ≥ 44（F-IOS-68 ①）。默认及以上字号的下扩量不变。
+    @ScaledMetric private var scaledLine: CGFloat
+
+    init(title: String, color: Color, probe: String, hitProbe: String, action: @escaping () -> Void) {
+        self.title = title
+        self.color = color
+        self.probe = probe
+        self.hitProbe = hitProbe
+        self.action = action
+        _scaledLine = ScaledMetric(wrappedValue: Self.lineHeight, relativeTo: CouliTextStyle.footnote.relativeTo)
+    }
+
+    private var hitBottom: CGFloat {
+        max(Self.hitBottomAtDefault, CouliHitTarget.minimum - Self.hitTop - scaledLine)
+    }
 
     var body: some View {
         Button(action: action) {
@@ -102,14 +119,14 @@ struct SettingsTextLink: View {
                 .foregroundColor(color)
                 .underline()
                 .padding(.top, Self.hitTop)
-                .padding(.bottom, Self.hitBottom)
+                .padding(.bottom, hitBottom)
                 .padding(.horizontal, Self.hitSide)
                 .contentShape(Rectangle())
                 .meProbe(hitProbe, role: "hit")
         }
         .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small, ringInside: true))
         .padding(.top, -Self.hitTop)
-        .padding(.bottom, -Self.hitBottom)
+        .padding(.bottom, -hitBottom)
         .padding(.horizontal, -Self.hitSide)
     }
 }

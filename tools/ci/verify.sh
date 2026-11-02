@@ -479,6 +479,23 @@ settings_visual_tests() {
 }
 
 # $1 = "platform=iOS Simulator,id=<UDID>"
+# APP-12w-b：隐私中心 / 关于 / 联系客服视觉（tools/testing/privacy-visual-tests.sh 带参数时不走默认清单，这里显式给全 18 项；同一 DerivedData，不重复构建）
+privacy_visual_tests() {
+    local udid="${1##*id=}"
+    bash tools/testing/privacy-visual-tests.sh "$udid" -project "$PROJECT" -derivedDataPath "$DD" \
+        -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        -only-testing:MeCoreTests/MeVectorTests -only-testing:CouliTests/MeVisualFundsGuardTests \
+        -only-testing:CouliTests/SettingsVisualGuardTests -only-testing:CouliTests/MePrivacyTests \
+        -only-testing:CouliTests/MeCsAboutTests -only-testing:CouliTests/PrivacyVisualFixtureTests \
+        -only-testing:CouliTests/PrivacyVisualGuardTests -only-testing:CouliTests/PrivacyVisualRedLineTests \
+        -only-testing:CouliTests/PrivacyVisualLayoutTests -only-testing:CouliTests/PrivacyVisualAboutTests \
+        -only-testing:CouliTests/PrivacyVisualCsTests -only-testing:CouliTests/PrivacyVisualNoticeTests \
+        -only-testing:CouliTests/PrivacyVisualBehaviorTests -only-testing:CouliTests/PrivacyVisualPaletteTests \
+        -only-testing:CouliTests/PrivacyVisualAdaptTests -only-testing:CouliTests/PrivacyVisualFollowupTests \
+        -only-testing:CouliTests/PrivacyVisualSnapshotTests -only-testing:CouliUITests/PrivacyVisualUITests
+}
+
+# $1 = "platform=iOS Simulator,id=<UDID>"
 # APP-09v-e：收款账号 / 实名 / 劳务视觉 e 组（tools/testing/payout-visual-tests.sh 带参数时不走默认清单，这里显式给全；同一 DerivedData，不重复构建）
 payout_visual_tests() {
     local udid="${1##*id=}"
@@ -514,7 +531,7 @@ xcb() {
 
 # 视觉组第二遍是否要跑：VERIFY_ALL_VISUAL=1、算不出改动范围或没有改动（主干上）时全跑，否则看改动是否碰钱包相关路径
 readonly VISUAL_GROUP_PATHS='^(Packages/Features/Sources/Wallet/|Packages/Core/Sources/WalletCore/|Packages/DesignSystem/|App/Sources/Wallet/|App/Sources/Debug/(DebugWallet|DebugFakeWallet)|AppTests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|UITests/(Wallet|Records|Withdraw|StepUp|Payout|Identity)|specs/wallet-vectors|tools/testing/(wallet|records|withdraw|payout)-visual)'
-readonly ME_VISUAL_PATHS='^(Packages/Features/Sources/Me/|Packages/Core/Sources/MeCore/|Packages/DesignSystem/|App/Sources/Me/|App/Sources/Debug/DebugMeVisual|AppTests/(Me|Settings)|UITests/(Me|Settings)|specs/me-vectors|tools/testing/(me|settings)-visual)'
+readonly ME_VISUAL_PATHS='^(Packages/Features/Sources/Me/|Packages/Core/Sources/MeCore/|Packages/DesignSystem/|App/Sources/Me/|App/Sources/Debug/DebugMeVisual|AppTests/(Me|Settings|Privacy)|UITests/(Me|Settings|Privacy)|specs/(me|privacy-visual)-vectors|tools/testing/(me|settings|privacy)-visual)'
 changed_paths() {
     local base
     base="$(git merge-base origin/main HEAD 2>/dev/null)" || return 1
@@ -712,9 +729,10 @@ if [ "$FAST" -eq 0 ]; then
     if visual_groups_needed "$ME_VISUAL_PATHS"; then
         step "「我的」视觉（tools/testing/me-visual-tests.sh）" visual_group me_visual_tests "$DEST"
         step "设置一族视觉（tools/testing/settings-visual-tests.sh）" visual_group settings_visual_tests "$DEST"
+        step "隐私中心关于客服视觉（tools/testing/privacy-visual-tests.sh）" visual_group privacy_visual_tests "$DEST"
     else
-        echo "    「我的」、设置一族视觉组：改动未碰相关路径，已由 test Debug 覆盖，跳过"
-        RESULTS+=("SKIP  「我的」、设置一族视觉第二遍（已由 test Debug 覆盖）")
+        echo "    「我的」、设置一族、隐私中心视觉组：改动未碰相关路径，已由 test Debug 覆盖，跳过"
+        RESULTS+=("SKIP  「我的」、设置一族、隐私中心视觉第二遍（已由 test Debug 覆盖）")
     fi
     step "release-scan --self-test Debug 包" tools/ci/release-scan.sh --self-test \
         --expect COULI_DEBUG_PANEL --expect COULI_DS_COMPONENT_CATALOG_7Q4XK2 \

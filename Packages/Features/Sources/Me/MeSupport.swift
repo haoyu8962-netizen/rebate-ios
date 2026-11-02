@@ -185,6 +185,9 @@ struct MeSwitchRow: View {
     var probe: String?
     /// 测量编号：系统开关本身。
     var controlProbe: String?
+    /// `.settings` 版式有副标题时的上下内边距、标题到副标题的间距（缺省设置一族的 8 / 2；隐私中心个性化卡 12 / 4）。
+    var settingsVerticalPadding = CouliSpacing.s2
+    var settingsTextSpacing = CouliSpacing.s1 / 2
     let onChange: (Bool) -> Void
 
     private var binding: Binding<Bool> {
@@ -220,7 +223,7 @@ struct MeSwitchRow: View {
     /// 标题 17 + 副标题 12（纵向 2、上下 8）；开关在右、垂直居中，不挤压文字。无副标题时 min 44。
     private var settingsRow: some View {
         HStack(alignment: .center, spacing: CouliSpacing.s3) {
-            VStack(alignment: .leading, spacing: CouliSpacing.s1 / 2) {
+            VStack(alignment: .leading, spacing: settingsTextSpacing) {
                 MeText(title, style: .body, probe: probe.map { $0 + ".title" })
                     .foregroundColor(enabled ? CouliColor.textPrimary : CouliColor.textSecondary)
                 if let subtitle {
@@ -236,7 +239,7 @@ struct MeSwitchRow: View {
                 .fixedSize()
                 .meProbe(controlProbe, role: "switch")
         }
-        .padding(.vertical, subtitle == nil ? 0 : CouliSpacing.s2)
+        .padding(.vertical, subtitle == nil ? 0 : settingsVerticalPadding)
         .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
         .meProbe(probe, role: "row")
     }

@@ -188,7 +188,7 @@ enum MeDraftTable {
         "appeal.again": "再次申诉",
         "cs.title": "联系客服",
         "cs.handoff.desc": "客服在微信里接待。点下方按钮会打开微信，进入凑狸企业微信客服的会话",
-        "cs.safety": "客服不会向你索要登录验证码和密码",
+        "cs.safety": "客服不会向你索要验证码或密码",
         "cs.open_wechat": "打开微信",
         "cs.handoff.go_help": "先看看帮助中心",
         "cs.open_failed.title": "暂时打不开客服",
@@ -205,6 +205,7 @@ enum MeDraftTable {
         // iOS 追加（设计稿 PrivacyCenter「系统权限」一节的条目名，G26：iOS 清单有 push、photos 两项）
         "privacy_center.permission.push": "通知",
         "privacy_center.permission.photos": "相册（仅保存图片）",
+        "privacy.system_permissions.purpose.push": "跟单成功、返利结算和提现到账时提醒你",
         // iOS 追加（代拟）：设置页缓存大小读不出时的占位、隐私中心撤回进行中的读屏名
         "settings.clear_cache.unknown": "--",
         "privacy_center.withdrawing": "正在撤回",

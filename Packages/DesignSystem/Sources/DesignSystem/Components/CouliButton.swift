@@ -34,6 +34,8 @@ public struct CouliButton: View {
     private let horizontalPadding: CGFloat?
     private let weight: Font.Weight
     private let mutedWhenDisabled: Bool
+    private let leadingIcon: CouliIcon?
+    private let iconProbeID: String?
     private let action: () -> Void
     @Environment(\.couliButtonLabelProbe) private var inheritedLabelProbe
 
@@ -50,8 +52,12 @@ public struct CouliButton: View {
         horizontalPadding: CGFloat? = nil,
         weight: Font.Weight = .couliSemibold,
         mutedWhenDisabled: Bool = false,
+        leadingIcon: CouliIcon? = nil,
+        iconProbeID: String? = nil,
         action: @escaping () -> Void
     ) {
+        self.leadingIcon = leadingIcon
+        self.iconProbeID = iconProbeID
         self.labelProbeID = labelProbeID
         self.horizontalPadding = horizontalPadding
         self.weight = weight
@@ -75,6 +81,15 @@ public struct CouliButton: View {
                         .progressViewStyle(.circular)
                         .tint(CouliButtonStyle.foreground(kind: kind, enabled: false, pressed: false))
                         .accessibilityHidden(true)
+                }
+                if let leadingIcon {
+                    // 文字前的 20 图标（APP-12w-b 关于页【复制诊断信息】）：缺省 nil，既有按钮不变；装饰，读屏只读按钮名。
+                    let icon = CouliIconView(leadingIcon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                    if let iconProbeID {
+                        icon.couliProbe(iconProbeID, role: "icon")
+                    } else {
+                        icon
+                    }
                 }
                 Text(verbatim: title)
                     .couliFont(size == .regular ? .body : .footnote, weight: weight)
