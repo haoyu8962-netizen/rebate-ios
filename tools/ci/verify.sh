@@ -53,6 +53,7 @@ summary() {
     for line in "${RESULTS[@]}"; do
         echo "  $line"
     done
+    [ ! -s "${CRASH_RERUN_LIST:-}" ] || sed 's/^/  testmanagerd 崩溃后重跑：/' "$CRASH_RERUN_LIST"
     echo "  日志：$LOGS"
     echo "================================================"
 }
@@ -581,6 +582,28 @@ test_debug() {
     return "$code"
 }
 
+# 视觉组第二遍同样会被 testmanagerd 崩溃打断：入口脚本自己拼 xcodebuild，这里取最新的 xcresult 判，规则与 test_debug 一样。
+# $1 = 入口函数 $2 = 模拟器 destination
+visual_group() {
+    local group="$1" dest="$2" code=0 crashed result test
+    local -a only
+    "$group" "$dest" || code=$?
+    [ "$code" -ne 0 ] || return 0
+    result="$(ls -dt "$DD"/Logs/Test/*.xcresult 2>/dev/null | head -1)"
+    [ -n "$result" ] || return "$code"
+    crashed="$(crashed_tests_in "$result")" || return "$code"
+    [ -n "$crashed" ] || return "$code"
+    if printf '%s\n' "$crashed" | grep -E "$NO_RETRY_TEST_PATTERN"; then
+        echo "金额相关用例被 testmanagerd 崩溃打断，不重跑"
+        return "$code"
+    fi
+    printf '%s\n' "$crashed" | tee -a "$CRASH_RERUN_LIST"
+    only=()
+    while IFS= read -r test; do only+=("-only-testing:$test"); done <<<"$crashed"
+    xcb -configuration Debug -destination "$dest" -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+        test-without-building "${only[@]}"
+}
+
 # CT-LOCK-01：contract.lock 与快照一致——必须按锁定提交重建、逐字节比较，并核对 lock files 哈希（tools/contracts/sync.sh --check）。
 # 取不到上游仓库或其中没有锁定提交就失败，不退化成只比哈希（与鸿蒙 / Android CT-LOCK-01 同口径）。上游仓库按顺序推导：
 #   1. 环境变量 REBATE_PLATFORM_DIR / COULI_DIR（设了就只用它，不对则失败）；
@@ -678,17 +701,17 @@ if [ "$FAST" -eq 0 ]; then
     # WalletVisualStateTests，这里显式给全 9 个类（同一 DerivedData，不重复构建）
     # 四组的类都已在上面的 test Debug 里跑过；这里是不并行的第二遍，只在改动碰钱包相关路径时跑（省约 56 分钟）
     if visual_groups_needed; then
-        step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" wallet_visual_tests "$DEST"
-        step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" records_visual_tests "$DEST"
-        step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" withdraw_visual_tests "$DEST"
-        step "收款账号实名劳务视觉 e 组（tools/testing/payout-visual-tests.sh）" payout_visual_tests "$DEST"
+        step "钱包视觉 a 组（tools/testing/wallet-visual-tests.sh）" visual_group wallet_visual_tests "$DEST"
+        step "提现记录视觉 b 组（tools/testing/records-visual-tests.sh）" visual_group records_visual_tests "$DEST"
+        step "提现页视觉 c 组（tools/testing/withdraw-visual-tests.sh）" visual_group withdraw_visual_tests "$DEST"
+        step "收款账号实名劳务视觉 e 组（tools/testing/payout-visual-tests.sh）" visual_group payout_visual_tests "$DEST"
     else
         echo "    视觉 a / b / c / e 组：改动未碰钱包相关路径，已由 test Debug 覆盖，跳过（VERIFY_ALL_VISUAL=1 强制全跑）"
         RESULTS+=("SKIP  视觉 a / b / c / e 组第二遍（已由 test Debug 覆盖）")
     fi
     if visual_groups_needed "$ME_VISUAL_PATHS"; then
-        step "「我的」视觉（tools/testing/me-visual-tests.sh）" me_visual_tests "$DEST"
-        step "设置一族视觉（tools/testing/settings-visual-tests.sh）" settings_visual_tests "$DEST"
+        step "「我的」视觉（tools/testing/me-visual-tests.sh）" visual_group me_visual_tests "$DEST"
+        step "设置一族视觉（tools/testing/settings-visual-tests.sh）" visual_group settings_visual_tests "$DEST"
     else
         echo "    「我的」、设置一族视觉组：改动未碰相关路径，已由 test Debug 覆盖，跳过"
         RESULTS+=("SKIP  「我的」、设置一族视觉第二遍（已由 test Debug 覆盖）")
