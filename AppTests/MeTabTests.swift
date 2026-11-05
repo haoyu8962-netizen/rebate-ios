@@ -17,8 +17,18 @@ final class MeTabTests: MeTestCase {
             XCTAssertNotNil(Routes.all[route], "\(route) 不在 routes.json")
             XCTAssertNotNil(RouteViewRegistry.builders[route], "\(route) 没有接页面")
         }
-        for name in ["Nickname", "NotifySettings", "InviteBackfill", "Favorites", "ShareHub", "CsHandoff"] {
+        for name in ["Nickname", "NotifySettings", "CsHandoff"] {
             XCTAssertNil(Routes.all[name], "\(name) 不该是路由（G32）")
+        }
+        // #24 test-change（升锁 00deded0ef6f）：新锁把 InviteBackfill、Favorites、ShareHub 登记为路由（routes.json）；本端没有页面——
+        // Favorites / ShareHub 的 since.ios 为 null 由守卫给升级提示，InviteBackfill（since 1.0.0）按 P1
+        // 走升级提示（HomePageApiP1RouteTests）
+        for name in ["InviteBackfill", "Favorites", "ShareHub"] {
+            XCTAssertNotNil(Routes.all[name], "\(name) 应已在新锁 routes.json")
+        }
+        for name in ["Favorites", "ShareHub"] {
+            XCTAssertNil(Routes.all[name]?.sinceIOS, "\(name) 本端未发布")
+            XCTAssertNil(RouteViewRegistry.builders[name], "\(name) 本端没有页面")
         }
     }
 

@@ -117,12 +117,21 @@ enum DebugWalletVisual {
         return (code, DebugFakeWallet.json(failure["data"] as? [String: Any] ?? [:]))
     }
 
-    /// 配置里并入注入的 `help_links`（APP-09v-c）；不是配置请求或没注入时 nil。`base` = 假服务本来要回的配置。
+    /// 配置里并入注入的 `help_links`（APP-09v-c）与 `configTexts`（文案键 → 值，并入 `texts`；FU-X-HOME-PAGE-API #24 T21：
+    /// 升锁后包内 `withdraw.sla_text` 等于回落句，记录页视觉改注入旧值）；不是配置请求或两者都没注入时 nil。
+    /// `base` = 假服务本来要回的配置。
     static func configReply(method: String, path: String, base: () -> String) -> DebugFakeWallet.Reply? {
-        guard method == "GET", path == "/v1/config", let links = withdraw?["helpLinks"] as? [String: Any],
+        let links = withdraw?["helpLinks"] as? [String: Any]
+        let texts = payload?["configTexts"] as? [String: String]
+        guard method == "GET", path == "/v1/config", links != nil || texts != nil,
               var config = (try? JSONSerialization.jsonObject(with: Data(base().utf8))) as? [String: Any]
         else { return nil }
-        config["help_links"] = (config["help_links"] as? [String: Any] ?? [:]).merging(links) { $1 }
+        if let links {
+            config["help_links"] = (config["help_links"] as? [String: Any] ?? [:]).merging(links) { $1 }
+        }
+        if let texts {
+            config["texts"] = (config["texts"] as? [String: Any] ?? [:]).merging(texts) { $1 }
+        }
         return .answer(code: 0, data: DebugFakeWallet.json(config), headers: [:])
     }
 

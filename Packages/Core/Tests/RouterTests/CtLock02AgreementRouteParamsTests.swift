@@ -16,7 +16,10 @@ final class CtLock02AgreementRouteParamsTests: XCTestCase {
 
     func testGeneratedSpecCarriesTheNewShape() throws {
         let spec = try spec()
-        XCTAssertEqual(spec.param("type")?.enumValues, ["agreement", "privacy", "sdk_list", "labor_agreement"])
+        // #24 test-change（升锁 00deded0ef6f）：routes.json 的 Agreement.type 枚举追加 collect_list（安卓 T4 同口径）
+        XCTAssertEqual(
+            spec.param("type")?.enumValues, ["agreement", "privacy", "sdk_list", "labor_agreement", "collect_list"]
+        )
         let version = try XCTUnwrap(spec.param("version"))
         XCTAssertEqual(version.type, .integer)
         XCTAssertEqual(version.minimum, 1)

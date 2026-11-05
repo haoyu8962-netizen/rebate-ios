@@ -354,3 +354,121 @@ public enum ClaimRejectReason: Swift.String, Swift.Sendable, Swift.CaseIterable,
         self = ClaimRejectReason(rawValue: rawValue) ?? .unknown
     }
 }
+
+/// 契约枚举 `order_sync_mode`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum OrderSyncMode: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case window
+    case orderNos = "order_nos"
+    case unknown = "__unknown__"
+
+    public static let allCases: [OrderSyncMode] = [
+        .window,
+        .orderNos,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = OrderSyncMode(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `order_sync_status`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum OrderSyncStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case queued
+    case running
+    case done
+    case failed
+    case unknown = "__unknown__"
+
+    public static let allCases: [OrderSyncStatus] = [
+        .queued,
+        .running,
+        .done,
+        .failed,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = OrderSyncStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `rights_import_kind`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum RightsImportKind: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case rights
+    case punish
+    case channel
+    case unknown = "__unknown__"
+
+    public static let allCases: [RightsImportKind] = [
+        .rights,
+        .punish,
+        .channel,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = RightsImportKind(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `rights_import_time_basis`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum RightsImportTimeBasis: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case paid
+    case received
+    case unknown = "__unknown__"
+
+    public static let allCases: [RightsImportTimeBasis] = [
+        .paid,
+        .received,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = RightsImportTimeBasis(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `rights_import_status`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum RightsImportStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case queued
+    case running
+    case done
+    case failed
+    case unknown = "__unknown__"
+
+    public static let allCases: [RightsImportStatus] = [
+        .queued,
+        .running,
+        .done,
+        .failed,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = RightsImportStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `rights_import_failure_reason`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum RightsImportFailureReason: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case invalidRow = "invalid_row"
+    case orderNotFound = "order_not_found"
+    case subOrderNoMissing = "sub_order_no_missing"
+    case receivedAtMissing = "received_at_missing"
+    case platformMismatch = "platform_mismatch"
+    case unknown = "__unknown__"
+
+    public static let allCases: [RightsImportFailureReason] = [
+        .invalidRow,
+        .orderNotFound,
+        .subOrderNoMissing,
+        .receivedAtMissing,
+        .platformMismatch,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = RightsImportFailureReason(rawValue: rawValue) ?? .unknown
+    }
+}

@@ -129,7 +129,7 @@ public enum Routes {
             agentGuide: false,
             agentGuideAccount: nil,
             params: [
-                RouteParamSpec(name: "type", type: .string, enumValues: ["agreement", "privacy", "sdk_list", "labor_agreement"]),
+                RouteParamSpec(name: "type", type: .string, enumValues: ["agreement", "privacy", "sdk_list", "labor_agreement", "collect_list"]),
                 RouteParamSpec(name: "version", type: .integer, minimum: 1),
             ],
             requiredParams: [],
@@ -196,6 +196,18 @@ public enum Routes {
             requiredParams: [],
             additionalParams: false
         )
+        table["DataCopy"] = RouteSpec(
+            name: "DataCopy", kind: .native, auth: "login",
+            sinceIOS: nil,
+            entries: [.inApp, .push],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+            ],
+            requiredParams: [],
+            additionalParams: false
+        )
         table["DeleteAccount"] = RouteSpec(
             name: "DeleteAccount", kind: .native, auth: "login",
             sinceIOS: nil,
@@ -234,6 +246,18 @@ public enum Routes {
                 RouteParamSpec(name: "url", type: .string, maxLength: 2048, pattern: "^https://"),
             ],
             requiredParams: ["url"],
+            additionalParams: false
+        )
+        table["Favorites"] = RouteSpec(
+            name: "Favorites", kind: .native, auth: "login",
+            sinceIOS: nil,
+            entries: [.inApp, .push],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+            ],
+            requiredParams: [],
             additionalParams: false
         )
         table["FindOrder"] = RouteSpec(
@@ -283,6 +307,45 @@ public enum Routes {
             params: [
             ],
             requiredParams: [],
+            additionalParams: false
+        )
+        table["HotRankList"] = RouteSpec(
+            name: "HotRankList", kind: .native, auth: "none",
+            sinceIOS: nil,
+            entries: [.inApp, .push, .deeplink],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+                RouteParamSpec(name: "platform", type: .string, enumValues: ["taobao", "jd", "pdd", "meituan", "vip", "douyin", "eleme", "kuaishou", "suning"]),
+            ],
+            requiredParams: [],
+            additionalParams: false
+        )
+        table["InviteBackfill"] = RouteSpec(
+            name: "InviteBackfill", kind: .native, auth: "phone",
+            sinceIOS: "1.0.0",
+            entries: [.inApp],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+                RouteParamSpec(name: "source", type: .string, enumValues: ["me", "login"]),
+            ],
+            requiredParams: [],
+            additionalParams: false
+        )
+        table["InviteLink"] = RouteSpec(
+            name: "InviteLink", kind: .native, auth: "none",
+            sinceIOS: "1.0.0",
+            entries: [.deeplink],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+                RouteParamSpec(name: "code", type: .string, minLength: 1, maxLength: 16),
+            ],
+            requiredParams: ["code"],
             additionalParams: false
         )
         table["InviteShare"] = RouteSpec(
@@ -497,6 +560,21 @@ public enum Routes {
             requiredParams: ["platform", "product_key"],
             additionalParams: false
         )
+        table["ProductShare"] = RouteSpec(
+            name: "ProductShare", kind: .native, auth: "phone",
+            sinceIOS: nil,
+            entries: [.inApp],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+                RouteParamSpec(name: "link_id", type: .string, minLength: 1),
+                RouteParamSpec(name: "platform", type: .string, enumValues: ["taobao", "jd", "pdd", "meituan", "vip", "douyin", "eleme", "kuaishou", "suning"]),
+                RouteParamSpec(name: "product_key", type: .string, minLength: 3, maxLength: 128),
+            ],
+            requiredParams: ["platform", "product_key"],
+            additionalParams: false
+        )
         table["RealName"] = RouteSpec(
             name: "RealName", kind: .native, auth: "phone",
             sinceIOS: "1.0.0",
@@ -504,6 +582,18 @@ public enum Routes {
             h5Path: nil, debugOnly: false,
             agentGuide: false,
             agentGuideAccount: "fund",
+            params: [
+            ],
+            requiredParams: [],
+            additionalParams: false
+        )
+        table["Reverify"] = RouteSpec(
+            name: "Reverify", kind: .native, auth: "login",
+            sinceIOS: nil,
+            entries: [.inApp],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
             params: [
             ],
             requiredParams: [],
@@ -550,6 +640,18 @@ public enum Routes {
         table["Settings"] = RouteSpec(
             name: "Settings", kind: .native, auth: "none",
             sinceIOS: "1.0.0",
+            entries: [.inApp, .push],
+            h5Path: nil, debugOnly: false,
+            agentGuide: false,
+            agentGuideAccount: nil,
+            params: [
+            ],
+            requiredParams: [],
+            additionalParams: false
+        )
+        table["ShareHub"] = RouteSpec(
+            name: "ShareHub", kind: .native, auth: "phone",
+            sinceIOS: nil,
             entries: [.inApp, .push],
             h5Path: nil, debugOnly: false,
             agentGuide: false,
@@ -624,7 +726,7 @@ public enum Routes {
             requiredParams: ["page_key", "token"],
             additionalParams: false
         )
-        if table.count != 43 {
+        if table.count != 51 {
             Swift.fatalError("COULI_DEBUG_ONLY_ROUTE_TABLE: debug-only route table incomplete")
         }
         #endif

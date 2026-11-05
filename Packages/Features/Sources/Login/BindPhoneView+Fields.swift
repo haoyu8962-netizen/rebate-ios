@@ -145,7 +145,7 @@ extension BindPhoneView {
     var sendButton: some View {
         let remaining = controller.resendRemaining
         let title = remaining > 0
-            ? texts.format(BindPhoneKeys.countdown, ["sec": String(remaining)]) : text(LoginKeys.getCode)
+            ? texts.format(BindPhoneKeys.countdown, ["n": String(remaining)]) : text(LoginKeys.getCode)
         return Button(action: controller.sendCode) {
             Text(verbatim: title)
                 .couliFont(.body, monospacedDigits: true)

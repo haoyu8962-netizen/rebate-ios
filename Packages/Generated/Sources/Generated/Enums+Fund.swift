@@ -139,6 +139,92 @@ public enum AdminAdjustSubType: Swift.String, Swift.Sendable, Swift.CaseIterable
     }
 }
 
+/// 契约枚举 `admin_adjustment_status`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAdjustmentStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case pending = "PENDING"
+    case approved = "APPROVED"
+    case rejected = "REJECTED"
+    case cancelled = "CANCELLED"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAdjustmentStatus] = [
+        .pending,
+        .approved,
+        .rejected,
+        .cancelled,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAdjustmentStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_adjustment_direction`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAdjustmentDirection: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case increase
+    case decrease
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAdjustmentDirection] = [
+        .increase,
+        .decrease,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAdjustmentDirection(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_adjustment_ref_type`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAdjustmentRefType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case reconDiff = "recon_diff"
+    case withdrawal
+    case order
+    case accountDeletion = "account_deletion"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAdjustmentRefType] = [
+        .reconDiff,
+        .withdrawal,
+        .order,
+        .accountDeletion,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAdjustmentRefType(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_adjustment_contra_subject`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminAdjustmentContraSubject: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case commissionRevenue = "COMMISSION_REVENUE"
+    case unionReceivable = "UNION_RECEIVABLE"
+    case badDebt = "BAD_DEBT"
+    case mktExpense = "MKT_EXPENSE"
+    case cashAlipay = "CASH_ALIPAY"
+    case cashWechat = "CASH_WECHAT"
+    case cashBank = "CASH_BANK"
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminAdjustmentContraSubject] = [
+        .commissionRevenue,
+        .unionReceivable,
+        .badDebt,
+        .mktExpense,
+        .cashAlipay,
+        .cashWechat,
+        .cashBank,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminAdjustmentContraSubject(rawValue: rawValue) ?? .unknown
+    }
+}
+
 /// 契约枚举 `beneficiary_role`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum BeneficiaryRole: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case contractSelf = "self"
@@ -402,6 +488,53 @@ public enum WithdrawalChannelState: Swift.String, Swift.Sendable, Swift.CaseIter
     }
 }
 
+/// 契约枚举 `withdrawal_sub_text_branch`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum WithdrawalSubTextBranch: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case processing
+    case wechatWaitConfirm = "wechat_wait_confirm"
+    case wechatConfirmExpired = "wechat_confirm_expired"
+    case wechatCanceling = "wechat_canceling"
+    case wechatProcessing = "wechat_processing"
+    case autoExpectedSoon = "auto_expected_soon"
+    case manualReviewPending = "manual_review_pending"
+    case manualReviewOverdue = "manual_review_overdue"
+    case channelProcessing = "channel_processing"
+    case payingDelayed = "paying_delayed"
+    case paidApi = "paid_api"
+    case paidManual = "paid_manual"
+    case rejectedOffset = "rejected_offset"
+    case rejected
+    case failedAccount = "failed_account"
+    case failedOther = "failed_other"
+    case failedManual = "failed_manual"
+    case unknown = "__unknown__"
+
+    public static let allCases: [WithdrawalSubTextBranch] = [
+        .processing,
+        .wechatWaitConfirm,
+        .wechatConfirmExpired,
+        .wechatCanceling,
+        .wechatProcessing,
+        .autoExpectedSoon,
+        .manualReviewPending,
+        .manualReviewOverdue,
+        .channelProcessing,
+        .payingDelayed,
+        .paidApi,
+        .paidManual,
+        .rejectedOffset,
+        .rejected,
+        .failedAccount,
+        .failedOther,
+        .failedManual,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = WithdrawalSubTextBranch(rawValue: rawValue) ?? .unknown
+    }
+}
+
 /// 契约枚举 `payout_attempt_kind`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum PayoutAttemptKind: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case transfer
@@ -648,6 +781,8 @@ public enum ReconDiffType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
     case settleMissing = "settle_missing"
     case appealRestore = "appeal_restore"
     case estimateChangedAfterCredit = "estimate_changed_after_credit"
+    case payMismatch = "pay_mismatch"
+    case payAnomaly = "pay_anomaly"
     case unknown = "__unknown__"
 
     public static let allCases: [ReconDiffType] = [
@@ -660,6 +795,8 @@ public enum ReconDiffType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
         .settleMissing,
         .appealRestore,
         .estimateChangedAfterCredit,
+        .payMismatch,
+        .payAnomaly,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {
@@ -709,5 +846,56 @@ public enum ReconDiffStatus: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     public init(from decoder: any Swift.Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
         self = ReconDiffStatus(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `union_receipt_method`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum UnionReceiptMethod: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case adminEntry = "ADMIN_ENTRY"
+    case r1Recon = "R1_RECON"
+    case unknown = "__unknown__"
+
+    public static let allCases: [UnionReceiptMethod] = [
+        .adminEntry,
+        .r1Recon,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = UnionReceiptMethod(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `union_receipt_cash_account`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum UnionReceiptCashAccount: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case cashAlipay = "CASH_ALIPAY"
+    case cashBank = "CASH_BANK"
+    case unknown = "__unknown__"
+
+    public static let allCases: [UnionReceiptCashAccount] = [
+        .cashAlipay,
+        .cashBank,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = UnionReceiptCashAccount(rawValue: rawValue) ?? .unknown
+    }
+}
+
+/// 契约枚举 `admin_fund_water_level`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum AdminFundWaterLevel: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case normal
+    case low
+    case unknown = "__unknown__"
+
+    public static let allCases: [AdminFundWaterLevel] = [
+        .normal,
+        .low,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = AdminFundWaterLevel(rawValue: rawValue) ?? .unknown
     }
 }

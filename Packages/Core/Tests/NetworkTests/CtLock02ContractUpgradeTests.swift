@@ -26,7 +26,12 @@ final class CtLock02ContractUpgradeTests: XCTestCase {
             let decision = RequestHeaderPolicy.decide(state: fullState, operation: operation, body: [:])
             XCTAssertTrue(decision.includeAuthorization, row[0])
         }
-        XCTAssertEqual(ApiOperations.all.values.filter { $0.auth == "phone" }.count, expected.count)
+        // #24 test-change（升锁 00deded0ef6f）：新锁新增 createShare（x-auth phone），本端不调用；其余判据不变
+        let createShare = try XCTUnwrap(ApiOperations.byId("createShare"))
+        XCTAssertEqual(createShare.auth, "phone")
+        XCTAssertTrue(RequestHeaderPolicy.decide(state: fullState, operation: createShare, body: [:])
+            .includeAuthorization)
+        XCTAssertEqual(ApiOperations.all.values.filter { $0.auth == "phone" }.count, expected.count + 1)
         XCTAssertEqual(
             Set(ApiOperations.all.values.map(\.auth)), ["none", "optional", "login", "phone", "realname"],
             "仍无 admin / super"
@@ -42,10 +47,16 @@ final class CtLock02ContractUpgradeTests: XCTestCase {
             "updateNotificationSettings", "getDict", "getProductPriceTrend", "listFavorites", "addFavorite",
             "removeFavorite", "batchDeleteFavorites",
         ]
-        for id in added {
+        // #24 test-change（FU-X-HOME-PAGE-API-ios 升锁 00deded0ef6f）：再新增 15 个（86 → 101，只增不删；安卓 U1 同口径，编排 11-04 15:01）
+        let addedByLock00deded = [
+            "getAgreementVersion", "listPageSectionItems", "createPayOrder", "getPayOrder", "payOrderReturned",
+            "cancelPayOrder", "getReverify", "reverifyByIdNumber", "reverifyByOauth", "bindOauthIdentity",
+            "listMyDataCopies", "getMyDataCopyDownload", "getHotRank", "getSearchHotWords", "createShare",
+        ]
+        for id in added + addedByLock00deded {
             XCTAssertNotNil(ApiOperations.byId(id), id)
         }
-        XCTAssertEqual(ApiOperations.all.count, 86)
+        XCTAssertEqual(ApiOperations.all.count, 101)
         XCTAssertFalse(ApiOperations.all.values.contains { $0.pathTemplate.hasPrefix("/admin/") })
     }
 

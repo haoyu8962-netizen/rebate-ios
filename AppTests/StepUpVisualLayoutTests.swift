@@ -128,7 +128,8 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
     func testW67CountdownRow() async throws {
         let (_, image) = try await openSheet(waitFor: "stepUp.countdown")
         XCTAssertEqual(try text("stepUp.countdown"), "48 秒后可重新获取", "键 login.code.countdown（G-W19）")
-        XCTAssertEqual(texts.format("login.code.countdown", ["sec": "48"]), "48 秒后可重新获取", "钱包文案表有这条草稿")
+        // #24 test-change（升锁 00deded0ef6f）：契约文案占位符 {sec} → {n}，代入名随契约改，判据不变
+        XCTAssertEqual(texts.format("login.code.countdown", ["n": "48"]), "48 秒后可重新获取", "钱包文案表有这条草稿")
         try assertBase("stepUp.countdown", 14, "倒计时")
         let countdown = try rect("stepUp.countdown")
         try assertNear(countdown.maxX, contentRight(), 1, "靠右")

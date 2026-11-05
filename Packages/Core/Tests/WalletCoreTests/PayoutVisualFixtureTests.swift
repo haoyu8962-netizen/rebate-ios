@@ -24,7 +24,8 @@ final class PayoutVisualFixtureTests: XCTestCase {
         let data = try vectors()
         let marker = try XCTUnwrap(data.range(of: Data("\"visualPayout\"".utf8)))
         let digest = SHA256.hash(data: data[..<marker.lowerBound]).map { String(format: "%02x", $0) }.joined()
-        XCTAssertEqual(digest, "ed1e95b8f35bd92650de69bea51f31f3787c0c3e2b90bf7a55b9f6d8def1799d")
+        // #24 守卫换值（FU-X-HOME-PAGE-API-ios）：旧组里只有第 243、261 行按编排 11-04 11:24 认可的原文改取新子键，其余一字未动
+        XCTAssertEqual(digest, "250e4ed71c459da59c1f3dbd9550763558e7f2b20c6672bcb9703113dfb64836")
     }
 
     func testPayoutParsesStrictly() throws {

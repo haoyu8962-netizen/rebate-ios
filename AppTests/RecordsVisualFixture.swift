@@ -156,8 +156,19 @@ final class RecordsVisualServer: @unchecked Sendable {
             }
             return .envelope(code: 0, data: body, headers: headers)
         }
+        if request.method == "GET", request.path == "/v1/config" {
+            // #24 test-change（升锁 00deded0ef6f）：新锁把包内 withdraw.sla_text 改成 BR-TEXT-07 原文（= 回落句），宿主改经生产路径
+            // 下发旧包内值（锁 a7c9f1f 的 openapi 示例），「配置值 ≠ 回落句」的前提与截图都与升锁前相同
+            guard let body = try? WithdrawVisualData.config(help: false, sla: Self.configuredSla) else {
+                return .envelope(code: 50001, data: "null", headers: headers)
+            }
+            return .envelope(code: 0, data: body, headers: headers)
+        }
         return WalletScript.fallback(request)
     }
+
+    /// 宿主下发的时效句（升锁前包内 DefaultConfig 的值，与 BR-TEXT-07 回落句不同）。
+    static let configuredSla = "工作日 24 小时内处理"
 
     /// 列表请求（第一页与翻页）的查询串，按发生顺序。
     static var listQueries: [String] {

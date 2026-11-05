@@ -86,7 +86,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 44001, 44003, 42901, 10405],
+            errorCodes: [20001, 44001, 44003, 42901, 10405, 30414],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .conditional,
             planned: false
@@ -99,7 +99,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 20002, 20003, 44001, 10405],
+            errorCodes: [20001, 20002, 20003, 44001, 10405, 10007],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
             planned: false
@@ -125,7 +125,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 20004, 44001, 50305, 10405],
+            errorCodes: [20001, 20004, 44001, 50305, 10405, 10007],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
             planned: false
@@ -138,7 +138,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 20004, 44001, 50305, 10405],
+            errorCodes: [20001, 20004, 44001, 50305, 10405, 10007],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
             planned: false
@@ -151,7 +151,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 20004, 44001, 50305, 10405],
+            errorCodes: [20001, 20004, 44001, 50305, 10405, 10007],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
             planned: true
@@ -177,7 +177,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [20001, 20002, 20003, 20004, 50305, 10405],
+            errorCodes: [20001, 20002, 20003, 20004, 50305, 10405, 30414],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .conditional,
             planned: false
@@ -364,6 +364,19 @@ public enum ApiOperations {
             minVersionGate: .unspecified,
             planned: false
         ),
+        "getAgreementVersion": ApiOperation(
+            operationId: "getAgreementVersion",
+            method: "GET",
+            pathTemplate: "/v1/agreements/{type}",
+            auth: "none",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [30701],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
         "listArticles": ApiOperation(
             operationId: "listArticles",
             method: "GET",
@@ -429,6 +442,19 @@ public enum ApiOperations {
             minVersionGate: .unspecified,
             planned: false
         ),
+        "listPageSectionItems": ApiOperation(
+            operationId: "listPageSectionItems",
+            method: "GET",
+            pathTemplate: "/v1/pages/{page_key}/sections/{section_id}/items",
+            auth: "optional",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [20001, 30701],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
         "getMessage": ApiOperation(
             operationId: "getMessage",
             method: "GET",
@@ -453,7 +479,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "markMessagesRead": ApiOperation(
             operationId: "markMessagesRead",
@@ -466,7 +492,7 @@ public enum ApiOperations {
             errorCodes: [20001, 10405],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "getUnreadMessageCount": ApiOperation(
             operationId: "getUnreadMessageCount",
@@ -479,7 +505,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "getWalletSummary": ApiOperation(
             operationId: "getWalletSummary",
@@ -492,7 +518,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "getEarningsSummary": ApiOperation(
             operationId: "getEarningsSummary",
@@ -505,7 +531,7 @@ public enum ApiOperations {
             errorCodes: [30701],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "listWalletLedger": ApiOperation(
             operationId: "listWalletLedger",
@@ -518,7 +544,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "getWithdrawRules": ApiOperation(
             operationId: "getWithdrawRules",
@@ -531,7 +557,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "listWithdrawals": ApiOperation(
             operationId: "listWithdrawals",
@@ -544,7 +570,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "createWithdrawal": ApiOperation(
             operationId: "createWithdrawal",
@@ -554,10 +580,10 @@ public enum ApiOperations {
             signed: true,
             idempotent: true,
             stepUp: "withdraw",
-            errorCodes: [10004, 10005, 30301, 30302, 30303, 30304, 30305, 30306, 30307, 30309, 10003, 20903, 10405],
+            errorCodes: [10004, 10005, 30301, 30302, 30303, 30304, 30305, 30306, 30307, 30309, 10003, 20903, 10405, 10010],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "getWithdrawal": ApiOperation(
             operationId: "getWithdrawal",
@@ -570,7 +596,59 @@ public enum ApiOperations {
             errorCodes: [30701],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
+        ),
+        "createPayOrder": ApiOperation(
+            operationId: "createPayOrder",
+            method: "POST",
+            pathTemplate: "/v1/pay/orders",
+            auth: "login",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [30901, 30902, 50306, 20901, 20902, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
+        ),
+        "getPayOrder": ApiOperation(
+            operationId: "getPayOrder",
+            method: "GET",
+            pathTemplate: "/v1/pay/orders/{pay_order_id}",
+            auth: "login",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [30701],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
+        "payOrderReturned": ApiOperation(
+            operationId: "payOrderReturned",
+            method: "POST",
+            pathTemplate: "/v1/pay/orders/{pay_order_id}/returned",
+            auth: "login",
+            signed: true,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [30701, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
+        ),
+        "cancelPayOrder": ApiOperation(
+            operationId: "cancelPayOrder",
+            method: "POST",
+            pathTemplate: "/v1/pay/orders/{pay_order_id}/cancel",
+            auth: "login",
+            signed: true,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [20902, 30701, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
         ),
         "getMe": ApiOperation(
             operationId: "getMe",
@@ -648,7 +726,7 @@ public enum ApiOperations {
             errorCodes: [20001, 44001, 42901],
             sessionScopes: ["full"],
             minVersionGate: .exempt,
-            planned: true
+            planned: false
         ),
         "landingRegister": ApiOperation(
             operationId: "landingRegister",
@@ -661,6 +739,58 @@ public enum ApiOperations {
             errorCodes: [10004, 30408, 42901, 20001, 30401, 20002, 20003, 44001],
             sessionScopes: ["full"],
             minVersionGate: .exempt,
+            planned: false
+        ),
+        "getReverify": ApiOperation(
+            operationId: "getReverify",
+            method: "GET",
+            pathTemplate: "/v1/me/reverify",
+            auth: "login",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
+        "reverifyByIdNumber": ApiOperation(
+            operationId: "reverifyByIdNumber",
+            method: "POST",
+            pathTemplate: "/v1/me/reverify/id-number",
+            auth: "login",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [20001, 20005, 10010, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
+        ),
+        "reverifyByOauth": ApiOperation(
+            operationId: "reverifyByOauth",
+            method: "POST",
+            pathTemplate: "/v1/me/reverify/oauth",
+            auth: "login",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [20001, 20004, 20005, 10010, 50305, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
+        ),
+        "bindOauthIdentity": ApiOperation(
+            operationId: "bindOauthIdentity",
+            method: "POST",
+            pathTemplate: "/v1/me/oauth-bindings",
+            auth: "login",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [20001, 20004, 10010, 50305, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
             planned: true
         ),
         "getPayoutAccount": ApiOperation(
@@ -674,7 +804,7 @@ public enum ApiOperations {
             errorCodes: [30304],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "savePayoutAccount": ApiOperation(
             operationId: "savePayoutAccount",
@@ -684,10 +814,10 @@ public enum ApiOperations {
             signed: true,
             idempotent: true,
             stepUp: "payout_account_change",
-            errorCodes: [30303, 30304, 30307, 30308, 10003, 20903, 10405],
+            errorCodes: [30303, 30304, 30307, 30308, 10003, 20903, 10405, 20001, 44001, 40901, 50401, 50301, 10010],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "submitRealname": ApiOperation(
             operationId: "submitRealname",
@@ -697,7 +827,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: true,
             stepUp: nil,
-            errorCodes: [10005, 10004, 20001, 30407, 30410, 30405, 30406, 50401, 50301, 10405],
+            errorCodes: [10005, 10004, 20001, 30407, 30410, 30405, 30406, 50401, 50301, 10405, 10010],
             sessionScopes: ["full"],
             minVersionGate: .gated,
             planned: false
@@ -723,7 +853,7 @@ public enum ApiOperations {
             signed: true,
             idempotent: true,
             stepUp: nil,
-            errorCodes: [30304, 10403, 20001, 10405],
+            errorCodes: [30304, 10403, 10004, 20001, 10405],
             sessionScopes: ["full"],
             minVersionGate: .gated,
             planned: false
@@ -778,7 +908,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "updateNotificationSettings": ApiOperation(
             operationId: "updateNotificationSettings",
@@ -791,7 +921,7 @@ public enum ApiOperations {
             errorCodes: [20001, 10405],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "getDeletion": ApiOperation(
             operationId: "getDeletion",
@@ -804,7 +934,7 @@ public enum ApiOperations {
             errorCodes: [],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "requestDeletion": ApiOperation(
             operationId: "requestDeletion",
@@ -814,10 +944,10 @@ public enum ApiOperations {
             signed: true,
             idempotent: true,
             stepUp: "account_deletion",
-            errorCodes: [30412, 30416, 10003, 20903],
+            errorCodes: [30412, 30416, 10003, 20903, 10010],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
-            planned: true
+            planned: false
         ),
         "cancelDeletion": ApiOperation(
             operationId: "cancelDeletion",
@@ -830,7 +960,33 @@ public enum ApiOperations {
             errorCodes: [10007],
             sessionScopes: ["full", "deletion_only"],
             minVersionGate: .exempt,
-            planned: true
+            planned: false
+        ),
+        "listMyDataCopies": ApiOperation(
+            operationId: "listMyDataCopies",
+            method: "GET",
+            pathTemplate: "/v1/me/data-copies",
+            auth: "login",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [],
+            sessionScopes: ["full", "deletion_only"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
+        "getMyDataCopyDownload": ApiOperation(
+            operationId: "getMyDataCopyDownload",
+            method: "GET",
+            pathTemplate: "/v1/me/data-copies/{id}/download",
+            auth: "login",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [30701],
+            sessionScopes: ["full", "deletion_only"],
+            minVersionGate: .unspecified,
+            planned: false
         ),
         "listAppeals": ApiOperation(
             operationId: "listAppeals",
@@ -853,7 +1009,7 @@ public enum ApiOperations {
             signed: false,
             idempotent: true,
             stepUp: nil,
-            errorCodes: [20001, 30701, 10405],
+            errorCodes: [20001, 30701, 10405, 30418],
             sessionScopes: ["full"],
             minVersionGate: .gated,
             planned: false
@@ -918,7 +1074,7 @@ public enum ApiOperations {
             signed: false,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [30141, 30143],
+            errorCodes: [30141, 30143, 50401],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
             planned: false
@@ -927,6 +1083,32 @@ public enum ApiOperations {
             operationId: "getProductPriceTrend",
             method: "GET",
             pathTemplate: "/v1/products/{product_key}/price-trend",
+            auth: "none",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
+        "getHotRank": ApiOperation(
+            operationId: "getHotRank",
+            method: "GET",
+            pathTemplate: "/v1/rank/hot",
+            auth: "optional",
+            signed: false,
+            idempotent: false,
+            stepUp: nil,
+            errorCodes: [20001, 50304],
+            sessionScopes: ["full"],
+            minVersionGate: .unspecified,
+            planned: false
+        ),
+        "getSearchHotWords": ApiOperation(
+            operationId: "getSearchHotWords",
+            method: "GET",
+            pathTemplate: "/v1/search/hot-words",
             auth: "none",
             signed: false,
             idempotent: false,
@@ -1051,7 +1233,7 @@ public enum ApiOperations {
             errorCodes: [30102, 30111, 30144],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "getShareTpwd": ApiOperation(
             operationId: "getShareTpwd",
@@ -1064,7 +1246,20 @@ public enum ApiOperations {
             errorCodes: [20001, 42901],
             sessionScopes: ["full"],
             minVersionGate: .exempt,
-            planned: true
+            planned: false
+        ),
+        "createShare": ApiOperation(
+            operationId: "createShare",
+            method: "POST",
+            pathTemplate: "/v1/shares",
+            auth: "phone",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [10005, 30413, 30101, 30111, 30153, 30121, 30131, 30141, 30143, 50301, 50303, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: false
         ),
         "createAgentSession": ApiOperation(
             operationId: "createAgentSession",
@@ -1077,7 +1272,7 @@ public enum ApiOperations {
             errorCodes: [30501, 10001, 10005, 10004, 10405],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "getCurrentAgentSession": ApiOperation(
             operationId: "getCurrentAgentSession",
@@ -1090,7 +1285,7 @@ public enum ApiOperations {
             errorCodes: [30501, 10001, 10005, 10004],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
-            planned: true
+            planned: false
         ),
         "listAgentSessionMessages": ApiOperation(
             operationId: "listAgentSessionMessages",
@@ -1116,7 +1311,7 @@ public enum ApiOperations {
             errorCodes: [30501, 10001, 10005, 10004, 30504, 20001, 30506, 30502, 50302, 10405, 42901, 50001, 50401],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "cancelAgentRun": ApiOperation(
             operationId: "cancelAgentRun",
@@ -1129,7 +1324,7 @@ public enum ApiOperations {
             errorCodes: [30501, 10001, 10005, 10004, 30505, 10405],
             sessionScopes: ["full"],
             minVersionGate: .gated,
-            planned: true
+            planned: false
         ),
         "setAgentMessageFeedback": ApiOperation(
             operationId: "setAgentMessageFeedback",

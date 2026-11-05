@@ -38,7 +38,7 @@ extension LoginView {
             HStack {
                 Spacer()
                 if model.resendCountdown > 0 {
-                    Text(verbatim: model.format(LoginKeys.codeCountdown, "sec", String(model.resendCountdown)))
+                    Text(verbatim: model.format(LoginKeys.codeCountdown, "n", String(model.resendCountdown)))
                         .couliFont(.body, monospacedDigits: true)
                         .foregroundColor(CouliColor.textSecondary)
                         .accessibilityIdentifier("login.countdown")

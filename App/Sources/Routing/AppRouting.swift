@@ -94,9 +94,11 @@ final class AppRouting {
         )
     }
 
-    /// 本构建可用的路由表：Release 只有 Routes.all；Debug / Staging 并入 debug_only 路由（Staging 下包里看不到 DEBUG）。
+    /// 本构建可用的路由表：Release 只有 Routes.all（本端没有页面的按未发布，见 markWithoutPage）；
+    /// Debug / Staging 并入 debug_only 路由（Staging 下包里看不到 DEBUG）。
     static var routeTable: [String: RouteSpec] {
         var table = Routes.all
+        markWithoutPage(&table)
         #if DEBUG
         table.merge(DebugOnlyRoutes.all) { current, _ in current }
         #endif

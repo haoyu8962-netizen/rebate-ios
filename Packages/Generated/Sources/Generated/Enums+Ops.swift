@@ -19,6 +19,8 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
     case smsCode = "SMS_CODE"
     case unionAuthExpiring = "UNION_AUTH_EXPIRING"
     case unionAuthExpired = "UNION_AUTH_EXPIRED"
+    case dataCopyReady = "DATA_COPY_READY"
+    case dataCopyCode = "DATA_COPY_CODE"
     case unknown = "__unknown__"
 
     public static let allCases: [NotifyTemplateCode] = [
@@ -38,6 +40,8 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
         .smsCode,
         .unionAuthExpiring,
         .unionAuthExpired,
+        .dataCopyReady,
+        .dataCopyCode,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {

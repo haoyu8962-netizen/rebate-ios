@@ -43,7 +43,7 @@ enum LoginDraftTexts {
         "login.code.title": "输入验证码",
         "login.code.sent_to": "验证码已发送至 {phone}",
         "login.code.label": "验证码",
-        "login.code.countdown": "{sec} 秒后可重新获取",
+        "login.code.countdown": "{n} 秒后可重新获取",
         "login.code.resend": "重新获取",
         // 「继续输入验证码」独立入口（APP-05a 共性 16；设计稿没有这个入口，措辞待定稿）
         "login.code.continue": "已收到验证码？继续输入",
@@ -80,7 +80,7 @@ enum LoginDraftTexts {
         // ---- APP-05b：BindPhone / BindPhoneMerge（说明条用契约 invite.bind_phone_guide.body，并号正文用契约 error.30411.mergeable）
         "bind_phone.title": "绑定手机号",
         "bind_phone.code.placeholder": "6 位验证码",
-        "bind_phone.countdown": "{sec} 秒后重新获取",
+        "bind_phone.countdown": "{n} 秒后重新获取",
         "bind_phone.submit": "绑定",
         "bind_phone.done": "手机号已绑定",
         // 倒计时结束、可以重新获取时的读屏播报（设计稿与契约都没有这句，共性第 11 条）

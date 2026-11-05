@@ -49,6 +49,11 @@ final class RecordsVisualHost {
     /// 经真实 Router 打开 WithdrawRecords（`focus` = 路由参数 withdrawal_id）并挂窗口。
     func show(focus: String? = nil, _ canvas: Canvas = Canvas()) async throws {
         if destination == nil {
+            // #24 test-change（升锁 00deded0ef6f）：配置走生产路径拉到下发的时效句后再开页（见 RecordsVisualServer.configuredSla）
+            wallet.config.startIfSettled(.settled)
+            await waitUntil("配置没有拉到") {
+                self.wallet.configText("withdraw.sla_text") == RecordsVisualServer.configuredSla
+            }
             let values: [String: JSONValue] = focus.map { [WalletRoutes.withdrawalId: .string($0)] } ?? [:]
             fixture.router.open(RouteRequest(route: WalletRoutes.withdrawRecords, values: values, from: .inApp))
             destination = try XCTUnwrap(fixture.router.path.last, "Router 没有推入 WithdrawRecords")

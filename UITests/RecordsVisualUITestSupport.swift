@@ -42,6 +42,8 @@ extension RecordsVisualUITest {
         let payload: [String: Any] = try [
             "summary": summary("normal"),
             "records": ["pages": pages, "details": details, "nowMillis": now],
+            // #24 T21（升锁 00deded0ef6f）：包内 withdraw.sla_text 已等于 BR-TEXT-07 回落句；经 Debug 假服务 GET /v1/config 下发旧包内值
+            "configTexts": ["withdraw.sla_text": Self.configuredSla],
         ]
         let app = XCUIApplication()
         app.launchEnvironment["COULI_FAKE_WALLET_VISUAL"] = try JSONSerialization.data(withJSONObject: payload)
@@ -86,19 +88,17 @@ extension RecordsVisualUITest {
         Array(log(app).dropFirst(count))
     }
 
-    /// v2 / T1：App 生效配置里的时效句。UI 进程不链接包；`-CouliFakeLoginServer` 的 `GET /v1/config` 回包内 `DefaultConfig`
-    /// （gen.py 由契约 openapi `GET /v1/config` 200 响应示例生成，Debug 只改 search_status / flags / kf / filing，不动 texts），
-    /// 所以期望值取 `contracts/snapshot/contracts/openapi.json` 该示例的 `data.texts["withdraw.sla_text"]`。
+    /// 宿主下发的时效句：升锁前包内 DefaultConfig（锁 a7c9f1f 的 openapi 示例）的值，与 BR-TEXT-07 回落句不同。
+    /// 与 AppTests 的 `RecordsVisualServer.configuredSla`（#24 T14）同一个值。
+    static var configuredSla: String {
+        "工作日 24 小时内处理"
+    }
+
+    /// v2 / T1：App 生效配置里的时效句。UI 进程不链接包；`-CouliFakeLoginServer` 的 `GET /v1/config` 在包内 `DefaultConfig` 上
+    /// 并入注入的 `configTexts`（`DebugWalletVisual.configReply`）。#24 T21：升锁 00deded0ef6f 后包内值已等于 BR-TEXT-07 回落句，
+    /// 改为注入旧包内值，期望值就是注入值；判据（配置值 ≠ 回落句、页面按配置取值）不变。
     func configSla() throws -> String {
-        let data = try Data(contentsOf: Self.repo().appendingPathComponent("contracts/snapshot/contracts/openapi.json"))
-        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let paths = try XCTUnwrap(root["paths"] as? [String: Any])
-        let get = try XCTUnwrap((paths["/v1/config"] as? [String: Any])?["get"] as? [String: Any])
-        let ok = try XCTUnwrap((get["responses"] as? [String: Any])?["200"] as? [String: Any])
-        let json = try XCTUnwrap((ok["content"] as? [String: Any])?["application/json"] as? [String: Any])
-        let example = try XCTUnwrap((json["example"] as? [String: Any])?["data"] as? [String: Any])
-        let texts = try XCTUnwrap(example["texts"] as? [String: Any], "openapi GET /v1/config 示例没有 texts")
-        return try XCTUnwrap(texts["withdraw.sla_text"] as? String, "openapi 示例没有 texts.withdraw.sla_text")
+        Self.configuredSla
     }
 
     /// v2 / T3：读屏可达的顺序。iOS 26 的 XCUI 快照会把一个无障碍元素（按钮、`children: .combine / .ignore` 的整行）内部的子文字

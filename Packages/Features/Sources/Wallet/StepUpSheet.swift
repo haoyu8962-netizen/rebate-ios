@@ -256,7 +256,7 @@ struct StepUpSheetBody: View {
                                alignment: .trailing, probe: "stepUp.sending")
                 } else if state.phase != .noPhone {
                     if state.resendLeftSec > 0 {
-                        RecordText(texts.format("login.code.countdown", ["sec": "\(state.resendLeftSec)"]),
+                        RecordText(texts.format("login.code.countdown", ["n": "\(state.resendLeftSec)"]),
                                    style: .footnote, color: CouliColor.textSecondary, monospacedDigits: true,
                                    alignment: .trailing, probe: "stepUp.countdown")
                             .accessibilityIdentifier("stepUp.countdown")

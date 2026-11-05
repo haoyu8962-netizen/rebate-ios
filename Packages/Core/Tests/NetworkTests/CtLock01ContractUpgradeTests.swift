@@ -92,6 +92,13 @@ final class CtLock01ContractUpgradeTests: XCTestCase {
     func testOperationRegistryHasNoAdminPathsAndListsTheAgentOperations() throws {
         XCTAssertFalse(ApiOperations.all.values.contains { $0.pathTemplate.hasPrefix("/admin/") })
         XCTAssertFalse(ApiOperations.all.values.contains { ["admin", "super"].contains($0.auth) })
+        // #24 test-change（FU-X-HOME-PAGE-API-ios 升锁 00deded0ef6f）：新锁 planned 逐个钉——4 个已实现（false）、3 个仍 planned（true），
+        // 与安卓 U3（编排 11-04 15:01）同口径；路径与方法不变
+        let planned: [String: Bool] = [
+            "createAgentSession": false, "getCurrentAgentSession": false, "listAgentSessionMessages": true,
+            "sendAgentMessage": false, "cancelAgentRun": false, "setAgentMessageFeedback": true,
+            "reportAgentMessage": true,
+        ]
         let expected: [[String]] = [
             ["createAgentSession", "POST", "/v1/agent/sessions"],
             ["getCurrentAgentSession", "GET", "/v1/agent/sessions/current"],
@@ -106,7 +113,7 @@ final class CtLock01ContractUpgradeTests: XCTestCase {
             let operation = try XCTUnwrap(ApiOperations.byId(operationId), operationId)
             XCTAssertEqual(operation.method, method, operationId)
             XCTAssertEqual(operation.pathTemplate, path, operationId)
-            XCTAssertTrue(operation.planned, operationId)
+            XCTAssertEqual(operation.planned, planned[operationId], operationId)
         }
         let agent = ApiOperations.all.values.filter { $0.pathTemplate.hasPrefix("/v1/agent/") }
         XCTAssertEqual(agent.count, expected.count)

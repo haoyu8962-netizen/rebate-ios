@@ -64,7 +64,8 @@ class RecordsVisualTestCase: WalletVisualTestCase {
     }
 
     /// v2 / T1：时效句的期望值 = App 此刻生效配置里的 `texts.withdraw.sla_text`（生产 `AppWallet.configText`，与
-    /// `AppWallet+Pages.recordsEntry` 同一来源；本宿主没有拉配置，生效的是包内 `DefaultConfig` = openapi 示例「工作日 24 小时内处理」）。
+    /// `AppWallet+Pages.recordsEntry` 同一来源；宿主经生产路径下发 `RecordsVisualServer.configuredSla`「工作日 24 小时内处理」，#24 升锁
+    /// 00deded0ef6f）。
     /// 前提：它与 BR-TEXT-07 回落句不同——这样页面若不按配置取值（回落成默认句或写死），断言才会红。
     func appSla(file: StaticString = #filePath, line: UInt = #line) throws -> String {
         let page = try XCTUnwrap(records, "没有记录页宿主", file: file, line: line)
