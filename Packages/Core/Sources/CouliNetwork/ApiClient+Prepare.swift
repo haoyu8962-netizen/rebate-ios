@@ -4,6 +4,16 @@ import Session
 
 /// 公共头 → 签名（03 §4.2 中间件前两步）：每次实际发送前重新组装。
 extension ApiClient {
+    /// 发往 stream 入口的契约路径前缀（D10-598 ①）。
+    static let agentPathPrefix = "/v1/agent/"
+
+    /// 请求基址：Agent 操作按契约路径模板（不按带查询串的 URL）分流到 stream 入口；stream 未设时与其余操作一样走 api
+    /// （D10-598 ①）。环境未就绪时为 nil。
+    static func baseURL(_ operation: ApiOperation, _ state: NetworkContext) -> URL? {
+        let stream = operation.pathTemplate.hasPrefix(agentPathPrefix) ? state.streamBaseURL : nil
+        return stream ?? state.apiBaseURL
+    }
+
     /// 公共头 → 签名：决定要带的头，读凭据（只在可读时），算签名。
     /// `options` 给出时（业务调用）：同一把锁里先比较——快照仍可信、调用仍属当前作废世代、带固定归属的会话世代未变——再读凭据
     /// （APP-08 iOS NEW-01）；任何一项不满足都不读令牌与设备凭据（随后的归属比较按不一致本地结束）。
@@ -34,7 +44,7 @@ extension ApiClient {
         guard decision.send else {
             return .rejected(decision.localRejectReason ?? LocalRejectReason.environmentUnsettled)
         }
-        guard let base = state.apiBaseURL else {
+        guard let base = Self.baseURL(operation, state) else {
             return .rejected(LocalRejectReason.environmentUnsettled)
         }
         guard let url = Self.buildURL(base, operation.pathTemplate, call.pathParams, call.query) else {

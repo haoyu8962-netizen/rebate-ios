@@ -165,6 +165,8 @@ public struct NetworkContext: Sendable, Equatable {
     public let update: String
     /// 当前环境的 API 基址；环境未就绪时为 nil。
     public let apiBaseURL: URL?
+    /// 当前环境的 Agent 流式入口基址（D10-598 ①）；只有 pathTemplate 以 `/v1/agent/` 开头的操作用它，nil 时一律走 apiBaseURL。
+    public let streamBaseURL: URL?
     /// 个性化推荐已关闭（APP-12 G03：设备级本机偏好）：隐私结论为已同意时请求带 `X-Personalization: off`；基本模式、未决不带。
     /// 签名不含这个头（签名只按方法、路径、查询、请求体）。
     public var personalizationOff = false
@@ -178,13 +180,15 @@ public struct NetworkContext: Sendable, Equatable {
         environmentSettled: Bool,
         credentialsReadable: Bool,
         update: String,
-        apiBaseURL: URL?
+        apiBaseURL: URL?,
+        streamBaseURL: URL? = nil
     ) {
         self.privacy = privacy
         self.environmentSettled = environmentSettled
         self.credentialsReadable = credentialsReadable
         self.update = update
         self.apiBaseURL = apiBaseURL
+        self.streamBaseURL = streamBaseURL
     }
 }
 

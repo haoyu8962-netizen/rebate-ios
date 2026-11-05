@@ -29,7 +29,12 @@ final class DebugCapabilitiesTests: XCTestCase {
         for environment in AppEnvironment.selectable {
             for url in [environment.endpoints.apiBaseURL, environment.endpoints.h5BaseURL] {
                 XCTAssertEqual(url.scheme, "https")
-                XCTAssertTrue(url.host?.hasSuffix(".\(environment.id).couli.invalid") ?? false, "\(url)")
+                // #24 test-change（FU-X-STAGING-HOSTS-ios）：staging 改连真实主机，只换这一行的期望；local / test / prod 原样
+                if environment.id == "staging" {
+                    XCTAssertTrue(["api-stg.couliapp.cn", "h5-stg.couliapp.cn"].contains(url.host ?? ""), "\(url)")
+                } else {
+                    XCTAssertTrue(url.host?.hasSuffix(".\(environment.id).couli.invalid") ?? false, "\(url)")
+                }
             }
         }
     }

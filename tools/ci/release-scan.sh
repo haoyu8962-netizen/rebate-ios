@@ -11,7 +11,11 @@
 #   只对授权内容返回 2 的假 grep 做故障注入，证明两处都退出 2。
 #
 # 用 strings 扫 .app 里的每个文件（二进制与资源），查：
-#   - 非 prod 环境地址：local / test / staging 的 .couli.invalid 域名
+#   - 非 prod 环境地址：local / test 的 .couli.invalid 域名；staging 真实主机的公共后缀 -stg.couliapp.cn
+#     （FU-X-STAGING-HOSTS：api / stream / h5 / l / s-stg 五个主机的 https 与裸主机写法都含它，16 字节超过 Swift 15 字节
+#     内联上限，strings 看得到；不列 couliapp.cn 本身，以免拦掉正式主域）。macOS 的 strings 不读 UTF-16，所以这一项
+#     另用 python 按 UTF-16LE 字节再查一遍。限制：运行时拼接出来的地址（分段字面量再拼）字节匹配拦不住，靠源码检查
+#     （AppTests StagingHostsEnvironmentTests X 组：主机只许写在 App 的 #if DEBUG 里）兜底。
 #   - 调试面板标记 COULI_DEBUG_PANEL（App/Sources/Debug/DebugPanelView.swift）
 #   - 组件目录页标记 COULI_DS_COMPONENT_CATALOG_7Q4XK2（App/Sources/Debug/Catalog/ComponentCatalogView.swift，DS-01）
 #   - debug_only 路由表标记 COULI_DEBUG_ONLY_ROUTE_TABLE（tools/codegen/gen.py 生成在 debug_only 表所在的
@@ -110,6 +114,8 @@ for tool in strings grep find python3 codesign sort mktemp; do
     command -v "$tool" >/dev/null 2>&1 || fail_scan "找不到工具 $tool"
 done
 
+STAGING_HOST_SUFFIX="-stg.couliapp.cn"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-scan.XXXXXX")" || fail_scan "mktemp 失败"
 trap 'rm -rf "$WORK"' EXIT
 PATTERNS="$WORK/patterns"
@@ -122,7 +128,7 @@ HITS_LOG="$WORK/hits"
 {
     echo "local.couli.invalid"
     echo "test.couli.invalid"
-    echo "staging.couli.invalid"
+    echo "$STAGING_HOST_SUFFIX"
     echo "COULI_DEBUG_PANEL"
     echo "COULI_DS_COMPONENT_CATALOG_7Q4XK2"
     echo "COULI_DEBUG_ONLY_ROUTE_TABLE"
@@ -233,6 +239,24 @@ while IFS= read -r -d '' file; do
     done <"$FOUND.sorted"
 done <"$FILES"
 [ "$SCANNED" -gt 0 ] || fail_scan "一个文件都没扫到"
+
+# staging 主机的 UTF-16LE 写法（strings 看不到）：一次读完全部文件，命中的文件逐个记。
+python3 -c '
+import os, sys
+needle = sys.argv[2].encode("utf-16-le")
+app = sys.argv[3]
+with open(sys.argv[1], "rb") as fh:
+    paths = [p for p in fh.read().split(b"\0") if p]
+for raw in paths:
+    with open(raw, "rb") as f:
+        if needle in f.read():
+            print(os.path.relpath(os.fsdecode(raw), app))
+' "$FILES" "$STAGING_HOST_SUFFIX" "$APP" >"$FOUND" || fail_scan "UTF-16LE 检查失败"
+while IFS= read -r rel; do
+    echo "  命中：${rel}：${STAGING_HOST_SUFFIX}（UTF-16LE）"
+    echo "$STAGING_HOST_SUFFIX" >>"$HITS_LOG"
+    HITS=$((HITS + 1))
+done <"$FOUND"
 
 # 代码签名里的授权。未签名的包（通用设备构建 CODE_SIGNING_ALLOWED=NO）没有授权可查。
 if entitlements="$(codesign -d --entitlements - "$APP" 2>&1)"; then

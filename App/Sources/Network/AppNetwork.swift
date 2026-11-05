@@ -215,7 +215,8 @@ final class NetworkContextSource {
             environmentSettled: settled,
             credentialsReadable: credentialsReadable(),
             update: AppNetwork.networkUpdate(update.routerStatus),
-            apiBaseURL: settled ? environment.current.endpoints.apiBaseURL : nil
+            apiBaseURL: settled ? environment.current.endpoints.apiBaseURL : nil,
+            streamBaseURL: settled ? environment.current.endpoints.streamBaseURL : nil
         )
         context.personalizationOff = personalizationOff?() ?? false
         return context

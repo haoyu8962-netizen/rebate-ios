@@ -114,10 +114,10 @@ final class AppRouting {
     }
 
     /// 深链入站配置。正式的 scheme 与 `l.` 子域未定（needs N-05），apps.json inbound 为空：Release 不认任何深链。
-    /// Debug / Staging 只认测试 scheme `couli-debug`（Info.plist 也只在这两套配置声明它）。
+    /// Debug / Staging 认测试 scheme `couli-debug`（Info.plist 只在这两套配置声明）与 staging 链接域（FU-X-STAGING-HOSTS，只管解析）。
     static var deepLinkConfig: DeepLinkConfig {
         #if DEBUG
-        DeepLinkConfig(schemes: ["couli-debug"], hosts: [])
+        DeepLinkConfig(schemes: ["couli-debug"], hosts: ["l-stg.couliapp.cn"])
         #else
         // TODO(N-05): 负责人给定 scheme 与链接域名后由 apps.json 生成。
         .empty
