@@ -105,7 +105,10 @@ extension AppHome {
         appVersion: String = AppRouting.appVersion,
         credentialsReadable: @escaping @MainActor () -> Bool = { PrivacyWithdrawalCleanup.runner.credentialsReadable }
     ) -> AppHome {
-        let port = variant == .debug ? debugPort() : nil
+        // 生产端口（FU-X-HOME-PAGE-API-ios，D10-643）：Release 一律用它；Debug / Staging 每次装配现判，带
+        // -CouliHomeVisual / -CouliFakeLoginServer 时 debugPort() 给出对应的假端口，否则同样走生产端口（不带参数的 Staging 包连 staging）。
+        let live = ApiClientHomeContractPort(api: network.client)
+        let port: HomeContractPort = variant == .debug ? (debugPort() ?? live) : live
         return AppHome(
             network: network,
             routing: routing,

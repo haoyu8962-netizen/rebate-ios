@@ -67,10 +67,13 @@ public struct HeaderDecision: Sendable, Equatable {
 /// 会话 deletion_only → 只放行 x-session-scopes 含 deletion_only 的接口，按请求体才接受的五个接口再看请求体
 /// （没有请求体按不接受）；签名接口没有可读的设备凭据 → device_not_ready。
 public enum RequestHeaderPolicy {
-    /// 基本模式匿名白名单（BR-ID-11）：配置、搜索、商品详情、帮助与规则文章列表。
-    /// TODO(N-19): 首页内容与 GET /v1/dict 在锁定 openapi 里没有 operationId；基本模式文章详情（getArticle，
+    /// 基本模式匿名白名单（BR-ID-11）：配置、搜索、商品详情、帮助与规则文章列表、首页（getPage 与区块取数
+    /// listPageSectionItems，D10-607 ②）。撤回清理未完成（凭据不可读）时同样按这张表。
+    /// TODO(N-19): GET /v1/dict 在锁定 openapi 里没有 operationId；基本模式文章详情（getArticle，
     /// 需区分协议 / 帮助类别）未定，暂不放行（rule-gaps 第 2 条）。
-    public static let basicModeAllowed: Set<String> = ["getConfig", "searchProducts", "getProduct", "listArticles"]
+    public static let basicModeAllowed: Set<String> = [
+        "getConfig", "searchProducts", "getProduct", "listArticles", "getPage", "listPageSectionItems",
+    ]
 
     /// 隐私尚未决定时只允许配置与协议文本（BR-ID-11「同意前禁止除配置和协议文本外的网络请求」）。
     /// TODO(N-19): 协议正文接口（文章详情按类别）未定，暂只放行列表。

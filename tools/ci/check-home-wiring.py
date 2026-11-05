@@ -18,6 +18,9 @@
   R7 首页路由视图：`HomeSduiScreen(controller: home.controller` 且 `grayscale: home.grayscale`（置灰只作用于首页根视图）。
   R8 首页路由视图出现时 `.onAppear { home.tabAppeared() }`（第 2 版，评审 T-15：真实首页必须被启动）。
   R9 CouliApp 经生产工厂 `AppHome.make(..., variant: .current, ...)` 装配首页（第 2 版，评审 T-12）；不得直接 `AppHome(`、不得写死变体。
+  R10 生产工厂（App/Sources/Home/AppHomeSupport.swift）构造生产端口 `ApiClientHomeContractPort(`（正好一次、不在条件分支里），
+      Release 分支不得写成恒为空：禁止 `debugPort() : nil`、`? … : nil` 的端口三元式、`port: nil`、`?? nil`
+      （FU-X-HOME-PAGE-API-ios，D10-643「CI 断言 Release 首页 port 非空」的源码层；行为由 AppTests HomePageApiWiringTests 证明）。
 漏接样例（--self-test）：恒值（`home: nil`、`grayscale: false`）、死代码（`if false {`、`#if NEVER`）、二次读取（同一规则写两次，后一次覆盖）、
 后续覆盖（转发后又把同名变量改掉）、错误接收者（`other.connect(me:`、`HomeSduiScreen(controller: preview.controller`）。
 只用 Python 3 标准库。
@@ -32,6 +35,7 @@ from pathlib import Path
 COULI_APP = "App/Sources/CouliApp.swift"
 REGISTRY = "App/Sources/Routing/RouteViewRegistry.swift"
 HOME_ROUTE = "App/Sources/Home/HomeRouteView.swift"
+HOME_SUPPORT = "App/Sources/Home/AppHomeSupport.swift"
 
 # (文件, 规则名, 必须匹配的正则, 所在函数 / 块的要求)
 RULES = [
@@ -45,6 +49,7 @@ RULES = [
     (HOME_ROUTE, "R7 首页渲染器", r"HomeSduiScreen\(\s*controller:\s*home\.controller\s*,\s*grayscale:\s*home\.grayscale\b", None),
     (HOME_ROUTE, "R8 首页出现时启动（生命周期转发）", r"\.onAppear\s*\{\s*home\.tabAppeared\(\s*\)\s*\}", None),
     (COULI_APP, "R9 经生产工厂按当前构建装配首页", r"AppHome\.make\([^)]*\bvariant:\s*\.current\b", None),
+    (HOME_SUPPORT, "R10 生产工厂构造生产端口", r"(?<![\w.])ApiClientHomeContractPort\(", None),
 ]
 
 # 恒值 / 被替换的实参
@@ -56,6 +61,10 @@ FORBIDDEN = [
     (HOME_ROUTE, r"HomeSduiScreen\(\s*controller:(?!\s*home\.controller\b)", "渲染器的控制器不是 home.controller"),
     (COULI_APP, r"(?<![\w.])(?!home\b)\w+\.connect\(\s*me:", "connect(me:) 的接收者不是 home"),
     (COULI_APP, r"\bvar\s+home\b[^\n]*=|(?<!let )(?<![\w.])home\s*=[^=]", "home 被重新赋值（后续覆盖）"),
+    (HOME_SUPPORT, r"debugPort\(\)\s*:\s*nil\b", "R10 Release 分支的首页端口写成了 nil（debugPort() : nil）"),
+    (HOME_SUPPORT, r"\bport\b[^\n=]*=[^\n]*\?[^\n]*:\s*nil\b", "R10 首页端口的三元式有一支恒为 nil"),
+    (HOME_SUPPORT, r"\bport:\s*nil\b", "R10 首页端口直接传 nil"),
+    (HOME_SUPPORT, r"\?\?\s*nil\b", "R10 首页端口回落到 nil（?? nil）"),
 ]
 
 DEAD_OPENERS = re.compile(r"^\s*(if\s+false\b|if\s+true\s*\{\s*\}\s*else|#if\s+(?!DEBUG\b)\w+|#if\s+false\b|while\s+false\b|guard\s+false\b)")
@@ -166,7 +175,7 @@ def inside_debug(lines: list[str], index: int) -> bool:
 
 def check(root: Path) -> int:
     errors = []
-    for path in (COULI_APP, REGISTRY, HOME_ROUTE):
+    for path in (COULI_APP, REGISTRY, HOME_ROUTE, HOME_SUPPORT):
         try:
             text = (root / path).read_text(encoding="utf-8")
         except OSError as error:
@@ -238,6 +247,19 @@ struct HomeRouteView: View {
     }
 }
 """,
+    HOME_SUPPORT: """
+extension AppHome {
+    static func make(
+        network: AppNetwork,
+        variant: HomeBuildVariant,
+        debugPort: () -> HomeContractPort?
+    ) -> AppHome {
+        let live = ApiClientHomeContractPort(api: network.client)
+        let port: HomeContractPort = variant == .debug ? (debugPort() ?? live) : live
+        return AppHome(network: network, port: port)
+    }
+}
+""",
 }
 
 # 漏接样例：(说明, 文件, 把合规样例里的 old 换成 new)
@@ -270,6 +292,23 @@ BAD = [
     ("注释里的假转发", HOME_ROUTE,
      "        HomeSduiScreen(controller: home.controller, grayscale: home.grayscale)\n",
      "        // HomeSduiScreen(controller: home.controller, grayscale: home.grayscale)\n        EmptyView()\n"),
+    ("R10 恒值：Release 端口写成 nil（底版写法）", HOME_SUPPORT,
+     "        let port: HomeContractPort = variant == .debug ? (debugPort() ?? live) : live\n",
+     "        let port = variant == .debug ? debugPort() : nil\n"),
+    ("R10 恒值：三元式 Release 一支为 nil", HOME_SUPPORT, "? (debugPort() ?? live) : live", "? live : nil"),
+    ("R10 恒值：直接传 port: nil", HOME_SUPPORT, "AppHome(network: network, port: port)", "AppHome(network: network, port: nil)"),
+    ("R10 恒值：?? nil 回落", HOME_SUPPORT, "(debugPort() ?? live) : live", "(debugPort() ?? live) : debugPort() ?? nil"),
+    ("R10 缺失：没有构造生产端口", HOME_SUPPORT, "        let live = ApiClientHomeContractPort(api: network.client)\n",
+     "        let live = debugPort()!\n"),
+    ("R10 条件分支：生产端口只在 debug 分支构造", HOME_SUPPORT,
+     "        let live = ApiClientHomeContractPort(api: network.client)\n",
+     "        var live: HomeContractPort = debugPort()!\n        if variant == .debug {\n            live = ApiClientHomeContractPort(api: network.client)\n        }\n"),
+    ("R10 死代码：生产端口在 if false 里", HOME_SUPPORT,
+     "        let live = ApiClientHomeContractPort(api: network.client)\n",
+     "        var live: HomeContractPort = debugPort()!\n        if false {\n            live = ApiClientHomeContractPort(api: network.client)\n        }\n"),
+    ("R10 注释里的假构造", HOME_SUPPORT,
+     "        let live = ApiClientHomeContractPort(api: network.client)\n",
+     "        // let live = ApiClientHomeContractPort(api: network.client)\n        let live = debugPort()!\n"),
 ]
 
 

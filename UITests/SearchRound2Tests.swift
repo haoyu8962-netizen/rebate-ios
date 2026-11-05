@@ -35,7 +35,7 @@ final class SearchRound2Tests: XCTestCase {
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "没有进搜索页")
         field.tap()
-        if let value = field.value as? String, !value.isEmpty, value != "搜索商品" {
+        if let value = field.value as? String, !value.isEmpty, value != "搜商品名，或粘贴商品链接" {
             element(app, "search.clear").tap()
         }
         field.typeText(keyword)

@@ -26,6 +26,10 @@ import Generated
     var apiNotices: [String: [HomeNotice]] = [:]
     var feeds: [String: HomeFeedUi] = [:]
     var pendingSections: Set<String> = []
+    /// D4（D10-607）：卡片还没有任何商品时，对「items 空但带游标」自动续取，每张卡每次渲染最多 3 次。已用次数与待续游标
+    /// 跨限流保留：续取被本地闸门或 42901 拦下，放开后从原游标恢复、不重新计数（安卓 r1 S1）。
+    var continuationCounts: [String: Int] = [:]
+    var continuationCursors: [String: String] = [:]
     var loadingSections: Set<String> = []
     var failedImages: Set<HomeImageTicket> = []
     var memoryClosed: Set<String> = []

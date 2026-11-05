@@ -46,9 +46,15 @@ final class HomeAppRenderTests: HomeAppTestCase {
         // 真实装配：Release 变体、没有端口 → 包内默认页（换一份本机数据目录，不让参照页写下的 LKG 顶替包内默认页）
         try? FileManager.default.removeItem(at: storageRoot)
         storageRoot = FileManager.default.temporaryDirectory.appendingPathComponent("home-app-\(UUID().uuidString)")
+        // #24 test-change（FU-X-HOME-PAGE-API-ios）：Release 现在走契约 getPage；服务端 30701 时 1.5 秒后落到包内默认页（D5），
+        // 判据（包内默认页每张卡都画出来）不变
+        script.fail("GET /v1/pages/home", 30701)
         let release = make(account: nil, variant: .release)
+        await release.launch()
+        release.clock.advance(1500)
+        await release.controller.whenIdle()
         let shot = try await shoot(release)
-        XCTAssertEqual(release.controller.state.source, .bundled, "前提：Release 无端口显示包内默认页")
+        XCTAssertEqual(release.controller.state.source, .bundled, "前提：Release 页面 30701 时显示包内默认页")
         XCTAssertEqual(release.controller.state.sections.count, sections.count, "前提：包内默认页每张卡都可见")
         XCTAssertGreaterThanOrEqual(
             shot.bottom, reference.bottom + 40,

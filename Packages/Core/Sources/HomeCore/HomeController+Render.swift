@@ -13,6 +13,8 @@ extension HomeController {
         feeds = [:]
         pendingSections = []
         loadingSections = []
+        continuationCounts = [:]
+        continuationCursors = [:]
         failedImages = []
         noticeTimer?.cancel()
         state.render = HomeRenderTicket(controller: id, generation: state.render.generation + 1)

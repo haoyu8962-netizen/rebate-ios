@@ -72,7 +72,7 @@ final class DebugHomeVisualPort: HomeContractPort, @unchecked Sendable {
             return Self.offline
         }
         try? await Task.sleep(for: .milliseconds(50))
-        if ["lkg", "invalid"].contains(scene) {
+        if ["lkg", "invalid", "bundled"].contains(scene) {
             return Self.offline
         }
         return .success(data: page, traceId: nil, idempotencyKey: nil)

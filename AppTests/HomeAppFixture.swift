@@ -63,7 +63,9 @@ struct HomeAppFixture {
         update checker: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)),
         port: TestHomePort = TestHomePort(), clock: TestHomeClock = TestHomeClock(),
         bundled: @escaping @MainActor () -> Data? = { HomeBundled.data() }, variant: HomeBuildVariant = .debug,
-        portLookups: PortLookups = PortLookups()
+        portLookups: PortLookups = PortLookups(),
+        // FU-X-HOME-PAGE-API-ios（只增参数、缺省行为不变）：Debug 端口来源这次装配是否给出假端口（false = 模拟不带假参数的启动）
+        debugPortProvided: @escaping @MainActor () -> Bool = { true }
     ) -> HomeAppFixture {
         let (tokens, privacyStore) = session(account: account, decision: decision)
         let withdrawal = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
@@ -98,7 +100,7 @@ struct HomeAppFixture {
         let home = AppHome.make(
             network: network, routing: routing, config: config, login: login, update: update, privacy: privacy,
             environment: environment, variant: variant, debugPort: { portLookups.count += 1
-                return port
+                return debugPortProvided() ? port : nil
             }, storage: storage, timers: clock, clock: clock.clock, images: images, bundled: bundled,
             appVersion: "1.10.0", credentialsReadable: { runner.credentialsReadable }
         )
@@ -218,11 +220,12 @@ class HomeAppTestCase: XCTestCase {
         account: String? = "user-a", decision: String = "consented",
         update: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)), port: TestHomePort = TestHomePort(),
         bundled: @escaping @MainActor () -> Data? = { HomeBundled.data() }, variant: HomeBuildVariant = .debug,
-        portLookups: PortLookups = PortLookups()
+        portLookups: PortLookups = PortLookups(), debugPortProvided: @escaping @MainActor () -> Bool = { true }
     ) -> HomeAppFixture {
         HomeAppFixture.make(
             suiteName: suiteName, defaults: defaults, storageRoot: storageRoot, account: account, decision: decision,
-            update: update, port: port, bundled: bundled, variant: variant, portLookups: portLookups
+            update: update, port: port, bundled: bundled, variant: variant, portLookups: portLookups,
+            debugPortProvided: debugPortProvided
         )
     }
 

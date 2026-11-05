@@ -290,6 +290,15 @@ private struct HomeListChrome: ViewModifier {
     let rows: HomeRowFrames
     @Binding var width: CGFloat
     @Binding var viewport: CGFloat
+    @State private var toast: CouliToastMessage?
+    /// 正在显示的提示对应的控制器 toast id。
+    @State private var toastSource: UUID?
+
+    private func show(_ source: HomeToast?) {
+        guard let source, source.id != toastSource else { return }
+        toastSource = source.id
+        toast = CouliToastMessage(source.message, icon: .info)
+    }
 
     func body(content: Content) -> some View {
         let render = model.render
@@ -320,15 +329,15 @@ private struct HomeListChrome: ViewModifier {
                 owner.refresh(render)
                 await owner.whenIdle()
             }
-            .overlay(alignment: .bottom) {
-                if let toast = model.toast {
-                    Text(verbatim: toast.message).couliFont(.footnote).padding()
-                        .background(CouliColor.backgroundSurface).cornerRadius(CouliRadius.card)
-                        .onTapGesture { owner.consumeToast(toast.id) }
-                        .task(id: toast.id) {
-                            try? await Task.sleep(for: .seconds(3))
-                            owner.consumeToast(toast.id)
-                        }
+            // 刷新失败等轻提示用 DS 的 couliToast（D10-643）：控制器的 toast 模型不变，这里只换呈现层；
+            // DS 计时消失后再交还控制器（consumeToast），同一条提示重绘不重复计时、不重复播报。
+            .couliToast($toast)
+            .onAppear { show(model.toast) }
+            .onChange(of: model.toast?.id) { _ in show(model.toast) }
+            .onChange(of: toast) { value in
+                if value == nil, let source = toastSource {
+                    toastSource = nil
+                    owner.consumeToast(source)
                 }
             }
             .fullScreenCover(item: Binding(get: { model.popup }, set: { value in

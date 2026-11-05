@@ -16,7 +16,7 @@ extension HomeController {
         }
         pendingSections.remove(id)
         loadingSections.insert(id)
-        let cursor = feeds[id]?.ticket.cursor
+        let cursor = continuationCursors[id] ?? feeds[id]?.ticket.cursor
         if section.type == "feed_infinite" {
             feeds[id] = HomeFeedUi(ticket: HomeFeedTicket(render: render, sectionId: id, cursor: cursor), loading: true)
         }
@@ -52,6 +52,7 @@ extension HomeController {
         probe: SendProbe
     ) {
         let id = section.id
+        var continueSection = false
         guard lifetime.valid else { return }
         // 同会话旧渲染的 42901 也限制后续发送；失效控制器在上一道已拒绝。
         effects(result)
@@ -66,10 +67,19 @@ extension HomeController {
             } else {
                 let mapped = items.compactMap(Self.productItem)
                 sectionItems[id] = (cursor == nil ? [] : sectionItems[id, default: []]) + mapped
+                let next = HomeValue.text(json["next_cursor"])
                 if section.type == "feed_infinite" {
-                    let next = HomeValue.text(json["next_cursor"])
                     feeds[id] = HomeFeedUi(ticket: HomeFeedTicket(render: render, sectionId: id, cursor: next),
                                            exhausted: next == nil || next == cursor)
+                }
+                // D4：只在这张卡还没有任何商品时续取，最多 3 次；已有商品后商品池不再翻页（D6），信息流等触底。
+                if sectionItems[id, default: []].isEmpty, let next, next != cursor,
+                   continuationCounts[id, default: 0] < Self.maxEmptyContinuations {
+                    continuationCounts[id, default: 0] += 1
+                    continuationCursors[id] = next
+                    continueSection = true
+                } else {
+                    continuationCursors[id] = nil
                 }
             }
         } else {
@@ -87,7 +97,13 @@ extension HomeController {
             }
         }
         rebuild()
+        if continueSection {
+            loadSection(id)
+        }
     }
+
+    /// D4 空页续取的上限（D10-607）。
+    static let maxEmptyContinuations = 3
 
     static func productItem(_ raw: Any) -> HomeItem? {
         guard let json = raw as? [String: Any], let key = HomeValue.text(json["product_key"]),

@@ -127,10 +127,11 @@ final class DebugHomeVisual: ObservableObject {
         visual.applyTraits()
     }
 
-    /// 首页端口（首页读本机数据之前先按 `-CouliHomeTestReset` 清空）。
+    /// 首页端口（首页读本机数据之前先按 `-CouliHomeTestReset` 清空）。各场景都给本机端口：装配不再有「无端口」
+    /// （FU-X-HOME-PAGE-API-ios：Release 也走生产端口），「包内默认」场景改由端口断网、推进 1500ms 兜底得到。
     func makePort() -> HomeContractPort? {
         DebugHomeUITestSupport.resetIfRequested()
-        return settings.scene == "bundled" ? nil : port
+        return port
     }
 
     /// 包内默认：「最后防线」场景下不可解（无 LKG、网络失败、包内默认也坏）。

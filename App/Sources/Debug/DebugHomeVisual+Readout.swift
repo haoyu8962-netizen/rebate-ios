@@ -118,6 +118,8 @@ extension DebugHomeVisual {
             }
         } else if scene == "invalid" {
             advanceInvalid(settled: settled, state: state, counts: counts)
+        } else if scene == "bundled" {
+            advanceBundled(settled: settled, state: state, counts: counts)
         } else if scene == "invite" {
             advanceInvite(settled: settled, state: state)
         } else if Self.stableScenes.contains(scene) || scene.hasPrefix("stress_") || scene.hasPrefix("no_rebate_") {
@@ -130,7 +132,6 @@ extension DebugHomeVisual {
     private static let stableScenes: Set = [
         "normal",
         "rank",
-        "bundled",
         "lkg",
         "feed_failure",
         "empty",
@@ -145,6 +146,16 @@ extension DebugHomeVisual {
             clock.advance(1500)
         } else if sceneStep == 1, state.loadFailed != nil, settled {
             markReady()
+        }
+    }
+
+    /// 包内默认：无 LKG、首页断网；推进可控时钟越过 1500ms 兜底（D5，同生产），落到包内默认后等稳定。
+    private func advanceBundled(settled: Bool, state: HomeUiState, counts: DebugHomeVisualPort.Counts) {
+        if sceneStep == 0, counts.pages >= 1, counts.inflight == 0 {
+            sceneStep = 1
+            clock.advance(1500)
+        } else if sceneStep == 1 {
+            readyWhenStable(settled: settled, state: state)
         }
     }
 
