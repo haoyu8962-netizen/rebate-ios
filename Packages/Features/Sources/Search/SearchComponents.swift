@@ -40,7 +40,7 @@ struct NoticeBar: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(icon, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+            CouliIconView(icon, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 .accessibilityHidden(true)
             Text(verbatim: text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -69,7 +69,7 @@ struct FilterChip: View {
                 Text(verbatim: title)
                     .fixedSize(horizontal: false, vertical: true)
                 if showsChevron {
-                    CouliIconView(.chevronDown, size: CouliGuideMetric.iconSmall, relativeTo: .footnote)
+                    CouliIconView(.chevronDown, size: CouliComponentMetric.iconSmall, relativeTo: .footnote)
                         .accessibilityHidden(true)
                 }
             }

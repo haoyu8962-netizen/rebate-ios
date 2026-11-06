@@ -13,7 +13,7 @@ extension OrderDetailScreen {
         )
         return VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             HStack(alignment: .center, spacing: CouliSpacing.s2) {
-                CouliIconView(.wifiOff, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.wifiOff, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 Text(verbatim: text)
                     .couliFont(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
@@ -80,7 +80,7 @@ extension OrderDetailScreen {
     func statusTitleRow(_ summary: OrderSummary) -> some View {
         let settled = OrderStatusIcon.settled(summary.displayStatus)
         return HStack(alignment: .center, spacing: CouliSpacing.s2) {
-            CouliIconView(OrderStatusIcon.icon(summary.displayStatus), size: CouliGuideMetric.iconMedium)
+            CouliIconView(OrderStatusIcon.icon(summary.displayStatus), size: CouliComponentMetric.iconMedium)
                 .foregroundColor(settled ? CouliColor.statusSuccessText : CouliColor.textSecondary)
                 .couliProbe("orderDetail.status.icon", role: "icon")
             OrderProbedText(OrderStatusLine.label(summary, texts: texts, hidden: mask.hidden), style: .body,
@@ -93,8 +93,8 @@ extension OrderDetailScreen {
             // 眼睛：视觉 20、命中 44；命中区透明外扩（上下不撑高标题行、右侧伸进卡片内边距），图标与画板同位
             AmountMaskButton(mask: mask, texts: texts)
                 .fixedSize()
-                .padding(.vertical, -(CouliHitTarget.minimum - CouliGuideMetric.iconMedium) / 2)
-                .padding(.trailing, -(CouliHitTarget.minimum - CouliGuideMetric.iconMedium) / 2)
+                .padding(.vertical, -(CouliHitTarget.minimum - CouliComponentMetric.iconMedium) / 2)
+                .padding(.trailing, -(CouliHitTarget.minimum - CouliComponentMetric.iconMedium) / 2)
         }
     }
 

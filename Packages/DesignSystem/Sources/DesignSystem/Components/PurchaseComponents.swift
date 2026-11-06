@@ -63,7 +63,7 @@ public struct RetryBanner: View {
     public var body: some View {
         CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s1) {
             HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
-                CouliIconView(.alert, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.alert, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .accessibilityHidden(true)
                 Text(verbatim: message)
                     .couliFont(.footnote)
@@ -98,7 +98,7 @@ public struct NoticeBox: View {
 
     public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.alert, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 Text(verbatim: title)

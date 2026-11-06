@@ -91,7 +91,7 @@ extension WalletScreen {
         return VStack(alignment: .leading, spacing: CouliSpacing.s1) {
             HStack(spacing: CouliSpacing.s1) {
                 if accent {
-                    CouliIconView(.clock, size: CouliGuideMetric.iconSmall, relativeTo: .footnote)
+                    CouliIconView(.clock, size: CouliComponentMetric.iconSmall, relativeTo: .footnote)
                         .walletProbe("wallet.estimate.left.icon", role: "icon")
                 }
                 WalletText(label, style: .footnote, probe: "wallet.estimate.left.label")
@@ -99,7 +99,7 @@ extension WalletScreen {
                             + (hidden ? PriceTerms.spokenAmountHidden : WalletMoney.spoken(view.estimated.fen))))
                 WalletIconButton(
                     .help,
-                    base: CouliGuideMetric.iconSmall,
+                    base: CouliComponentMetric.iconSmall,
                     label: texts.text("wallet.help.estimated_label"),
                     probe: "wallet.estimate.left.help"
                 ) { help = "estimated" }
@@ -150,7 +150,7 @@ extension WalletScreen {
             WalletText(paused.display(hidden: mask.hidden), style: .caption, monospacedDigits: true,
                        probe: "wallet.paused.text")
                 .accessibilityLabel(Text(verbatim: paused.spoken(hidden: mask.hidden)))
-            WalletIconButton(.help, base: CouliGuideMetric.iconSmall,
+            WalletIconButton(.help, base: CouliComponentMetric.iconSmall,
                              label: texts.text("wallet.help.pending_paused_label"),
                              probe: "wallet.paused.help") { help = "pending_paused" }
             Spacer(minLength: 0)

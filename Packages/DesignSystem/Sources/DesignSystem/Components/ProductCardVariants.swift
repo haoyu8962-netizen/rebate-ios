@@ -103,7 +103,7 @@ public struct ProductGridCard<ImageContent: View>: View {
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CouliSpacing.s1) {
                 if accent {
-                    CouliIconView(.clock, size: CouliGuideMetric.iconSmall, relativeTo: .caption)
+                    CouliIconView(.clock, size: CouliComponentMetric.iconSmall, relativeTo: .caption)
                 }
                 Text(verbatim: rebate.label ?? rebate.text)
                     .couliFont(.caption)

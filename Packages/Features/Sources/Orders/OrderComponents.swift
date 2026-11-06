@@ -183,7 +183,7 @@ struct OrderImage: View {
             RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous)
                 .fill(CouliColor.backgroundPlaceholder)
             if otherProduct, probe != nil {
-                CouliIconView(.orders, size: CouliGuideMetric.iconMedium)
+                CouliIconView(.orders, size: CouliComponentMetric.iconMedium)
                     .foregroundColor(CouliColor.textSecondary)
                     .orderProbe(probe.map { $0 + ".placeholderIcon" }, role: "icon")
             } else if url == nil {
@@ -228,7 +228,7 @@ struct OrderStatusLine: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
-            CouliIconView(.clock, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+            CouliIconView(.clock, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
             Text(verbatim: Self.label(summary, texts: texts, hidden: hidden))
                 .couliFont(.footnote)
@@ -257,7 +257,7 @@ struct AmountMaskButton: View {
         Button {
             mask.toggle()
         } label: {
-            CouliIconView(mask.hidden ? .eyeOff : .eye, size: CouliGuideMetric.iconMedium)
+            CouliIconView(mask.hidden ? .eyeOff : .eye, size: CouliComponentMetric.iconMedium)
                 .foregroundColor(CouliColor.textSecondary)
                 .couliHitTarget()
         }

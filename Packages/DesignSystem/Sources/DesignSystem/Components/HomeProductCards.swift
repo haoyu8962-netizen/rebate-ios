@@ -193,7 +193,7 @@ public struct HomeProductCard<ImageContent: View>: View {
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CouliSpacing.s1) {
                 if accent {
-                    CouliIconView(.clock, size: CouliGuideMetric.iconSmall, relativeTo: .caption)
+                    CouliIconView(.clock, size: CouliComponentMetric.iconSmall, relativeTo: .caption)
                 }
                 Text(verbatim: rebate.label ?? rebate.text)
                     .couliFont(.caption)
@@ -229,7 +229,7 @@ public struct HomeProductCard<ImageContent: View>: View {
 
     /// i 的视觉图形（16）：只占自己的大小；命中区由 `infoButton` 叠在上面。
     private var infoGlyph: some View {
-        CouliIconView(.info, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+        CouliIconView(.info, size: CouliComponentMetric.iconInline, relativeTo: .caption)
             .anchorPreference(key: HomeInfoAnchorKey.self, value: .bounds) { $0 }
             .couliProbe("home.info.glyph.\(suffix)", role: "info-glyph", card: cardID)
     }
@@ -316,7 +316,7 @@ public enum HomeProductCardMetrics {
         if !data.hidesPrice {
             let glyph = ProductGridCard<EmptyView>.disclaimerPlacement(data) == .besidePrice
                 ? CouliSpacing.s1 + UIFontMetrics(forTextStyle: .caption1)
-                .scaledValue(for: CouliGuideMetric.iconInline, compatibleWith: traits) : 0
+                .scaledValue(for: CouliComponentMetric.iconInline, compatibleWith: traits) : 0
             widths.append(width(data.price.mainAmount, CouliTextStyle.body.baseSize, .bold) + glyph)
         }
         for line in subLines(data) {
@@ -332,8 +332,8 @@ public enum HomeProductCardMetrics {
             // 返利块首行（钟表 + 预估返 + i）也不拆字：放不下时同样加宽 / 改单列
             let caption = UIFontMetrics(forTextStyle: .caption1)
             let label = caption.scaledFont(for: UIFont.systemFont(ofSize: CouliTextStyle.caption.baseSize))
-            let icons = caption.scaledValue(for: CouliGuideMetric.iconSmall, compatibleWith: traits)
-                + caption.scaledValue(for: CouliGuideMetric.iconInline, compatibleWith: traits)
+            let icons = caption.scaledValue(for: CouliComponentMetric.iconSmall, compatibleWith: traits)
+                + caption.scaledValue(for: CouliComponentMetric.iconInline, compatibleWith: traits)
             let text = ceil(((rebate.label ?? rebate.text) as NSString).size(withAttributes: [
                 .font: label.withSize(caption.scaledValue(for: CouliTextStyle.caption.baseSize,
                                                           compatibleWith: traits)),

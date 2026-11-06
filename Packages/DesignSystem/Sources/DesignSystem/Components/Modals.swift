@@ -193,7 +193,8 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         VStack(alignment: .leading, spacing: CouliSpacing.s4) {
             Capsule()
                 .fill(CouliColor.borderSubtle)
-                .frame(width: CouliGuideMetric.sheetHandleWidth, height: CouliGuideMetric.sheetHandleHeight)
+                .frame(width: CouliPendingTokenMetric.sheetHandleWidth,
+                       height: CouliPendingTokenMetric.sheetHandleHeight)
                 .modifier(DialogProbe(id: probeID, part: "handle"))
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
@@ -260,8 +261,7 @@ public struct CouliSheet<Content: View, Actions: View>: View {
     }
 }
 
-/// 弹层的读屏焦点规则（adaptation-a11y-spec §4、§8）：打开时焦点进面板标题；关闭后回到打开它的触发控件。
-/// 纯逻辑单独拿出来，便于单测；真正移焦点由 `ModalOverlayModifier` 做。
+/// 弹层的读屏焦点规则（adaptation-a11y-spec §4、§8）：打开时焦点进面板标题；关闭后回到打开它的触发控件。纯逻辑单独拿出来，便于单测；真正移焦点由 `ModalOverlayModifier` 做。
 enum ModalFocus: Equatable {
     /// 刚打开：面板自己把焦点放到标题。
     case focusPanelTitle

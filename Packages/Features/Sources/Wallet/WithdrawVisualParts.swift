@@ -135,7 +135,7 @@ struct WithdrawLinkButton: View {
             HStack(spacing: CouliSpacing.s1) {
                 RecordText(title, style: .footnote, weight: weight, color: ink, probe: probe + ".label")
                 if chevron {
-                    CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                    CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         .foregroundColor(ink)
                 }
             }
@@ -251,7 +251,7 @@ struct WithdrawPayoutRow: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: label + PriceTerms.spokenPause + spoken))
-                CouliIconView(.chevron, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .walletProbe("withdraw.payout.chevron", role: "icon")
                     .accessibilityHidden(true)
@@ -288,7 +288,7 @@ struct WalletErrorIcon: View {
     let probe: String
 
     var body: some View {
-        CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+        CouliIconView(.alert, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
             .foregroundColor(CouliColor.statusErrorText)
             .walletProbe(probe, role: "icon")
             .padding(.top, 2)
@@ -303,7 +303,7 @@ struct WalletWarningBlock<Content: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.alert, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .walletProbe(iconProbe, role: "icon")
                 .accessibilityHidden(true)
             content()

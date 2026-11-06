@@ -149,7 +149,7 @@ public struct RiskNoticeScreen: View {
     private func header(_ model: RiskNoticeModel) -> some View {
         let frozen = RiskLayout.isFrozen(model.layoutRaw)
         return VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconMedium + CouliSpacing.s3)
+            CouliIconView(.alert, size: CouliComponentMetric.iconMedium + CouliSpacing.s3)
                 .foregroundColor(CouliColor.statusWarningText)
                 .accessibilityHidden(true)
             Text(verbatim: texts.text(frozen ? "risk.frozen.title" : "risk.banned.title"))

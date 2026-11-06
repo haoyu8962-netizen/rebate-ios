@@ -191,7 +191,7 @@ struct OrderDetailLink: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .couliLineBox(.footnote)
                 if chevron {
-                    CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                    CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 }
             }
             .foregroundColor(CouliColor.brandEmphasis)
@@ -215,14 +215,14 @@ struct OrderDetailMutedPill: View {
     var body: some View {
         HStack(alignment: .center, spacing: CouliSpacing.s1) {
             if let icon {
-                CouliIconView(icon, size: CouliGuideMetric.iconSmall, relativeTo: .caption)
+                CouliIconView(icon, size: CouliComponentMetric.iconSmall, relativeTo: .caption)
             }
             OrderProbedText(text, style: .caption, probeID: probe + ".label")
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundColor(CouliColor.textSecondary)
         .padding(.horizontal, CouliSpacing.s2)
-        .frame(minHeight: CouliGuideMetric.tagMinHeight)
+        .frame(minHeight: CouliComponentMetric.tagMinHeight)
         .background(Capsule().fill(CouliColor.backgroundMuted))
         .couliProbe(probe, role: "pill", text: text)
         .accessibilityElement(children: .ignore)

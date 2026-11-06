@@ -39,7 +39,7 @@ extension MeTabBody {
                     MeInviteCodeText(code: code)
                         .accessibilityLabel(Text(verbatim: label + " " + code))
                         .accessibilityIdentifier("me.inviteCode")
-                    MeIconButton(.copy, base: CouliGuideMetric.iconInline,
+                    MeIconButton(.copy, base: CouliComponentMetric.iconInline,
                                  label: texts.text("me.copy") + label, margin: 2, probe: "me.invite.copy",
                                  action: actions.copyInvite)
                         .foregroundColor(CouliColor.textLink)

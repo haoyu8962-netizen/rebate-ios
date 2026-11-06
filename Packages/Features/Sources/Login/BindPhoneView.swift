@@ -153,7 +153,7 @@ struct BindPhoneView: View {
 
     private var infoBar: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(.info, size: CouliGuideMetric.iconMedium)
+            CouliIconView(.info, size: CouliComponentMetric.iconMedium)
                 .foregroundColor(CouliColor.textSecondary)
             Text(verbatim: text(BindPhoneKeys.info))
                 .couliFont(.body)

@@ -275,7 +275,7 @@ struct DialogCard<Content: View, Buttons: View>: View {
     private var titleRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
             if let icon {
-                CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .body)
+                CouliIconView(icon, size: CouliComponentMetric.iconMedium, relativeTo: .body)
                     .foregroundColor(iconColor ??
                         (icon == .alert ? CouliColor.statusErrorText : CouliColor.textPrimary))
                     .accessibilityHidden(true)
@@ -298,7 +298,7 @@ struct DialogCard<Content: View, Buttons: View>: View {
         titleText
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, CouliGuideMetric.iconMedium + CouliSpacing.s2)
+            .padding(.horizontal, CouliComponentMetric.iconMedium + CouliSpacing.s2)
             .overlay(alignment: .topTrailing) {
                 Button(action: close.action) {
                     CouliIconView(.close)

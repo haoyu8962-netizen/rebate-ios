@@ -94,7 +94,7 @@ struct RecordRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                CouliIconView(.chevronDown, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.chevronDown, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .walletProbe(probe + ".arrow", role: "icon")
             }

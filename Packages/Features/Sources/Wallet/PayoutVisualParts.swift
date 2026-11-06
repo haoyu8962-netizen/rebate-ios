@@ -153,7 +153,7 @@ struct WalletInfoStrip: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(icon, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .walletProbe(probe + ".icon", role: "icon")
                 .accessibilityHidden(true)

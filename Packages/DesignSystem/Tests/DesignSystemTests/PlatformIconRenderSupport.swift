@@ -81,7 +81,7 @@ enum PlatformIconRenderSupport {
             .couliFont(.caption)
             .foregroundColor(CouliColor.token("source.text"))
             .padding(.horizontal, CouliSpacing.s2)
-            .frame(minHeight: CouliGuideMetric.badgeMinHeight)
+            .frame(minHeight: CouliComponentMetric.badgeMinHeight)
             .background(Capsule().fill(CouliColor.token("source.background")))
             .overlay(Capsule().strokeBorder(
                 CouliColor.token("source.border"), lineWidth: CouliComponentMetric.controlBorderWidth

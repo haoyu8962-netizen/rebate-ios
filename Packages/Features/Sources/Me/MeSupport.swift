@@ -159,7 +159,7 @@ struct MeRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if chevron {
-                CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .accessibilityHidden(true)
             }
@@ -325,7 +325,7 @@ struct MeNoticeBar: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: CouliSpacing.s3) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.alert, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(CouliColor.statusWarningText)
                 .accessibilityHidden(true)
             Text(verbatim: text)

@@ -146,7 +146,7 @@ extension OrderDetailScreen {
                 ZStack {
                     RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous)
                         .fill(CouliColor.brandSubtle)
-                    CouliIconView(.chat, size: CouliGuideMetric.iconMedium)
+                    CouliIconView(.chat, size: CouliComponentMetric.iconMedium)
                         .foregroundColor(CouliColor.brandEmphasis)
                 }
                 .frame(width: CouliSpacing.s8, height: CouliSpacing.s8)
@@ -156,7 +156,7 @@ extension OrderDetailScreen {
                     .foregroundColor(CouliColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: CouliSpacing.s2)
-                CouliIconView(.chevron, size: CouliGuideMetric.iconMedium)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconMedium)
                     .foregroundColor(CouliColor.textSecondary)
             }
             .padding(.horizontal, CouliSpacing.s4)

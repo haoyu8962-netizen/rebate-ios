@@ -34,7 +34,7 @@ struct SettingsRowContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if chevron {
-                CouliIconView(.chevron, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .meProbe(probe.map { $0 + ".chevron" }, role: "icon")
                     .accessibilityHidden(true)
@@ -71,7 +71,7 @@ struct SettingsNoticeBar<Content: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(icon, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(iconColor)
                 .meProbe(iconProbe ?? probe + ".icon", role: "icon")
                 .accessibilityHidden(true)

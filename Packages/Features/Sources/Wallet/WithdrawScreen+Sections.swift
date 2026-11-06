@@ -279,7 +279,7 @@ extension WithdrawScreen {
         case let .shown(line, _):
             HStack(spacing: CouliSpacing.s1) {
                 WithdrawEstimateText(line: estimateText(line), net: estimateNet(line))
-                WalletIconButton(.help, base: CouliGuideMetric.iconInline - 2, relativeTo: .footnote,
+                WalletIconButton(.help, base: CouliComponentMetric.iconInline - 2, relativeTo: .footnote,
                                  label: texts.text("wallet.help.fee_tax_label"), probe: "withdraw.estimate.help") {
                     feeHelp = true
                 }

@@ -57,13 +57,13 @@ extension OrdersScreen {
     var pinnedFindRow: some View {
         Button(action: config.onFindOrder) {
             HStack(alignment: .center, spacing: CouliSpacing.s2) {
-                CouliIconView(.claim, size: CouliGuideMetric.iconMedium)
+                CouliIconView(.claim, size: CouliComponentMetric.iconMedium)
                     .couliProbe("orders.findPinned.icon", role: "icon")
                 OrderProbedText(texts.text(OrderKeys.findEntry), style: .body, weight: .couliSemibold,
                                 probeID: "orders.findPinned.label")
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: CouliSpacing.s2)
-                CouliIconView(.chevron, size: CouliGuideMetric.iconInline)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconInline)
             }
             .foregroundColor(CouliColor.brandEmphasis)
             .padding(.horizontal, CouliSpacing.s4)
@@ -85,7 +85,7 @@ extension OrdersScreen {
             OrderKeys.staleData, ["time": CouliFormat.timeListPast(epochMillis: at, nowEpochMillis: config.now())]
         )
         return HStack(alignment: .center, spacing: CouliSpacing.s2) {
-            CouliIconView(.wifiOff, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.wifiOff, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .couliProbe("orders.stale.icon", role: "icon")
             OrderProbedText(text, style: .footnote, probeID: "orders.stale.text")
                 .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +144,7 @@ extension OrdersScreen {
         let share = snapshot.query.scope == OrderQuery.shareScope
         let placeholder = texts.text(share ? OrderKeys.searchPlaceholderShare : OrderKeys.searchPlaceholder)
         return HStack(spacing: CouliSpacing.s2) {
-            CouliIconView(.search, size: CouliGuideMetric.iconMedium)
+            CouliIconView(.search, size: CouliComponentMetric.iconMedium)
                 .foregroundColor(CouliColor.textSecondary)
             TextField(
                 "",

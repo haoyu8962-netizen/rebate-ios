@@ -192,7 +192,7 @@ public struct AmountGrid: View {
         return VStack(alignment: .leading, spacing: CouliSpacing.s1) {
             HStack(spacing: CouliSpacing.s1) {
                 if rebateAccent {
-                    CouliIconView(.clock, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+                    CouliIconView(.clock, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                 }
                 Text(verbatim: item.label)
                     .couliFont(.footnote)
@@ -289,7 +289,7 @@ public struct WalletHeroCard<Footer: View>: View {
                         HStack(spacing: CouliSpacing.s1) {
                             Text(verbatim: recordsTitle)
                                 .couliFont(.footnote, weight: .couliSemibold)
-                            CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                            CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         }
                         .frame(minHeight: CouliHitTarget.minimum)
                         .contentShape(Rectangle())
@@ -369,7 +369,7 @@ public struct HeroAmountRow: View {
                     HStack(spacing: CouliSpacing.s1) {
                         // 狸橙实底上一律白字；钟表与 AmountGrid 同一判定（无返利 / ¥0 不带返利图形）。
                         if item.usesRebateAccent(amountHidden: amountHidden) {
-                            CouliIconView(.clock, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                            CouliIconView(.clock, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         }
                         Text(verbatim: item.label)
                             .couliFont(.footnote, weight: .couliMedium)
@@ -379,7 +379,7 @@ public struct HeroAmountRow: View {
                         }
                     }
                     // 有无问号的两列标签行同高，数值对齐。
-                    .frame(minHeight: CouliGuideMetric.iconInline + CouliSpacing.s2, alignment: .leading)
+                    .frame(minHeight: CouliComponentMetric.iconInline + CouliSpacing.s2, alignment: .leading)
                     AmountText(item.value, hidden: amountHidden, style: valueStyle, weight: .couliBold)
                         .accessibilityHidden(true)
                     if let note = item.note {

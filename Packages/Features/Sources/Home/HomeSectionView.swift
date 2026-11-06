@@ -116,7 +116,7 @@ struct HomeSectionView: View {
                     Button { controller.open(more) } label: {
                         HStack(spacing: 0) {
                             Text(verbatim: controller.text("home.more")).couliFont(.footnote)
-                            CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                            CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         }
                         .foregroundColor(CouliColor.textLink)
                         .frame(minWidth: CouliHitTarget.minimum, minHeight: CouliHitTarget.minimum)
@@ -255,7 +255,7 @@ struct HomeActivityCell: View {
                 Text(verbatim: badge).couliFont(.caption).foregroundColor(CouliColor.textLink)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: CouliGuideMetric.gridCellMinHeight - CouliSpacing.s3 * 2,
+        .frame(maxWidth: .infinity, minHeight: CouliComponentMetric.gridCellMinHeight - CouliSpacing.s3 * 2,
                alignment: .leading)
         .padding(CouliSpacing.s3)
         .homeCard()
@@ -276,7 +276,7 @@ struct HomeAdBadge: View {
             Text(verbatim: label).couliFont(.caption).foregroundColor(CouliColor.textSecondary)
                 .fixedSize()
                 .padding(.horizontal, CouliSpacing.s2)
-                .frame(minHeight: CouliGuideMetric.tagMinHeight)
+                .frame(minHeight: CouliComponentMetric.tagMinHeight)
                 .background(Capsule(style: .circular).fill(CouliColor.backgroundSurface))
                 .overlay(Capsule(style: .circular).strokeBorder(CouliColor.borderSubtle,
                                                                 lineWidth: CouliComponentMetric.controlBorderWidth))

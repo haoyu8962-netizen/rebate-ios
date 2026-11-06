@@ -259,7 +259,7 @@ public struct ProductDetailDisclaimer: View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                 HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                    CouliIconView(line.icon ?? .info, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+                    CouliIconView(line.icon ?? .info, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                         .couliProbe("product.disclaimer.icon.\(index)", role: "icon")
                         .frame(minHeight: lineHeight)
                     Text(verbatim: line.text)

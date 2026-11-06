@@ -241,7 +241,7 @@ public struct RealNameScreen: View {
     /// 要点（W93）：20 次文字色图标 + 17 主文字。
     private func consentItem(_ index: Int, _ key: String, _ icon: CouliIcon) -> some View {
         HStack(alignment: .top, spacing: CouliSpacing.s3) {
-            CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .body)
+            CouliIconView(icon, size: CouliComponentMetric.iconMedium, relativeTo: .body)
                 .foregroundColor(CouliColor.textSecondary)
                 .walletProbe("consent.item.\(index).icon", role: "icon")
                 .accessibilityHidden(true)

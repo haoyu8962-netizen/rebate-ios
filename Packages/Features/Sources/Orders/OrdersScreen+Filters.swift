@@ -82,7 +82,7 @@ extension OrdersScreen {
                         .foregroundColor(CouliColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                         .layoutPriority(1)
-                    CouliIconView(.chevronDown, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                    CouliIconView(.chevronDown, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .fixedSize()
                         .couliProbe(probe + ".chevron", role: "icon")

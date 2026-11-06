@@ -28,7 +28,7 @@ extension MeTabBody {
         return HStack(spacing: 0) {
             Button(action: actions.openGuide) {
                 HStack(spacing: CouliSpacing.s2) {
-                    CouliIconView(.bell, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                    CouliIconView(.bell, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .meProbe("me.guideBar.icon", role: "icon")
                         .accessibilityHidden(true)
@@ -45,7 +45,7 @@ extension MeTabBody {
             .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.button))
             .accessibilityIdentifier("me.guideBar.open")
             Button(action: actions.closeGuide) {
-                CouliIconView(.close, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.close, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .meProbe("me.guideBar.close", role: "icon")
                     .couliHitTarget()

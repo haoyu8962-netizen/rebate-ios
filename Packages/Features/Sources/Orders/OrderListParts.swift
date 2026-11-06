@@ -78,7 +78,7 @@ struct OrderStatusPill: View {
         let status = summary.displayStatus
         let settled = OrderStatusIcon.settled(status)
         HStack(alignment: .center, spacing: CouliSpacing.s1) {
-            CouliIconView(OrderStatusIcon.icon(status), size: CouliGuideMetric.iconSmall, relativeTo: .caption)
+            CouliIconView(OrderStatusIcon.icon(status), size: CouliComponentMetric.iconSmall, relativeTo: .caption)
                 .couliProbe(probe + ".icon", role: "icon")
             OrderProbedText(OrderStatusLine.label(summary, texts: texts, hidden: hidden), style: .caption,
                             probeID: probe + ".label")
@@ -86,7 +86,7 @@ struct OrderStatusPill: View {
         }
         .foregroundColor(settled ? CouliColor.statusSuccessText : CouliColor.textSecondary)
         .padding(.horizontal, CouliSpacing.s2)
-        .frame(minHeight: CouliGuideMetric.tagMinHeight)
+        .frame(minHeight: CouliComponentMetric.tagMinHeight)
         .background(Capsule().fill(settled ? CouliColor.statusSuccessBackground : CouliColor.backgroundMuted))
         .couliProbe(probe, role: "pill")
     }

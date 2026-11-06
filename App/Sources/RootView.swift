@@ -77,7 +77,7 @@ struct RootView: View {
     /// 弹窗本身仍不能被关闭，只能点按钮（BR-ID-11）。
     private var gated: some View {
         navigation
-            // 外观：跟随系统外观的运行时接线（DS-02-iOS 裁定前只在 Debug / Staging 开关打开时生效，见 AppAppearance）
+            // 外观：跟随系统外观的运行时接线（DSX-127 解锁前只在 Debug / Staging 开关打开时生效，见 AppAppearance）
             .background(AppAppearanceHook())
             .couliDialog(isPresented: privacyDialogShown) {
                 privacyDialog()

@@ -138,7 +138,7 @@ public struct RebateTag: View {
                 if !isNeutral {
                     CouliIconView(
                         .clock,
-                        size: isLarge ? CouliGuideMetric.iconMedium : CouliGuideMetric.iconSmall,
+                        size: isLarge ? CouliComponentMetric.iconMedium : CouliComponentMetric.iconSmall,
                         relativeTo: isLarge ? .body : .caption
                     )
                 }
@@ -158,8 +158,8 @@ public struct RebateTag: View {
         }
         .foregroundColor(isNeutral ? CouliColor.textSecondary : CouliColor.rebateText)
         .padding(.horizontal, isLarge ? CouliSpacing.s4 : CouliSpacing.s2)
-        .padding(.vertical, isLarge ? CouliSpacing.s2 : CouliGuideMetric.tagPaddingVertical)
-        .frame(minHeight: CouliGuideMetric.tagMinHeight)
+        .padding(.vertical, isLarge ? CouliSpacing.s2 : CouliPendingTokenMetric.tagPaddingVertical)
+        .frame(minHeight: CouliComponentMetric.tagMinHeight)
         .background(
             RoundedRectangle(cornerRadius: isLarge ? CouliRadius.button : CouliRadius.button, style: .continuous)
                 .fill(isNeutral ? CouliColor.backgroundMuted : CouliColor.rebateBackground)
@@ -248,7 +248,7 @@ public struct DisclaimerFooter: View {
         switch style {
         case .list:
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.info, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+                CouliIconView(.info, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     ForEach(lines, id: \.self) { line in
                         Text(verbatim: line.text)
@@ -266,7 +266,7 @@ public struct DisclaimerFooter: View {
             VStack(alignment: .leading, spacing: CouliSpacing.s3) {
                 ForEach(lines, id: \.self) { line in
                     HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                        CouliIconView(line.icon ?? .info, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                        CouliIconView(line.icon ?? .info, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         Text(verbatim: line.text)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -301,7 +301,7 @@ public struct DisclaimerInfoButton: View {
         Button {
             isExpanded.toggle()
         } label: {
-            CouliIconView(.info, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+            CouliIconView(.info, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                 .foregroundColor(CouliColor.textSecondary)
                 .couliHitTarget()
         }

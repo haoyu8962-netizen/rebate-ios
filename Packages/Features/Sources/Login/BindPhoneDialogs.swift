@@ -51,7 +51,7 @@ struct BindPendingCardView: View {
         let key = card.key
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.alert, size: CouliGuideMetric.iconMedium)
+                CouliIconView(.alert, size: CouliComponentMetric.iconMedium)
                     .foregroundColor(CouliColor.statusWarningText)
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     Text(verbatim: texts.text(BindPhoneKeys.pendingTitle))

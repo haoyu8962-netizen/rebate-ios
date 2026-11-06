@@ -137,7 +137,7 @@ struct NoticeBar: View {
     var body: some View {
         let plain = tone == .plain
         HStack(alignment: plain ? .center : .top, spacing: plain ? CouliSpacing.s3 : CouliSpacing.s2) {
-            CouliIconView(tone.icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(tone.icon, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(tone.iconInk)
                 .walletProbe(probe.map { $0 + ".icon" }, role: "icon")
                 .accessibilityHidden(true)
@@ -267,7 +267,7 @@ struct WalletHelpButton: View {
 
     var body: some View {
         Button(action: action) {
-            CouliIconView(.help, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+            CouliIconView(.help, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                 .couliHitTarget()
         }
         .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))

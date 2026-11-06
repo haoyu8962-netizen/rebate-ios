@@ -96,7 +96,7 @@ extension OrdersScreen {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: CouliSpacing.s2)
                 if selected {
-                    CouliIconView(.check, size: CouliGuideMetric.iconMedium)
+                    CouliIconView(.check, size: CouliComponentMetric.iconMedium)
                         .foregroundColor(CouliColor.brandEmphasis)
                         .couliProbe(probe + ".check", role: "icon")
                 }

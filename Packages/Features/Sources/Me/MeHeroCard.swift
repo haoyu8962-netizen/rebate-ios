@@ -73,7 +73,7 @@ struct MeHeroCard: View {
         HStack(spacing: CouliSpacing.s1) {
             MeText(titleText, style: .footnote, weight: .couliMedium, probe: "me.hero.title")
                 .accessibilityRepresentation { EmptyView() }
-            MeIconButton(hidden ? .eyeOff : .eye, base: CouliGuideMetric.iconMedium,
+            MeIconButton(hidden ? .eyeOff : .eye, base: CouliComponentMetric.iconMedium,
                          label: texts.text(hidden ? "amount_mask.show" : "amount_mask.hide"), onBrand: true,
                          probe: "me.hero.eye", action: actions.toggleMask)
         }
@@ -91,7 +91,7 @@ struct MeHeroCard: View {
     private var estimate: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: CouliSpacing.s1) {
-                CouliIconView(.clock, size: CouliGuideMetric.iconSmall, relativeTo: .footnote)
+                CouliIconView(.clock, size: CouliComponentMetric.iconSmall, relativeTo: .footnote)
                     .meProbe("me.estimate.clock", role: "icon")
                     .accessibilityHidden(true)
                 MeText(estimateTitle, style: .footnote, probe: "me.estimate.label")

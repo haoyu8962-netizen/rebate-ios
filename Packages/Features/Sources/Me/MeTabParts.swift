@@ -136,7 +136,7 @@ struct MeAvatar: View {
     var body: some View {
         ZStack {
             Circle().fill(CouliColor.backgroundMuted)
-            CouliIconView(.user, size: CouliGuideMetric.iconMedium + CouliSpacing.s3)
+            CouliIconView(.user, size: CouliComponentMetric.iconMedium + CouliSpacing.s3)
                 .foregroundColor(CouliColor.textSecondary)
                 .meProbe("me.avatar.icon", role: "icon")
         }

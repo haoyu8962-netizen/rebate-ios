@@ -48,7 +48,7 @@ struct WalletCompare: View {
                         ], amountHidden: hidden)
                         HStack(spacing: CouliSpacing.s1) {
                             AmountNoteText(AmountNote("其中 ", amountFen: 456, suffix: " 暂缓入账"), hidden: hidden)
-                            CouliIconView(.help, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                            CouliIconView(.help, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                                 .accessibilityHidden(true)
                             Spacer(minLength: 0)
                         }

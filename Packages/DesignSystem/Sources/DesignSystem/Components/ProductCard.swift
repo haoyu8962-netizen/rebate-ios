@@ -58,7 +58,7 @@ public struct ProductCard<ImageContent: View>: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             ImageLeadingLayout(spacing: CouliSpacing.s3) {
-                ProductImageFrame(side: CouliGuideMetric.listImage) { image }
+                ProductImageFrame(side: CouliComponentMetric.listImage) { image }
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     BadgedTitle(
                         platform: data.platformName, platformCode: data.platformCode, title: data.title,
@@ -258,8 +258,8 @@ struct ImageLeadingLayout: Layout {
 /// 网格卡图片：宽取提议宽度，高按设计稿 157×132 的比例（GUIDE §6；`aspectRatio` 在未定高度的提议下会塌成 0 高）。
 private struct SquareLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews _: Subviews, cache _: inout ()) -> CGSize {
-        let side = proposal.width ?? CouliGuideMetric.listImage
-        return CGSize(width: side, height: side * CouliGuideMetric.gridImageAspect)
+        let side = proposal.width ?? CouliComponentMetric.listImage
+        return CGSize(width: side, height: side * CouliPendingTokenMetric.gridImageAspect)
     }
 
     func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {

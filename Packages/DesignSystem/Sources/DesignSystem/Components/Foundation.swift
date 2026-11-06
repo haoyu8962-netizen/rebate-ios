@@ -345,7 +345,7 @@ struct HelpButton: View {
 
     var body: some View {
         Button(action: action) {
-            CouliIconView(.help, size: CouliGuideMetric.iconInline, relativeTo: .caption)
+            CouliIconView(.help, size: CouliComponentMetric.iconInline, relativeTo: .caption)
                 .couliHitTarget()
         }
         .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small))

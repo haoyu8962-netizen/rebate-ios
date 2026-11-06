@@ -113,7 +113,7 @@ struct RecordStatusPill: View {
     let status: String
     let title: String
     let probe: String
-    @ScaledMetric(relativeTo: .caption) private var icon: CGFloat = CouliGuideMetric.iconSmall
+    @ScaledMetric(relativeTo: .caption) private var icon: CGFloat = CouliComponentMetric.iconSmall
 
     var body: some View {
         let tone = RecordTone.of(status)
@@ -128,7 +128,7 @@ struct RecordStatusPill: View {
         }
         .foregroundColor(tone.ink)
         .padding(.horizontal, CouliSpacing.s2)
-        .frame(minHeight: CouliGuideMetric.tagMinHeight)
+        .frame(minHeight: CouliComponentMetric.tagMinHeight)
         .background(Capsule(style: .circular).fill(tone.background))
         .walletProbe(probe, role: "pill")
         .accessibilityHidden(true)
@@ -203,7 +203,7 @@ struct RecordSkeleton: View {
                 Spacer(minLength: CouliSpacing.s2)
                 Capsule(style: .circular)
                     .fill(CouliColor.backgroundMuted)
-                    .frame(width: 56, height: CouliGuideMetric.tagMinHeight)
+                    .frame(width: 56, height: CouliComponentMetric.tagMinHeight)
             }
             block(width: 150, height: 12)
                 .frame(height: CouliTextStyle.caption.baseSize * CouliTextStyle.caption.lineHeightMultiple)

@@ -98,7 +98,7 @@ private struct PendingTrackCard: View {
         let title = texts.text("pending_track_card.title")
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                CouliIconView(.clock, size: CouliGuideMetric.iconMedium, relativeTo: .body)
+                CouliIconView(.clock, size: CouliComponentMetric.iconMedium, relativeTo: .body)
                     .foregroundColor(CouliColor.textSecondary)
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     Text(verbatim: title)
@@ -115,7 +115,7 @@ private struct PendingTrackCard: View {
                 }
                 Spacer(minLength: 0)
                 Button(action: onClose) {
-                    CouliIconView(.close, size: CouliGuideMetric.iconMedium, relativeTo: .body)
+                    CouliIconView(.close, size: CouliComponentMetric.iconMedium, relativeTo: .body)
                         .foregroundColor(CouliColor.textSecondary)
                         .couliHitTarget()
                 }
@@ -135,7 +135,7 @@ private struct PendingTrackCard: View {
                     .accessibilityHidden(true)
                 CouliFlowLayout(horizontalSpacing: CouliSpacing.s2, verticalSpacing: CouliSpacing.s2) {
                     HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                        CouliIconView(.bell, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                        CouliIconView(.bell, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                             .foregroundColor(CouliColor.textSecondary)
                         Text(verbatim: texts.text("perm.push.card_hint"))
                             .couliFont(.footnote)

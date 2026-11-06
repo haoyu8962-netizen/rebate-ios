@@ -103,9 +103,11 @@ final class PlatformBadgeCardWiringTests: XCTestCase {
         // 列表 / Agent 的标题位于「卡片内边距 + 商品图 + 间距」之后，图标距徽标左缘 4pt。
         // 横向只放宽 ±2 个物理像素；纵向限首行徽标，兼容 Text 附件的基线对齐。
         // 不扫描整卡，商品图、按钮或正文里的相似图不能让断言通过。
-        let iconLeft = Int((CouliSpacing.s3 + CouliGuideMetric.listImage + CouliSpacing.s3 + CouliSpacing.s1) * scale)
+        let iconLeft = Int(
+            (CouliSpacing.s3 + CouliComponentMetric.listImage + CouliSpacing.s3 + CouliSpacing.s1) * scale
+        )
         let firstRowTop = Int(CouliSpacing.s3 * scale) - 2
-        let firstRowBottom = Int((CouliSpacing.s3 + CouliGuideMetric.badgeMinHeight) * scale)
+        let firstRowBottom = Int((CouliSpacing.s3 + CouliComponentMetric.badgeMinHeight) * scale)
         var best = IconMatch(error: .infinity, xOffset: iconLeft, yOffset: firstRowTop)
         for xOffset in (iconLeft - 2)...(iconLeft + 2) {
             for yOffset in firstRowTop...firstRowBottom {

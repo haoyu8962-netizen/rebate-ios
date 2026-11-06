@@ -139,7 +139,7 @@ struct NicknameView: View {
         Button {
             actions.clear()
         } label: {
-            CouliIconView(.close, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+            CouliIconView(.close, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .meProbe("nickname.clear.icon", role: "icon")
                 .couliHitTarget()
@@ -152,7 +152,7 @@ struct NicknameView: View {
 
     private func errorRow(_ error: String) -> some View {
         HStack(alignment: .top, spacing: CouliSpacing.s1) {
-            CouliIconView(.alert, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+            CouliIconView(.alert, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 .foregroundColor(CouliColor.statusErrorText)
                 .padding(.top, 1)
                 .meProbe("nickname.error.icon", role: "icon")

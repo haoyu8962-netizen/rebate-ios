@@ -3,12 +3,12 @@ import UIKit
 
 /// App 外观（APP-11v S2-4：深色运行时接线）。
 ///
-/// 现状：`Info.plist` 的 `UIUserInterfaceStyle=Light` 把整 App 锁成浅色；是否解锁、整 App 跟随系统深色属 DS-02-iOS 待编排裁定
-/// （尚未改版的页面还没有深色令牌）。在裁定之前不改 Info.plist，只把「跟随系统外观」这条运行时路径接好：
-/// `followsSystem` 为真时，把所在窗口的外观覆盖改为系统当前外观并随系统切换，首页按 `CouliColor` 的深色取值（`CouliDarkTokens`）呈现。
-/// 裁定解锁时：删掉 Info.plist 的锁并把 `followsSystem` 改为恒真（或接到设置项），无需再改页面。
+/// 现状：`Info.plist` 的 `UIUserInterfaceStyle=Light` 把整 App 锁成浅色；解锁、整 App 跟随系统深色归 DSX-127（D10-671：先做全部页面
+/// 深色快照与对比度扫描，最后合）。在那之前不改 Info.plist，只把「跟随系统外观」这条运行时路径接好：
+/// `followsSystem` 为真时，把所在窗口的外观覆盖改为系统当前外观并随系统切换，页面按 `CouliColor` 的深色取值（生成物
+/// `DesignTokens.colorsDark`）呈现。DSX-127 解锁时：删掉 Info.plist 的锁并把 `followsSystem` 改为恒真（或接到设置项），无需再改页面。
 enum AppAppearance {
-    /// 是否跟随系统外观。Release 恒为假（等 DS-02-iOS 裁定）；Debug / Staging 可用启动参数 `-CouliFollowSystemAppearance YES`
+    /// 是否跟随系统外观。Release 恒为假（等 DSX-127 解锁）；Debug / Staging 可用启动参数 `-CouliFollowSystemAppearance YES`
     /// 打开，在不经 UI 测试场景、不强制覆盖外观的正常启动中验证系统深色下的首页。
     static var followsSystem: Bool {
         #if DEBUG

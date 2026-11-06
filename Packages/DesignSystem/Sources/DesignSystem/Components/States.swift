@@ -157,9 +157,12 @@ struct StateLayout: View {
             if showsIllustration {
                 RoundedRectangle(cornerRadius: CouliRadius.card, style: .continuous)
                     .fill(CouliColor.backgroundMuted)
-                    .frame(width: CouliGuideMetric.emptyIllustration, height: CouliGuideMetric.emptyIllustration)
+                    .frame(
+                        width: CouliPendingTokenMetric.emptyIllustration,
+                        height: CouliPendingTokenMetric.emptyIllustration
+                    )
                     .overlay(
-                        CouliIconView(icon, size: CouliGuideMetric.emptyIcon)
+                        CouliIconView(icon, size: CouliPendingTokenMetric.emptyIcon)
                             .foregroundColor(CouliColor.textSecondary)
                             .modifier(OptionalProbe(id: iconProbeID, role: "icon"))
                     )
@@ -251,7 +254,7 @@ public struct ProductCardSkeleton: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             HStack(alignment: .top, spacing: CouliSpacing.s3) {
-                SkeletonBlock(width: CouliGuideMetric.listImage, height: CouliGuideMetric.listImage)
+                SkeletonBlock(width: CouliComponentMetric.listImage, height: CouliComponentMetric.listImage)
                 GeometryReader { proxy in
                     VStack(alignment: .leading, spacing: CouliSpacing.s2) {
                         SkeletonBlock(width: proxy.size.width, height: CouliSpacing.s4)
@@ -259,7 +262,7 @@ public struct ProductCardSkeleton: View {
                         SkeletonBlock(width: proxy.size.width * 0.4, height: CouliSpacing.s6)
                     }
                 }
-                .frame(height: CouliGuideMetric.listImage)
+                .frame(height: CouliComponentMetric.listImage)
             }
             HStack {
                 Spacer()
@@ -287,7 +290,7 @@ public struct Toast: View {
     public var body: some View {
         HStack(spacing: CouliSpacing.s2) {
             if let symbol = icon.icon {
-                CouliIconView(symbol, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(symbol, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(icon.color)
             }
             Text(verbatim: message)

@@ -213,7 +213,7 @@ struct OrderListSkeletonCard: View {
                 block("amount1", width: 72, height: 36).frame(maxWidth: .infinity, alignment: .leading)
                 block("amount2", width: 72, height: 36).frame(maxWidth: .infinity, alignment: .leading)
             }
-            block("pill", width: 96, height: CouliGuideMetric.tagMinHeight)
+            block("pill", width: 96, height: CouliComponentMetric.tagMinHeight)
         }
         .couliCard()
         .orderProbe(probe.map { "\($0).card" })

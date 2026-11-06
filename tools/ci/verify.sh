@@ -673,6 +673,15 @@ check_lock() {
 }
 
 step "快照与 contract.lock 一致（按锁定提交重建核对）" check_lock
+
+# DS-02-iOS-1（D10-643「verify 加检查」）：手抄表 / 旧名为 0、DesignSystem 无手写色值、生成物版本 = 快照版本、令牌锁不早于 v0.5.1。
+# couli 仓库与 check_lock 用同一套 resolve_upstream 取。
+check_design_tokens() {
+    local dt_dir
+    dt_dir="$(resolve_upstream "${COULI_DIR:-}" "$(lock_field design_tokens.repo)" "/Users/zhixing/我的项目/couli")"
+    python3 "$ROOT/tools/ci/check-design-tokens.py" --self-test || return 1
+    python3 "$ROOT/tools/ci/check-design-tokens.py" --couli "$dt_dir" "$ROOT"
+}
 step "源码树可完整读取（自测 + 全仓，F-X-07）" bash -c 'python3 tools/ci/check-source-tree.py --self-test && python3 tools/ci/check-source-tree.py'
 step "swiftformat --lint" swiftformat --lint .
 step "swiftlint --strict" swiftlint lint --strict --no-cache
@@ -685,6 +694,7 @@ step "release-scan 拦 staging 真实主机（FU-X-STAGING-HOSTS：合成包 R1�
 step "首页禁止项（APP-11：不渲染 WebView、不执行脚本 / 模板 / 反射，置灰只在首页根视图；违规样例自测 + 源码）" bash -c 'python3 tools/ci/check-home-forbidden.py --self-test && python3 tools/ci/check-home-forbidden.py'
 step "gen.py --check" python3 tools/codegen/gen.py --check
 step "gen.py 命名冲突探针（test_gen.py）" python3 tools/codegen/test_gen.py
+step "设计令牌来源（DS-02-iOS-1：违规样例自测 + 源码；令牌锁不早于 f088f04）" check_design_tokens
 step "xcodegen generate" xcodegen generate
 step "build Debug（模拟器）" xcb -configuration Debug -destination "$SIM_BUILD_DEST" build
 

@@ -81,7 +81,7 @@ struct RecordDetailCard: View {
                     .couliFlowPushTrailing(.inlineOnly)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            CouliIconView(.chevronDown, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.chevronDown, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .rotationEffect(.degrees(180))
                 .walletProbe(probe + ".header.arrow", role: "icon")

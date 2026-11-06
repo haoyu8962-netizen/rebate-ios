@@ -45,7 +45,7 @@ struct PrivacyPermissionRow: View {
                     .padding(.leading, CouliSpacing.s1)
             }
             if chevron {
-                CouliIconView(.chevron, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .foregroundColor(CouliColor.textSecondary)
                     .meProbe(probe + ".chevron", role: "icon")
                     .accessibilityHidden(true)
@@ -83,7 +83,7 @@ struct PrivacyPermissionRow: View {
 /// 权限行图标（系统图标集，D10-559）：通知铃铛、相册图片。`CouliIcon` 没有图片类，组件库本组只加可选参数，所以这里直接取系统图标，尺寸写法同 `CouliIconView`。
 private struct PrivacyPermissionIcon: View {
     let type: String
-    @ScaledMetric(relativeTo: .footnote) private var size = CouliGuideMetric.iconMedium
+    @ScaledMetric(relativeTo: .footnote) private var size = CouliComponentMetric.iconMedium
 
     var body: some View {
         Image(systemName: type == "push" ? CouliIcon.bell.rawValue : "photo")

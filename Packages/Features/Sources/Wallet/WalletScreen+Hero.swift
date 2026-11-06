@@ -59,7 +59,7 @@ struct WalletHeroPanel: View {
             WalletText(titleText, style: .footnote, weight: .couliMedium, probe: "wallet.hero.title")
                 .accessibilityHidden(true)
             WalletIconButton(
-                hidden ? .eyeOff : .eye, base: CouliGuideMetric.iconMedium,
+                hidden ? .eyeOff : .eye, base: CouliComponentMetric.iconMedium,
                 label: texts.text(hidden ? "amount_mask.show" : "amount_mask.hide"), onBrand: true,
                 probe: "wallet.hero.eye", action: actions.toggleMask
             )
@@ -74,7 +74,7 @@ struct WalletHeroPanel: View {
             HStack(spacing: 2) {
                 Text(verbatim: title)
                     .couliFont(.footnote, weight: .couliMedium)
-                CouliIconView(.chevron, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
             }
             .frame(minHeight: rowLine)
             .walletProbe("wallet.hero.records", role: "link")
@@ -147,7 +147,7 @@ struct WalletHeroPanel: View {
                 WalletText(label, style: .footnote, probe: id + ".label")
                     .accessibilityLabel(Text(verbatim: label + PriceTerms.spokenPause + spoken(amount.fen)))
                 if let help {
-                    WalletIconButton(.help, base: CouliGuideMetric.iconSmall, label: help, onBrand: true,
+                    WalletIconButton(.help, base: CouliComponentMetric.iconSmall, label: help, onBrand: true,
                                      probe: id + ".help") { onHelp("frozen") }
                 }
             }

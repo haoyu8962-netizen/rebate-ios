@@ -84,7 +84,7 @@ public struct CouliButton: View {
                 }
                 if let leadingIcon {
                     // 文字前的 20 图标（APP-12w-b 关于页【复制诊断信息】）：缺省 nil，既有按钮不变；装饰，读屏只读按钮名。
-                    let icon = CouliIconView(leadingIcon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                    let icon = CouliIconView(leadingIcon, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     if let iconProbeID {
                         icon.couliProbe(iconProbeID, role: "icon")
                     } else {

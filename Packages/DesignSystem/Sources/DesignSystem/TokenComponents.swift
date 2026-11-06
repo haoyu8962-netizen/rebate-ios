@@ -14,6 +14,20 @@ public enum CouliComponentMetric {
     public static let controlBorderWidth = metric(DesignTokens.component, "control.border-width", group: "component")
     /// 图标默认尺寸。
     public static let iconDefault = metric(DesignTokens.component, "icon.default", group: "component")
+    /// 小图标（标签里的钟表、对勾）。
+    public static let iconSmall = metric(DesignTokens.component, "icon.small", group: "component")
+    /// 行内图标（口径 i、说明行）。
+    public static let iconInline = metric(DesignTokens.component, "icon.inline", group: "component")
+    /// 中号图标（提示条）。
+    public static let iconMedium = metric(DesignTokens.component, "icon.medium", group: "component")
+    /// 胶囊标签最小高（放大时继续增高）。
+    public static let tagMinHeight = metric(DesignTokens.component, "tag.min-height", group: "component")
+    /// 平台来源标签最小高。
+    public static let badgeMinHeight = metric(DesignTokens.component, "platform-badge.min-height", group: "component")
+    /// 列表卡左图边长。
+    public static let listImage = metric(DesignTokens.component, "image.list", group: "component")
+    /// 宫格格子最小高。
+    public static let gridCellMinHeight = metric(DesignTokens.component, "grid-cell.min-height", group: "component")
 }
 
 /// 焦点环（pt），对应 tokens.focus。
@@ -63,49 +77,26 @@ public extension View {
     }
 }
 
-/// 遮罩：浅色墨棕按令牌规定的不透明度（GUIDE §2：rgba(40, 37, 31, 0.4)）；深色取唯一源 v0.4.0 `color.overlay.scrim.dark`
-/// `#0000008C`（黑 55%）——深色下主文字色是浅色，不能再拿它当遮罩（APP-11v-b MainPopupDark / HomeClipboardCardDark-v3）。
-/// TODO(N-11 / DS-02-iOS): 锁定令牌补 overlay.scrim 后改读令牌。
+/// 遮罩：令牌 overlay.scrim（浅色墨棕 40%，深色纯黑 55%；8 位色末两位是透明度）。随外观切换，见 `CouliColor.token`。
 public enum CouliScrim {
-    public static let opacity = 0.4
-    /// 深色遮罩不透明度（v0.4.0 overlay.scrim dark 末两位 8C）。
-    static let darkOpacity = 0x8C / 255.0
+    /// 浅色遮罩不透明度（令牌 overlay.scrim 浅色值的 alpha）。
+    public static let opacity = TokenRGB(token: "overlay.scrim")?.alpha ?? 0
     public static var color: Color {
-        guard let ink = TokenRGB(token: "text.primary") else {
-            return CouliColor.textPrimary.opacity(opacity)
-        }
-        let light = ink.uiColor.withAlphaComponent(opacity)
-        let night = UIColor.black.withAlphaComponent(darkOpacity)
-        return Color(UIColor { $0.userInterfaceStyle == .dark ? night : light })
+        CouliColor.token("overlay.scrim")
     }
 }
 
-/// 设计稿（GUIDE §3、§6、§7）规定、但令牌里还没有的尺寸。集中在这里，组件不散写数字。
-/// 能由间距令牌组合出的直接组合；其余三项（14、22、2）待令牌补齐。
-/// TODO(N-11): 令牌补 component.tag / icon.small 等后改读令牌。
-public enum CouliGuideMetric {
-    /// 小图标（标签里的钟表、对勾，GUIDE §3）。
-    public static let iconSmall: CGFloat = 14
-    /// 行内图标（口径 i、说明行，GUIDE §7.2.1）。
-    public static let iconInline = CouliSpacing.s4
-    /// 中号图标（提示条，GUIDE §3）。
-    public static let iconMedium = CouliSpacing.s5
-    /// 胶囊标签最小高（GUIDE §3 标签 height 22，放大时改为最小高）。
-    public static let tagMinHeight: CGFloat = 22
+/// 设计稿（GUIDE §3、§6、§7）规定、但锁定令牌（v0.5.1）里还没有的尺寸，写字面值集中在这里，组件不散写数字。
+/// 待 DSX-02 令牌 v0.6.0 补上（tag padding、image frame、sheet handle）后由 DSX-120 改读令牌。
+public enum CouliPendingTokenMetric {
     /// 胶囊标签上下内边距（GUIDE §7.2.1 返利标签 padding 2px 8px）。
     public static let tagPaddingVertical: CGFloat = 2
-    /// 平台来源标签最小高（GUIDE §7.2.1 高 20）。
-    public static let badgeMinHeight = CouliSpacing.s5
-    /// 列表卡左图边长（96）。
-    public static let listImage = CouliSpacing.s12 * 2
     /// 网格卡图片高宽比（GUIDE §6「157×132 网格卡」）。
     public static let gridImageAspect: CGFloat = 132.0 / 157.0
-    /// 宫格格子最小高（≥72，GUIDE §7.2）。
-    public static let gridCellMinHeight = CouliSpacing.s12 + CouliSpacing.s6
     /// 空态占位块边长（96）与其中图标（32）。
-    public static let emptyIllustration = CouliSpacing.s12 * 2
-    public static let emptyIcon = CouliSpacing.s8
+    public static let emptyIllustration: CGFloat = 96
+    public static let emptyIcon: CGFloat = 32
     /// 半屏把手 36×4。
-    public static let sheetHandleWidth = CouliSpacing.s8 + CouliSpacing.s1
-    public static let sheetHandleHeight = CouliSpacing.s1
+    public static let sheetHandleWidth: CGFloat = 36
+    public static let sheetHandleHeight: CGFloat = 4
 }

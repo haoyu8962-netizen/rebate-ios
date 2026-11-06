@@ -62,7 +62,7 @@ extension SearchView {
                     page.input = ""
                     fieldFocused = true
                 } label: {
-                    CouliIconView(.close, size: CouliGuideMetric.iconInline)
+                    CouliIconView(.close, size: CouliComponentMetric.iconInline)
                         .foregroundColor(CouliColor.textSecondary)
                         .couliHitTarget()
                 }

@@ -223,7 +223,7 @@ struct ProductNotInstalledNote: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
-            CouliIconView(.info, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(.info, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .accessibilityHidden(true)
             Text(verbatim: text)

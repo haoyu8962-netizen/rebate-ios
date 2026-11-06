@@ -33,7 +33,8 @@ public struct CouliChoiceSheet: View {
         VStack(alignment: .leading, spacing: CouliSpacing.s4) {
             Capsule()
                 .fill(CouliColor.borderSubtle)
-                .frame(width: CouliGuideMetric.sheetHandleWidth, height: CouliGuideMetric.sheetHandleHeight)
+                .frame(width: CouliPendingTokenMetric.sheetHandleWidth,
+                       height: CouliPendingTokenMetric.sheetHandleHeight)
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
             Text(verbatim: title)

@@ -65,7 +65,7 @@ public struct CouliTag: View {
         let colors = style.colors
         HStack(spacing: CouliSpacing.s1) {
             if let icon = style.icon {
-                CouliIconView(icon, size: CouliGuideMetric.iconSmall, relativeTo: .caption)
+                CouliIconView(icon, size: CouliComponentMetric.iconSmall, relativeTo: .caption)
             }
             Text(verbatim: text)
                 .couliFont(.caption)
@@ -73,8 +73,8 @@ public struct CouliTag: View {
         }
         .foregroundColor(colors.text)
         .padding(.horizontal, CouliSpacing.s2)
-        .padding(.vertical, CouliGuideMetric.tagPaddingVertical)
-        .frame(minHeight: CouliGuideMetric.tagMinHeight)
+        .padding(.vertical, CouliPendingTokenMetric.tagPaddingVertical)
+        .frame(minHeight: CouliComponentMetric.tagMinHeight)
         .background(Capsule(style: .circular).fill(colors.background))
         .overlay(
             Capsule(style: .circular)
@@ -103,7 +103,7 @@ public struct PlatformBadge: View {
     public var body: some View {
         content
             .foregroundColor(CouliColor.token("source.text"))
-            .frame(minHeight: CouliGuideMetric.badgeMinHeight)
+            .frame(minHeight: CouliComponentMetric.badgeMinHeight)
             .background(Capsule().fill(CouliColor.token("source.background")))
             .overlay(
                 Capsule().strokeBorder(
@@ -176,7 +176,7 @@ public struct AiLabel: View {
             .couliFont(.caption, weight: .couliMedium)
             .foregroundColor(CouliColor.textSecondary)
             .padding(.horizontal, CouliSpacing.s2)
-            .frame(minHeight: CouliGuideMetric.badgeMinHeight)
+            .frame(minHeight: CouliComponentMetric.badgeMinHeight)
             .background(RoundedRectangle(cornerRadius: CouliRadius.small).fill(CouliColor.backgroundMuted))
             .fixedSize()
             .accessibilityLabel(Text(verbatim: text))

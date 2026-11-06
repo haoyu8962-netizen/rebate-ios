@@ -165,14 +165,14 @@ struct WalletStrip<Lines: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: CouliSpacing.s2) {
-            CouliIconView(icon, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+            CouliIconView(icon, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                 .walletProbe(probe + ".icon", role: "icon")
             VStack(alignment: .leading, spacing: 2) {
                 lines()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if chevron {
-                CouliIconView(.chevron, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                CouliIconView(.chevron, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                     .walletProbe(probe + ".chevron", role: "icon")
             }
         }

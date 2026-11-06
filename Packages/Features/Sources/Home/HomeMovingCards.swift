@@ -81,7 +81,7 @@ struct HomeNoticeView: View {
 
     private func row(_ item: HomeItemUi) -> some View {
         HStack(alignment: .center, spacing: CouliSpacing.s2) {
-            CouliIconView(.info, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+            CouliIconView(.info, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                 .foregroundColor(CouliColor.textSecondary)
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                 HomeAdBadge(label: item.adLabel)
@@ -95,7 +95,7 @@ struct HomeNoticeView: View {
             .accessibilityElement(children: .combine)
             if let close = item.close {
                 Button { controller.closeNotice(close) } label: {
-                    CouliIconView(.close, size: CouliGuideMetric.iconInline, relativeTo: .footnote)
+                    CouliIconView(.close, size: CouliComponentMetric.iconInline, relativeTo: .footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .frame(width: CouliHitTarget.minimum, height: CouliHitTarget.minimum)
                         .contentShape(Rectangle())

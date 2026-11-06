@@ -37,7 +37,7 @@ extension LoginView {
                 .accessibilityIdentifier("login.phone")
                 if !model.phoneText.isEmpty {
                     Button(action: model.clearPhone) {
-                        CouliIconView(.close, size: CouliGuideMetric.iconMedium)
+                        CouliIconView(.close, size: CouliComponentMetric.iconMedium)
                             .foregroundColor(CouliColor.textSecondary)
                             .couliHitTarget()
                     }
@@ -129,7 +129,7 @@ extension LoginView {
                 .accessibilityIdentifier("login.invite")
                 if !model.inviteText.isEmpty {
                     Button { model.inviteText = "" } label: {
-                        CouliIconView(.close, size: CouliGuideMetric.iconMedium)
+                        CouliIconView(.close, size: CouliComponentMetric.iconMedium)
                             .foregroundColor(CouliColor.textSecondary)
                             .couliHitTarget()
                     }

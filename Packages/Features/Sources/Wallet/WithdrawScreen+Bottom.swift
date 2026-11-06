@@ -17,7 +17,7 @@ extension WithdrawScreen {
                     )
                 }
                 HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                    CouliIconView(.info, size: CouliGuideMetric.iconMedium, relativeTo: .footnote)
+                    CouliIconView(.info, size: CouliComponentMetric.iconMedium, relativeTo: .footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .walletProbe("withdraw.sla.icon", role: "icon")
                         .accessibilityHidden(true)

@@ -125,7 +125,7 @@ public struct EntryGrid: View {
             }
             .foregroundColor(CouliColor.textPrimary)
             .padding(.vertical, CouliSpacing.s2)
-            .frame(maxWidth: .infinity, minHeight: CouliGuideMetric.gridCellMinHeight)
+            .frame(maxWidth: .infinity, minHeight: CouliComponentMetric.gridCellMinHeight)
             .contentShape(Rectangle())
             .modifier(EntryGridProbe(id: cellProbePrefix.map { "\($0).\(item.id)" }, role: "hit"))
         }

@@ -70,7 +70,7 @@ extension BindPhoneView {
                 // 清除按钮只在聚焦且非空时出现（适配稿）：未聚焦时不占号码的宽度；出现时保留 44pt 命中区
                 if focus == .phone, !controller.phone.isEmpty, !locked {
                     Button(action: controller.clearPhone) {
-                        CouliIconView(.close, size: CouliGuideMetric.iconMedium)
+                        CouliIconView(.close, size: CouliComponentMetric.iconMedium)
                             .foregroundColor(CouliColor.textSecondary)
                             .couliHitTarget()
                     }
