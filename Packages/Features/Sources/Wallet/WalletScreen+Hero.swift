@@ -21,7 +21,6 @@ struct WalletHeroPanel: View {
     @ScaledMetric(relativeTo: .footnote) private var rowLine: CGFloat = CouliTextStyle.footnote.baseSize
         * CouliTextStyle.footnote.lineHeightMultiple
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         // 子项按读屏顺序声明（眼睛 → 可提现金额 →【提现】→ 提现记录 → 冻结中 / 已提现，brief §4.2），由 WalletHeroLayout 摆回画板位置
@@ -103,17 +102,15 @@ struct WalletHeroPanel: View {
         }
     }
 
-    /// 【提现】（WalletDark 设计说明）：狸橙主卡在深色下不变，可点时卡内【提现】仍是白底 + #A83B1F 字（令牌 button.inverse 深浅同值）；
-    /// 深色置灰为 #36312C 底 + #A39A90 字（= 令牌 button.primary.disabled.* 的深色值，取主按钮禁用样式）。共用 `.inverse` 样式取的是
-    /// 随外观变化的 surface / emphasis（深色会变深底），本页只在这里按画板取色，共用样式默认不变（F-IOS-50）。浅色外观与原来相同。
+    /// 【提现】（WalletDark 设计说明）：狸橙主卡在深色下不变，可点时卡内【提现】仍是白底 + #A83B1F 字，置灰为主按钮禁用样式
+    /// （深色 #36312C 底 + #A39A90 字）。都由共用 `.inverse` 样式按令牌 button.inverse.* / button.primary.disabled.* 取值
+    /// （DS-02-iOS-1 计划 ③），本页不再局部强制外观（原 F-IOS-50 写法）。
     private var withdrawButton: some View {
-        let darkDisabled = colorScheme == .dark && !withdrawEnabled
-        return CouliButton(
-            texts.text("wallet.withdraw"), kind: darkDisabled ? .primary : .inverse, isEnabled: withdrawEnabled,
+        CouliButton(
+            texts.text("wallet.withdraw"), kind: .inverse, isEnabled: withdrawEnabled,
             labelProbeID: "wallet.hero.withdraw.label", minWidth: CouliSpacing.s12 * 2, action: actions.withdraw
         )
         .fixedSize()
-        .environment(\.colorScheme, darkDisabled ? .dark : .light)
         .walletProbe("wallet.hero.withdraw", role: "button")
         .accessibilityValue(Text(verbatim: disabledReason ?? ""))
     }

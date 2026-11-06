@@ -42,8 +42,9 @@ public enum CouliShadow: String, Sendable, CaseIterable {
     case card
     case floating
 
-    var layers: [DesignTokens.ShadowLayer] {
-        guard let layers = DesignTokens.shadows[rawValue] else {
+    /// 浅色取 `DesignTokens.shadows`，深色取 `DesignTokens.shadowsDark`（深色为黑影，浅色为墨棕影）。
+    func layers(dark: Bool) -> [DesignTokens.ShadowLayer] {
+        guard let layers = (dark ? DesignTokens.shadowsDark : DesignTokens.shadows)[rawValue] else {
             assertionFailure("missing token shadow.\(rawValue)")
             return []
         }
@@ -53,10 +54,12 @@ public enum CouliShadow: String, Sendable, CaseIterable {
 
 private struct CouliShadowModifier: ViewModifier {
     let shadow: CouliShadow
+    /// 按所在视图的外观取层：外观变化时 SwiftUI 重新求值 body，阴影跟着换。
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         // 令牌目前每档至多一层；多层时依次叠加。
-        shadow.layers.reduce(AnyView(content)) { view, layer in
+        shadow.layers(dark: colorScheme == .dark).reduce(AnyView(content)) { view, layer in
             AnyView(
                 view.shadow(
                     color: (TokenRGB(hex: layer.color)?.color ?? .clear).opacity(layer.opacity),

@@ -79,12 +79,11 @@ struct MeHeroCard: View {
         }
     }
 
-    /// 主卡在深色下不变，卡内【提现】仍是白底（令牌 button.inverse）：`.inverse` 取随外观变化的颜色，这里固定浅色外观（同钱包主卡）。
+    /// 主卡在深色下不变，卡内【提现】仍是白底：`.inverse` 按令牌 button.inverse.* 取值（深浅同为白底 #A83B1F 字，同钱包主卡）。
     private var withdraw: some View {
         CouliButton(texts.text("me.withdraw"), kind: .inverse, labelProbeID: "me.hero.withdraw.label",
                     minWidth: CouliSpacing.s12 * 2, action: actions.withdraw)
             .fixedSize()
-            .environment(\.colorScheme, .light)
             .meProbe("me.hero.withdraw", role: "button")
     }
 

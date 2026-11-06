@@ -137,7 +137,9 @@ struct CouliButtonStyle: ButtonStyle {
         case .text:
             enabled ? CouliColor.textLink : CouliColor.textSecondary
         case .inverse:
-            enabled ? CouliColor.brandEmphasis : CouliColor.textSecondary
+            // 卡内白底按钮（计划 ③）：深浅都读 button.inverse.*，深色仍白底 #A83B1F 字（与安卓、鸿蒙一致）；
+            // 置灰取主按钮禁用字色（浅色与 text.secondary 同值）。
+            CouliColor.token(enabled ? "button.inverse.text" : "button.primary.disabled.text")
         }
     }
 
@@ -151,7 +153,8 @@ struct CouliButtonStyle: ButtonStyle {
         case .text:
             pressed ? CouliColor.brandSubtle : .clear
         case .inverse:
-            enabled ? (pressed ? CouliColor.brandSubtle : CouliColor.backgroundSurface)
+            // 按下态令牌里没有 inverse.pressed，暂用 brand.subtle（登记 COMP-SPEC 按压归属）。
+            enabled ? (pressed ? CouliColor.brandSubtle : CouliColor.token("button.inverse.background"))
                 : CouliColor.token("button.primary.disabled.background")
         }
     }

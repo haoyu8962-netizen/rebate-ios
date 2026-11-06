@@ -126,9 +126,12 @@ struct NicknameView: View {
         .meProbe("nickname.field", role: "field")
     }
 
-    /// 普通 `border.control` 1、错误 `status.error.text` 2；输入中 2（`border.active` 不在锁定令牌里，先用控件边色）。
+    /// 普通 `border.control` 1、错误 `status.error.text` 2（错误优先）；输入中 `border.active` 2。
     private func borderColor(error: String?) -> Color {
-        error == nil ? CouliColor.borderControl : CouliColor.statusErrorText
+        if error != nil {
+            return CouliColor.statusErrorText
+        }
+        return inputFocused ? CouliColor.borderActive : CouliColor.borderControl
     }
 
     private func borderWidth(error: String?) -> CGFloat {
