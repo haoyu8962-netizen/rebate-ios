@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -256,6 +257,160 @@ class ProbeSnapshot(unittest.TestCase):
         self.assertGreater(len(gen.DEBUG_ONLY_ROUTE_MARKER.encode()), 15, "标记必须长于 15 字节，避免被内联")
         self.assertIn("public static func appLaunch(", files["TrackerEvents.swift"])
         self.assertNotRegex(files["DefaultConfig.swift"], r"https?://|example\\.test")
+        self.typecheck(files)
+
+
+
+# ---- DS-02-iOS-1：令牌段（colorsDark / componentNumber / shadowsDark、8 位色）brief §2.2-6 ----
+
+
+def swift_table(body: str, name: str) -> dict:
+    """从生成的 DesignTokens.swift 里取一个 [String: 标量] 表；没有该表返回 None。"""
+    match = re.search(r"public static let " + re.escape(name) + r": \[[^\]]+\] = \[\n(.*?)\n    \]", body, re.S)
+    if not match:
+        return None
+    table = {}
+    for line in match.group(1).splitlines():
+        row = re.fullmatch(r'\s*"([^"]+)": (.+),', line)
+        if row:
+            raw = row.group(2)
+            table[row.group(1)] = json.loads(raw) if raw.startswith('"') else float(raw) if "." in raw else int(raw)
+    return table
+
+
+def swift_shadow_keys(body: str, name: str) -> dict:
+    match = re.search(r"public static let " + re.escape(name) + r": \[Swift\.String: \[ShadowLayer\]\] = \[\n(.*?)\n    \]\n",
+                      body, re.S)
+    if not match:
+        return None
+    rows = {}
+    for key, rest in re.findall(r'^        "([^"]+)": (\[\],|\[\n.*?\n        \],)', match.group(1), re.S | re.M):
+        rows[key] = re.findall(r"color: \"([^\"]+)\", opacity: ([0-9.]+)", rest)
+    return rows
+
+
+class TokenSegments(unittest.TestCase):
+    """真实快照复制到临时目录后改 design-tokens.json；不继承 ProbeSnapshot（避免把探针用例再跑一遍），只借它的类型检查。"""
+
+    setUp = ProbeSnapshot.setUp
+    tearDown = ProbeSnapshot.tearDown
+    typecheck = ProbeSnapshot.typecheck
+
+    def tokens_path(self):
+        return os.path.join(self.snapshot, "design", "design-tokens.json")
+
+    def edit_tokens(self, change):
+        with open(self.tokens_path(), encoding="utf-8") as f:
+            doc = json.load(f)
+        change(doc["tokens"])
+        with open(self.tokens_path(), "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False)
+
+    def reset(self):
+        self.tearDown()
+        self.setUp()
+
+    def tokens_swift(self) -> str:
+        return gen.generate()["DesignTokens.swift"]
+
+    def test_locked_snapshot_emits_every_segment(self):
+        with open(self.tokens_path(), encoding="utf-8") as f:
+            doc = json.load(f)
+        body = self.tokens_swift()
+        self.assertIn('public static let version: Swift.String = "0.5.1"', body)
+        colors, dark = swift_table(body, "colors"), swift_table(body, "colorsDark")
+        self.assertIsNotNone(dark, "缺 colorsDark 段")
+        self.assertEqual(set(colors), set(dark))
+        self.assertEqual(colors["overlay.scrim"], "#28251F66")
+        self.assertEqual(dark["overlay.scrim"], "#0000008C")
+        ints, numbers = swift_table(body, "component"), swift_table(body, "componentNumber")
+        self.assertIsNotNone(numbers, "缺 componentNumber 段")
+        self.assertEqual(numbers, {"checkbox.max-scale": 1.5})
+        self.assertFalse(set(ints) & set(numbers), "同一路径不能同时在两段")
+        def count(node):
+            return 1 if "value" in node else sum(count(child) for child in node.values())
+        self.assertEqual(len(ints) + len(numbers), count(doc["tokens"]["component"]))
+        light, night = swift_shadow_keys(body, "shadows"), swift_shadow_keys(body, "shadowsDark")
+        self.assertIsNotNone(night, "缺 shadowsDark 段")
+        self.assertEqual(set(light), set(night))
+        self.assertEqual(night["none"], [])
+        self.assertEqual(night["card"], [("#000000", "0.3")])
+        self.assertEqual(night["floating"], [("#000000", "0.45")])
+
+    def test_eight_digit_color_kept_verbatim_in_css_order(self):
+        def change(tokens):
+            tokens["color"]["brand"]["primary"]["value"] = "#c4482080"
+            tokens["color"]["brand"]["primary"]["dark"] = "#80C44820"
+        self.edit_tokens(change)
+        body = self.tokens_swift()
+        self.assertEqual(swift_table(body, "colors")["brand.primary"], "#c4482080", "源字符串原样，不改大小写、不换成 ARGB")
+        self.assertEqual(swift_table(body, "colorsDark")["brand.primary"], "#80C44820")
+
+    def test_malformed_colors_fail(self):
+        for field in ("value", "dark"):
+            for bad in ("#12345", "#1234567", "#123456789", "#GG0000", "C44820", "#C44820 ", ""):
+                with self.subTest(field=field, bad=bad):
+                    def change(tokens, bad=bad, field=field):
+                        tokens["color"]["brand"]["primary"][field] = bad
+                    self.reset()
+                    self.edit_tokens(change)
+                    with self.assertRaises(gen.GenError):
+                        gen.generate()
+
+    def test_missing_dark_fails_instead_of_falling_back(self):
+        self.edit_tokens(lambda tokens: tokens["color"]["text"]["link"].pop("dark"))
+        with self.assertRaisesRegex(gen.GenError, r"text\.link"):
+            gen.generate()
+
+    def test_dark_values_come_from_dark_field(self):
+        def change(tokens):
+            tokens["color"]["text"]["link"]["value"] = "#111111"
+            tokens["color"]["text"]["link"]["dark"] = "#222222"
+        self.edit_tokens(change)
+        body = self.tokens_swift()
+        self.assertEqual(swift_table(body, "colors")["text.link"], "#111111")
+        self.assertEqual(swift_table(body, "colorsDark")["text.link"], "#222222")
+
+    def test_component_split_by_type_not_by_value(self):
+        def change(tokens):
+            tokens["component"]["probe"] = {
+                "ratio": {"type": "number", "value": 2.25},
+                "whole": {"type": "number", "value": 3},
+                "size": {"type": "dimension", "value": 40, "unit": "logical"},
+            }
+        self.edit_tokens(change)
+        body = self.tokens_swift()
+        ints, numbers = swift_table(body, "component"), swift_table(body, "componentNumber")
+        self.assertEqual(numbers.get("probe.ratio"), 2.25)
+        self.assertEqual(numbers.get("probe.whole"), 3.0, "type number 即使是整数也进 componentNumber")
+        self.assertEqual(ints.get("probe.size"), 40)
+        self.assertNotIn("probe.ratio", ints)
+        self.assertNotIn("probe.whole", ints)
+        self.assertNotIn("probe.size", numbers)
+
+    def test_fractional_dimension_fails(self):
+        self.edit_tokens(lambda tokens: tokens["component"]["chip"]["height"].update(value=32.5))
+        with self.assertRaises(gen.GenError):
+            gen.generate()
+
+    def test_shadow_dark_rules(self):
+        self.edit_tokens(lambda tokens: tokens["shadow"]["card"].pop("dark"))
+        with self.assertRaisesRegex(gen.GenError, r"shadow\.card"):
+            gen.generate()
+        self.reset()
+        self.edit_tokens(lambda tokens: tokens["shadow"]["none"].pop("dark", None))
+        self.assertEqual(swift_shadow_keys(self.tokens_swift(), "shadowsDark")["none"], [])
+
+    def test_minimal_token_fixture_output_typechecks(self):
+        def change(tokens):
+            tokens["color"]["probe"] = {"veil": {"type": "color", "value": "#0A0B0C0D", "dark": "#0d0c0b0a"}}
+            tokens["component"]["probe"] = {"scale": {"type": "number", "value": 1.25}}
+        self.edit_tokens(change)
+        files = gen.generate()
+        body = files["DesignTokens.swift"]
+        self.assertEqual(swift_table(body, "colorsDark")["probe.veil"], "#0d0c0b0a")
+        self.assertIn("public static let componentNumber: [Swift.String: Swift.Double]", body)
+        self.assertIn("public static let shadowsDark: [Swift.String: [ShadowLayer]]", body)
         self.typecheck(files)
 
 

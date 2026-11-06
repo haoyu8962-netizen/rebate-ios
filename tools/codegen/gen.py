@@ -873,18 +873,72 @@ def token_leaves(node, kind, ctx: str, prefix: str = "") -> list[tuple[str, obje
     return result
 
 
-def shadow_layers(node) -> list[tuple[str, list[dict]]]:
+# 颜色：#RRGGBB 或 #RRGGBBAA（CSS 顺序，末两位是透明度；生成物保留源字符串，不换成 ARGB）。
+COLOR_RE = r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?"
+
+
+def as_color(value, context: str) -> str:
+    text = as_str(value, context)
+    if not re.fullmatch(COLOR_RE, text):
+        raise GenError(f"{context} 不是 #RRGGBB / #RRGGBBAA：{text!r}")
+    return text
+
+
+def color_leaves(node, ctx: str, prefix: str = "") -> list[tuple[str, str, str]]:
+    """颜色叶子 → (路径, 浅色 value, 深色 dark)。缺 dark 直接报错，不回落到浅色。"""
+    if not isinstance(node, dict):
+        raise GenError(f"{ctx} 应为对象")
+    if "value" in node:
+        if not prefix:
+            raise GenError(f"{ctx} 叶子没有相对路径")
+        if "dark" not in node:
+            raise GenError(f"{ctx} 缺少 dark")
+        return [(prefix, as_color(node["value"], f"{ctx}.value"), as_color(node["dark"], f"{ctx}.dark"))]
+    result = []
+    for key in sorted(node):
+        path = f"{prefix}.{key}" if prefix else key
+        result += color_leaves(node[key], f"{ctx}.{key}", path)
+    return result
+
+
+def component_leaves(node, ctx: str, prefix: str = "") -> tuple[list[tuple[str, int]], list[tuple[str, float]]]:
+    """组件叶子按 type 分段：type number → 非整数段（Double）；其余（dimension）→ 整数段，小数报错。不按值猜类型。"""
+    if not isinstance(node, dict):
+        raise GenError(f"{ctx} 应为对象")
+    if "value" in node:
+        if not prefix:
+            raise GenError(f"{ctx} 叶子没有相对路径")
+        if node.get("type") == "number":
+            return [], [(prefix, as_number(node["value"], f"{ctx}.value"))]
+        return [(prefix, as_int(node["value"], f"{ctx}.value"))], []
+    ints, numbers = [], []
+    for key in sorted(node):
+        path = f"{prefix}.{key}" if prefix else key
+        sub_ints, sub_numbers = component_leaves(node[key], f"{ctx}.{key}", path)
+        ints += sub_ints
+        numbers += sub_numbers
+    return ints, numbers
+
+
+def shadow_layers(node, field: str = "value") -> list[tuple[str, list[dict]]]:
+    """field = "value" 取浅色层，"dark" 取深色层。深色：没有 dark 的档位只在浅色为空（none）时取空数组，否则报错。"""
     if not isinstance(node, dict):
         raise GenError("tokens.shadow 应为对象")
     result = []
     for key in sorted(node):
         ctx = f"tokens.shadow.{key}"
-        value = (node[key] or {}).get("value") if isinstance(node[key], dict) else None
+        entry = node[key] if isinstance(node[key], dict) else {}
+        if field != "value" and field not in entry:
+            if entry.get("value") == []:
+                result.append((key, []))
+                continue
+            raise GenError(f"{ctx} 缺少 {field}")
+        value = entry.get(field)
         if not isinstance(value, list):
-            raise GenError(f"{ctx}.value 应为数组")
+            raise GenError(f"{ctx}.{field} 应为数组")
         layers = []
         for index, layer in enumerate(value):
-            lctx = f"{ctx}.value[{index}]"
+            lctx = f"{ctx}.{field}[{index}]"
             if not isinstance(layer, dict):
                 raise GenError(f"{lctx} 应为对象")
             color = as_str(layer.get("color"), f"{lctx}.color")
@@ -902,6 +956,23 @@ def shadow_layers(node) -> list[tuple[str, list[dict]]]:
     return result
 
 
+def swift_shadow_table(name: str, doc_line: str, shadows: list[tuple[str, list[dict]]]) -> list[str]:
+    lines = ["", f"    /// {doc_line}", f"    public static let {name}: [Swift.String: [ShadowLayer]] = ["]
+    for key, layers in shadows:
+        if not layers:
+            lines.append(f"        {swift_string(key)}: [],")
+            continue
+        lines.append(f"        {swift_string(key)}: [")
+        for layer in layers:
+            lines.append(
+                f"            ShadowLayer(x: {layer['x']}, y: {layer['y']}, blur: {layer['blur']}, "
+                f"spread: {layer['spread']}, color: {swift_string(layer['color'])}, opacity: {layer['opacity']!r}),"
+            )
+        lines.append("        ],")
+    lines.append("    ]")
+    return lines
+
+
 def gen_tokens(out: dict[str, str]):
     doc = load("design/design-tokens.json")
     version = as_str((doc.get("metadata") or {}).get("version"), "design.metadata.version")
@@ -909,9 +980,15 @@ def gen_tokens(out: dict[str, str]):
     if not isinstance(tokens, dict):
         raise GenError("design.tokens 缺失")
     try:
+        colors = color_leaves(tokens["color"], "tokens.color")
+        component_ints, component_numbers = component_leaves(tokens["component"], "tokens.component")
         groups = [
-            ("colors", "String", "颜色：去掉 tokens.color. 前缀的点分路径 → \"#RRGGBB\"（保留源大小写）。",
-             token_leaves(tokens["color"], str, "tokens.color")),
+            ("colors", "String",
+             "颜色（浅色，tokens.color.*.value）：去掉 tokens.color. 前缀的点分路径 → \"#RRGGBB\" 或 \"#RRGGBBAA\""
+             "（CSS 顺序，末两位透明度；保留源字符串）。",
+             [(path, value) for path, value, _ in colors]),
+            ("colorsDark", "String", "颜色（深色，tokens.color.*.dark）：键与 colors 相同，写法同上。",
+             [(path, dark) for path, _, dark in colors]),
             ("spacing", "Int", "间距（pt）：\"0\"…\"16\"。", token_leaves(tokens["space"], int, "tokens.space")),
             ("radius", "Int", "圆角（pt）。", token_leaves(tokens["radius"], int, "tokens.radius")),
             ("fontSize", "Int", "字号（pt）：caption … display。",
@@ -924,15 +1001,14 @@ def gen_tokens(out: dict[str, str]):
              token_leaves(tokens["font"]["weight"], int, "tokens.font.weight")),
             ("focus", "Int", "焦点环（pt）：width、offset（tokens.focus）。",
              token_leaves(tokens["focus"], int, "tokens.focus")),
-            ("component", "Int", "组件尺寸（pt）：点分路径，如 \"button.min-height\"（tokens.component）。",
-             token_leaves(tokens["component"], int, "tokens.component")),
+            ("component", "Int", "组件尺寸（pt，type dimension）：点分路径，如 \"button.min-height\"（tokens.component）。",
+             component_ints),
+            ("componentNumber", "Double", "组件非整数值（type number，如 checkbox.max-scale）。", component_numbers),
         ]
         shadows = shadow_layers(tokens["shadow"])
+        shadows_dark = shadow_layers(tokens["shadow"], "dark")
     except KeyError as exc:
         raise GenError(f"design.tokens 缺少分组 {exc}") from exc
-    for prefix, value in groups[0][3]:
-        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
-            raise GenError(f"tokens.color.{prefix} 不是 #RRGGBB：{value!r}")
     lines = [
         HEADER.rstrip("\n"),
         "// 快照：design/design-tokens.json",
@@ -949,7 +1025,7 @@ def gen_tokens(out: dict[str, str]):
         lines.append("    ]")
     lines += [
         "",
-        "    /// 阴影的一层（tokens.shadow.* 的 value 数组元素）。color 为 \"#RRGGBB\"，opacity 0…1。",
+        "    /// 阴影的一层（tokens.shadow.* 的 value / dark 数组元素）。color 为 \"#RRGGBB\"，opacity 0…1。",
         "    public struct ShadowLayer: Swift.Sendable, Swift.Equatable {",
         "        public let x: Swift.Int",
         "        public let y: Swift.Int",
@@ -958,22 +1034,11 @@ def gen_tokens(out: dict[str, str]):
         "        public let color: Swift.String",
         "        public let opacity: Swift.Double",
         "    }",
-        "",
-        "    /// 阴影：none / card / floating …（tokens.shadow）。",
-        "    public static let shadows: [Swift.String: [ShadowLayer]] = [",
     ]
-    for key, layers in shadows:
-        if not layers:
-            lines.append(f"        {swift_string(key)}: [],")
-            continue
-        lines.append(f"        {swift_string(key)}: [")
-        for layer in layers:
-            lines.append(
-                f"            ShadowLayer(x: {layer['x']}, y: {layer['y']}, blur: {layer['blur']}, "
-                f"spread: {layer['spread']}, color: {swift_string(layer['color'])}, opacity: {layer['opacity']!r}),"
-            )
-        lines.append("        ],")
-    lines += ["    ]", "}", ""]
+    lines += swift_shadow_table("shadows", "阴影（浅色）：none / card / floating …（tokens.shadow.*.value）。", shadows)
+    lines += swift_shadow_table("shadowsDark", "阴影（深色）：键与 shadows 相同（tokens.shadow.*.dark；空档 none 无 dark 时为空）。",
+                                shadows_dark)
+    lines += ["}", ""]
     put(out, "DesignTokens.swift", "\n".join(lines))
 
 
