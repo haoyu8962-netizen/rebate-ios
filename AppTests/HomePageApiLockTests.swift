@@ -14,7 +14,8 @@ import XCTest
 @MainActor
 final class HomePageApiLockTests: XCTestCase {
     static let lockedCommit = "00deded0ef6f62716fcd8ca62f549dfdc1da4995"
-    static let designLockCommit = "18ad5b4aa66235855a92e68f40f8b8ef7822f4dc"
+    /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交。
+    static let designLockCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
 
     /// 鸿蒙 main contract.lock（ee878ac3…cd03，与安卓 84b4dde 整文件相同）里与 iOS 同名的 23 项。
     static let sameNameHashes: [String: String] = [
@@ -49,7 +50,7 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/texts.default.json":
             "23eac6f8bf02693840a02ac4828b226bff58a4458ffae467445ba5e2bb9881cc",
         "design/design-tokens.json":
-            "cae7499e21496fbeaddc190c7d6170dbf03161436e0e85062d8d4373670f42f1",
+            "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c",
         "specs/app-stores.json":
             "19ad122d9cf7b92044819edd30c615f4f111668a0388eea28814394e130822cf",
         "specs/client-public-ids.json":
@@ -75,7 +76,7 @@ final class HomePageApiLockTests: XCTestCase {
         let lock = try lock()
         XCTAssertEqual((lock["rebate_platform"] as? [String: Any])?["commit"] as? String, Self.lockedCommit)
         XCTAssertEqual((lock["design_tokens"] as? [String: Any])?["commit"] as? String, Self.designLockCommit,
-                       "design_tokens 本单不升（DS-02-iOS）")
+                       "design_tokens 锁在 f088f04（DS-02-iOS-1）")
     }
 
     /// 23 个同名快照：lock 的 files 与两端逐项相同，快照文件实算的 sha256 也相同（三端逐字节一致的 iOS 口径）。
