@@ -53,10 +53,14 @@ final class CtLock02ContractUpgradeTests: XCTestCase {
             "cancelPayOrder", "getReverify", "reverifyByIdNumber", "reverifyByOauth", "bindOauthIdentity",
             "listMyDataCopies", "getMyDataCopyDownload", "getHotRank", "getSearchHotWords", "createShare",
         ]
-        for id in added + addedByLock00deded {
+        // #24 test-change（FU-X-CTA-KEY-DRIFT-ios 升锁 a89c1ec3a，D10-857）：再新增 2 个（101 → 103，只增不删）
+        let addedByLockA89c1ec = ["submitProductFeedback", "openProductShop"]
+        XCTAssertEqual(ApiOperations.byId("submitProductFeedback")?.auth, "optional")
+        XCTAssertEqual(ApiOperations.byId("openProductShop")?.auth, "login")
+        for id in added + addedByLock00deded + addedByLockA89c1ec {
             XCTAssertNotNil(ApiOperations.byId(id), id)
         }
-        XCTAssertEqual(ApiOperations.all.count, 101)
+        XCTAssertEqual(ApiOperations.all.count, 103)
         XCTAssertFalse(ApiOperations.all.values.contains { $0.pathTemplate.hasPrefix("/admin/") })
     }
 

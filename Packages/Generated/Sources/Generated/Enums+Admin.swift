@@ -312,10 +312,12 @@ public enum AuditActorKind: Swift.String, Swift.Sendable, Swift.CaseIterable, Sw
 /// 契约枚举 `audit_system_actor`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum AuditSystemActor: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case systemRisk = "system:risk"
+    case systemPayout = "system:payout"
     case unknown = "__unknown__"
 
     public static let allCases: [AuditSystemActor] = [
         .systemRisk,
+        .systemPayout,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {

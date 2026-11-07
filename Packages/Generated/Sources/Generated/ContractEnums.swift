@@ -32,7 +32,7 @@ public enum ContractEnums {
         "appeal_status": ["processing", "upheld", "revoked"],
         "appeal_target_type": ["account", "order", "blocked_request"],
         "audit_actor_kind": ["admin", "system"],
-        "audit_system_actor": ["system:risk"],
+        "audit_system_actor": ["system:risk", "system:payout"],
         "auth_level": ["none", "optional", "login", "phone", "realname"],
         "auth_method": ["web_code", "sdk_token"],
         "availability": ["ok", "off_shelf", "coupon_gone", "ref_expired", "price_unavailable", "unknown"],

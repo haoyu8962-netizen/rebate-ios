@@ -75,6 +75,7 @@ final class ProductVisualReviewR1Tests: ProductVisualTestCase {
             XCTAssertNotNil(page.probes[id], "金额未知：仍显示 \(id)（返利位写「可返利，金额以订单为准」）")
         }
         let button = try XCTUnwrap(page.probes["product.buy.label"], "缺 product.buy.label")
-        XCTAssertEqual(button.text, "去购买", "按钮「去购买」，不拼任何金额")
+        // #24 test-change（FU-X-CTA-KEY-DRIFT-ios 升锁 a89c1ec3a）：契约 btn.buy 新值「购买」（原「去购买」），判据不变
+        XCTAssertEqual(button.text, "购买", "按钮「购买」，不拼任何金额")
     }
 }

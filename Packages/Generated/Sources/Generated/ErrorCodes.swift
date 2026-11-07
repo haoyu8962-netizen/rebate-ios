@@ -196,6 +196,16 @@ public enum ErrorCodes {
             retryKindByReason: [:],
             isDeprecated: false, isP1: false
         ),
+        30145: ErrorCodeInfo(
+            code: 30145, http: 422, retryKind: .never,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
+        30146: ErrorCodeInfo(
+            code: 30146, http: 422, retryKind: .never,
+            retryKindByReason: [:],
+            isDeprecated: false, isP1: false
+        ),
         30151: ErrorCodeInfo(
             code: 30151, http: 422, retryKind: .never,
             retryKindByReason: [:],

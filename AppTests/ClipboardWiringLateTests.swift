@@ -85,7 +85,8 @@ extension ClipboardWiringTests {
         guard case let .unrecognized(text, prefill) = fixture.clipboard.result?.kind else {
             return XCTFail("30132 本地提示")
         }
-        XCTAssertEqual(text, "这个口令暂时识别不了")
+        // #24 test-change（FU-X-CTA-KEY-DRIFT-ios 升锁 a89c1ec3a）：契约 error.30132 新值，判据不变
+        XCTAssertEqual(text, "这个链接或口令暂时识别不了")
         XCTAssertEqual(prefill, "全脂纯牛奶 250ml")
         fixture.api.reply = .failure(code: 59999)
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)

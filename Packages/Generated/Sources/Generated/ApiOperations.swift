@@ -255,7 +255,7 @@ public enum ApiOperations {
             signed: false,
             idempotent: false,
             stepUp: nil,
-            errorCodes: [30101, 30102, 30153, 50301],
+            errorCodes: [30101, 30102, 30153, 50301, 50303],
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
             planned: false
@@ -1091,6 +1091,32 @@ public enum ApiOperations {
             sessionScopes: ["full"],
             minVersionGate: .unspecified,
             planned: false
+        ),
+        "submitProductFeedback": ApiOperation(
+            operationId: "submitProductFeedback",
+            method: "POST",
+            pathTemplate: "/v1/products/{product_key}/feedback",
+            auth: "optional",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [30145, 20001, 30144, 42901, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: true
+        ),
+        "openProductShop": ApiOperation(
+            operationId: "openProductShop",
+            method: "POST",
+            pathTemplate: "/v1/products/{product_key}/shop/open",
+            auth: "login",
+            signed: true,
+            idempotent: true,
+            stepUp: nil,
+            errorCodes: [10001, 30101, 30102, 30111, 50301, 30146, 50303, 20001, 10405],
+            sessionScopes: ["full"],
+            minVersionGate: .gated,
+            planned: true
         ),
         "getHotRank": ApiOperation(
             operationId: "getHotRank",

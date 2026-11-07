@@ -13,7 +13,7 @@ import XCTest
 /// 升锁前（锁 a7c9f1f）本文件多数用例红属预期，由实现者的提交 1（升锁）转绿。
 @MainActor
 final class HomePageApiLockTests: XCTestCase {
-    static let lockedCommit = "00deded0ef6f62716fcd8ca62f549dfdc1da4995"
+    static let lockedCommit = "a89c1ec3a7f4de0b069742af909eba6545358ea3"
     /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交。
     static let designLockCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
 
@@ -26,7 +26,7 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/bridge.schema.json":
             "553c7f79b4a803fcdab70d6efa5c0d631f9a8a3263f9fd7f373a053c654dc1e3",
         "contracts/enums/admin.json":
-            "0a31468548e9a376a822e896465781033bfd37e89cea123d950b42e6a6ca3f72",
+            "15169659cbc717065f12d3c17893972a473b47d6271832e5c4acc026ea00a8ca",
         "contracts/enums/fund.json":
             "609f58a2598222e9b9c88364a77662c9c7efce5612fad7f84b43c133b62e3f5e",
         "contracts/enums/identity.json":
@@ -42,13 +42,13 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/enums/trade.json":
             "2baee49aac11b903b942fedf65835f6528baed8ba99c33aaad6afbcfc0f15fd8",
         "contracts/error-codes.json":
-            "c73af4261ea443dcd4ae07aeb22ded9ec844c85ae881555cdb5b01f48acd2540",
+            "954c14c589f9681d66fa5c8518ad482ee892638a1b6f2adfc2cd8c801dcb2d8f",
         "contracts/openapi.json":
-            "366e96cf0793c7a58feee7fd7ecdfec6b4baa97677c4967cc52fa6e24b23655b",
+            "4b658d0079bc173d5bed9081b122c202032b49247dc4afd45db0d2f2c0787214",
         "contracts/routes.json":
             "ab9b31952c979f61b40608edc982423423a38617f40b0937e3541e0766a31b06",
         "contracts/texts.default.json":
-            "23eac6f8bf02693840a02ac4828b226bff58a4458ffae467445ba5e2bb9881cc",
+            "3ddce957d12e696d6276fd676cd0e78a719d337615f8d99d0d511b551d3022db",
         "design/design-tokens.json":
             "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c",
         "specs/app-stores.json":

@@ -64,7 +64,7 @@ final class PrivacyVisualGuardTests: XCTestCase {
             "App/Sources/Me/AppMe+Flows.swift":
                 "ea68a8bf4c9aa02761e024d35eb8101e32360887ebe6d4fe524f69e386e639f1",
             "contract.lock":
-                "093f8598dfe90753d86b80b818718aa946a632a95ca3df9c7f33b10b7e64bd96",
+                "b65d6556e620f25f7f39f2aca9370c242a5e6b85cb12ac916dc909bc43d70117",
             "contracts/snapshot/specs/system-permissions.json":
                 "bd7c09ae405d0ed5493704be0a51e59ec2628bf7a0c24c2433c39acfe8175b2f",
             "specs/me-vectors.json":
