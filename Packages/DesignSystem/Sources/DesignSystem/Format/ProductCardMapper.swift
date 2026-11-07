@@ -1,5 +1,6 @@
 import Foundation
 import Generated
+import os
 
 /// 卡片映射的结果：DesignSystem 卡片数据 + 详情大卡另外要的取价时间、店铺、降级提示。
 public struct ProductCardMapping: Sendable {
@@ -20,6 +21,8 @@ public enum ProductCardKeys {
     }
 
     public static let disclaimerButton = "card.disclaimer_button"
+    /// 渲染不出的 cta 键回落的通用购买文案键（D10-856：「购买」，先经调用方 texts，再用包内契约字典）。
+    public static let buyFallback = "btn.buy"
     /// 价格不可用（BR-PRICE-01「暂时查不到该商品价格」）。
     public static let priceUnavailable = "card.price_unavailable"
     /// 价格不可用、平台维护中时的按钮（「稍后再试」，BR-TEXT-14 表 B 50301.maintenance「购买按钮置灰『稍后再试』」）。
@@ -31,7 +34,8 @@ public enum ProductCardKeys {
 /// 接口的 ProductCard（openapi searchProducts / getProduct 的 JSON 对象）→ ProductCardData。只做格式化，不做计算
 /// （BR-PRICE-17）：价格、返利、预估返后都用服务端字段经 PriceTagModel / RebateTagModel / EstNetModel。
 /// - 价格三字段原样保留「未知」，不补 0（BR-PRICE-01；APP-06a 共性 1）：价格不可用时隐藏全部金额、显示提示、按钮「稍后再试」禁用。
-/// - 购买按钮动词：服务端 cta.text_key 经 texts（BR-TEXT-12、TRADE-21）。
+/// - 购买按钮动词：服务端 cta.text_key 经 texts（BR-TEXT-12、TRADE-21）；原文的 {amount} 用同卡单一返利金额填；
+///   渲染不出（锁内没有、回键名、残留变量）回落 btn.buy 并记一条只带键名的诊断（D10-856，specs/cta-key-vectors.json R1–R4）。
 /// - 优惠标签：benefit_tags 原样（「预售」由 is_presale 放置，不重复）。
 /// - 口径说明：disclaimer_keys 按数组顺序经 texts 取文字；含 rebate_compare 时底行带「以结算为准」。
 public enum ProductCardMapper {
@@ -39,7 +43,8 @@ public enum ProductCardMapper {
         _ card: [String: Any],
         texts: (String) -> String,
         buyEnabled: Bool = true,
-        nowMillis: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
+        nowMillis: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
+        onCtaFallback: (String) -> Void = CtaKeyLog.fallback
     ) -> ProductCardMapping {
         let platform = card["platform"] as? String ?? ""
         let basis = rebateBasis(card)
@@ -52,7 +57,7 @@ public enum ProductCardMapper {
         let keys = (card["disclaimer_keys"] as? [Any])?.compactMap { $0 as? String } ?? []
         let lines = keys.map(texts).filter { !$0.isEmpty }
         let ctaKey = (card["cta"] as? [String: Any])?["text_key"] as? String ?? ""
-        let buyBase = ctaKey.isEmpty ? "" : texts(ctaKey)
+        let buyBase = ctaText(ctaKey, rebate: rebate, texts: texts, onFallback: onCtaFallback)
         let buyState = buttonState(unavailable: unavailable, buyEnabled: buyEnabled, buyBase: buyBase, texts: texts)
         let tags = (card["benefit_tags"] as? [Any])?.compactMap { $0 as? String }
             .filter { !$0.isEmpty && $0 != PriceTerms.presale }.map { ProductCardTag($0) } ?? []
@@ -161,6 +166,34 @@ public enum ProductCardMapper {
         return data
     }
 
+    /// cta 文案（D10-856，向量 R1–R4）：字典原文，{amount} 用同卡单一返利金额（与返利标签同一格式化结果）填；
+    /// 渲染不出完整文案（空串、回键名、填完仍有变量）→ 记一次诊断、回落 btn.buy（先经 texts，再用包内契约字典）。
+    /// 缺键不改按钮状态。没有键或空键（服务端违约）不兜底、不记诊断：按钮仍按空文案禁用。
+    static func ctaText(
+        _ key: String, rebate: RebateTagContent, texts: (String) -> String, onFallback: (String) -> Void
+    ) -> String {
+        guard !key.isEmpty else { return "" }
+        if let text = renderedCta(texts(key), key: key, rebate: rebate) {
+            return text
+        }
+        onFallback(key)
+        let fallback = ProductCardKeys.buyFallback
+        return renderedCta(texts(fallback), key: fallback, rebate: rebate)
+            ?? renderedCta(DefaultTexts.text(fallback) ?? "", key: fallback, rebate: rebate) ?? ""
+    }
+
+    private static func renderedCta(_ raw: String, key: String, rebate: RebateTagContent) -> String? {
+        guard !raw.isEmpty, raw != key else { return nil }
+        var text = raw
+        if text.contains(amountVariable) {
+            guard rebate.kind == .amount, let amount = rebate.singleAmount, !amount.isEmpty else { return nil }
+            text = text.replacingOccurrences(of: amountVariable, with: amount)
+        }
+        return text.contains("{") || text.contains("}") ? nil : text
+    }
+
+    private static let amountVariable = "{amount}"
+
     private static func buttonState(
         unavailable: Bool, buyEnabled: Bool, buyBase: String, texts: (String) -> String
     ) -> BuyButtonState {
@@ -231,5 +264,18 @@ public enum ProductCardMapper {
         }
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: iso).map { Int64($0.timeIntervalSince1970 * 1000) }
+    }
+}
+
+/// cta 诊断日志（D10-856 R3）：系统日志只写 text_key，不写商品、用户、链接字段。同一进程内同一个键只写一次
+/// （详情页每次重画都会映射一次，避免刷屏）；测试经 `onCtaFallback` 注入，每次映射都会收到。
+public enum CtaKeyLog {
+    private static let logger = Logger(subsystem: "com.couli.app", category: "cta")
+    private static let logged = OSAllocatedUnfairLock(initialState: Set<String>())
+
+    public static func fallback(_ key: String) {
+        let first = logged.withLock { $0.insert(key).inserted }
+        guard first else { return }
+        logger.notice("cta text_key not renderable, fell back to btn.buy: \(key, privacy: .public)")
     }
 }

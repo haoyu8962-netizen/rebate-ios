@@ -288,8 +288,11 @@ public enum BuyButtonModel {
     /// 时在动词后拼「· 预估返 ¥x」，金额与 RebateTag 同一格式化结果；区间、无返利、金额未知、登录查看、
     /// LinkLanding 与分享页不拼。loading、禁用、「稍后再试」由 BuyButton 组件处理（不拼）。
     /// 未知 context 不拼（保守）。
+    /// 动词本身已带这笔金额（btn.buy.rebate「购买预估返 {amount}」由 ProductCardMapper 填好，D10-856）时不再拼后缀，金额只出现一次。
     public static func text(base: String, rebate: RebateTagContent, amountHidden: Bool, context: String) -> String {
-        guard let amount = suffixAmount(rebate: rebate, amountHidden: amountHidden, context: context) else {
+        guard let amount = suffixAmount(rebate: rebate, amountHidden: amountHidden, context: context),
+              !base.contains(amount)
+        else {
             return base
         }
         return base + PriceTerms.buyRebateSuffixTemplate.replacingOccurrences(of: "{amount}", with: amount)
@@ -303,6 +306,11 @@ public enum BuyButtonModel {
         amountHidden: Bool,
         context: String
     ) -> String {
+        // 动词里已带这笔金额（btn.buy.rebate）：可见的「预估返 ¥2.69」换成读屏写法，不再追加，金额只读一次
+        if rebate.kind == .amount, let amount = rebate.singleAmount, !amount.isEmpty, base.contains(amount) {
+            guard !rebate.text.isEmpty, base.contains(rebate.text) else { return base }
+            return base.replacingOccurrences(of: rebate.text, with: rebate.accessibilityText)
+        }
         let showsAmountOnPage = !amountHidden && shownContexts.contains(BuyButtonContext(rawValue: context) ?? .share)
         guard showsAmountOnPage, rebate.showsAmount else {
             return base
