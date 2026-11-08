@@ -125,6 +125,7 @@ final class WithdrawGuideTests: WalletFlowTestCase {
     /// Release 形态（没有实名 / 劳务协议后端，G01、G02）：【提交认证】置灰、劳务协议「暂未提供」，不发任何请求。
     func testReleaseShapeIdentityPagesSendNothing() async throws {
         let fixture = make()
+        fixture.wallet.installBackends(realname: nil, labor: nil)
         await verifyRealname(fixture)
         let real = try XCTUnwrap(fixture.open(WalletRoutes.realName)?.controller as? RealNameController)
         XCTAssertFalse(real.available)

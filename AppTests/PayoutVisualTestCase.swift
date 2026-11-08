@@ -86,7 +86,7 @@ class PayoutVisualTestCase: WithdrawVisualTestCase {
         WalletStubProtocol.requests("PUT", "/v1/me/payout-account")
     }
 
-    /// 打开实名页。`backend` = false：Release 形态（`deps.realname == nil`）。`filled`：填好 fixture 表单。
+    /// 打开实名页。`backend` = false：没有实名后端（显式 `installBackends(realname: nil)`，「暂未开放」）。`filled`：填好 fixture 表单。
     @discardableResult
     func openRealName(filled: Bool = true, backend: Bool = true, canvas: WithdrawVisualHost.Canvas = .init(),
                       waitFor: String? = "realname.header", needProbes: Bool = true, file: StaticString = #filePath,
@@ -96,6 +96,8 @@ class PayoutVisualTestCase: WithdrawVisualTestCase {
             let fake = VisualRealNameBackend()
             realBackend = fake
             host.wallet.installBackends(realname: fake, labor: nil)
+        } else {
+            host.wallet.installBackends(realname: nil, labor: nil)
         }
         try await host.show(WalletRoutes.realName, canvas)
         await waitUntil("实名页没有打开", file: file, line: line) { host.realName != nil }

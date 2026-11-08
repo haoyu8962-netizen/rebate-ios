@@ -150,7 +150,7 @@ final class IdentityVisualLayoutTests: PayoutVisualTestCase {
         try assertDisjoint(rect("consent.check.hit"), rect("consent.ok"), "命中不压按钮")
     }
 
-    /// W95：底栏无底色；Release「暂未开放」句保留（G-W24）。
+    /// W95：底栏无底色；没有实名后端时「暂未开放」句保留（G-W24）。
     func testW95BottomBarAndUnavailable() async throws {
         let (_, image) = try await openRealName()
         let submit = try rect("realname.submit")

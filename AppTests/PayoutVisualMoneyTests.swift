@@ -190,7 +190,7 @@ final class PayoutVisualMoneyTests: PayoutVisualTestCase {
         XCTAssertNil(host.realName?.state.error, "不重复播报")
     }
 
-    /// Release 形态：没有后端时不可提交、零调用（G-W24）。
+    /// 没有实名后端：不可提交、零调用（G-W24）。
     func testReleaseShapeNeverSubmits() async throws {
         let (host, _) = try await openRealName(backend: false, needProbes: false)
         XCTAssertEqual(host.realName?.available, false)

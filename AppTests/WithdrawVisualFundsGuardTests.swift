@@ -29,7 +29,7 @@ final class WithdrawVisualFundsGuardTests: XCTestCase {
     }
 
     func testLogicFilesUnchanged() throws {
-        XCTAssertEqual(WithdrawVisualBaseline.logicFiles.count, 29)
+        XCTAssertEqual(WithdrawVisualBaseline.logicFiles.count, 31)
         for (path, digest) in WithdrawVisualBaseline.logicFiles {
             XCTAssertEqual(try sha(file(path)), digest, "\(path) 被改了：资金逻辑零改动（brief §3）")
         }
