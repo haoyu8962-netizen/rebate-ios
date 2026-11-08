@@ -48,11 +48,21 @@ public struct WalletOwner: Equatable, Sendable {
     public static let none = WalletOwner(account: nil, key: "-", request: nil)
 }
 
-/// 实名提交（G01）：契约没有实名提交接口，手写的待定 operation submitRealname 只由 Debug 假服务实现；Release 为 nil，【提交认证】置灰并显示
-/// 「实名认证暂未开放」，不发任何请求，也不调 /v1/consents。TODO(N-32) 契约补上后改为真实接口。
+/// 实名提交（D10-856 ②）：生产为 `ApiRealNameBackend`（契约 submitRealname、recordConsent）；Debug 假登录模式与测试可经
+/// `AppWallet.installBackends` 换成假服务。nil = 「实名认证暂未开放」：【提交认证】置灰，不发任何请求。
 public protocol RealNameBackend: AnyObject, Sendable {
-    /// 单独同意与实名提交（Debug 假服务里一起发生）；`owner` 是表单固定身份，实现方在实际处理前核对。
+    /// 实名单独同意记录（POST /v1/consents，type=id_verification、channel=realname_sheet，BR-ID-25）：code 0 之后才提交。
+    func recordConsent(owner: RequestOwnership?) async -> ApiResult
+    /// 实名提交；`owner` 是表单固定身份，实现方在实际处理前核对。`idempotencyKey` 由执行器管理（结果未知、40901 沿用原键）。
     func submit(name: String, idNo: String, idempotencyKey: String, owner: RequestOwnership?) async -> ApiResult
+}
+
+public extension RealNameBackend {
+    /// 只给假服务（Debug、测试替身）用：单独同意随提交一起发生，不另发请求。**生产实现必须覆盖**（不覆盖 = 悄悄跳过单独同意，
+    /// 服务端回 10004）；生产实现 `ApiRealNameBackend` 已覆盖。
+    func recordConsent(owner _: RequestOwnership?) async -> ApiResult {
+        .success(data: nil, traceId: nil, idempotencyKey: nil)
+    }
 }
 
 /// 劳务协议（G02）：取协议与签署走手写的待定 operation，只由 Debug 假服务实现；Release 为 nil（全文区「协议正文暂未提供」，【同意并签署】置灰）。
@@ -103,6 +113,9 @@ public protocol WalletEnv: AnyObject {
     func markWalletDirty(_ owner: WalletOwner)
     /// 实名成功：刷新 GET /v1/me 的 realname_status，守卫按已实名放行（G05）。
     func realnameChanged()
+    /// 实名提交成功（data.realname_status 恒为 verified）：`owner` 仍是当前会话时本会话直接按已实名放行，再复查 GET /v1/me；
+    /// 复查失败也保持已实名（与鸿蒙 markVerified 一致）。
+    func realnameSubmitted(_ owner: WalletOwner)
     /// 二次验证、单独同意等敏感浮层出现 / 关闭（剪贴板等迟到结果只丢弃，APP-07 第 4 条）。
     func sensitiveOverlay(_ showing: Bool)
     /// 本机时钟（禁用期、发码倒计时、token 过期）。
@@ -291,4 +304,8 @@ public extension WalletEnv {
     }
 
     func recheckIdentity() {}
+
+    func realnameSubmitted(_: WalletOwner) {
+        realnameChanged()
+    }
 }

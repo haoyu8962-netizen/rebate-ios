@@ -90,8 +90,12 @@ final class AppWallet: ObservableObject, WalletEnv {
         lifetimes = WebRouteLifetimes(router: routing.router)
         let router = routing.router
         customerService = { _ in router.open(RouteRequest(route: WalletRoutes.help, from: .inApp)) }
+        // 实名提交走契约（D10-856 ②）；劳务协议仍是 G02 待定接口（nil）。Debug 假登录模式与测试经 installBackends 替换
+        let realname = ApiRealNameBackend(api: self.api, gate: gates.realname) { [weak self] in
+            self?.idVerificationConsentVersion() ?? 1
+        }
         deps = WalletDeps(
-            api: self.api, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: nil, labor: nil
+            api: self.api, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: realname, labor: nil
         )
         // 摘要与金额草稿按「账号 + 持久化登录世代」分区（FU-IOS-0712）：世代与会话可用性同口径，未知不读不写；世代只取执行器构造时
         // 固定的那一份（WalletOwner.loginEpoch，R1-01），存储不读当前世代
@@ -108,7 +112,7 @@ final class AppWallet: ObservableObject, WalletEnv {
         cleaner.onCleared = { [weak self] in self?.cacheCleared() }
     }
 
-    /// Debug 假服务的实名与劳务协议后端（G01、G02；Release 为 nil）。
+    /// 换实名与劳务协议后端（Debug 假服务、测试替身；`realname: nil` = 实名「暂未开放」）。生产默认：实名为 ApiRealNameBackend，劳务为 nil（G02）。
     func installBackends(realname: RealNameBackend?, labor: LaborBackend?) {
         let fresh = WalletDeps(
             api: api, env: self, gates: gates, cache: cache, mask: mask, realname: realname, labor: labor
@@ -223,6 +227,28 @@ final class AppWallet: ObservableObject, WalletEnv {
 
     func realnameChanged() {
         refreshRealname(nil)
+    }
+
+    /// 实名提交成功：固定身份仍是当前会话才按已实名记下（换号后到达的结果不给新账号），再复查 GET /v1/me（复查失败保持已实名）。
+    func realnameSubmitted(_ owner: WalletOwner) {
+        guard isCurrent(owner) else { return }
+        realnameState = (owner.key, true)
+        refreshRealname(nil)
+    }
+
+    /// 实名单独同意的 version（D10-887 ①）：/v1/config.legal.privacy.version；取不到用本机已同意的隐私政策版本，再取不到用包内默认配置。
+    func idVerificationConsentVersion() -> Int {
+        let legal = configObject("legal")
+        if let version = ((legal?["privacy"] as? [String: Any])?["version"] as? NSNumber)?.intValue, version >= 1 {
+            return version
+        }
+        if let consented = routing.privacy.consentedVersion, consented >= 1 {
+            return consented
+        }
+        let bundled = DefaultConfig.json.data(using: .utf8)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let privacy = (bundled?["legal"] as? [String: Any])?["privacy"] as? [String: Any]
+        return max(1, (privacy?["version"] as? NSNumber)?.intValue ?? 1)
     }
 
     func sensitiveOverlay(_ showing: Bool) {

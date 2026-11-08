@@ -34,9 +34,17 @@ public struct RealNameSnapshot: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
-/// 实名认证执行器（RealName 路由；BR-ID-25，G01）：姓名去首尾空白；身份证号只收数字与 X，18 位，小写 x 转大写，不做校验位计算。提交前先弹
-/// 单独同意（默认不勾选，点遮罩不关闭）。实名提交接口契约没有（G01）：只由 Debug 假服务实现（`RealNameBackend`）；Release 为 nil，【提交认证】
-/// 置灰，显示「实名认证暂未开放」，不发任何请求。成功后刷新 realname_status、出栈回发起页（G05，不重放）。只在主线程使用。
+/// 实名认证执行器（RealName 路由；BR-ID-25，D10-856 ②）：姓名去首尾空白；身份证号只收数字与 X，18 位，小写 x 转大写，不做校验位计算。提交前
+/// 先弹单独同意（默认不勾选，点遮罩不关闭）；勾选后【同意并继续】先记同意（recordConsent），code 0 之后才发实名提交（submitRealname）。
+/// 后端为 nil（`installBackends(realname: nil)`）时【提交认证】置灰，显示「实名认证暂未开放」，不发任何请求。
+///
+/// 幂等键（契约 IdempotencyKey、BR-ID-10，编排 F-AND-48 / D10-887）：键与规范化后的请求体绑定，同一个键绝不配另一份请求体。
+/// - 结果未知（断连、超时）、10004 id_verification（重开单独同意，同意后重放）、10001 / 10005：保留原键，表单不变再提交沿用；
+///   表单改了旧键作废、用新键（D10-887 ③）。
+/// - 40901：不是终态，保持在途，退避后自动用原键、原请求体重发（不重新记同意；连首发 6 秒内最多 4 次，D10-887 ⑤），重发用完后停在
+///   可再提交（仍沿用原键）。
+/// - 其余错误（2xxxx、3xxxx、10010、10405、5xxxx）：本次键结束，下次用新键。50301 回落 error.50001 + trace6（D10-887 ②）。
+/// 成功后本会话按已实名放行、复查 GET /v1/me、清掉已填内容、出栈回发起页（G05，不重放）；结果只给表单固定的身份。只在主线程使用。
 @MainActor
 public final class RealNameController: ObservableObject, IdentityResumable {
     public static let fieldName = "name"
@@ -51,6 +59,12 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     private var serial = 0
     private var deferredBack = false
     private var completed = false
+    /// 保留的幂等键与它绑定的请求体（规范化后的输入；只在内存）。nil = 下次提交用新键。`unknown`：这个键出现过结果未知（断连、超时），
+    /// 之后再拿到 10405 / 5xxxx / 42901 也不结束键（错误码表「不结束未决幂等键」，D10-1018）。
+    private var retained: Retained?
+    /// 40901 后自动重发前的等待（毫秒）：发出时刻约 0、1、2.5、4.5 秒，连首发共 4 次、都在 6 秒内（D10-887 ⑤）；用完停下，
+    /// 出 error.40901、保留原键，用户再提交仍沿用原键。
+    static let busyDelaysMillis: [UInt64] = [1000, 1500, 2000]
     /// 身份暂时未知时到达的提交结果（FU-IOS-0712 整体重理：与各资金页同一套机制；不重放提交，身份确认后仍是本表单身份才采用）。
     public let deferral = IdentityDeferral()
 
@@ -60,7 +74,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         state = RealNameSnapshot(owner: deps.env.currentOwner())
     }
 
-    /// Release：契约补上实名接口之前不开放（G01）。
+    /// 没有实名后端（`installBackends(realname: nil)`）时不开放；生产接线为 `ApiRealNameBackend`。
     public var available: Bool {
         deps.realname != nil
     }
@@ -85,6 +99,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         state.name = PayoutAccountForm.clip(text, max: RealNameForm.nameMax)
         state.fieldErrors.removeAll { $0 == Self.fieldName }
         state.error = nil
+        dropKeyIfFormChanged()
     }
 
     public func onIdChange(_ text: String, owner: WalletOwner) {
@@ -92,6 +107,14 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         state.idNo = RealNameForm.acceptIdNo(current: state.idNo, next: text)
         state.fieldErrors.removeAll { $0 == Self.fieldId }
         state.error = nil
+        dropKeyIfFormChanged()
+    }
+
+    /// 结果未知后改了表单：旧键作废，下次用新键（D10-887 ③；同一个键不配另一份请求体）。
+    private func dropKeyIfFormChanged() {
+        guard let held = retained,
+              RealNameForm.normalize(name: state.name, idNo: state.idNo) != held.input else { return }
+        retained = nil
     }
 
     /// 【提交认证】：先弹单独同意（默认不勾选）。
@@ -117,7 +140,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         deps.env.sensitiveOverlay(false)
     }
 
-    /// 单独同意里勾选后点【同意并继续】：同意记录与实名提交在 Debug 假服务里一起发生（Release 不调 /v1/consents）。
+    /// 单独同意里勾选后点【同意并继续】：先记同意（code 0 之后才提交），再发实名提交。
     public func agreeAndSubmit(consent: Int, owner: WalletOwner) {
         guard let backend = deps.realname, state.consentId == consent, state.consentChecked, !state.submitting,
               owns(owner)
@@ -128,30 +151,94 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         state.submitting = true
         state.error = nil
         deps.env.sensitiveOverlay(false)
-        let key = deps.newKey()
+        let kept = retained.flatMap { $0.input == input ? $0 : nil }
+        let key = kept?.key ?? deps.newKey()
+        retained = Retained(input: input, key: key, unknown: kept?.unknown ?? false)
+        let attempt = Attempt(input: input, key: key, owner: owner)
+        let tasks = tasks
+        tasks.begin()
+        Task { @MainActor [weak self] in
+            defer { tasks.end() }
+            guard let self, !left, deps.env.isCurrent(owner) else {
+                self?.state.submitting = false
+                return
+            }
+            let result = await backend.recordConsent(owner: owner.request)
+            consentArrived(result, attempt: attempt, backend: backend)
+        }
+    }
+
+    /// 同意记录的结果：code 0 才发实名提交；失败（含断连）不提交、给出错误、恢复按钮。身份暂时未知时与提交结果同一套机制：不采用、记下
+    /// （结束忙碌展示但保持提交锁，显示核对身份），身份确认后仍是本表单身份才继续；已换代 → 丢弃（换代另有重建）。
+    private func consentArrived(_ result: ApiResult, attempt: Attempt, backend: RealNameBackend) {
+        guard !left, state.owner == attempt.owner, state.submitting else { return }
+        guard deferral.admit(deps.env.check(attempt.owner), slot: "consent", resume: { [weak self] in
+            self?.consentArrived(result, attempt: attempt, backend: backend)
+        }, settle: { state.awaitingIdentity = true }) else {
+            if deps.env.check(attempt.owner) == .stale {
+                state.submitting = false
+            }
+            return
+        }
+        state.awaitingIdentity = false
+        if case .success = result {
+            send(attempt, backend: backend, busy: 0)
+            return
+        }
+        let error = WalletErrors.of(result)
+        if error.kind == .retryAfter {
+            deps.gates.realname.start(error.disableMillis)
+        }
+        serial += 1
+        state.submitting = false
+        if error.kind != .cancelled {
+            state.error = Self.notice(error, code: Self.code(result), id: serial)
+        }
+    }
+
+    private func send(_ attempt: Attempt, backend: RealNameBackend, busy: Int) {
         let tasks = tasks
         tasks.begin()
         Task { @MainActor [weak self] in
             defer { tasks.end() }
             // 发送前核对：会话已换的不发（共性第 39、52 条）；后端实现也按固定身份核对
-            guard let self, deps.env.isCurrent(owner) else {
+            guard let self, !left, deps.env.isCurrent(attempt.owner) else {
                 self?.state.submitting = false
                 return
             }
-            let result = await backend.submit(name: input.name, idNo: input.idNo, idempotencyKey: key,
-                                              owner: owner.request)
-            submitArrived(result, owner: owner)
+            let result = await backend.submit(name: attempt.input.name, idNo: attempt.input.idNo,
+                                              idempotencyKey: attempt.key, owner: attempt.owner.request)
+            submitArrived(result, attempt: attempt, backend: backend, busy: busy)
         }
     }
 
     /// 提交结果的身份核对：暂时未知 → 不采用、记下（结束忙碌展示但保持提交锁，身份确认后仍是本表单身份才采用）；已换代 → 丢弃。
-    private func submitArrived(_ result: ApiResult, owner: WalletOwner) {
-        guard !left, state.owner == owner else { return }
-        guard deferral.admit(deps.env.check(owner), slot: "submit", resume: { [weak self] in
-            self?.submitArrived(result, owner: owner)
+    private func submitArrived(_ result: ApiResult, attempt: Attempt, backend: RealNameBackend, busy: Int) {
+        guard !left, state.owner == attempt.owner else { return }
+        guard deferral.admit(deps.env.check(attempt.owner), slot: "submit", resume: { [weak self] in
+            self?.submitArrived(result, attempt: attempt, backend: backend, busy: busy)
         }, settle: { state.awaitingIdentity = true }) else { return }
         state.awaitingIdentity = false
+        if Self.code(result) == Self.busyCode, busy < Self.busyDelaysMillis.count {
+            retryBusy(attempt, backend: backend, busy: busy)
+            return
+        }
         onResult(result)
+    }
+
+    /// 40901：保持在途，等一会儿用原键、原请求体再发（F-AND-48；不重新记同意）。
+    private func retryBusy(_ attempt: Attempt, backend: RealNameBackend, busy: Int) {
+        state.error = nil
+        let delay = Self.busyDelaysMillis[busy]
+        let tasks = tasks
+        tasks.begin()
+        Task { @MainActor [weak self] in
+            defer { tasks.end() }
+            try? await Task.sleep(nanoseconds: delay * 1_000_000)
+            // 重发的是这次提交自己的键与请求体（等待期间改了表单也不混用）
+            guard let self, !left, state.owner == attempt.owner, state.submitting else { return }
+            send(attempt, backend: backend, busy: busy + 1)
+        }
     }
 
     /// 本页重试只核对身份，不重发提交。
@@ -172,10 +259,12 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     private func onResult(_ result: ApiResult) {
         if case .success = result {
             completed = true
-            // 实名完成：清掉已填的姓名与身份证号，刷新 realname_status，出栈回发起页
+            retained = nil
+            // 实名完成：本会话按已实名放行并复查 realname_status，清掉已填的姓名与身份证号，出栈回发起页
+            let owner = state.owner
             serial += 1
-            state = RealNameSnapshot(done: Notice("realname.done", id: serial, assertive: false), owner: state.owner)
-            deps.env.realnameChanged()
+            state = RealNameSnapshot(done: Notice("realname.done", id: serial, assertive: false), owner: owner)
+            deps.env.realnameSubmitted(owner)
             back()
             return
         }
@@ -183,25 +272,30 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         if error.kind == .retryAfter {
             deps.gates.realname.start(error.disableMillis)
         }
-        var code: Int?
+        let code = Self.code(result)
         var fields: [String] = []
-        if case let .failure(failed, _, data, _, _, _) = result {
-            code = failed
+        var consentType: String?
+        if case let .failure(failed, _, data, _, effect, _) = result {
             let object = WalletJSON.parse(data) as? [String: Any] ?? [:]
             fields = failed == 20001 ? (object["fields"] as? [Any])?.compactMap { $0 as? String } ?? [] : []
+            consentType = effect.consentType ?? object["consent_type"] as? String
         }
-        let key: String = if code == 20001 {
-            "error.20001"
-        } else if let code, code / 10000 != 5, DefaultTexts.text("error.\(code)") != nil {
-            "error.\(code)"
-        } else {
-            error.textKey
-        }
+        let reopenConsent = code == Self.consentCode && consentType == ApiRealNameBackend.consentType
+        // 键是否保留：有响应外壳的码按表（前置码、40901 沿用原键；键出现过结果未知时 10405 / 5xxxx / 42901 也不结束，D10-1018）；
+        // 没有外壳（断连、超时、本地拒绝）结果未知或没发出，保留原键，断连另记「出现过结果未知」
+        retained = retained.flatMap { Self.keyAfter(result, code: code, reopenConsent: reopenConsent, held: $0) }
         serial += 1
         state.submitting = false
+        if reopenConsent {
+            // 10004 id_verification：重开单独同意（默认不勾选），用户同意后先记同意、再用原键重放；不自动重放
+            state.error = nil
+            state.consentId = serial
+            state.consentChecked = false
+            deps.env.sensitiveOverlay(true)
+            return
+        }
         // 带 fields 的 20001 由字段旁的错误提示承担（首错定位并播报一次，iOS R2-06）；页内错误条只给没有字段的错误，避免同一事件播报两次
-        state.error = fields.isEmpty
-            ? Notice(key, id: serial, traceId: error.traceId, showTrace6: error.showTrace6) : nil
+        state.error = fields.isEmpty ? Self.notice(error, code: code, id: serial) : nil
         state.fieldErrors = fields
         if !fields.isEmpty {
             state.fieldErrorId = serial
@@ -236,6 +330,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
         guard !left else { return }
         deferredBack = false
         completed = false
+        retained = nil
         deferral.reset()
         if state.consentId != nil {
             deps.env.sensitiveOverlay(false)
@@ -246,6 +341,7 @@ public final class RealNameController: ObservableObject, IdentityResumable {
     public func leave() {
         guard !left else { return }
         left = true
+        retained = nil
         deferral.reset()
         if state.consentId != nil {
             deps.env.sensitiveOverlay(false)
