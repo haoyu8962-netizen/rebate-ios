@@ -25,9 +25,9 @@ final class MeShotTests: XCTestCase, TradeUITest {
         }
         app.launchArguments += args + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         if !startTab {
-            element(app, "shell.tabBar").buttons["我的"].firstMatch.tap()
+            ShellTabBar.tap(app, "我的")
         }
         return app
     }

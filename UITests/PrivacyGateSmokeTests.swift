@@ -21,7 +21,7 @@ final class PrivacyGateSmokeTests: XCTestCase {
         let app = launch(["-CouliPrivacyPreset", "reset"])
         let backdrop = app.descendants(matching: .any)["launch.backdrop"]
         XCTAssertTrue(app.staticTexts["个人信息保护提示"].waitForExistence(timeout: 30), "首启弹窗没有出现")
-        XCTAssertFalse(app.descendants(matching: .any)["shell.tabBar"].exists, "同意前不进 Tab")
+        XCTAssertFalse(ShellTabBar.bar(app).exists, "同意前不进 Tab")
         XCTAssertTrue(backdrop.exists)
         for link in ["privacy.link.privacy", "privacy.link.agreement", "privacy.link.collection", "privacy.link.sdk"] {
             XCTAssertTrue(app.descendants(matching: .any)[link].exists, link)
@@ -36,7 +36,7 @@ final class PrivacyGateSmokeTests: XCTestCase {
         app.buttons["仍不同意"].tap()
         let notice = app.descendants(matching: .any)["basic.notice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 10), "没有进入基本模式页")
-        XCTAssertTrue(app.descendants(matching: .any)["shell.tabBar"].exists)
+        XCTAssertTrue(ShellTabBar.bar(app).exists)
         XCTAssertTrue(app.buttons["basic.settings"].exists)
         save(app, "BasicMode")
 
@@ -50,7 +50,7 @@ final class PrivacyGateSmokeTests: XCTestCase {
         app.buttons["basic.enableFull"].tap()
         XCTAssertTrue(app.staticTexts["个人信息保护提示"].waitForExistence(timeout: 10))
         app.buttons["同意"].tap()
-        let tabBar = app.descendants(matching: .any)["shell.tabBar"]
+        let tabBar = ShellTabBar.bar(app)
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
         XCTAssertTrue(notice.waitForNonExistence(timeout: 10), "同意后离开基本模式")
         save(app, "HomeGuest")
@@ -58,7 +58,7 @@ final class PrivacyGateSmokeTests: XCTestCase {
         // 再冷启动：已同意当前版本，不弹。
         app.terminate()
         let again = launch([])
-        XCTAssertTrue(again.descendants(matching: .any)["shell.tabBar"].waitForExistence(timeout: 30))
+        XCTAssertTrue(ShellTabBar.bar(again).waitForExistence(timeout: 30))
         XCTAssertFalse(again.staticTexts["个人信息保护提示"].exists)
     }
 

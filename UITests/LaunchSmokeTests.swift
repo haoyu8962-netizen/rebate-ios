@@ -12,7 +12,7 @@ final class LaunchSmokeTests: XCTestCase {
         app.launchArguments += ["-CouliPrivacyPreset", "consented"]
         app.launch()
 
-        let tabBar = app.descendants(matching: .any)["shell.tabBar"]
+        let tabBar = ShellTabBar.bar(app)
         XCTAssertTrue(tabBar.waitForExistence(timeout: 30), "tab shell did not appear")
         XCTAssertFalse(app.descendants(matching: .any)["launch.backdrop"].exists)
         // 测试动作跑 Debug：调试信息与面板入口可见。

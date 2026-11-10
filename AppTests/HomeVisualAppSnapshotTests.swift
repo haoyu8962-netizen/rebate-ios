@@ -43,23 +43,18 @@ final class HomeVisualAppSnapshotTests: HomeAppTestCase {
     }
 
     func testLargeTextAndBothLargeScreenIdentities() async throws {
-        for width: CGFloat in [320, 390] {
-            for dark in width == 390 ? [false, true] : [false] {
-                let fixture = try makeVisual(guest: true)
-                await fixture.launch()
-                assertProducts(fixture)
-                await shot(fixture, name: "font200-w\(Int(width))-\(dark ? "dark" : "light")", width: width,
-                           height: 2823, dark: dark, size: .accessibility3)
-            }
-        }
+        // #24 test-change（FU-IOS-NATIVE-TABBAR v5，编排定）：font200 三张（w320-light、w390-light、w390-dark）撤掉。挂 App 场景后，
+        // 进程内整窗截取在 AX3、窗口高 2823 时每帧 0 商品像素（实现 r3-1）；同场景由真机 UI 的 HomeVisualScreenSnapshotTests
+        // matrix-overlays.Main-font200-* 覆盖（r1 已重录看过，首页视觉 UI 90/90 绿）。旧 PNG 一并删除；其余 8 张整窗不变。
         for basic in [false, true] {
             let fixture = try makeVisual(guest: basic, basic: basic)
             await fixture.launch()
             assertProducts(fixture)
+            // #24 test-change（FU-IOS-NATIVE-TABBAR v3）：现在每张都挂在 App 的窗口场景上截（见 shot）。原注释保留作来历：
             // 基本模式必须挂在 App 的窗口场景上截：不挂场景的独立 UIWindow 里，基本模式首页的商品图请求已应答、AsyncImage 已到
             // 「已加载」，但图层树里没有任何商品图层（测试 v5 诊断：基本模式 390 / 600 / 840 宽都是 0 像素；同一装配挂上场景后
             // 840 宽 11 万像素；游客 / 会员不挂场景也正常）。这是测试宿主装配问题，真实 App（窗口总在场景里）不受影响。
-            await shot(fixture, name: basic ? "Basic-w840" : "Main-w840", width: 840, height: 1400, scene: basic)
+            await shot(fixture, name: basic ? "Basic-w840" : "Main-w840", width: 840, height: 1400)
         }
     }
 
@@ -100,7 +95,7 @@ final class HomeVisualAppSnapshotTests: HomeAppTestCase {
     }
 
     private func shot(_ fixture: HomeAppFixture, name: String, width: CGFloat = 390, height: CGFloat,
-                      dark: Bool = false, size: DynamicTypeSize = .large, scene: Bool = false,
+                      dark: Bool = false, size: DynamicTypeSize = .large,
                       file: StaticString = #filePath, testName: String = #function, line: UInt = #line) async {
         window?.isHidden = true
         window?.rootViewController = nil
@@ -108,17 +103,15 @@ final class HomeVisualAppSnapshotTests: HomeAppTestCase {
         let root = HomeVisualAppHost.root(fixture, defaults: defaults, directory: storageRoot)
             .environment(\.colorScheme, dark ? .dark : .light).environment(\.dynamicTypeSize, size)
         let host = UIHostingController(rootView: root)
-        let canvas: UIWindow
-        if scene {
-            guard let windowScene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
-            else {
-                XCTFail("App 宿主没有窗口场景，不能截基本模式", file: file, line: line)
-                return
-            }
-            canvas = UIWindow(windowScene: windowScene)
-        } else {
-            canvas = UIWindow(frame: .zero)
+        // #24 test-change（FU-IOS-NATIVE-TABBAR v3，D10-826 ⑤）：系统标签栏下，不挂场景的独立 UIWindow 里可滚动列表画不出来
+        // （layer.render 空白；drawHierarchy 0 像素或连续两帧始终不同，实现 r1-1），只有挂在场景上的 Basic-w840 能录。
+        // 11 张一律挂到 App 的窗口场景上（与真实 App 一致）；判据（像素达标、连续两帧相同、与基准比对）不变。
+        guard let windowScene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
+        else {
+            XCTFail("App 宿主没有窗口场景，不能截整窗", file: file, line: line)
+            return
         }
+        let canvas = UIWindow(windowScene: windowScene)
         canvas.frame = CGRect(x: 0, y: 0, width: width, height: height)
         canvas.overrideUserInterfaceStyle = dark ? .dark : .light
         canvas.rootViewController = host
@@ -152,8 +145,13 @@ final class HomeVisualAppSnapshotTests: HomeAppTestCase {
         var previousPNG: Data?
         var pixels = 0
         while clock.now < deadline {
+            // #24 test-change（FU-IOS-NATIVE-TABBAR v2，D10-826 ⑤）：系统标签栏下的滚动边缘效果用了 layer.render 画不出的图层滤镜，
+            // 可滚动窗口的列表区整片空白（实现交回 §5-4、diag/MainDark-*）。改用 drawHierarchy 取合成后的画面；判据（像素达标、
+            // 连续两帧整图相同、与基准比对）不变。drawHierarchy 返回 false（没画成）时退回 layer.render，由像素判据兜底。
             let image = UIGraphicsImageRenderer(bounds: canvas.bounds, format: format).image { context in
-                canvas.layer.render(in: context.cgContext)
+                if !canvas.drawHierarchy(in: canvas.bounds, afterScreenUpdates: true) {
+                    canvas.layer.render(in: context.cgContext)
+                }
             }
             pixels = blueImagePixels(image)
             if pixels >= 2000, let png = image.pngData() {

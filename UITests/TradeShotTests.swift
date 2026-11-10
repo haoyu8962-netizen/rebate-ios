@@ -166,7 +166,7 @@ final class TradeShotTests: XCTestCase, TradeUITest {
             (["-CouliFakeTaobaoBinding", "blocked"], "AuthManageBlocked"),
         ] {
             app = launch(extra)
-            element(app, "shell.tabBar").buttons["我的"].firstMatch.tap()
+            ShellTabBar.tap(app, "我的")
             pause()
             save(app, "Me-AuthManageEntry")
             element(app, "me.authManage").tap()

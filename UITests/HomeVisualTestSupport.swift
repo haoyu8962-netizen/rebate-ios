@@ -111,7 +111,7 @@ class HomeVisualUITestCase: XCTestCase {
         app.launch()
         XCTAssertTrue(element("home.visual.ready").waitForExistence(timeout: 20), "缺 Debug 场景接线，不能用旧 main 冒充")
         XCTAssertEqual(element("home.visual.ready").value as? String, item.name)
-        XCTAssertTrue(element("shell.tabBar").exists)
+        XCTAssertTrue(ShellTabBar.bar(app).exists)
         let state = try diagnostics()
         XCTAssertEqual(state.level, item.level)
         XCTAssertEqual(state.scene, item.scene)

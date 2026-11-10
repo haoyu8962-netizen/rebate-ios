@@ -55,7 +55,10 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
             try launch(item)
             for id in ["home.product.scroll.0", "home.product.grid.0", "home.product.feed.0", "home.footer"] {
                 try alignForSnapshot(id, bottom: id == "home.footer")
-                snapshot(name: "\(id)-\(dark ? "dark" : "light")")
+                // #24 test-change（v5，编排定）：深色玻璃标签栏采样它底下的内容，那一条在复比之间有像素差（实现 r3-1：feed.0-dark
+                // 4 次 3 绿，差异只在标签栏底下）。比对时按标签栏实际 frame 遮掉这一块；卡片区判据与阈值不动。
+                // 标签栏本身由 ShellSystemTabBar* 用例守（显示、文字图标、品牌色、收起展开）。
+                snapshot(name: "\(id)-\(dark ? "dark" : "light")", maskTabBar: true)
             }
         }
     }
@@ -78,6 +81,37 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
         }
     }
 
+    /// #24 test-change（FU-IOS-NATIVE-TABBAR v3）：系统玻璃标签栏展开 / 收起的动画在 XCUI 按钮位置停稳后还会画几帧（实现 r1-2：
+    /// 页脚用例 feed.0-dark、scroll.0-light 刚录完即比对不上）。截图前等画面停稳：间隔 0.3 秒连续两张整图逐字节相同才用；
+    /// 4 秒内停不下（页面本身有动画，如加载骨架）就用最后一张，与改前一样。比对判据（precision 0.99 / perceptual 0.98）不变。
+    private func stableShot(of canvas: XCUIElement) -> UIImage {
+        var last = canvas.screenshot()
+        let deadline = Date().addingTimeInterval(4)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            let next = canvas.screenshot()
+            if next.pngRepresentation == last.pngRepresentation {
+                return next.image
+            }
+            last = next
+        }
+        return last.image
+    }
+
+    /// 把 `area`（屏幕坐标，pt）在整窗截图里涂成纯色块（截图以 canvas 左上为原点，按截图自身的 scale 换算）。
+    private func masked(_ image: UIImage, canvas: CGRect, area: CGRect) -> UIImage {
+        let local = area.offsetBy(dx: -canvas.minX, dy: -canvas.minY)
+            .intersection(CGRect(origin: .zero, size: image.size))
+        guard !local.isNull, !local.isEmpty else { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { context in
+            image.draw(at: .zero)
+            UIColor.magenta.setFill()
+            context.fill(local)
+        }
+    }
+
     private func assertSceneMarker(_ scene: String) {
         let markers = [
             "invalid": "home.loadFailed", "popup": "home.popup.close",
@@ -92,14 +126,20 @@ final class HomeVisualScreenSnapshotTests: HomeVisualUITestCase {
 
     private func snapshot(
         name: String,
+        maskTabBar: Bool = false,
         file: StaticString = #filePath,
         testName: String = #function,
         line: UInt = #line
     ) {
         let canvas = element("home.visual.canvas")
         XCTAssertTrue(canvas.exists, "必须截整个真实 RootView（包含系统浮层）", file: file, line: line)
-        let image = canvas.screenshot().image
+        var image = stableShot(of: canvas)
         XCTAssertGreaterThan(image.size.width, 0, file: file, line: line)
+        if maskTabBar {
+            let bar = ShellTabBar.bar(app)
+            XCTAssertTrue(bar.exists, "要遮的标签栏不在", file: file, line: line)
+            image = masked(image, canvas: canvas.frame, area: bar.frame)
+        }
         // 仅让录缺图的 SnapshotTesting 失败继续；前面的场景、几何和命中前置检查仍立即失败。
         let previous = continueAfterFailure
         continueAfterFailure = ProcessInfo.processInfo.environment["COULI_RECORD_SNAPSHOTS"] == "1"

@@ -16,7 +16,7 @@ enum HomeUILaunch {
         ] + extra
         app.launch()
         XCTAssertTrue(
-            app.descendants(matching: .any)["shell.tabBar"].firstMatch.waitForExistence(timeout: 30), "没有进入 Tab 外壳"
+            ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳"
         )
         UIWait.until("App 启动前清掉首页 LKG 与偏好（-CouliHomeTestReset）", ceiling: 20) { reset.count >= 1 }
         UIWait.until("本机假服务回答首页页面 \(page)", ceiling: 20) { served.count >= 1 }
@@ -32,7 +32,7 @@ enum HomeUILaunch {
         ] + (gray ? ["-CouliFakeFlags", "ui.grayscale=true"] : [])
         app.launch()
         XCTAssertTrue(
-            app.descendants(matching: .any)["shell.tabBar"].firstMatch.waitForExistence(timeout: 30), "没有进入 Tab 外壳"
+            ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳"
         )
         return app
     }
@@ -48,7 +48,7 @@ enum HomeAreas {
     /// 首页区域：状态栏以下、Tab 栏以上（状态栏与 Tab 栏不在首页根里，不参与置灰）。
     static func home(_ app: XCUIApplication) -> CGRect {
         let window = app.windows.firstMatch.frame
-        let tabBar = app.descendants(matching: .any)["shell.tabBar"].firstMatch.frame
+        let tabBar = ShellTabBar.bar(app).frame
         let top: CGFloat = 70
         let bottom = tabBar.isEmpty ? window.maxY : tabBar.minY
         return CGRect(x: 0, y: top, width: window.width, height: max(0, bottom - top - 1))

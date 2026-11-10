@@ -41,7 +41,7 @@ final class UpdateSmokeTests: XCTestCase {
         let app = launch("force")
         let page = element(app, "update.force")
         XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 30), "没有进入强更页")
-        XCTAssertFalse(element(app, "shell.tabBar").isHittable, "强更页盖住 Tab 外壳")
+        XCTAssertFalse(ShellTabBar.bar(app).isHittable, "强更页盖住 Tab 外壳")
         save(app, "ForceUpdate")
 
         // 从左边缘侧滑：不能离开强更页（没有返回按钮，导航栈被拉回）。
@@ -114,7 +114,7 @@ final class UpdateSmokeTests: XCTestCase {
         // 冷启动（不清记录）：同一 latest 不再弹。
         app.terminate()
         let again = launch("recommend", reset: false)
-        XCTAssertTrue(element(again, "shell.tabBar").waitForExistence(timeout: 30))
+        XCTAssertTrue(ShellTabBar.bar(again).waitForExistence(timeout: 30))
         XCTAssertFalse(again.buttons["暂不更新"].waitForExistence(timeout: 3), "同一版本不再弹")
         save(again, "MainUpdatePrompt-after-later")
     }

@@ -26,7 +26,7 @@ final class TradeSmokeTests: XCTestCase, TradeUITest {
         app.terminate()
 
         let me = launch()
-        element(me, "shell.tabBar").buttons["我的"].firstMatch.tap()
+        ShellTabBar.tap(me, "我的")
         element(me, "me.authManage").tap()
         XCTAssertTrue(element(me, "authManage.status.taobao").waitForExistence(timeout: 10), "授权管理没有打开")
         XCTAssertTrue(element(me, "authManage.authorize.pdd").exists, "未授权给【去授权】")

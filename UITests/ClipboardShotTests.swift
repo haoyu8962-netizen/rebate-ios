@@ -23,7 +23,7 @@ final class ClipboardShotTests: XCTestCase {
             "-CouliHideDebugInfo", "1",
         ] + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30))
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30))
         return app
     }
 

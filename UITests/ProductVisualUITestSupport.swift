@@ -57,7 +57,7 @@ extension ProductVisualUITest {
             "-CouliHideDebugInfo", "1", "-CouliFakeTradeLoggedIn", "-CouliFakeTradeNoExternal",
         ] + (extra.contains(Self.tipsUnread) ? [] : ["-CouliFakeTipsRead"]) + extra.filter { $0 != Self.tipsUnread }
         app.launch()
-        XCTAssertTrue(node(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         node(app, "home.search").tap()
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "没有进搜索页")

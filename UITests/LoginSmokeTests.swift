@@ -19,7 +19,7 @@ final class LoginSmokeTests: XCTestCase {
         app.launchArguments += extra
         app.launch()
         if waitShell {
-            XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+            XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         }
         return app
     }
@@ -29,7 +29,7 @@ final class LoginSmokeTests: XCTestCase {
     }
 
     private func openLoginFromOrders(_ app: XCUIApplication) {
-        element(app, "shell.tabBar").buttons["订单"].firstMatch.tap()
+        ShellTabBar.tap(app, "订单")
         XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10), "游客点订单没有进登录页")
     }
 
@@ -81,7 +81,7 @@ final class LoginSmokeTests: XCTestCase {
         save(app, "Login-success-resumed-pending")
 
         // 登出：设置占位页（调试面板入口；「我的」是占位页）。
-        element(app, "shell.tabBar").buttons["首页"].firstMatch.tap()
+        ShellTabBar.tap(app, "首页")
         app.buttons["root.debugPanelButton"].tap()
         let session = element(app, "debug.login.session")
         for _ in 0..<6 where !session.exists {
@@ -97,7 +97,7 @@ final class LoginSmokeTests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         save(app, "Settings-logout-confirm")
         confirm.tap()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 10))
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["settings.logout"].waitForExistence(timeout: 2), "退出后不再显示退出登录")
         save(app, "Logout-back-to-guest")
         openLoginFromOrders(app)

@@ -75,7 +75,7 @@ extension OrderVisualUITest {
             "-CouliStartTab", "orders",
         ] + extra
         app.launch()
-        XCTAssertTrue(node(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         guard node(app, "order.card.\(expect)").waitForExistence(timeout: 15) else {
             throw OrderVisualUIError.notInjected("订单卡 \(expect)")
         }

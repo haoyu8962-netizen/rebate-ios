@@ -11,7 +11,7 @@ extension TradeUITest {
         let app = XCUIApplication()
         app.launchArguments += ["-CouliPrivacyPreset", "consented", "-CouliFakeLoginServer", "-CouliUpdateReset", "1"]
         app.launch()
-        _ = app.descendants(matching: .any)["shell.tabBar"].firstMatch.waitForExistence(timeout: 30)
+        _ = ShellTabBar.bar(app).waitForExistence(timeout: 30)
         app.terminate()
     }
 
@@ -22,7 +22,7 @@ extension TradeUITest {
             "-CouliHideDebugInfo", "1", "-CouliFakeTradeLoggedIn", "-CouliFakeTradeNoExternal",
         ] + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app
     }
 

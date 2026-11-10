@@ -143,7 +143,7 @@ final class OrderListVisualReviewR2UITests: XCTestCase, TradeUITest {
         let button = app.buttons["去首页逛逛"].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 10), "【去首页逛逛】在首屏（没有滚动；不在首屏时惰性列表不建它）")
         Thread.sleep(forTimeInterval: 1)
-        let tabTop = element(app, "shell.tabBar").frame.minY
+        let tabTop = ShellTabBar.bar(app).frame.minY
         XCTAssertTrue(button.isHittable, "【去首页逛逛】可点")
         XCTAssertGreaterThanOrEqual(button.frame.minY, 0, "【去首页逛逛】上缘在屏内：\(button.frame)")
         XCTAssertLessThanOrEqual(
@@ -174,7 +174,7 @@ final class OrderListVisualReviewR2UITests: XCTestCase, TradeUITest {
 
         let button = app.buttons["去首页逛逛"].firstMatch
         let listTop = element(app, "orders.list").frame.minY
-        let tabTop = element(app, "shell.tabBar").frame.minY
+        let tabTop = ShellTabBar.bar(app).frame.minY
         func visible() -> Bool {
             button.exists && button.isHittable && button.frame.height >= 43.5
                 && button.frame.minY >= listTop - 0.5 && button.frame.maxY <= tabTop + 0.5

@@ -15,7 +15,7 @@ final class OAuthBindPhoneSmokeTests: XCTestCase {
                                 "-CouliHideDebugInfo", "1"]
         app.launchArguments += extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app
     }
 
@@ -24,7 +24,7 @@ final class OAuthBindPhoneSmokeTests: XCTestCase {
     }
 
     private func openLogin(_ app: XCUIApplication) {
-        element(app, "shell.tabBar").buttons["订单"].firstMatch.tap()
+        ShellTabBar.tap(app, "订单")
         XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10), "游客点订单没有进登录页")
     }
 

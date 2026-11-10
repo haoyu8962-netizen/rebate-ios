@@ -12,7 +12,7 @@ final class SettingsVisualUITests: XCTestCase, MeVisualUITest {
     private func enterSettings(_ app: XCUIApplication) {
         let cell = reveal(app, "me.settings")
         // 引导条把宫格往下推时格子可能压在 Tab 栏下面（isHittable 仍为真，点到的是 Tab）
-        let tabBar = node(app, "shell.tabBar")
+        let tabBar = ShellTabBar.bar(app)
         for _ in 0..<4 where cell.frame.maxY > tabBar.frame.minY - 8 {
             app.swipeUp()
         }

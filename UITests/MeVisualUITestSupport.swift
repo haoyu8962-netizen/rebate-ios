@@ -51,7 +51,7 @@ extension MeVisualUITest {
             app.launchArguments += ["-CouliFakeMe", fake]
         }
         app.launch()
-        XCTAssertTrue(node(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         let page = name == nil ? "me.guest" : "me.nickname"
         XCTAssertTrue(node(app, page).waitForExistence(timeout: 15), "「我的」页没有到位")
         return app
@@ -94,7 +94,7 @@ extension MeVisualUITest {
     func spoken(_ app: XCUIApplication) throws -> [WalletA11yItem] {
         var items: [WalletA11yItem] = []
         func walk(_ element: XCUIElementSnapshot) {
-            if element.identifier.hasPrefix("debug.") || element.identifier == "shell.tabBar" {
+            if element.identifier.hasPrefix("debug.") || ShellTabBar.isShellTabBar(element) {
                 return
             }
             if element.elementType == .image {

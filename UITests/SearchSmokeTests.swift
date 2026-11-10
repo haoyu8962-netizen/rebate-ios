@@ -16,7 +16,7 @@ final class SearchSmokeTests: XCTestCase {
             "-CouliHideDebugInfo", "1",
         ] + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app
     }
 

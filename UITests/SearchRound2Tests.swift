@@ -19,7 +19,7 @@ final class SearchRound2Tests: XCTestCase {
         app.launchArguments += baseArguments + extra
         app.launch()
         if waitForShell {
-            XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+            XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         }
         return app
     }
@@ -141,7 +141,7 @@ final class SearchRound2Tests: XCTestCase {
         element(app, "search.card.0").staticTexts.firstMatch.tap()
         XCTAssertTrue(element(app, "product.askAI").waitForExistence(timeout: 10))
         element(app, "product.askAI").tap()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 5), "回到 Tab 外壳（AgentChat 是 Tab 根）")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 5), "回到 Tab 外壳（AgentChat 是 Tab 根）")
         XCTAssertFalse(element(app, "product.askAI").exists, "离开详情页")
         XCTAssertFalse(element(app, "home.search").exists, "切到了 AI 助手 Tab，不在首页")
         pause()

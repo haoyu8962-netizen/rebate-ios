@@ -6,9 +6,8 @@ extension HomeVisualUITestCase {
     /// isHittable 只保证露出的部分可点；四边点击必须让整个命中框进入列表。
     func revealFullyVisible(_ id: String) throws -> XCUIElement {
         let target = try reveal(id)
-        let list = element("home.list")
         for _ in 0..<24 {
-            let viewport = list.frame.insetBy(dx: 1, dy: 2)
+            let viewport = visibleList().insetBy(dx: 1, dy: 2)
             let frame = target.frame
             if target.isHittable, viewport.contains(frame) {
                 return target
@@ -16,7 +15,7 @@ extension HomeVisualUITestCase {
             let delta = frame.minY < viewport.minY ? frame.minY - viewport.minY : frame.maxY - viewport.maxY
             scrollList(by: delta + (delta > 0 ? 24 : -24))
         }
-        XCTFail("整个命中框仍未进入列表：\(id)，target=\(target.frame)，list=\(list.frame)")
+        XCTFail("整个命中框仍未进入列表：\(id)，target=\(target.frame)，list=\(visibleList())")
         return target
     }
 
@@ -29,15 +28,23 @@ extension HomeVisualUITestCase {
     /// 来学习；④ 单次可拖到约 0.6 屏，追回被甩远的距离；⑤ 对齐判据（±0.5pt、整卡顶边 / 页脚底边、可命中）不变。
     func alignForSnapshot(_ id: String, bottom: Bool = false) throws {
         let target = try reveal(id)
-        let list = element("home.list")
+        // #24 test-change（FU-IOS-NATIVE-TABBAR v2，D10-826 ⑤）：系统标签栏是悬浮玻璃，首页列表铺到窗口底、iOS 26 还会随滚动收起。
+        // 对齐前先展开标签栏（只点胶囊、不拖页面），列表的可见区下沿取标签栏容器上沿（原来列表就止于自绘底栏上沿，同义）；
+        // 对齐到位后再确认一次标签栏是展开的，截图里的标签栏状态固定。判据（±0.5pt、整卡顶边 / 页脚底边、可命中）不变。
+        ShellTabBar.expand(app)
+        let list = visibleList()
         // UIKit 拖动开始有手势识别距离（本机实测约 10pt）；按「请求 − 实际」学习，只采信没被甩出的拖动。
         var dragSlop: CGFloat = 10
         var history: [String] = []
+        var expandTries = 0
         for _ in 0..<40 {
             let frame = settledFrame(of: target)
-            let expected = bottom ? list.frame.maxY - 16 : list.frame.minY + 12
+            let expected = bottom ? list.maxY - 16 : list.minY + 12
             let actual = bottom ? frame.maxY : frame.minY
             if abs(actual - expected) <= 0.5 {
+                if expandBeforeShot(id, tries: &expandTries) {
+                    continue
+                }
                 XCTAssertTrue(target.isHittable)
                 XCTAssertEqual(actual, expected, accuracy: 0.5, "截图锚点：\(id)")
                 return
@@ -45,9 +52,12 @@ extension HomeVisualUITestCase {
             // 无返利信息流较短，到底后首卡可能无法再顶齐；此时改用精确的页脚底边锚点。
             let footer = element("home.footer")
             if !bottom, actual > expected, footer.exists, footer.isHittable,
-               list.frame.contains(frame), abs(footer.frame.maxY - (list.frame.maxY - 16)) <= 0.5 {
+               list.contains(frame), abs(footer.frame.maxY - (list.maxY - 16)) <= 0.5 {
+                if expandBeforeShot(id, tries: &expandTries) {
+                    continue
+                }
                 XCTAssertTrue(target.isHittable)
-                XCTAssertEqual(footer.frame.maxY, list.frame.maxY - 16, accuracy: 0.5, "截图已到内容底部")
+                XCTAssertEqual(footer.frame.maxY, list.maxY - 16, accuracy: 0.5, "截图已到内容底部")
                 return
             }
             let delta = actual - expected
@@ -71,7 +81,26 @@ extension HomeVisualUITestCase {
                 dragSlop = shortfall
             }
         }
-        XCTFail("截图锚点未对齐：\(id)，target=\(target.frame)，list=\(list.frame)，拖动（请求→实际）：\(history)")
+        XCTFail("截图锚点未对齐：\(id)，target=\(target.frame)，list=\(list)，拖动（请求→实际）：\(history)")
+    }
+
+    /// 对齐到位、截图之前：标签栏收起了就展开（最多两次），返回 true 表示展开过、要重新核对齐；展不开则记失败。
+    private func expandBeforeShot(_ id: String, tries: inout Int) -> Bool {
+        if ShellTabBar.isMinimized(app), tries < 2 {
+            tries += 1
+            ShellTabBar.expand(app)
+            return true
+        }
+        XCTAssertFalse(ShellTabBar.isMinimized(app), "截图前标签栏应展开：\(id)")
+        return false
+    }
+
+    /// 首页列表的可见区：列表框，下沿截到标签栏容器上沿（玻璃下的内容看得见但点不到）。
+    func visibleList() -> CGRect {
+        let frame = element("home.list").frame
+        guard let bottom = ShellTabBar.visibleBottom(app), bottom < frame.maxY,
+              bottom > frame.minY else { return frame }
+        return CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: bottom - frame.minY)
     }
 
     /// 单次拖动下限：实测短于约 30pt 的合成拖动常带惯性滑出，留足余量。

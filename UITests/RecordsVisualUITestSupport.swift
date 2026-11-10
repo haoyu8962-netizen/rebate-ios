@@ -54,7 +54,7 @@ extension RecordsVisualUITest {
             "-CouliStartTab", "me", "-CouliFakeWalletResetPending",
         ] + extra
         app.launch()
-        XCTAssertTrue(node(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         let entry = node(app, "me.wallet")
         XCTAssertTrue(entry.waitForExistence(timeout: 15), "「我的」页没有【钱包】入口")
         entry.tap()

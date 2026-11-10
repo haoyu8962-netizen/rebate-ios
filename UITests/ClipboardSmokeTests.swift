@@ -25,7 +25,7 @@ final class ClipboardSmokeTests: XCTestCase {
             "-CouliHideDebugInfo", "1", "-CouliClipboardDiagnostics",
         ] + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app
     }
 
@@ -57,7 +57,7 @@ final class ClipboardSmokeTests: XCTestCase {
         }
         sleep(1)
         app.activate()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 10) || element(app, "login.page").exists)
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 10) || element(app, "login.page").exists)
     }
 
     func testPromptThenTapUploadsOnceWithoutWritesOrPasteAlert() {
@@ -90,7 +90,7 @@ final class ClipboardSmokeTests: XCTestCase {
 
     func testSensitiveLoginPageDoesNotReadAndNoCatchUp() {
         let app = launch(clip: nil)
-        element(app, "shell.tabBar").buttons["订单"].firstMatch.tap()
+        ShellTabBar.tap(app, "订单")
         XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 10), "没有进登录页")
         let before = diagnostics(app)
         backgroundAndReturn(app, clip: sampleLink + " 登录页")

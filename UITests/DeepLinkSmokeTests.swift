@@ -32,7 +32,7 @@ final class DeepLinkSmokeTests: XCTestCase {
         let home = app.descendants(matching: .any)["home.root"].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 15), "正式首页根未出现（home.root）")
         XCTAssertTrue(home.isHittable, "正式首页根必须在屏幕上可见、可命中")
-        let tabBar = app.descendants(matching: .any)["shell.tabBar"].firstMatch
+        let tabBar = ShellTabBar.bar(app)
         XCTAssertTrue(tabBar.exists)
         XCTAssertTrue(tabBar.buttons["首页"].isSelected, "未声明的深链被拦后仍选中首页 Tab")
         XCTAssertTrue(app.descendants(matching: .any)["home.search"].exists, "首页固定区仍在")
@@ -57,7 +57,7 @@ final class DeepLinkSmokeTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-CouliPrivacyPreset", "consented"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["shell.tabBar"].waitForExistence(timeout: 30))
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30))
         let url = try XCTUnwrap(URL(string: link))
         XCUIDevice.shared.system.open(url)
         // 系统可能先问「在 … 中打开？」。

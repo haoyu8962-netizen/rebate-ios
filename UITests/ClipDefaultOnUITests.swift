@@ -33,7 +33,7 @@ final class ClipDefaultOnUITests: XCTestCase {
                 "1",
             ]
             app.launch()
-            _ = app.descendants(matching: .any)["shell.tabBar"].firstMatch.waitForExistence(timeout: 30)
+            _ = ShellTabBar.bar(app).waitForExistence(timeout: 30)
             app.terminate()
         }
         try await super.tearDown()
@@ -48,7 +48,7 @@ final class ClipDefaultOnUITests: XCTestCase {
             "-CouliHideDebugInfo", "1", "-CouliClipboardDiagnostics",
         ] + (reset ? ["-CouliClipboardSwitchReset", "1"] : []) + extra
         app.launch()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app
     }
 
@@ -84,7 +84,7 @@ final class ClipDefaultOnUITests: XCTestCase {
 
     /// 「我的」→ 设置 → 剪贴板开关行。
     private func switchRow(_ app: XCUIApplication) -> XCUIElement {
-        element(app, "shell.tabBar").buttons["我的"].firstMatch.tap()
+        ShellTabBar.tap(app, "我的")
         tap(app, "me.settings")
         XCTAssertTrue(element(app, "settings.page").waitForExistence(timeout: 10), "没有进设置页")
         let row = element(app, "settings.row.clipboard_auto")
@@ -112,7 +112,7 @@ final class ClipDefaultOnUITests: XCTestCase {
 
     private func backHome(_ app: XCUIApplication) {
         app.navigationBars.buttons.firstMatch.tap()
-        element(app, "shell.tabBar").buttons["首页"].firstMatch.tap()
+        ShellTabBar.tap(app, "首页")
         XCTAssertTrue(element(app, "clipboard.homeCard.paste").waitForExistence(timeout: 10), "没有回到首页")
     }
 
@@ -121,7 +121,7 @@ final class ClipDefaultOnUITests: XCTestCase {
         UIPasteboard.general.string = clip
         sleep(1)
         app.activate()
-        XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 10))
+        XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 10))
     }
 
     /// 默认开启（旧键 false 也不影响）→ 设置页点关 → 回首页复制商品链接回前台不读取 → 杀进程重启仍关、冷启动不读 → 再开 → 回前台照常读取。

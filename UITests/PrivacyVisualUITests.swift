@@ -16,7 +16,7 @@ final class PrivacyVisualUITests: XCTestCase, MeVisualUITest {
 
     private func enterSettings(_ app: XCUIApplication) {
         let cell = reveal(app, "me.settings")
-        let tabBar = node(app, "shell.tabBar")
+        let tabBar = ShellTabBar.bar(app)
         for _ in 0..<4 where cell.frame.maxY > tabBar.frame.minY - 8 {
             app.swipeUp()
         }

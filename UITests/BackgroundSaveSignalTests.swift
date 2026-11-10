@@ -12,7 +12,7 @@ final class BackgroundSaveSignalTests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(
-            app.descendants(matching: .any)["shell.tabBar"].firstMatch.waitForExistence(timeout: 30), "没有进入 Tab 外壳"
+            ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳"
         )
         let ceiling: TimeInterval = 10
         let started = Date()

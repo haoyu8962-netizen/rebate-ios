@@ -237,15 +237,8 @@ final class ComponentSnapshotTests: XCTestCase {
                 lines: [.init("券后价按单件计算，以下单页为准", icon: .info), .init("确认收货后随联盟月度结算入账", icon: .clock)],
                 style: .boxed
             )
-            TabBar(
-                items: [
-                    TabBarItem(id: "home", title: "首页", icon: .home),
-                    TabBarItem(id: "agent", title: "AI 助手", icon: .chat),
-                    TabBarItem(id: "orders", title: "订单", icon: .orders),
-                    TabBarItem(id: "me", title: "我的", icon: .user),
-                ],
-                selectedID: "home"
-            ) { _ in }
+            // #24 test-change（FU-IOS-NATIVE-TABBAR，D10-826 ④⑤）：底栏改系统 TabView 标签栏，设计系统删自绘 TabBar；
+            // 这里去掉 TabBar 一块，本张基准由实现者按本端回归基线重录（plan-ios §2.1），其余组件判据不变
         })
     }
 

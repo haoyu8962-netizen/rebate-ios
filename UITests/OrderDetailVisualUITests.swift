@@ -154,7 +154,7 @@ final class OrderDetailVisualUITests: XCTestCase, OrderVisualUITest {
                        "AgentChat 带订单 context，不自动发送")
         // 评审 r1 S2-4：上面的记录在 Router 判定之前写下；这里看判定之后的落地——Tab 切到「AI 助手」、详情出栈。
         // 参数里的 order_id 界面上看不到（AgentChat 消费 context 属 APP-10），由进程内 OrderDetailVisualReviewR1Tests 读 Router.tabRoot 断言。
-        let agentTab = node(app, "shell.tabBar").buttons["AI 助手"]
+        let agentTab = ShellTabBar.button(app, "AI 助手")
         let landed = NSPredicate(format: "isSelected == true")
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: landed, evaluatedWith: agentTab)], timeout: 5), .completed,
                        "Router 放行：Tab 切到「AI 助手」")

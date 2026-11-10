@@ -19,7 +19,7 @@ final class SearchRound3Tests: XCTestCase {
         app.launchArguments += baseArguments + extra
         app.launch()
         if waitForShell {
-            XCTAssertTrue(element(app, "shell.tabBar").waitForExistence(timeout: 30), "没有进入 Tab 外壳")
+            XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         }
         return app
     }
