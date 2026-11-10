@@ -88,7 +88,7 @@ struct ComponentGallery: View {
     @AccessibilityFocusState private var dialogTriggerFocused: Bool
     @AccessibilityFocusState private var sheetTriggerFocused: Bool
     @AccessibilityFocusState private var nestedTriggerFocused: Bool
-    @State private var tab = "home"
+    @State private var tab = ShellTab.home
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -371,10 +371,20 @@ extension ComponentGallery {
 
     private var navigation: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
-            title("NavBar · TabBar")
+            title("NavBar · 标签栏（系统）")
             NavBar(title: "钱包", backLabel: CatalogText.back)
                 .background(CouliColor.backgroundSurface)
-            TabBar(items: CatalogText.tabs, selectedID: tab) { tab = $0.id }
+            // 底栏是系统 TabView 的标签栏（D10-826），样例与外壳同一配置（TabShellView.Page / 品牌色 tint / iOS 26 滚动收起），
+            // 不另画一套；占位页不进 Feature
+            TabView(selection: $tab) {
+                ForEach(ShellTab.allCases, id: \.self) { item in
+                    CouliColor.backgroundSurface
+                        .modifier(TabShellView<EmptyView>.Page(tab: item))
+                }
+            }
+            .tint(CouliColor.brandPrimary)
+            .modifier(ShellTabBarMinimize())
+            .frame(height: 120)
         }
     }
 }

@@ -173,14 +173,6 @@ private struct SearchHeaderMock: View {
     }
 }
 
-struct TabBarMock: View {
-    let selected: String
-
-    var body: some View {
-        TabBar(items: CatalogText.tabs, selectedID: selected) { _ in }
-    }
-}
-
 // MARK: - Search
 
 private struct SearchCompare: View {
@@ -200,7 +192,6 @@ private struct SearchCompare: View {
                     .init(PriceTerms.settlementNote),
                 ])
             }
-            TabBarMock(selected: "home")
         }
     }
 }
@@ -253,7 +244,6 @@ private struct StressCompare: View {
                 ProductCardGrid([CatalogSample.gridMaxRange, CatalogSample.gridMaxSingle])
                 DisclaimerFooter(lines: [.init(CatalogText.priceBasisGeneral), .init(PriceTerms.settlementNote)])
             }
-            TabBarMock(selected: "home")
         }
     }
 
@@ -361,7 +351,6 @@ private struct SearchEmptyCompare: View {
                 ProductCard(CatalogSample.emptyRice) {}
                 DisclaimerFooter(lines: [.init(CatalogText.priceBasisGeneral), .init(CatalogText.rebateSettleNote)])
             }
-            TabBarMock(selected: "home")
         }
     }
 }

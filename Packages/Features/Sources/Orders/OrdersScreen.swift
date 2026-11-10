@@ -24,6 +24,10 @@ public struct OrdersScreen: View {
     @State var pendingHeight: CGFloat = 0
     /// 没有订单时各档空态的自然高度（`EmptyStateDensity.rawValue` → 高）：按剩余高度挑档用（测试 v5 跟进）。
     @State var emptyHeights: [Int: CGFloat] = [:]
+    /// 冷启动恢复对齐之后的复核窗口（FU-IOS-NATIVE-TABBAR）：列表伸到系统标签栏下面后，`scrollTo` 之后约 1 秒惰性列表补量行高，SwiftUI
+    /// 会把滚动位置重置回顶部（实测 iOS 26.5，列表不伸到标签栏下时不发生）。窗口内列表被重置回顶部且目标不是第一张卡，按同一目标再对齐
+    /// 一次；用户拖动或点状态栏回顶即取消，Tab 切回不开（见 `settleRestore`）。
+    @State var restoreSettle: OrderRestoreSettle?
     @AccessibilityFocusState var platformFocused: Bool
     @AccessibilityFocusState var monthFocused: Bool
     @FocusState var searchFocused: Bool
@@ -87,6 +91,7 @@ public struct OrdersScreen: View {
                     })
                 }
                 .coordinateSpace(name: OrderListSpace.name)
+                .modifier(OrderScrollInteraction(onInteract: cancelRestoreSettle))
                 .background(GeometryReader { geometry in
                     Color.clear
                         .onAppear { viewportHeight = geometry.size.height }
@@ -100,6 +105,7 @@ public struct OrdersScreen: View {
                 .onPreferenceChange(OrderListOffsetKey.self) { value in
                     if let value {
                         config.scrolled(offset: Double(value))
+                        settleRestore(offset: value, proxy)
                     }
                 }
                 .onChange(of: controller.snapshot) { _ in

@@ -21,6 +21,8 @@ public struct HomeSduiScreen: View {
     /// 信息流窗口化（离视口远的商品行换同高占位）与它的重算计数。
     @State private var window = HomeFeedWindow()
     @State private var windowTick = 0
+    /// 滚动容器的底部安全区（系统标签栏等压在列表底部的高度），列表按它补底部留白（HomeScrollBottomMargin，D10-831）。
+    @State private var bottomInset: CGFloat = 0
 
     public init(controller: HomeController, grayscale: Bool = false) {
         self.controller = controller
@@ -84,13 +86,13 @@ public struct HomeSduiScreen: View {
             .frame(maxWidth: Self.maxColumn)
             .padding(.horizontal, CouliSpacing.s4)
             .padding(.top, CouliSpacing.s1)
-            .padding(.bottom, CouliSpacing.s4)
+            .padding(.bottom, CouliSpacing.s4 + HomeScrollBottomMargin.legacy(bottomInset))
             .frame(maxWidth: .infinity)
-            .background(HomeScrollInsets(rows: rows))
+            .background(HomeScrollInsets(rows: rows, bottom: $bottomInset))
         }
         // 列表外层的修饰收在一个修饰器里（视图类型层级浅，既有身份探针按层级找行 ForEach）
-        .modifier(HomeListChrome(model: model, owner: owner, grayscale: grayscale, rows: rows, width: $width,
-                                 viewport: $viewport))
+        .modifier(HomeListChrome(model: model, owner: owner, grayscale: grayscale, rows: rows, bottom: bottomInset,
+                                 width: $width, viewport: $viewport))
     }
 
     /// 整页最后防线（包内默认也坏）：通用错误版式。
@@ -288,6 +290,8 @@ private struct HomeListChrome: ViewModifier {
     let owner: HomeController
     let grayscale: Bool
     let rows: HomeRowFrames
+    /// 底部留白（滚动容器的底部安全区，HomeScrollBottomMargin）。
+    let bottom: CGFloat
     @Binding var width: CGFloat
     @Binding var viewport: CGFloat
     @State private var toast: CouliToastMessage?
@@ -302,7 +306,7 @@ private struct HomeListChrome: ViewModifier {
 
     func body(content: Content) -> some View {
         let render = model.render
-        content
+        content.modifier(HomeScrollBottomMargin(bottom: bottom))
             .coordinateSpace(name: HomeRowFrames.space)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.list")

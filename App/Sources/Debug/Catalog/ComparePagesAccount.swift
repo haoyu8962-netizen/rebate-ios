@@ -146,7 +146,6 @@ struct MeCompare: View {
                     EntryGridItem(id: "settings", title: "设置", icon: .settings),
                 ]) { _ in }
             }
-            TabBarMock(selected: "me")
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }

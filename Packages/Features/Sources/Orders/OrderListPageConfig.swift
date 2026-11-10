@@ -131,6 +131,11 @@ public final class OrderListPageConfig: ObservableObject {
     /// 挂载过的视图实例个数（每个 OrdersScreen 实例只算一次）。
     public private(set) var mounts = 0
 
+    /// 列表视图是不是本进程第一次挂上（冷启动恢复）；Tab 切回重建时为假。恢复后的补对齐只用于冷启动恢复（FU-IOS-NATIVE-TABBAR r5）。
+    public var firstMount: Bool {
+        mounts <= 1
+    }
+
     /// 一个新的列表视图实例挂上这份配置（OrdersScreen 的 StateObject 初始化时调用，早于它的第一次排版与位置报告）。
     /// 第二次起（主 Tab 切走再切回：Tab 外壳重建了视图、ScrollView 回到顶部；执行器、条件与已加载的列表都保留）：以切走前记录的锚点
     /// 开始一次一次性顶对齐（共性第 37 条）。恢复进行中冻结记录，新视图首次排版报告的「顶部那张卡」不会覆盖旧锚点；对齐复用进程恢复的

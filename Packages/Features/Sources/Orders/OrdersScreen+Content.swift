@@ -192,7 +192,10 @@ extension OrdersScreen {
             pageErrorRow(OrderErrorText.text(error, texts: texts))
         case .loadingMore:
             HStack(spacing: CouliSpacing.s2) {
+                // 保持系统默认的灰色转圈：外壳给 Tab 页内容设了 .tint(.blue)，不写的话转圈会变蓝（FU-IOS-NATIVE-TABBAR r5 实测；
+                // .secondary 与不设 tint 时的默认色逐像素一致，浅色 / 深色都核过）
                 ProgressView()
+                    .tint(.secondary)
                 Text(verbatim: texts.text(OrderKeys.loading))
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.textSecondary)
@@ -271,7 +274,45 @@ extension OrdersScreen {
     func restoreStep(_ proxy: ScrollViewProxy) {
         config.restoreStep { id in
             proxy.scrollTo(id, anchor: .top)
+            // 只在冷启动恢复时开复核窗口；Tab 切回重建的一次性顶对齐不补（编排 11-10 08:44、评审 r1 S1-1；r5 实测 Tab 切回后列表
+            // 保持原位置，没有被重置回顶部）。用户一动就取消，见 settleRestore
+            let settles = config.firstMount && snapshot.items.first?.orderId != id
+            restoreSettle = settles ? OrderRestoreSettle(target: id) : nil
         }
+    }
+
+    /// 恢复对齐后的复核（见 `restoreSettle`）：窗口内列表被系统重置回顶部就按同一目标再对齐一次，只补一次。不和用户抢滚动：
+    /// - 系统重置是从对齐位置直接跳回顶部（实测 −1201 → +3003 → 0，没有中间值）；用户拖动、点状态栏回顶都会连续经过中间位置。
+    ///   对齐后第一次离开顶部的位置记为对齐位置；之后只要出现一个离对齐位置超过容差、又仍在顶部以下的位置，就当作用户在动，取消补对齐；
+    /// - iOS 18 起另外用滚动阶段：出现用户正在拖动（interacting）即取消（`cancelRestoreSettle`）。
+    /// 窗口外不处理；页面失效时不补（与延迟对齐同一复核）。
+    func settleRestore(offset: CGFloat, _ proxy: ScrollViewProxy) {
+        guard var settle = restoreSettle else { return }
+        guard Date() < settle.until else {
+            restoreSettle = nil
+            return
+        }
+        if offset < -0.5 {
+            if let aligned = settle.alignedAt {
+                if abs(offset - aligned) > OrderRestoreSettle.tolerance {
+                    restoreSettle = nil
+                }
+            } else {
+                settle.alignedAt = offset
+                restoreSettle = settle
+            }
+            return
+        }
+        // 内容顶边在视口顶边以下（正值）是重置途中的瞬时位置，不判
+        guard abs(offset) < 0.5, settle.alignedAt != nil else { return }
+        restoreSettle = nil
+        guard config.pageCheck() == .current else { return }
+        proxy.scrollTo(settle.target, anchor: .top)
+    }
+
+    /// 用户开始拖动列表（iOS 18 起的滚动阶段）：取消补对齐。
+    func cancelRestoreSettle() {
+        restoreSettle = nil
     }
 }
 
@@ -281,5 +322,32 @@ struct OrderListOffsetKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
         value = nextValue() ?? value
+    }
+}
+
+/// 冷启动恢复对齐后的复核窗口：目标卡、截止时刻（对齐后 2 秒）与对齐后的位置。
+struct OrderRestoreSettle {
+    /// 位置偏离对齐位置多少点以上算「经过中间位置」（排版取整误差以内不算）。
+    static let tolerance: CGFloat = 2
+    let target: String
+    let until = Date().addingTimeInterval(2)
+    /// 对齐生效后的位置（内容顶边在视口里的纵坐标，第一次离开顶部时记下）。
+    var alignedAt: CGFloat?
+}
+
+/// 用户拖动列表时通知（iOS 18 起有滚动阶段；更早的系统只靠位置判断，见 `settleRestore`）。
+struct OrderScrollInteraction: ViewModifier {
+    let onInteract: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollPhaseChange { _, phase in
+                if phase == .interacting {
+                    onInteract()
+                }
+            }
+        } else {
+            content
+        }
     }
 }

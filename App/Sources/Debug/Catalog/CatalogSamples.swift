@@ -22,12 +22,6 @@ enum CatalogText {
     static let taobao = "淘宝"
     static let jd = "京东"
     static let pdd = "拼多多"
-    static let tabs = [
-        TabBarItem(id: "home", title: "首页", icon: .home),
-        TabBarItem(id: "agent", title: "AI 助手", icon: .chat),
-        TabBarItem(id: "orders", title: "订单", icon: .orders),
-        TabBarItem(id: "me", title: "我的", icon: .user),
-    ]
     static let walletHelp = [
         "estimated": "还没结算的返利和推广收益的估计值，按联盟最新预估计算，以联盟结算金额为准，结算后计入可提现余额",
         "pending_paused": "部分订单暂时不能结算，处理完成后继续按联盟结算入账，如有疑问请联系客服",

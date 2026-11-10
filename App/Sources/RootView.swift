@@ -244,13 +244,15 @@ struct RootView: View {
                         onAskAI: { router.open(RouteRequest(route: AppSearchRoutes.agentChat, from: .inApp)) },
                         popupShowing: home.popupShowing
                     )
-                    RouteViewRegistry.view(for: root)
                     #if DEBUG
+                    // 调试信息放在搜索行与列表之间（FU-IOS-NATIVE-TABBAR）：列表下沿照常贴着系统标签栏、铺到屏底从玻璃下透出，
+                    // 不再把列表截在调试信息上沿
                     if !DebugPrivacyPreset.hidesDebugInfo {
                         debugInfo
                             .padding(CouliSpacing.s4)
                     }
                     #endif
+                    RouteViewRegistry.view(for: root)
                 }
                 // 搜索行与状态栏区域也是页面底色（Main-v3），不露出 Tab 容器的系统白底
                 .background(CouliColor.backgroundCanvas.ignoresSafeArea())

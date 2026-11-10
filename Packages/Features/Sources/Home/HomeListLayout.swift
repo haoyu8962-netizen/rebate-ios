@@ -280,25 +280,36 @@ final class HomeFeedWindow {
     }
 }
 
-/// 首页列表夹在吸顶搜索行与底栏之间，不需要系统按安全区再给滚动内容加内边距（APP-11v）：关掉所在 UIScrollView 的自动内边距，
+/// 首页列表在吸顶搜索行之下，不需要系统按安全区再给滚动内容加顶部内边距（APP-11v）：关掉所在 UIScrollView 的自动内边距，
 /// 滚动位置从 0 起算（原生头部与 SDUI 同一 contentOffset）。只找最近的那一个纵向滚动容器，不改别的设置。
+/// 底部：系统标签栏（D10-826）悬浮在内容之上，SwiftUI 把滚动容器伸到屏底（内容从玻璃下透出）；关掉自动内边距后，SwiftUI 不再按
+/// 底部安全区让出标签栏的高度，末屏商品与页脚会压在玻璃下点不到。这里读出滚动容器的底部安全区（含标签栏）交给 `bottom`，由列表按
+/// 它补底部留白（HomeScrollBottomMargin，D10-831 必须同修）。不直接改 UIScrollView 的内边距：SwiftUI 按自己的边距钳滚动位置，
+/// 直接改的内边距会被它拉回去（实测 iOS 26）。
 struct HomeScrollInsets: UIViewRepresentable {
     let rows: HomeRowFrames
+    @Binding var bottom: CGFloat
 
     func makeUIView(context _: Context) -> UIView {
-        Probe(rows: rows)
+        Probe(rows: rows, report: { bottom = $0 })
     }
 
     func updateUIView(_ view: UIView, context _: Context) {
-        (view as? Probe)?.apply()
+        guard let probe = view as? Probe else { return }
+        probe.report = { bottom = $0 }
+        probe.apply()
     }
 
     /// SwiftUI 更新滚动容器时可能把内边距行为改回自动（列表内容变化后整列表按安全区下移，偏移变负）：每次更新与布局都重新确认。
     private final class Probe: UIView {
         private let rows: HomeRowFrames
+        var report: (CGFloat) -> Void
+        private var reported: CGFloat?
+        private var observation: NSKeyValueObservation?
 
-        init(rows: HomeRowFrames) {
+        init(rows: HomeRowFrames, report: @escaping (CGFloat) -> Void) {
             self.rows = rows
+            self.report = report
             super.init(frame: .zero)
         }
 
@@ -321,7 +332,14 @@ struct HomeScrollInsets: UIViewRepresentable {
             var next = superview
             while let view = next {
                 if let scroll = view as? UIScrollView {
-                    rows.scrollView = scroll
+                    if rows.scrollView !== scroll {
+                        rows.scrollView = scroll
+                        // 安全区落定得比列表布局晚、且没有回调：滚动时（含程序设偏移）顺带读一次（只读，不改滚动容器）
+                        observation = scroll.observe(\.contentOffset) { [weak self] scroll, _ in
+                            MainActor.assumeIsolated { self?.reportBottom(of: scroll) }
+                        }
+                    }
+                    reportBottom(of: scroll)
                     guard scroll.contentInsetAdjustmentBehavior != .never else { return }
                     scroll.contentInsetAdjustmentBehavior = .never
                     // 自动内边距期间留下的负偏移收回到顶（不在拖动、减速或下拉刷新中时）
@@ -334,6 +352,40 @@ struct HomeScrollInsets: UIViewRepresentable {
                 }
                 next = view.superview
             }
+        }
+
+        /// 底部安全区变大了才上报；在下一轮主循环改 SwiftUI 状态（不在视图更新中改）。只增不减：iOS 26 标签栏随滚动收起时底部安全区
+        /// 会变小（实测），留白若跟着缩，末屏页脚会滑到收起前标签栏占着的那一条里、被标签栏容器挡住点不到；留白保持展开时的高度。
+        private func reportBottom(of scroll: UIScrollView) {
+            guard scroll.window != nil else { return }
+            let value = scroll.safeAreaInsets.bottom
+            if let reported, value < reported + 0.5 {
+                return
+            }
+            reported = value
+            let report = report
+            DispatchQueue.main.async { report(value) }
+        }
+    }
+}
+
+/// 首页列表的底部留白 = 滚动容器的底部安全区（系统标签栏等，HomeScrollInsets 量出）。iOS 17 起用滚动内容边距（SwiftUI 按它钳滚动
+/// 位置，内容高度不变）；iOS 16 没有内容边距，`legacy` 给列表内容末尾补同样高的留白。
+struct HomeScrollBottomMargin: ViewModifier {
+    let bottom: CGFloat
+
+    static func legacy(_ bottom: CGFloat) -> CGFloat {
+        if #available(iOS 17.0, *) {
+            return 0
+        }
+        return bottom
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.contentMargins(.bottom, bottom, for: .scrollContent)
+        } else {
+            content
         }
     }
 }

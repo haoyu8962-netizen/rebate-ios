@@ -64,6 +64,9 @@
 #     环境变量里的 payout 键只被 DebugWalletVisual 读，由上一条的类型名覆盖（短键名会被内联，strings 看不到）
 #   - 「我的」视觉 UI 测试的报文注入与只读记录（APP-12v）：环境变量 COULI_FAKE_ME_VISUAL、类型名 DebugMeVisual、DebugMeLog、
 #     标识 debug.me.log（App/Sources/Debug/DebugMeVisual.swift）
+#   - 系统界面兼容开关 UIDesignRequiresCompatibility（FU-IOS-NATIVE-TABBAR，D10-826 ②）：Release 包的 Info.plist 不得含这个键，
+#     否则 iOS 26 起系统标签栏等不呈现 Liquid Glass。二进制 plist 里键名是 ASCII，strings 看得到；Debug 包由
+#     AppTests ShellSystemTabBarSourceTests（Bundle.main 与 project.yml / Info.plist / 全部 xcconfig）覆盖
 # 兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -208,6 +211,7 @@ HITS_LOG="$WORK/hits"
     echo "DebugMeVisual"
     echo "DebugMeLog"
     echo "debug.me.log"
+    echo "UIDesignRequiresCompatibility"
 } >"$PATTERNS" || fail_scan "无法写检查项"
 python3 -c '
 import json, sys
