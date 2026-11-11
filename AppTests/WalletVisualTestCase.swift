@@ -311,21 +311,54 @@ enum WalletVisualRender {
     }
 }
 
-/// a v2 / v3（实现交回 T2、评审 r1 S1-2）的段内折行金额判据（放在扩展里：类体长度上限）。
+/// a v2 / v3（实现交回 T2、评审 r1 S1-2）的「放不下时」金额判据（放在扩展里：类体长度上限）。
+/// FU-IOS-NUM-WRAP（D10-1230 判据 1，#24 改）：旧口径「单段放不下时段内折行」作废——数字串任何字号宽度都不在中间断，
+/// 放不下时整段一行、在容器内横向滚动。名字沿用，调用方不变。
+/// tests v2（#24 复核 FAIL 后修正，只可更严）：只去掉与「整段一行、框内横滑」真冲突的横向在容器内与「字形块数 = 全部字数」，
+/// 其余加回——竖向在容器内；横滑条可见框竖向完整包住文字框；可见部分像素核字（恰一行墨迹、墨迹高够一个数字、
+/// 从框左缘起一直铺到横滑条可见右缘，没有被裁掉上下半截、开头或末端没缺字）。
+/// 注意：只核墨迹两端与行数，可见区中间漏掉一个字形查不出来（tests v3 按评审 r1 S2-3 如实写明）。
 extension WalletVisualTestCase {
-    /// 段内折行的不可拆金额（DS AmountText「不截断、不缩字号，单段放不下时段内折行」）：字号不小于设计字号、整段框在容器内，
-    /// 再按截图逐行逐字核对（`WalletWrappedAmountJudge`）。v3：容差不再按行累加，缺一位（行尾裁掉或中间少字）都判红。
     func assertWrappedAmount(_ id: String, inside container: CGRect, image: UIImage,
                              background: ProductVisualPixels.RGB, _ message: String, file: StaticString = #filePath,
                              line: UInt = #line) async throws {
         let item = try record(id, file: file, line: line)
         XCTAssertGreaterThan(item.naturalWidth, 0, "\(message)：要报自然宽", file: file, line: line)
         XCTAssertGreaterThanOrEqual(item.fontSize + 0.01, item.baseFontSize, "\(message)：字号不缩", file: file, line: line)
-        assertInside(item.rect, container, "\(message)：整段在容器内（不越界、不被父裁切）", file: file, line: line)
-        let problems = await WalletWrappedAmountJudge.problems(
-            image: image, rect: item.rect, text: item.text, fontSize: item.fontSize,
-            background: background
-        )
-        XCTAssertEqual(problems, [], "\(message)：\(problems)", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(item.rect.width + 0.5, item.naturalWidth,
+                                    "\(message)：整段一行（实际宽 \(item.rect.width) < 自然宽 \(item.naturalWidth)）",
+                                    file: file, line: line)
+        XCTAssertTrue(item.rect.minY >= container.minY - 0.5 && item.rect.maxY <= container.maxY + 0.5,
+                      "\(message)：文字框 \(item.rect) 竖向不在容器 \(container) 内（越出 / 被裁）", file: file, line: line)
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        let found = windows.lazy.compactMap {
+            DigitsRunJudge.horizontalScroller(around: item.rect, inside: container, window: $0)
+        }.first
+        let scroller = try XCTUnwrap(found, "\(message)：放不下时要在容器 \(container) 内横向滚动（框 \(item.rect)）",
+                                     file: file, line: line)
+        let clipped = DigitsRunJudge.scrollerClips(scroller, rect: item.rect)
+        XCTAssertEqual(clipped, [], "\(message)", file: file, line: line)
+        // 可见部分：文字框 ∩ 横滑条可见框 ∩ 容器（截图与测量同为窗口坐标）
+        let visible = item.rect.intersection(scroller.convert(scroller.bounds, to: nil)).intersection(container)
+        XCTAssertFalse(visible.isNull || visible.width < 1, "\(message)：文字框在横滑条里不可见（\(item.rect)）",
+                       file: file, line: line)
+        guard !visible.isNull, visible.width >= 1 else { return }
+        let pixels = ProductVisualPixels(image)
+        let rows = DigitsRunJudge.inkRows(pixels, in: visible, background: background)
+        XCTAssertEqual(rows.count, 1, "\(message)：可见部分应恰一行墨迹（\(rows)，框 \(visible)）", file: file, line: line)
+        if let row = rows.first {
+            XCTAssertGreaterThanOrEqual(row.upperBound - row.lowerBound, item.fontSize * 0.6,
+                                        "\(message)：墨迹高 \(row.upperBound - row.lowerBound) 不够一个数字（字号 \(item.fontSize)），"
+                                            + "上下半截被裁", file: file, line: line)
+        }
+        let tolerance = max(3, item.fontSize * 0.5)
+        let left = try XCTUnwrap(inkLeft(pixels, in: visible, background: background),
+                                 "\(message)：可见部分没有字形墨迹", file: file, line: line)
+        let right = try XCTUnwrap(inkRight(pixels, in: visible, background: background), file: file, line: line)
+        XCTAssertLessThanOrEqual(left, item.rect.minX + tolerance, "\(message)：字形左端 \(left) 离文字框左缘太远（缺字 / 错位）",
+                                 file: file, line: line)
+        XCTAssertGreaterThanOrEqual(right, visible.maxX - tolerance,
+                                    "\(message)：字形右端 \(right) 没铺到可见右缘 \(visible.maxX)（横滑内容缺字）", file: file,
+                                    line: line)
     }
 }

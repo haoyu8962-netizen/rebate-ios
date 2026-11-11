@@ -39,8 +39,9 @@ final class OrderListVisualAdaptTests: OrderVisualTestCase {
             XCTAssertEqual(right.text, OrderVisualData.money(9_999_999))
             XCTAssertGreaterThan(left.fontSize, left.baseFontSize, "\(width)：金额随字号放大（真 200%）")
             XCTAssertLessThanOrEqual(right.rect.maxY, left.rect.minY + 0.5, "\(width)：纵排时返利在上")
-            let number = try rect("order.card.STRESS.number")
-            assertInside(number, card, "\(width)：19 位单号整段在卡内")
+            // #24：放不下时卡内横滑（D10-1230 判据 1），不再要求文字框在卡内
+            try assertInsideOrScrolled("order.card.STRESS.number", card, width: width,
+                                       "\(width)：19 位单号整段在卡内或卡内横滑")
             let title = try record("order.card.STRESS.title")
             XCTAssertLessThanOrEqual(title.rect.height, title.fontSize * 1.6, "\(width)：商品标题单行省略（唯一允许省略）")
             let pill = try record("order.card.STRESS.status.label")
@@ -62,12 +63,20 @@ final class OrderListVisualAdaptTests: OrderVisualTestCase {
         let hit = try rect("order.card.STRESS.copy")
         assertHit(hit, covers: label.rect, "复制")
         let lineHeight = UIFont.systemFont(ofSize: number.fontSize).lineHeight
-        XCTAssertGreaterThan(number.rect.height, lineHeight * 1.5, "前提：320 × 200% 下 19 位单号确实折成多行")
+        // FU-IOS-NUM-WRAP #24：旧前提「19 位单号折成多行」改为 D10-1230 判据 1——单号整段不在中间断
+        // （放不下时框内横滑，见 DigitsWrapOrderTests）
+        XCTAssertTrue(number.text.contains("3741234567890123456"), "前提：压力卡单号（\(number.text)）")
+        let whole = DigitsRunJudge.width("3741234567890123456", size: number.fontSize, weight: .regular)
+        XCTAssertGreaterThanOrEqual(number.rect.width + 1, whole, "320 × 200% 下 19 位单号整段（不拆行）")
         XCTAssertLessThanOrEqual(label.rect.height, UIFont.systemFont(ofSize: label.fontSize).lineHeight * 1.5,
                                  "复制是单行整体")
         let wrapped = label.rect.minY >= number.rect.maxY - 0.5
         if wrapped {
-            assertNear(label.rect.minX, number.rect.minX, 1, "整体换行时回到单号列起点")
+            // #24：换行后的【复制】是描边按钮（D10-1223），按钮框（= 命中区）回到单号列起点，字在框内
+            assertNear(hit.minX, number.rect.minX, 1, "整体换行时回到单号列起点")
+            // tests v2（#24 复核建议）：字紧贴按钮框左侧内边距（0–12），不准在整行宽命中区里跑到行尾
+            XCTAssertTrue((0...12).contains(label.rect.minX - hit.minX),
+                          "复制字在按钮框左侧内边距内（字 \(label.rect.minX)，框 \(hit.minX)）")
         } else {
             let lastLine = CGRect(x: number.rect.minX, y: number.rect.maxY - lineHeight,
                                   width: max(0, label.rect.minX - number.rect.minX - 0.5), height: lineHeight)

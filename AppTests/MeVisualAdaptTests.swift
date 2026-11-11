@@ -70,10 +70,17 @@ final class MeVisualAdaptTests: MeVisualTestCase {
         let solid = pixel(CouliColor.token("rebate.solid.background"), dark: false)
         let amount = try record("me.hero.amount", file: file, line: line)
         XCTAssertGreaterThan(amount.fontSize, amount.baseFontSize * 1.3, "大数真放大", file: file, line: line)
-        // 比卡内可用宽还宽时沿用 DS AmountText「不截断、不缩字、段内折行」（钱包 a v2 同口径）
+        // 比卡内可用宽还宽时：整段一行、卡内横滑，不截不缩（D10-1230 判据 1；钱包同口径，assertWrappedAmount 名字沿用）
         if amount.naturalWidth > hero.width - 40 + 0.5 {
-            try await assertWrappedAmount("me.hero.amount", inside: hero, image: image, background: solid, "大数（段内折行）",
-                                          file: file, line: line)
+            try await assertWrappedAmount(
+                "me.hero.amount",
+                inside: hero,
+                image: image,
+                background: solid,
+                "大数（放不下：整段一行卡内横滑）",
+                file: file,
+                line: line
+            )
         } else {
             try assertWholeAmount("me.hero.amount", inside: hero, "大数", file: file, line: line)
             try assertAmountInkFillsFrame(

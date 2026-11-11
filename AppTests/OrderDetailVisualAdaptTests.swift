@@ -24,8 +24,9 @@ final class OrderDetailVisualAdaptTests: OrderVisualTestCase {
             XCTAssertEqual(rebate.text, OrderVisualData.money(9_999_999))
             XCTAssertGreaterThan(rebate.fontSize, rebate.baseFontSize, "\(width)：真 200%")
             XCTAssertLessThanOrEqual(rebate.rect.maxY, paid.rect.minY + 0.5, "\(width)：纵排返利在上")
-            assertInside(try rect("orderDetail.product.number"), try rect("orderDetail.product"),
-                         "\(width)：19 位单号完整在商品卡内")
+            // #24：放不下时卡内横滑（D10-1230 判据 1），不再要求文字框在卡内
+            try assertInsideOrScrolled("orderDetail.product.number", rect("orderDetail.product"), width: width,
+                                       "\(width)：19 位单号完整在商品卡内或卡内横滑")
         }
     }
 

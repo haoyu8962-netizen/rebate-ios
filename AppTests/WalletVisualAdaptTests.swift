@@ -76,13 +76,13 @@ final class WalletVisualAdaptTests: WalletVisualTestCase {
             let item = try record(id, file: file, line: line)
             XCTAssertGreaterThan(item.fontSize, item.baseFontSize * 1.3, "\(id) 字号真放大（不是只换布局）", file: file,
                                  line: line)
-            // a v2（实现交回 T2）：主卡大数单段比卡内可用宽还宽时（如 320 × AX3 的「¥9876543.21」），沿用 DS AmountText 规则
-            // 「不截断、不缩字号、段内折行」——这时改核：字号不缩、整段在主卡内、各行可见字形加起来覆盖全部字（像素）。
-            // 只有确实放不下才允许折行；其余金额与放得下的大数仍按单行判
+            // a v2（实现交回 T2）：主卡大数单段比卡内可用宽还宽时（如 320 × AX3 的「¥9876543.21」）改核放不下的口径——
+            // FU-IOS-NUM-WRAP（D10-1230 判据 1）起是「整段一行、卡内横滑，不截不缩」（见 assertWrappedAmount，名字沿用）；
+            // 其余金额与放得下的大数仍按单行判
             let inner = container.width - 2 * 20
             if id == "wallet.hero.amount", item.naturalWidth > inner + 0.5 {
                 try await assertWrappedAmount(id, inside: container, image: image, background: background,
-                                              "\(width) × AX3 \(id)（段内折行）", file: file, line: line)
+                                              "\(width) × AX3 \(id)（放不下：整段一行卡内横滑）", file: file, line: line)
                 continue
             }
             try assertWholeAmount(id, inside: container, "\(width) × AX3 \(id)", file: file, line: line)

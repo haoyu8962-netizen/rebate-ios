@@ -99,6 +99,22 @@ class OrderVisualTestCase: XCTestCase {
                       "\(message)：\(inner) 不在 \(outer) 内", file: file, line: line)
     }
 
+    /// FU-IOS-NUM-WRAP #24（D10-1230 判据 1）：单号放不下时整段一行、在卡内横向滚动——竖向在卡内，横向完整在卡内或在卡内能横滑的滚动视图里。
+    /// tests v2（#24 复核）：横滑时滚动视图可见框还必须竖向完整包住文字框（`DigitsRunJudge.visibility` → `scrollerClips`），
+    /// 比行高矮、裁掉上下半截的横滑条判红。
+    func assertInsideOrScrolled(_ id: String, _ outer: CGRect, width: CGFloat, _ message: String,
+                                file: StaticString = #filePath, line: UInt = #line) throws {
+        let item = try record(id, file: file, line: line)
+        XCTAssertTrue(item.rect.minY >= outer.minY - 0.5 && item.rect.maxY <= outer.maxY + 0.5,
+                      "\(message)：\(item.rect) 竖向不在 \(outer) 内", file: file, line: line)
+        let tier = DigitsRunJudge.Tier(name: message, width: width, size: .large, dark: false)
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        let reports = windows.map { DigitsRunJudge.visibility(item, container: outer, window: $0, tier: tier) }
+        XCTAssertTrue(reports.contains(where: \.isEmpty),
+                      "\(message)：\(item.rect) 横向超出 \(outer) 且不在卡内横滑，或横滑条裁字（\(reports.flatMap(\.self).first ?? "")）",
+                      file: file, line: line)
+    }
+
     func assertDisjoint(_ lhs: CGRect, _ rhs: CGRect, _ message: String,
                         file: StaticString = #filePath, line: UInt = #line) {
         let overlap = lhs.insetBy(dx: 0.5, dy: 0.5).intersection(rhs.insetBy(dx: 0.5, dy: 0.5))

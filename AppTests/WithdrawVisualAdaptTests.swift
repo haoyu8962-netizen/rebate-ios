@@ -31,7 +31,8 @@ final class WithdrawVisualAdaptTests: WithdrawVisualTestCase {
         let inner = card.insetBy(dx: 16, dy: 0)
         if amountItem.naturalWidth > inner.width {
             try await assertWrappedAmount("withdraw.balance.amount", inside: card, image: image,
-                                          background: pixel(CouliColor.backgroundSurface, dark: false), "大数段内折行",
+                                          background: pixel(CouliColor.backgroundSurface, dark: false),
+                                          "大数放不下：整段一行卡内横滑",
                                           file: file, line: line)
         } else {
             try assertWholeAmount("withdraw.balance.amount", inside: card, "大数整段", file: file, line: line)

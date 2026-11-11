@@ -66,7 +66,7 @@ final class RecordsVisualAdaptTests: RecordsVisualTestCase {
         try await assertRecordsWhole(320)
     }
 
-    /// 压力值（申请 ¥9999999999.99、32 位流水号）× 320 × AX3：大数不截断不缩字（放不下段内折行），32 位号完整、复制可点。
+    /// 压力值（申请 ¥9999999999.99、32 位流水号）× 320 × AX3：大数不截断不缩字（放不下时整段一行、卡内横滑，D10-1230 判据 1），32 位号完整、复制可点。
     func testAX3W320StressAmountsAndTradeNo() async throws {
         let (_, image) = try await openRecords("stress", expand: ["STRESS"],
                                                canvas: .init(width: 320, height: 1600, size: ax))
