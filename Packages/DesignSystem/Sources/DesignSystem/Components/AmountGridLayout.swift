@@ -25,7 +25,8 @@ public struct AmountNoteText: View {
     }
 }
 
-/// 金额文字：按不可拆分段排（区间只在破折号处折行）；单段比可用宽度还宽时段内折行（不截断、不缩字号）。
+/// 金额文字：按不可拆分段排（区间只在破折号处折行）；单段不在中间断开，独占一行仍放不下时框内横滑（带截断提示，
+/// D10-1230 / D10-1265；`BreakableText`），不截断、不缩字号。
 struct AmountText: View {
     let parts: [String]
     let style: CouliTextStyle

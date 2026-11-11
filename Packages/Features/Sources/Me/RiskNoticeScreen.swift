@@ -221,18 +221,12 @@ public struct RiskNoticeScreen: View {
         let title = wallet.text(row.titleKey)
         let lines = WithdrawalText.render(row.display, texts: wallet, money: MeMoney.text)
         return VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-            Text(verbatim: texts.format(
-                "risk.withdrawal_row",
-                ["amount": MeMoney.text(row.amountFen), "status": title]
-            ))
-            .couliFont(.footnote, monospacedDigits: true)
-            .foregroundColor(CouliColor.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
+            RiskDigitsText(
+                texts.format("risk.withdrawal_row", ["amount": MeMoney.text(row.amountFen), "status": title]),
+                style: .footnote, color: CouliColor.textPrimary
+            )
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                Text(verbatim: line)
-                    .couliFont(.caption, monospacedDigits: true)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                RiskDigitsText(line, style: .caption, color: CouliColor.textSecondary)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -291,5 +285,30 @@ public struct RiskNoticeScreen: View {
                 .accessibilityIdentifier("risk.logout")
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// 含金额 / 账号 / 时间的一行文字（评审 r1 S2-1，D10-1230 / D10-1265）：数字段整段换行，独占一行仍放不下才框内横滑（带截断提示），
+/// 不缩字、不在数字中间断。读屏由所在行的组合标签读出。
+private struct RiskDigitsText: View {
+    let text: String
+    let style: CouliTextStyle
+    let color: Color
+    @ScaledMetric private var size: CGFloat
+
+    init(_ text: String, style: CouliTextStyle, color: Color) {
+        self.text = text
+        self.style = style
+        self.color = color
+        _size = ScaledMetric(wrappedValue: style.baseSize, relativeTo: style.relativeTo)
+    }
+
+    var body: some View {
+        CouliWholeDigits(minimumWidth: CouliDigitRuns.widest(text, size: size)) {
+            Text(verbatim: text)
+                .couliFont(style, monospacedDigits: true)
+                .foregroundColor(color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

@@ -48,6 +48,20 @@ struct RecordText: View {
             .fixedSize(horizontal: singleLine, vertical: true)
             // 单行也按令牌行高占位（画板 line-height：17 → 25.5、14 → 21、12 → 18）
             .couliLineBox(style)
+        if monospacedDigits, !singleLine {
+            // 含数字串的可折行文字（明细右列金额、脱敏账号、流水号）：数字段整段换行，整段也放不下时框内横滑（D10-1230 判据 1）
+            CouliWholeDigits(minimumWidth: CouliDigitRuns.widest(text, size: size,
+                                                                 weight: RecordMeasure.uiWeight(weight)),
+                             probe: probe) {
+                probed(label)
+            }
+        } else {
+            probed(label)
+        }
+    }
+
+    @ViewBuilder
+    private func probed(_ label: some View) -> some View {
         if let probe, receiver != nil {
             label.couliTextProbe(probe, role: "text", text: text, fontSize: size, baseFontSize: style.baseSize,
                                  naturalWidth: RecordMeasure.width(text, size: size, weight: weight,

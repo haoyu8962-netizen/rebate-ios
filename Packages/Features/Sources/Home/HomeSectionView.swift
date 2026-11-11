@@ -74,9 +74,14 @@ struct HomeSectionView: View {
             .homeCard()
         case "icon_grid":
             // 列数按 props 的 columns，不随屏宽增加；格间距 竖 16 / 横 8（Main-v3 金刚区）
+            // 大字号下每格放不下格名前两个字时减列（不缩字、不逐字竖排，FU-IOS-ADAPT-CHECK ③）
+            let iconColumns = HomeVisualRules.iconColumns(
+                section.columns, availableWidth: column - CouliSpacing.s4 * 2,
+                titles: section.items.compactMap(\.title), size: size, spacing: CouliSpacing.s2
+            )
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), spacing: CouliSpacing.s2, alignment: .top),
-                               count: section.columns),
+                               count: iconColumns),
                 spacing: CouliSpacing.s4
             ) {
                 ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in

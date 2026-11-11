@@ -50,7 +50,7 @@ struct MeText: View {
     }
 }
 
-/// 一个金额段：放得下就单行、不截断、不缩字；比可用宽度还宽时段内折行（同 DS `AmountText`）。有测量接收方时报单行自然宽。
+/// 一个金额段：放得下就单行、不截断、不缩字；比可用宽度还宽时整段一行、框内横向滚动（D10-1230）。有测量接收方时报单行自然宽。
 /// `lineHeightMultiple`：单行占位高度倍数（大数按按钮高 48 / 34，与【提现】上下居中）。
 struct MeAmount: View {
     private let text: String
@@ -76,11 +76,14 @@ struct MeAmount: View {
             .font(Font.system(size: size, weight: weight).monospacedDigit())
             .fixedSize(horizontal: false, vertical: true)
             .frame(minHeight: (size * lineHeightMultiple).rounded())
-        if receiver != nil {
-            label.couliTextProbe(probe, role: "amount", text: text, fontSize: size, baseFontSize: style.baseSize,
-                                 naturalWidth: naturalWidth)
-        } else {
-            label
+        // 单段放不下时整段一行、框内横滑（D10-1230 判据 1：不在数字中间断、不缩字）
+        CouliWholeDigits(minimumWidth: naturalWidth, probe: probe) {
+            if receiver != nil {
+                label.couliTextProbe(probe, role: "amount", text: text, fontSize: size,
+                                     baseFontSize: style.baseSize, naturalWidth: naturalWidth)
+            } else {
+                label
+            }
         }
     }
 

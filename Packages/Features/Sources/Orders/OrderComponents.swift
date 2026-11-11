@@ -131,44 +131,6 @@ struct OrderSplitAmountGrid: View {
     }
 }
 
-/// 订单号行：自购单「订单号 …」+ 独立的【复制】（44 命中区，点击不穿透到整卡）；分享单只显示脱敏原样（普通 Text：不可选中、没有长按菜单、
-/// 没有复制按钮），读屏把「*」读作「星号」。坏数据（两个都有或都没有）不显示任何单号。
-struct OrderNumberRow: View {
-    let summary: OrderSummary
-    let texts: OrderTexts
-    let onCopy: (String) -> Void
-
-    var body: some View {
-        let number = OrderNumberDisplay.view(summary)
-        if let text = number.text {
-            HStack(alignment: .center, spacing: CouliSpacing.s2) {
-                Text(verbatim: texts.format(OrderKeys.orderNo, ["no": text]))
-                    .couliFont(.footnote, monospacedDigits: true)
-                    .foregroundColor(CouliColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(minHeight: CouliHitTarget.minimum)
-                    .accessibilityLabel(Text(verbatim: texts.format(
-                        OrderKeys.orderNo,
-                        ["no": OrderNumberDisplay.spoken(text, star: texts.text(OrderKeys.starSpoken))]
-                    )))
-                    .accessibilityIdentifier(number.copyable ? "order.number" : "order.maskedNumber")
-                Spacer(minLength: 0)
-                if number.copyable {
-                    CouliButton(
-                        texts.text(OrderKeys.copy), kind: .text, size: .compact,
-                        accessibilityLabel: texts.text(OrderKeys.copyLabel)
-                    ) {
-                        onCopy(text)
-                    }
-                    .accessibilityIdentifier("order.copy")
-                    .fixedSize()
-                }
-            }
-            .accessibilityElement(children: .contain)
-        }
-    }
-}
-
 /// 商品图：image_url 加载中、为 null 或失败时露出占位底（APP-06a 第 22 条）；装饰，读屏不读。无图时占位写「商品图」；
 /// 分享单「好友购买的其他商品」（`otherProduct`）为占位底 + 文档图标、不写「商品图」（APP-08v brief-android O14）。
 /// `probe`：列表卡的测量前缀（`<probe>.image` / `.placeholder` / `.placeholderIcon`），nil 不量（详情缺省不变）。

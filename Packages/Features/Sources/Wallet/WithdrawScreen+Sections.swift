@@ -192,6 +192,7 @@ extension WithdrawScreen {
     func allButton(_ display: WithdrawRulesDisplay, editable: Bool, _ actions: WithdrawActions) -> some View {
         WithdrawLinkButton(title: texts.text("withdraw.all"), probe: "withdraw.all",
                            isEnabled: display.allEnabled && editable, action: actions.fillAll)
+            .outlinedAtLargeText()
             .fixedSize()
             .accessibilityIdentifier("withdraw.all")
     }

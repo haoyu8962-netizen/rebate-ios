@@ -22,6 +22,8 @@ extension OrdersScreen {
                                     probeID: "orders.findEntry.label")
                         .foregroundColor(CouliColor.brandEmphasis)
                         .fixedSize(horizontal: false, vertical: true)
+                        // 辅助字号下会折行、掉出标题行：带描边，明确是按钮（D10-1223 按钮口径）
+                        .couliTextButtonOutline(dynamicTypeSize.isAccessibilitySize)
                         .frame(minWidth: CouliHitTarget.minimum, minHeight: CouliHitTarget.minimum)
                         .contentShape(Rectangle())
                 }

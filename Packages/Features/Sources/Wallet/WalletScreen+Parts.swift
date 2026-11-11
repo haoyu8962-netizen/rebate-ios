@@ -58,8 +58,8 @@ struct WalletText: View {
     }
 }
 
-/// 一个金额段（大数、冻结中、预估）：放得下就单行、不截断、不缩字；单段比可用宽度还宽时段内折行（同 DesignSystem `AmountText`：
-/// 不截断、不缩字号）。有测量接收方时按同一字体量单行自然宽，连同实际框、实际字号一起上报
+/// 一个金额段（大数、冻结中、预估）：放得下就单行、不截断、不缩字；单段比可用宽度还宽时整段一行、框内横向滚动
+/// （D10-1230 判据 1：不在数字中间断、不截断、不缩字号）。有测量接收方时按同一字体量单行自然宽，连同实际框、实际字号一起上报
 /// （`CouliUnbreakableText` 口径：放得下时实际宽 = 自然宽）。
 /// `lineHeightMultiple`：单行占位高度倍数（主卡大数用按钮高 48 / 34，金额行与【提现】上下居中时金额框贴行顶）。
 struct WalletAmount: View {
@@ -86,11 +86,14 @@ struct WalletAmount: View {
             .font(Font.system(size: size, weight: weight).monospacedDigit())
             .fixedSize(horizontal: false, vertical: true)
             .frame(minHeight: (size * lineHeightMultiple).rounded())
-        if receiver != nil {
-            label.couliTextProbe(probe, role: "amount", text: text, fontSize: size, baseFontSize: style.baseSize,
-                                 naturalWidth: naturalWidth)
-        } else {
-            label
+        // 单段放不下时整段一行、框内横滑（D10-1230 判据 1：不在数字中间断、不缩字）
+        CouliWholeDigits(minimumWidth: naturalWidth, probe: probe) {
+            if receiver != nil {
+                label.couliTextProbe(probe, role: "amount", text: text, fontSize: size,
+                                     baseFontSize: style.baseSize, naturalWidth: naturalWidth)
+            } else {
+                label
+            }
         }
     }
 

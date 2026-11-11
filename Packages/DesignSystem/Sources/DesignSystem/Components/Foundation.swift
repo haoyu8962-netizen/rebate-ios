@@ -297,7 +297,8 @@ public struct CouliPlainButtonStyle: ButtonStyle {
 
 /// 金额与带金额的短句：放得下就一行；放不下时只在空格处折行（「券前」「¥13345.67」）。
 /// 含金额的小段整体不拆（不在数字中间或小数点前断开）；放不下整段时由外层改布局（列表卡价格区占整卡宽、
-/// 网格卡改单列），不缩字号、不截断（03 §10.4）。不含金额的文字段照常折行。
+/// 网格卡改单列），独占一行仍放不下时框内横滑（带截断提示，D10-1230 / D10-1265），不缩字号、不截断（03 §10.4）。
+/// 不含金额的文字段照常折行。
 struct BreakableText: View {
     let text: String
     let style: CouliTextStyle
@@ -320,6 +321,9 @@ struct BreakableText: View {
         }
     }
 
+    /// 不可拆段的理想宽：大到任何可用宽都放不下，`CouliWholeDigits` 只在「整段一行」与「横滑」之间选，不走折行。
+    static let unbreakable: CGFloat = 1_000_000
+
     /// 含金额（¥ 或数字）的段整体不拆。
     static func isAtomic(_ piece: String) -> Bool {
         piece.contains(PriceTerms.yuanSign) || piece.contains(where: \.isNumber)
@@ -328,9 +332,18 @@ struct BreakableText: View {
     var body: some View {
         CouliFlowLayout(horizontalSpacing: 0, verticalSpacing: 0) {
             ForEach(Array(Self.pieces(text).enumerated()), id: \.offset) { _, piece in
-                Text(verbatim: piece)
-                    .couliFont(style, weight: weight, monospacedDigits: monospacedDigits)
-                    .fixedSize(horizontal: Self.isAtomic(piece), vertical: true)
+                if Self.isAtomic(piece) {
+                    // 含金额的段整体不拆：放得下一行；独占一行仍放不下才框内横滑（带截断提示，D10-1230 / D10-1265），不撑出容器
+                    CouliWholeDigits(minimumWidth: Self.unbreakable) {
+                        Text(verbatim: piece)
+                            .couliFont(style, weight: weight, monospacedDigits: monospacedDigits)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text(verbatim: piece)
+                        .couliFont(style, weight: weight, monospacedDigits: monospacedDigits)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .accessibilityElement(children: .ignore)

@@ -94,111 +94,12 @@ struct OrderStatusPill: View {
 
 // MARK: - 单号 +【复制】
 
-/// 单号逐字排、【复制】紧跟单号末行文字（间距 8）；末行放不下时整体换到下一行的列起点（不停在多行中部，Android a 评审 r1 S2-2）。
-/// 子视图顺序：单号各字…、单号测量框、【复制】可见文字、【复制】命中区（44，居中盖住可见文字，不参与行高）。
-struct OrderNumberFlowLayout: Layout {
-    let characters: Int
-    let hasCopy: Bool
-    let spacing: CGFloat
-    let lineGap: CGFloat
-
-    private struct Plan {
-        var origins: [CGPoint] = []
-        var sizes: [CGSize] = []
-        var numberBounds = CGRect.zero
-        var copy = CGRect.zero
-        var size = CGSize.zero
-    }
-
-    /// 一行：各字下标、基线以上最高、基线以下最深。
-    private struct Line {
-        var items: [Int] = []
-        var width: CGFloat = 0
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-    }
-
-    private func breakLines(_ subviews: Subviews, width: CGFloat) -> ([Line], [ViewDimensions]) {
-        var result: [Line] = []
-        var current = Line()
-        var dimensions: [ViewDimensions] = []
-        for index in 0..<characters {
-            let item = subviews[index].dimensions(in: .unspecified)
-            dimensions.append(item)
-            if !current.items.isEmpty, current.width + item.width > width + 0.5 {
-                result.append(current)
-                current = Line()
-            }
-            current.items.append(index)
-            current.width += item.width
-            current.ascent = max(current.ascent, item[.firstTextBaseline])
-            current.descent = max(current.descent, item.height - item[.firstTextBaseline])
-        }
-        result.append(current)
-        return (result, dimensions)
-    }
-
-    private func plan(_ subviews: Subviews, width: CGFloat) -> Plan {
-        var plan = Plan()
-        let (lines, dimensions) = breakLines(subviews, width: width)
-        plan.origins = Array(repeating: .zero, count: characters)
-        plan.sizes = dimensions.map { CGSize(width: $0.width, height: $0.height) }
-        var top: CGFloat = 0
-        var lastTop: CGFloat = 0
-        for (number, line) in lines.enumerated() {
-            if number > 0 {
-                top += lineGap
-            }
-            lastTop = top
-            var cursor: CGFloat = 0
-            for index in line.items {
-                plan.origins[index] = CGPoint(x: cursor, y: top + line.ascent - dimensions[index][.firstTextBaseline])
-                cursor += dimensions[index].width
-            }
-            top += line.ascent + line.descent
-        }
-        let last = lines.last ?? Line()
-        plan.numberBounds = CGRect(x: 0, y: 0, width: lines.map(\.width).max() ?? 0, height: top)
-        plan.size = plan.numberBounds.size
-        guard hasCopy else { return plan }
-        let label = subviews[characters + 1].dimensions(in: .unspecified)
-        if last.width + spacing + label.width <= width + 0.5 {
-            plan.copy = CGRect(x: last.width + spacing, y: lastTop + last.ascent - label[.firstTextBaseline],
-                               width: label.width, height: label.height)
-        } else {
-            plan.copy = CGRect(x: 0, y: top + lineGap, width: label.width, height: label.height)
-        }
-        plan.size = CGSize(width: max(plan.numberBounds.width, plan.copy.maxX),
-                           height: max(plan.numberBounds.maxY, plan.copy.maxY))
-        return plan
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        plan(subviews, width: proposal.width ?? .infinity).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        let plan = plan(subviews, width: bounds.width)
-        let origin = bounds.origin
-        for index in 0..<characters {
-            subviews[index].place(at: CGPoint(x: origin.x + plan.origins[index].x, y: origin.y + plan.origins[index].y),
-                                  proposal: ProposedViewSize(plan.sizes[index]))
-        }
-        subviews[characters].place(at: origin, proposal: ProposedViewSize(plan.numberBounds.size))
-        guard hasCopy else { return }
-        let label = plan.copy.offsetBy(dx: origin.x, dy: origin.y)
-        subviews[characters + 1].place(at: label.origin, proposal: ProposedViewSize(label.size))
-        let hit = CGSize(
-            width: max(CouliHitTarget.minimum, label.width),
-            height: max(CouliHitTarget.minimum, label.height)
-        )
-        subviews[characters + 2].place(at: CGPoint(x: label.midX, y: label.midY), anchor: .center,
-                                       proposal: ProposedViewSize(hit))
-    }
-}
-
 /// 列表卡右列的「订单号 {no}」+【复制】（brief §2.2）：单号 12 次文字等宽数字；自购单【复制】12 强调色紧随、命中区 44（不撑高行）；
 /// 分享单只显示脱敏原样、没有【复制】。整卡读屏另由卡片给出，这里的文字不单独进读屏；【复制】是独立的第二个目标。
+/// 单号任何字号、宽度都不在中间断（D10-1230 判据 1）：按顺序取第一种放得下的排法——
+/// ① 一行「订单号 单号【复制】」；② 「订单号 单号」一行、【复制】换到下一行；③ 「订单号」/ 单号 / 【复制】各一行；
+/// ④ 单号整段也放不下：「订单号 单号」一行在框内横向滚动（末端渐隐 + 滚动指示器，D10-1265）、【复制】在下一行。【复制】离开单号那一行时带描边（D10-1223 按钮口径）。
+/// 测量：`.number` = 「订单号 + 单号」的实际排版框（横滑时是滚动内容里的文字框），`.copy.label` = 【复制】字，`.copy` = 命中区。
 struct OrderListNumber: View {
     let summary: OrderSummary
     let texts: OrderTexts
@@ -210,28 +111,80 @@ struct OrderListNumber: View {
         let number = OrderNumberDisplay.view(summary)
         if let raw = number.text {
             let text = texts.format(OrderKeys.orderNo, ["no": raw])
-            let characters = text.map { String($0) }
-            let lineGap = max(size * CouliTextStyle.caption.lineHeightMultiple - Self.lineHeight(size), 0)
-            OrderNumberFlowLayout(characters: characters.count, hasCopy: number.copyable,
-                                  spacing: CouliSpacing.s2, lineGap: lineGap) {
-                ForEach(Array(characters.enumerated()), id: \.offset) { _, character in
-                    Text(verbatim: character).couliFont(.caption, monospacedDigits: true)
-                        .accessibilityHidden(true)
+            let range = text.range(of: raw)
+            let prefix = range.map { String(text[..<$0.lowerBound]) } ?? ""
+            let rest = range.map { String(text[$0.lowerBound...]) } ?? text
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: CouliSpacing.s2) {
+                    line(text).probedNumber(probe, text: text, size: size)
+                    if number.copyable {
+                        copyInline(raw)
+                    }
                 }
-                Color.clear
-                    .accessibilityHidden(true)
-                    .couliTextProbe(probe + ".number", role: "text", text: text, fontSize: size,
-                                    baseFontSize: CouliTextStyle.caption.baseSize)
-                if number.copyable {
-                    OrderProbedText(texts.text(OrderKeys.copy), style: .caption, probeID: probe + ".copy.label")
-                        .foregroundColor(CouliColor.brandEmphasis)
-                        .fixedSize()
-                        .accessibilityHidden(true)
-                    copyButton(raw)
+                VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                    line(text).probedNumber(probe, text: text, size: size)
+                    if number.copyable {
+                        copyBoxed(raw)
+                    }
+                }
+                VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                    // 两行按令牌行高（12 → 18）排，同多行正文
+                    VStack(alignment: .leading, spacing: 0) {
+                        line(prefix.trimmingCharacters(in: .whitespaces)).couliLineBox(.caption)
+                        line(rest).couliLineBox(.caption)
+                    }
+                    .probedNumber(probe, text: text, size: size)
+                    if number.copyable {
+                        copyBoxed(raw)
+                    }
+                }
+                VStack(alignment: .leading, spacing: CouliSpacing.s1) {
+                    CouliDigitsScroller(probe: probe + ".number") {
+                        line(text).probedNumber(probe, text: text, size: size)
+                    }
+                    if number.copyable {
+                        copyBoxed(raw)
+                    }
                 }
             }
             .foregroundColor(CouliColor.textSecondary)
         }
+    }
+
+    /// 一行不折的文字（单号整段）。
+    private func line(_ value: String) -> some View {
+        Text(verbatim: value).couliFont(.caption, monospacedDigits: true)
+            .lineLimit(1)
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
+
+    private func copyLabel() -> some View {
+        OrderProbedText(texts.text(OrderKeys.copy), style: .caption, probeID: probe + ".copy.label")
+            .foregroundColor(CouliColor.brandEmphasis)
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
+
+    /// 紧跟单号的【复制】：视觉是字，命中区 44 居中盖住字、不参与行高。
+    private func copyInline(_ raw: String) -> some View {
+        copyLabel()
+            .overlay { copyButton(raw) }
+    }
+
+    /// 换到下一行的【复制】：描边按钮（D10-1223），命中区 = 按钮框（≥ 44）。
+    private func copyBoxed(_ raw: String) -> some View {
+        Button {
+            onCopy(raw)
+        } label: {
+            copyLabel()
+                .couliTextButtonOutline(true)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .couliProbe(probe + ".copy", role: "hit")
+        .accessibilityLabel(Text(verbatim: texts.text(OrderKeys.copyLabel)))
+        .accessibilityIdentifier("order.copy")
     }
 
     private func copyButton(_ raw: String) -> some View {
@@ -247,9 +200,12 @@ struct OrderListNumber: View {
         .accessibilityLabel(Text(verbatim: texts.text(OrderKeys.copyLabel)))
         .accessibilityIdentifier("order.copy")
     }
+}
 
-    /// 字体自身行高（中文落到苹方，同 DesignSystem 行距算法）。
-    static func lineHeight(_ size: CGFloat) -> CGFloat {
-        (UIFont(name: "PingFangSC-Regular", size: size) ?? UIFont.systemFont(ofSize: size)).lineHeight
+private extension View {
+    /// 单号测量：框 = 「订单号 + 单号」的实际排版框。
+    func probedNumber(_ probe: String, text: String, size: CGFloat) -> some View {
+        couliTextProbe(probe + ".number", role: "text", text: text, fontSize: size,
+                       baseFontSize: CouliTextStyle.caption.baseSize)
     }
 }

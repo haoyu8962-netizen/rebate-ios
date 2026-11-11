@@ -13,6 +13,7 @@ public struct OrdersScreen: View {
     @ObservedObject var controller: OrderListController
     @ObservedObject var mask: AmountMaskStore
     @State var toast: CouliToastMessage?
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
     /// 各卡在视口里的框（只给「视口顶部那张卡」的记录用，不参与绘制）：放在不被观察的盒子里，写入不触发重绘。
     /// 原为 @State：半屏开关的动画期间卡片框逐帧变化 → 写 State → 重算 body → 框再变，动画不断叠加、事件循环不空闲
     /// （APP-08v-a 测试 v3 月份半屏用例复现，评审 r1 后修）。

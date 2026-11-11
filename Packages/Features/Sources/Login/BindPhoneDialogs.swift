@@ -6,6 +6,8 @@ struct BindMergeBody: View {
     let message: String
     let into: String
     let account: String
+    /// 正文字号（body 17 随系统字号）：量号码整段宽（D10-1230 判据 1：脱敏账号不在中间断）。
+    @ScaledMetric(relativeTo: CouliTextStyle.body.relativeTo) private var bodySize = CouliTextStyle.body.baseSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s3) {
@@ -23,10 +25,12 @@ struct BindMergeBody: View {
                     Text(verbatim: into)
                         .couliFont(.footnote)
                         .foregroundColor(CouliColor.textSecondary)
-                    Text(verbatim: account)
-                        .couliFont(.body, weight: .couliSemibold, monospacedDigits: true)
-                        .foregroundColor(CouliColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    CouliWholeDigits(minimumWidth: CouliDigitRuns.widest(account, size: bodySize, weight: .semibold)) {
+                        Text(verbatim: account)
+                            .couliFont(.body, weight: .couliSemibold, monospacedDigits: true)
+                            .foregroundColor(CouliColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
@@ -46,6 +50,8 @@ struct BindPendingCardView: View {
     let card: BindPendingCard
     @ObservedObject var controller: BindPhoneController
     let texts: LoginTexts
+    /// 正文字号（body 17 随系统字号）：量号码整段宽（D10-1230 / D10-1249 ④：新号码不在中间断）。
+    @ScaledMetric(relativeTo: CouliTextStyle.body.relativeTo) private var bodySize = CouliTextStyle.body.baseSize
 
     var body: some View {
         let key = card.key
@@ -56,9 +62,11 @@ struct BindPendingCardView: View {
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     Text(verbatim: texts.text(BindPhoneKeys.pendingTitle))
                         .couliFont(.body, weight: .couliSemibold)
-                    Text(verbatim: texts.format(BindPhoneKeys.pendingDesc, ["phone": card.maskedPhone]))
-                        .couliFont(.body, monospacedDigits: true)
-                        .fixedSize(horizontal: false, vertical: true)
+                    CouliWholeDigits(minimumWidth: CouliDigitRuns.widest(card.maskedPhone, size: bodySize)) {
+                        Text(verbatim: texts.format(BindPhoneKeys.pendingDesc, ["phone": card.maskedPhone]))
+                            .couliFont(.body, monospacedDigits: true)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .foregroundColor(CouliColor.statusWarningText)
                 Spacer(minLength: 0)
@@ -115,15 +123,21 @@ struct BindPendingCardView: View {
         .accessibilityIdentifier("bindPhone.pending.confirm")
     }
 
+    /// 摘要一行：标签左、值靠右；放不下同行时值换到下一行，号码 / 时间整段不在中间断，整段也放不下时框内横滑（D10-1249 ④）。
     private func summaryRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: CouliSpacing.s3) {
+        CouliFlowLayout(horizontalSpacing: CouliSpacing.s3, verticalSpacing: 0) {
             Text(verbatim: label)
                 .foregroundColor(CouliColor.textSecondary)
-            Spacer(minLength: CouliSpacing.s2)
-            Text(verbatim: value)
-                .foregroundColor(CouliColor.textPrimary)
-                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+            CouliWholeDigits(minimumWidth: CouliDigitRuns.widest(value, size: bodySize)) {
+                Text(verbatim: value)
+                    .foregroundColor(CouliColor.textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .couliFlowPushTrailing(.inlineOnly)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .couliFont(.body, monospacedDigits: true)
         .accessibilityElement(children: .combine)
     }

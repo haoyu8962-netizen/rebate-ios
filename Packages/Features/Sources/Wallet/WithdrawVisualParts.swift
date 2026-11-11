@@ -21,7 +21,8 @@ enum WithdrawErrorPlacement {
 /// 金额框（W38、W54）：视觉 56、「¥」17 次文字 + 输入 28/600 等宽。`muted`（待确认、提交中）灰底浅边；其余白底控件边
 /// （WithdrawRealName 未实名时框也是白底，靠占位句说明）；有错误红边。
 /// 文本绑定由调用方给（同一份 `WithdrawActions.amount`）；`placeholder` 只在未实名不可输入时给。外观不决定能否输入，能否输入只看 `editable`。
-/// 输入框可折行：放不下时金额换行，聚焦与未聚焦都看得到完整金额（验收 6；单行框放不下时聚焦会裁掉开头）。框不随字号设最小宽，否则会把窄屏整页撑出屏幕。
+/// 输入框是系统单行框（D10-1230 判据 1：金额不折成两行、不缩字）：放不下时编辑中系统框自己横滑；未聚焦时金额用框内可横滑的一行字显示
+/// （单行框未聚焦且放不下时只露开头，同 FU-IOS-BINDPHONE-LAYOUT 手机号框），点它进入输入。框不随字号设最小宽，否则会把窄屏整页撑出屏幕。
 struct WithdrawAmountBox: View {
     private let text: Binding<String>
     private let placeholder: String?
@@ -35,6 +36,9 @@ struct WithdrawAmountBox: View {
     /// 框内文字：过滤拒绝时金额没变、输入框不会自己退回去（实测框里留着被拒的字），所以框内文字单独记，每次输入后对回金额（`syncKey`）。
     @State private var shown: String
     @State private var edits = 0
+    /// 未聚焦时放不下的金额改用框内横滑的一行字显示（见上）。
+    @FocusState private var focused: Bool
+    @State private var fieldWidth: CGFloat = 0
 
     init(text: Binding<String>, placeholder: String?, label: String, editable: Bool, muted: Bool, hasError: Bool) {
         self.text = text
@@ -71,6 +75,34 @@ struct WithdrawAmountBox: View {
         value.components(separatedBy: .newlines).joined(separator: " ")
     }
 
+    private var inputFont: Font {
+        Font.system(size: inputSize, weight: .couliSemibold).monospacedDigit()
+    }
+
+    /// 未聚焦、框里有字且一行放不下时才换成横滑显示；放得下时就是系统框本身（外观不变）。
+    private var showsReadout: Bool {
+        !focused && !shown.isEmpty && fieldWidth > 0
+            && RecordMeasure.width(shown, size: inputSize, weight: .couliSemibold, monospacedDigits: true)
+            > fieldWidth + 0.5
+    }
+
+    private var readout: some View {
+        CouliDigitsScroller(probe: "withdraw.amount.readout") {
+            Text(verbatim: shown)
+                .font(inputFont)
+                .foregroundColor(CouliColor.textPrimary)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if editable {
+                focused = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
     private var border: Color {
         if hasError {
             return CouliColor.statusErrorText
@@ -88,12 +120,22 @@ struct WithdrawAmountBox: View {
                     RecordText(placeholder, style: .body, color: CouliColor.textSecondary)
                         .accessibilityHidden(true)
                 }
-                TextField("", text: input, axis: .vertical)
-                    .lineLimit(1...)
+                TextField("", text: input)
                     .keyboardType(.decimalPad)
-                    .font(Font.system(size: inputSize, weight: .couliSemibold).monospacedDigit())
-                    .foregroundColor(CouliColor.textPrimary)
+                    .font(inputFont)
+                    .foregroundColor(showsReadout ? Color.clear : CouliColor.textPrimary)
                     .disabled(!editable)
+                    .focused($focused)
+                    .background(GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { fieldWidth = proxy.size.width }
+                            .onChange(of: proxy.size.width) { fieldWidth = $0 }
+                    })
+                    .overlay(alignment: .leading) {
+                        if showsReadout {
+                            readout
+                        }
+                    }
                     .accessibilityLabel(Text(verbatim: label))
                     .accessibilityIdentifier("withdraw.input")
                     .couliTextProbe("withdraw.amount.input", role: "input", text: text.wrappedValue,
@@ -127,7 +169,17 @@ struct WithdrawLinkButton: View {
     var isEnabled = true
     var hitMinimum = CouliHitTarget.minimum
     var ringInside = false
+    /// 辅助字号下带描边（D10-1223 按钮口径：【全部提现】大字号会换到框下、离开金额框那一行，光字看不出是按钮）。
+    var outlinedWhenLarge = false
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// 同一个按钮、辅助字号下带描边（【全部提现】用；调用处的资金字面不变）。
+    func outlinedAtLargeText() -> WithdrawLinkButton {
+        var copy = self
+        copy.outlinedWhenLarge = true
+        return copy
+    }
 
     var body: some View {
         let ink = isEnabled ? CouliColor.textLink : CouliColor.textSecondary
@@ -139,6 +191,7 @@ struct WithdrawLinkButton: View {
                         .foregroundColor(ink)
                 }
             }
+            .couliTextButtonOutline(outlinedWhenLarge && typeSize.isAccessibilitySize)
             .walletProbe(probe, role: "link")
             .padding(.horizontal, inset)
             .frame(minWidth: hitMinimum, minHeight: hitMinimum)
@@ -186,51 +239,6 @@ enum WithdrawMetric {
     static let chipHeight: CGFloat = 32
     static let spinner: CGFloat = 16
     static let estimateRowMinHeight: CGFloat = 25.5
-}
-
-/// 估算句（W42）：14 字里到账金额片段 17/600，整句一个文字节点（读屏读完整句）。金额只取服务端字段，这里只找位置、不计算。
-struct WithdrawEstimateText: View {
-    let line: String
-    let net: String
-    @ScaledMetric private var size: CGFloat
-    @ScaledMetric private var amountSize: CGFloat
-
-    init(line: String, net: String) {
-        self.line = line
-        self.net = net
-        _size = ScaledMetric(wrappedValue: CouliTextStyle.footnote.baseSize,
-                             relativeTo: CouliTextStyle.footnote.relativeTo)
-        _amountSize = ScaledMetric(wrappedValue: CouliTextStyle.body.baseSize,
-                                   relativeTo: CouliTextStyle.body.relativeTo)
-    }
-
-    private var parts: (before: String, after: String) {
-        guard let range = line.range(of: net) else { return (line, "") }
-        return (String(line[..<range.lowerBound]), String(line[range.upperBound...]))
-    }
-
-    private var naturalWidth: CGFloat {
-        RecordMeasure.width(parts.before, size: size, weight: .regular, monospacedDigits: true)
-            + RecordMeasure.width(line.contains(net) ? net : "", size: amountSize, weight: .couliSemibold,
-                                  monospacedDigits: true)
-            + RecordMeasure.width(parts.after, size: size, weight: .regular, monospacedDigits: true)
-    }
-
-    var body: some View {
-        let plain = Font.system(size: size).monospacedDigit()
-        let strong = Font.system(size: amountSize, weight: .couliSemibold).monospacedDigit()
-        let body = Text(verbatim: parts.before).font(plain)
-            + Text(verbatim: line.contains(net) ? net : "").font(strong)
-            + Text(verbatim: parts.after).font(plain)
-        body
-            .foregroundColor(CouliColor.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-            .couliTextProbe("withdraw.estimate", role: "text", text: line, fontSize: size,
-                            baseFontSize: CouliTextStyle.footnote.baseSize, naturalWidth: naturalWidth)
-            .couliTextProbe("withdraw.estimate.net", role: "amount", text: net, fontSize: amountSize,
-                            baseFontSize: CouliTextStyle.body.baseSize)
-            .accessibilityIdentifier("withdraw.estimate")
-    }
 }
 
 /// 收款账号行（W51）：白卡、左标签、账号靠右 + 20 ›；读屏一项「标签，账号」。

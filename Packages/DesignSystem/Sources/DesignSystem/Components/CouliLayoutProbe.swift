@@ -74,7 +74,7 @@ public extension View {
     }
 
     /// 文字的实际布局框连同实际字号上报（可换行的文字：缺省不量自然宽度）。`fontSize` 须是正在显示的文字所用字号。
-    /// `naturalWidth`：调用方已按同一字体量好的单行自然宽度（APP-09v 钱包金额：放得下单行、放不下段内折行）；缺省 0 = 不报。
+    /// `naturalWidth`：调用方已按同一字体量好的单行自然宽度（APP-09v 钱包金额：放得下单行、放不下框内横滑，D10-1230）；缺省 0 = 不报。
     func couliTextProbe(_ id: String, role: String, text: String, fontSize: CGFloat,
                         baseFontSize: CGFloat, naturalWidth: CGFloat = 0) -> some View {
         modifier(CouliProbeModifier(id: id, role: role, card: "", text: text, natural: naturalWidth,

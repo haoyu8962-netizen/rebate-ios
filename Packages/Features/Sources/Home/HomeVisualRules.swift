@@ -26,6 +26,23 @@ enum HomeVisualRules {
         (availableWidth - spacing) / 2 >= requiredItemWidth ? 2 : 1
     }
 
+    /// 金刚区列数（FU-IOS-ADAPT-CHECK ③）：按 props 的列数，但每格至少放得下格名前两个字（格名 caption 12 随字号缩放、苹方）；
+    /// 大字号下放不下就减列（5 → 4 → 3 …），格名不缩字、不逐字竖排。常规字号下列数不变。
+    static func iconColumns(_ columns: Int, availableWidth: CGFloat, titles: [String], size: DynamicTypeSize,
+                            spacing: CGFloat) -> Int {
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+        let fontSize = UIFontMetrics(forTextStyle: .caption1).scaledValue(for: CouliTextStyle.caption.baseSize,
+                                                                          compatibleWith: traits)
+        let font = UIFont(name: "PingFangSC-Regular", size: fontSize) ?? UIFont.systemFont(ofSize: fontSize)
+        let pair = titles.map { (String($0.prefix(2)) as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
+        var count = max(1, columns)
+        while count > 1, (availableWidth - spacing * CGFloat(count - 1)) / CGFloat(count) < pair + 1 {
+            count -= 1
+        }
+        return count
+    }
+
     /// 横滑卡整卡读屏名：平台、标题、主价、返利（可见层不显示标题与来源，读屏仍完整读出）。
     static func scrollAccessibilityLabel(_ data: ProductCardData) -> String {
         var parts = [data.platformName, data.title, data.price.mainAccessibilityText]
