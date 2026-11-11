@@ -94,6 +94,7 @@ public struct LoginView: View {
         }
         .padding(.leading, CouliSpacing.s2)
         .padding(.trailing, CouliSpacing.s3)
+        .loginTopBarChrome()
     }
 
     // MARK: - 手机号步

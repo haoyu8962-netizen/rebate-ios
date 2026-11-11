@@ -149,6 +149,7 @@ struct BindPhoneView: View {
         }
         .padding(.horizontal, CouliSpacing.s1)
         .frame(minHeight: CouliHitTarget.minimum)
+        .loginTopBarChrome()
     }
 
     private var infoBar: some View {

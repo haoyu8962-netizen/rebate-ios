@@ -17,7 +17,7 @@ extension BindPhoneView {
         controller.inputsLocked
     }
 
-    /// 纵向输入框里回车 / 粘贴带来的换行不进号码。
+    /// 粘贴带来的换行不进号码。
     static func singleLine(_ value: String) -> String {
         value.filter { !$0.isNewline }
     }
@@ -38,48 +38,22 @@ extension BindPhoneView {
                 .couliFont(.body)
                 .foregroundColor(CouliColor.textSecondary)
                 .accessibilityHidden(true)
-            HStack(spacing: 0) {
-                Text(verbatim: text(LoginKeys.phonePrefix))
-                    .couliFont(.title)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .padding(.leading, CouliSpacing.s3)
-                    .padding(.trailing, CouliSpacing.s3)
-                    .accessibilityHidden(true)
-                Rectangle().fill(CouliColor.borderSubtle).frame(width: 1, height: CouliSpacing.s6)
-                    .accessibilityHidden(true)
-                // 未聚焦时完整显示号码（R1-07）：放不下一行时换行（纵向轴、最多 3 行），不截成省略号、不缩字号；号码里不会有换行
-                TextField(
-                    text: Binding(get: { controller.phone }, set: { controller.setPhone(Self.singleLine($0)) }),
-                    prompt: Text(verbatim: text(LoginKeys.phonePlaceholder)),
-                    axis: .vertical
-                ) {
-                    Text(verbatim: text(LoginKeys.phoneLabel))
-                }
-                .lineLimit(1...3)
-                .couliFont(.title)
-                .foregroundColor(CouliColor.textPrimary)
-                .keyboardType(.phonePad)
-                .textContentType(.telephoneNumber)
-                .disabled(locked)
-                .padding(.leading, CouliSpacing.s3)
-                .frame(minHeight: CouliComponentMetric.controlMinHeight + CouliSpacing.s1)
-                .focused($focus, equals: .phone)
-                .accessibilityLabel(Text(verbatim: text(LoginKeys.phoneLabel) + " " + text(LoginKeys.phonePrefix)))
-                .accessibilityHint(Text(verbatim: controller.phoneError ?? ""))
-                .accessibilityIdentifier("bindPhone.phone")
-                // 清除按钮只在聚焦且非空时出现（适配稿）：未聚焦时不占号码的宽度；出现时保留 44pt 命中区
-                if focus == .phone, !controller.phone.isEmpty, !locked {
-                    Button(action: controller.clearPhone) {
-                        CouliIconView(.close, size: CouliComponentMetric.iconMedium)
-                            .foregroundColor(CouliColor.textSecondary)
-                            .couliHitTarget()
-                    }
-                    .buttonStyle(CouliPlainButtonStyle())
-                    .accessibilityLabel(Text(verbatim: text(LoginKeys.phoneClear)))
-                    .accessibilityIdentifier("bindPhone.phoneClear")
-                }
-            }
-            .background(fieldBox(error: controller.phoneError != nil))
+            // 共用手机号组件（D10-1223）：单行、号码不在中间断；清除按钮只在聚焦且非空时出现（适配稿，未聚焦时不占号码的宽度）
+            PhoneNumberField(
+                text: Binding(get: { controller.phone }, set: { controller.setPhone(Self.singleLine($0)) }),
+                prefix: text(LoginKeys.phonePrefix),
+                placeholder: text(LoginKeys.phonePlaceholder),
+                label: text(LoginKeys.phoneLabel),
+                clearLabel: text(LoginKeys.phoneClear),
+                identifier: "bindPhone.phone",
+                focus: $focus,
+                focusValue: .phone,
+                hint: controller.phoneError ?? "",
+                error: controller.phoneError != nil,
+                locked: locked,
+                showsClear: focus == .phone && !controller.phone.isEmpty && !locked,
+                onClear: controller.clearPhone
+            )
             if let error = controller.phoneError {
                 Text(verbatim: error)
                     .couliFont(.footnote)
@@ -97,18 +71,19 @@ extension BindPhoneView {
                 .couliFont(.body)
                 .foregroundColor(CouliColor.textSecondary)
                 .accessibilityHidden(true)
-            // 窄屏、200% 字号放不下时「获取验证码 / N 秒后重新获取」换到输入下方（ViewThatFits）
+            // 窄屏、200% 字号放不下时「获取验证码 / N 秒后重新获取」换到输入下方（ViewThatFits），换成有描边的次按钮（D10-1223）；
+            // 框内的按钮字按最长的倒计时文案占宽，发码前后不换排法
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: CouliSpacing.s2) {
                     codeInput
                     Rectangle().fill(CouliColor.borderSubtle).frame(width: 1, height: CouliSpacing.s6)
                         .accessibilityHidden(true)
-                    sendButton.fixedSize()
+                    sendButton(boxed: true).fixedSize()
                 }
                 .background(fieldBox(error: controller.codeError != nil))
                 VStack(alignment: .leading, spacing: CouliSpacing.s2) {
                     codeInput.background(fieldBox(error: controller.codeError != nil))
-                    sendButton
+                    sendButton(boxed: false)
                 }
             }
             if let error = controller.codeError {
@@ -142,21 +117,38 @@ extension BindPhoneView {
         .accessibilityIdentifier("bindPhone.code")
     }
 
-    var sendButton: some View {
+    var sendTitle: String {
         let remaining = controller.resendRemaining
-        let title = remaining > 0
+        return remaining > 0
             ? texts.format(BindPhoneKeys.countdown, ["n": String(remaining)]) : text(LoginKeys.getCode)
-        return Button(action: controller.sendCode) {
-            Text(verbatim: title)
-                .couliFont(.body, monospacedDigits: true)
-                .foregroundColor(controller.canSendCode ? CouliColor.brandEmphasis : CouliColor.textSecondary)
+    }
+
+    /// 【获取验证码】：`boxed` 留在验证码框内右侧（与正常字号同样的强调色字，按最长文案占宽）；否则在框下方，
+    /// 用有描边的次按钮（明确的按钮外观，高 ≥ 44pt，整行宽）。
+    @ViewBuilder func sendButton(boxed: Bool) -> some View {
+        if boxed {
+            Button(action: controller.sendCode) {
+                ZStack {
+                    Text(verbatim: texts.format(BindPhoneKeys.countdown, ["n": "88"]))
+                        .couliFont(.body, monospacedDigits: true)
+                        .hidden()
+                    Text(verbatim: sendTitle)
+                        .couliFont(.body, monospacedDigits: true)
+                        .foregroundColor(controller.canSendCode ? CouliColor.brandEmphasis : CouliColor.textSecondary)
+                }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, CouliSpacing.s3)
                 .frame(minHeight: CouliHitTarget.minimum)
                 .contentShape(Rectangle())
+            }
+            .buttonStyle(CouliPlainButtonStyle())
+            .disabled(!controller.canSendCode)
+            .accessibilityLabel(Text(verbatim: sendTitle))
+            .accessibilityIdentifier("bindPhone.getCode")
+        } else {
+            CouliButton(sendTitle, kind: .secondary, size: .compact, isEnabled: controller.canSendCode,
+                        fillsWidth: true, action: controller.sendCode)
+                .accessibilityIdentifier("bindPhone.getCode")
         }
-        .buttonStyle(CouliPlainButtonStyle())
-        .disabled(!controller.canSendCode)
-        .accessibilityIdentifier("bindPhone.getCode")
     }
 }

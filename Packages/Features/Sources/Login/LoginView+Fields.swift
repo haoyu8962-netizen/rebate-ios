@@ -9,50 +9,19 @@ extension LoginView {
                 .couliFont(.footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .accessibilityHidden(true)
-            HStack(spacing: 0) {
-                Text(verbatim: text(LoginKeys.phonePrefix))
-                    .couliFont(.title)
-                    .foregroundColor(CouliColor.textPrimary)
-                    .padding(.leading, CouliSpacing.s4)
-                    .padding(.trailing, CouliSpacing.s3)
-                    .accessibilityHidden(true)
-                Rectangle()
-                    .fill(CouliColor.borderSubtle)
-                    .frame(width: 1, height: CouliSpacing.s6)
-                    .accessibilityHidden(true)
-                TextField(
-                    text: Binding(get: { model.phoneText }, set: model.setPhone),
-                    prompt: Text(verbatim: text(LoginKeys.phonePlaceholder))
-                ) {
-                    Text(verbatim: text(LoginKeys.phoneLabel))
-                }
-                .couliFont(.title)
-                .foregroundColor(CouliColor.textPrimary)
-                .keyboardType(.phonePad)
-                .textContentType(.telephoneNumber)
-                .padding(.horizontal, CouliSpacing.s3)
-                .frame(minHeight: CouliComponentMetric.controlMinHeight + CouliSpacing.s1)
-                .accessibilityLabel(Text(verbatim: text(LoginKeys.phoneLabel) + " " + text(LoginKeys.phonePrefix)))
-                .focused($phoneFocused)
-                .accessibilityIdentifier("login.phone")
-                if !model.phoneText.isEmpty {
-                    Button(action: model.clearPhone) {
-                        CouliIconView(.close, size: CouliComponentMetric.iconMedium)
-                            .foregroundColor(CouliColor.textSecondary)
-                            .couliHitTarget()
-                    }
-                    .buttonStyle(CouliPlainButtonStyle())
-                    .accessibilityLabel(Text(verbatim: text(LoginKeys.phoneClear)))
-                    .accessibilityIdentifier("login.phoneClear")
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                    .fill(CouliColor.backgroundSurface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-                    .strokeBorder(model.phoneError.isEmpty ? CouliColor.borderControl : CouliColor.statusErrorText)
+            // 共用手机号组件（D10-1223）：与绑定手机号页同一个；非空即显示清除按钮
+            PhoneNumberField(
+                text: Binding(get: { model.phoneText }, set: model.setPhone),
+                prefix: text(LoginKeys.phonePrefix),
+                placeholder: text(LoginKeys.phonePlaceholder),
+                label: text(LoginKeys.phoneLabel),
+                clearLabel: text(LoginKeys.phoneClear),
+                identifier: "login.phone",
+                focus: $phoneFocused,
+                focusValue: true,
+                error: !model.phoneError.isEmpty,
+                showsClear: !model.phoneText.isEmpty,
+                onClear: model.clearPhone
             )
             if !model.phoneError.isEmpty {
                 Text(verbatim: model.phoneError)
