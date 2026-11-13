@@ -144,6 +144,10 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: false
+      # FU-IOS-TESTMANAGERD-LOST（D10-1447）：UI 测试自动抓屏改截图，不再录视频。
+      # 默认 screenRecording 时模拟器里的 testmanagerd 在停止录屏处崩溃、xcodebuild 报 Lost connection to testmanagerd。
+      # 失败用例仍留自动截图附件（systemAttachmentLifetime 保持默认 deleteOnSuccess）。
+      preferredScreenCaptureFormat: screenshots
       targets:
         - CouliTests
         - CouliUITests
