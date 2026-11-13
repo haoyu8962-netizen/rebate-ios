@@ -165,7 +165,8 @@ struct ForceUpdateScreen: View {
     }
 
     /// 「注销账号」：需要登录的先登录（受限登录，03 §4.1），登录后进 DeleteAccount（TODO(APP-05、APP-12)）。
-    /// DeleteAccount 的 since.ios 还是 null（未发布，rule-gaps G02 / N-14），守卫会停在强更页。
+    /// DeleteAccount 的 since.ios 还是 null（未发布，rule-gaps G02 / N-14）：已登录时守卫给升级提示（与别处点到未发布路由相同，
+    /// 强更页留在下面，D10-1562 过渡）；N-14 上线后改为进 DeleteAccount。
     private func openDeleteAccount() {
         let route = router.currentGuardState.session == .guest ? RoutePolicy.login : "DeleteAccount"
         router.openFromForceUpdatePage(RouteRequest(route: route, from: .inApp))

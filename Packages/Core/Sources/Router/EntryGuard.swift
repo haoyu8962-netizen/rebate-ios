@@ -222,11 +222,16 @@ public enum EntryGuard {
         )
         guard state.fromForceUpdatePage,
               request.sourceKind == .inApp,
-              RoutePolicy.forceUpdateSecondaryRoutes.contains(route),
-              availability(route: route, state: state, routes: routes) == nil,
-              let spec = routes[route]
+              RoutePolicy.forceUpdateSecondaryRoutes.contains(route)
         else {
-            // TODO(N-14): DeleteAccount 的 since.ios 仍为 null（未发布），按未发布处理，停在强更页（rule-gaps G02）。
+            return forceUpdate
+        }
+        if let unavailable = availability(route: route, state: state, routes: routes) {
+            // TODO(N-14): DeleteAccount 的 since.ios 仍为 null（未发布，rule-gaps G02）。过渡做法（D10-1562）：与别处点到未发布
+            // 路由一样给升级提示（Router 打开内置提示页，强更页留在下面），不再静默停在强更页。N-14 上线后这里自然放行进 DeleteAccount。
+            return unavailable
+        }
+        guard let spec = routes[route] else {
             return forceUpdate
         }
         if let blocked = paramsCheck(request: request, spec: spec, state: state) {

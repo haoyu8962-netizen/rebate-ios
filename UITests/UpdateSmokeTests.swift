@@ -38,7 +38,8 @@ final class UpdateSmokeTests: XCTestCase {
     }
 
     func testForceUpdateCannotBeLeftAndSecondaryEntriesReturn() {
-        let app = launch("force")
+        // 本例断言游客路径（受限登录页），冷启动用本机假服务清掉模拟器上别的用例留下的登录会话（FU-IOS-FORCEUPDATE-DELETE-ENTRY-FLAKE / D10-1562）。
+        let app = launch("force", extra: ["-CouliFakeLoginServer"])
         let page = element(app, "update.force")
         XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 30), "没有进入强更页")
         XCTAssertFalse(ShellTabBar.bar(app).isHittable, "强更页盖住 Tab 外壳")
@@ -76,6 +77,33 @@ final class UpdateSmokeTests: XCTestCase {
         XCTAssertTrue(element(app, "update.force.unavailable").waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["update.force.retry"].exists)
         save(app, "ForceUpdateUnavailable-force")
+    }
+
+    /// 已登录时强更页【注销账号】（D10-1562 过渡）：DeleteAccount 的 since.ios 仍为 null（未发布，N-14 / rule-gaps G02），
+    /// 在强更页上面推入内置升级提示页，强更页留在下面，返回回到强更页（不再点了静默无效）。
+    /// TODO(N-14): iOS DeleteAccount 上线后改成断言「进 DeleteAccount」，去掉升级提示过渡。
+    func testForceUpdateDeleteAccountWhenLoggedInShowsUpgradePrompt() {
+        // 收尾（无论成败）：冷启动一次只开假服务，清掉 `-CouliFakeTradeLoggedIn` 写入的假登录，不留给之后按游客走的用例。
+        addTeardownBlock { @MainActor in
+            let reset = XCUIApplication()
+            reset.launchArguments += [
+                "-CouliPrivacyPreset", "consented", "-CouliFakeLoginServer", "-CouliUpdateReset", "1",
+            ]
+            reset.launch()
+            _ = ShellTabBar.bar(reset).waitForExistence(timeout: 30)
+            reset.terminate()
+        }
+        let app = launch("force", extra: ["-CouliFakeLoginServer", "-CouliFakeTradeLoggedIn"])
+        XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 30), "没有进入强更页")
+
+        app.buttons["update.force.deleteAccount"].tap()
+        XCTAssertTrue(element(app, "route.upgradePrompt").waitForExistence(timeout: 10), "已登录点【注销账号】应出现升级提示页")
+        XCTAssertFalse(ShellTabBar.bar(app).isHittable, "强更状态下 Tab 外壳仍不可点")
+        save(app, "ForceUpdate-delete-loggedin-upgrade")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(element(app, "update.force.goStore").waitForExistence(timeout: 10), "返回回到强更页")
+        XCTAssertTrue(element(app, "update.force").exists, "强更页还在")
     }
 
     func testStoresUnavailableShowsRetry() {
