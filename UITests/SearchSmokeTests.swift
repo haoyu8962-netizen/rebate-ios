@@ -92,7 +92,7 @@ final class SearchSmokeTests: XCTestCase {
     /// 点卡片标题区域进详情（大字号时卡片下半部可能被每屏底部的口径说明区盖住）。
     private func openCard(_ app: XCUIApplication, _ index: Int) {
         reveal(app, "search.card.\(index)")
-        element(app, "search.card.\(index)").staticTexts.firstMatch.tap()
+        element(app, "search.card.\(index)").tapCardBody()
     }
 
     /// 滚到某张卡可点（先往下找，找不到再往上找：返回列表时保留了滚动位置）。

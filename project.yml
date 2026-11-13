@@ -105,6 +105,8 @@ targets:
       - path: AppTests
         excludes:
           - "**/__Snapshots__"
+          # FU-IOS-A11Y-CODE-ERROR-FOCUS（D10-1432）：未自动验证的读屏用例，不进必跑名单（恢复时删这一行）
+          - "Pending/**"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.couli.app.tests

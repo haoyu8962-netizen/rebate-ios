@@ -48,7 +48,7 @@ extension TradeUITest {
     /// 搜一个场景（如 tb:t-price）并进它的详情。
     func product(_ app: XCUIApplication, _ key: String) {
         search(app, key)
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         XCTAssertTrue(element(app, "product.buy").waitForExistence(timeout: 10), "没有进详情")
     }
 

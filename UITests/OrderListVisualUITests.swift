@@ -36,7 +36,7 @@ final class OrderListVisualUITests: XCTestCase, OrderVisualUITest {
             XCTAssertTrue(cardLabel.contains(part), "整卡一项读出「\(part)」：\(cardLabel)")
         }
         XCTAssertEqual(occurrences("淘宝", in: cardLabel), 1, "平台图标不重复播报：\(cardLabel)")
-        XCTAssertEqual(items[copy].label, "复制订单号", "【复制】独立第二项")
+        XCTAssertEqual(items[copy].label, "复制订单号 3741234567890123456", "【复制】独立第二项，读出本行完整单号（D10-1248 ⑨）")
         XCTAssertEqual(node(app, "orders.filter.platform").value as? String, "已收起", "筛选读出展开状态")
     }
 
@@ -87,7 +87,7 @@ final class OrderListVisualUITests: XCTestCase, OrderVisualUITest {
         XCTAssertTrue(routes(app).isEmpty, "复制不穿透到整卡（不打开详情）")
 
         before = log(app).count
-        node(app, "order.card.A").staticTexts.firstMatch.tap()
+        node(app, "order.card.A").tapCardBody()
         waitLog(app, beyond: before)
         XCTAssertEqual(routes(app), ["route:OrderDetail?order_id=A"], "整卡 → OrderDetail {order_id}")
     }

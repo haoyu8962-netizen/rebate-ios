@@ -87,7 +87,7 @@ final class SearchRound3Tests: XCTestCase {
         XCTAssertFalse(element(app, "search.card.0").isHittable, "已经滚下去")
         let top = topCard(app)
         save(app, "R3-Restore-1-search-scrolled")
-        card.staticTexts.firstMatch.tap()
+        card.tapCardBody()
         XCTAssertTrue(element(app, "product.header").waitForExistence(timeout: 10), "没有进详情")
         pause()
         save(app, "R3-Restore-2-detail-before-kill")
@@ -153,7 +153,7 @@ final class SearchRound3Tests: XCTestCase {
     func testProductTitleIsHeaderForVoiceOver() throws {
         let app = launch()
         search(app, "milk")
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         let title = element(app, "product.title")
         XCTAssertTrue(title.waitForExistence(timeout: 10), "详情标题")
         XCTAssertTrue(title.label.hasPrefix("淘宝，"), "平台与商品名合为一项、来源在前：\(title.label)")
@@ -167,7 +167,8 @@ final class SearchRound3Tests: XCTestCase {
         app.buttons["返回"].firstMatch.tap()
         let card = element(app, "search.card.0")
         XCTAssertTrue(card.waitForExistence(timeout: 10))
-        let cardTitle = card.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "淘宝，")).firstMatch
+        // 列表卡标题并进整卡一项按钮（FU-IOS-A11Y-04）
+        let cardTitle = card.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "淘宝，")).firstMatch
         XCTAssertTrue(cardTitle.exists)
         let cardTraits = ((try cardTitle.snapshot()) as? NSObject)?.value(forKey: "traits") as? UInt64 ?? 0
         XCTAssertEqual(cardTraits & header, 0, "列表卡标题不是标题角色")
@@ -202,7 +203,7 @@ final class SearchRound3Tests: XCTestCase {
             XCTAssertTrue(card.descendants(matching: .any).matching(price).firstMatch.exists, "列表卡商品价格保留")
             pause()
             save(app, "R3-Search-purchase-" + name)
-            card.staticTexts.firstMatch.tap()
+            card.tapCardBody()
             let buy = element(app, "product.buy")
             XCTAssertTrue(buy.waitForExistence(timeout: 10), "没有进详情")
             if let text {

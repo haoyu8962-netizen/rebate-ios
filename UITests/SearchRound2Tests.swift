@@ -138,7 +138,7 @@ final class SearchRound2Tests: XCTestCase {
     func testAskAIOpensAgentChatTab() {
         let app = launch()
         search(app, "milk")
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         XCTAssertTrue(element(app, "product.askAI").waitForExistence(timeout: 10))
         element(app, "product.askAI").tap()
         XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 5), "回到 Tab 外壳（AgentChat 是 Tab 根）")
@@ -154,11 +154,11 @@ final class SearchRound2Tests: XCTestCase {
     func testProductImageLoadsFromContractField() {
         let app = launch()
         search(app, "milk")
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         XCTAssertTrue(element(app, "product.image.loaded").waitForExistence(timeout: 10), "详情头图按 image 加载")
         app.buttons["返回"].firstMatch.tap()
         search(app, "states")
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         XCTAssertTrue(element(app, "product.image.failed").waitForExistence(timeout: 10), "图片 404：占位")
         app.terminate()
     }
@@ -179,7 +179,7 @@ final class SearchRound2Tests: XCTestCase {
         save(app, "Search-footer-scrolled")
         app.swipeDown()
         app.swipeDown()
-        element(app, "search.card.0").staticTexts.firstMatch.tap()
+        element(app, "search.card.0").tapCardBody()
         XCTAssertTrue(element(app, "product.image.loaded").waitForExistence(timeout: 10))
         pause()
         save(app, "Product-image")
@@ -215,7 +215,7 @@ final class SearchRound2Tests: XCTestCase {
             for _ in 0..<8 where !(card.exists && card.isHittable) {
                 app.swipeUp()
             }
-            card.staticTexts.firstMatch.tap()
+            card.tapCardBody()
             XCTAssertTrue(element(app, "product.header").waitForExistence(timeout: 10), "没有进详情")
             let fetched = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "以下单页为准")).firstMatch
             XCTAssertTrue(fetched.waitForExistence(timeout: 10), "缓存降级提示")

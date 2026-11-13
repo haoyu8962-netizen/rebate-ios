@@ -69,14 +69,15 @@ extension ProductVisualUITest {
         // 必须是注入的那一张（不是 DebugFakeSearch 的通用样例卡）：结果恰好 1 张、标题一致
         let title = card["title"] as? String ?? ""
         let only = !node(app, "search.card.1").exists
-        let matches = first.label.contains(title) || first.staticTexts.containing(
+        // 卡内文字合成整卡一项按钮（FU-IOS-A11Y-04）：按整卡项的读屏名认卡
+        let matches = first.label.contains(title) || first.buttons.containing(
             NSPredicate(format: "label CONTAINS %@", title)
         ).firstMatch.exists
         guard only, matches else {
             // 直接抛错结束本用例：不能拿 DebugFakeSearch 的通用样例卡冒充 visualCards 继续断言
             throw ProductVisualUIError.cardNotInjected(title)
         }
-        first.staticTexts.firstMatch.tap()
+        first.tapCardBody()
         if hold {
             XCTAssertTrue(node(app, "product.loading").waitForExistence(timeout: 10), "没有停在详情加载态")
             return app

@@ -56,10 +56,11 @@ final class PlatformBadgeAccessibilityTests: XCTestCase {
         app.buttons["search.submit"].tap()
         let card = app.descendants(matching: .any)["search.card.0"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 15))
-        let title = card.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "淘宝，")).firstMatch
+        // 列表卡标题并进整卡一项按钮（FU-IOS-A11Y-04），平台名照样只在最前读一次
+        let title = card.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "淘宝，")).firstMatch
         XCTAssertTrue(title.exists)
         assertMergedTitle(title)
-        title.tap()
+        card.tapCardBody()
         let detailTitle = app.descendants(matching: .any)["product.title"].firstMatch
         XCTAssertTrue(detailTitle.waitForExistence(timeout: 10))
         assertMergedTitle(detailTitle)

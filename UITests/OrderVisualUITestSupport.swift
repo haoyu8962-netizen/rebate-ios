@@ -84,7 +84,7 @@ extension OrderVisualUITest {
 
     /// 进某张卡的详情（真点卡上的文字）。
     func openDetail(_ app: XCUIApplication, _ id: String) {
-        node(app, "order.card.\(id)").staticTexts.firstMatch.tap()
+        node(app, "order.card.\(id)").tapCardBody()
         XCTAssertTrue(node(app, "orderDetail.product").waitForExistence(timeout: 10), "没有进 \(id) 详情")
     }
 
