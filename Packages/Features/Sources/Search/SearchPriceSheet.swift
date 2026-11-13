@@ -13,6 +13,8 @@ struct SearchPriceSheet: View {
     /// 返回 false = 执行器拒绝（不合法或限流中），面板保留。
     let onApply: (Int64?, Int64?) -> Bool
     @State private var invalid = false
+    /// 第几次被拒（同一句提示再点【确定】也要再播一次，FU-IOS-A11Y-09）。
+    @State private var rejections = 0
 
     var body: some View {
         CouliSheet(
@@ -38,6 +40,8 @@ struct SearchPriceSheet: View {
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.statusErrorText)
                     .fixedSize(horizontal: false, vertical: true)
+                    // 出现（含再次点【确定】）时立即播报原因，播完焦点到这一行（FU-IOS-A11Y-09）
+                    .couliAnnounceThenFocus(texts.text(SearchKeys.sheetInvalid), trigger: rejections)
                     .accessibilityIdentifier("search.price.invalid")
             }
         } actions: {
@@ -81,6 +85,7 @@ struct SearchPriceSheet: View {
               onApply(min, max)
         else {
             invalid = true
+            rejections += 1
             return
         }
         invalid = false

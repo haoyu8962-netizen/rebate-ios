@@ -58,6 +58,9 @@ public struct WithdrawScreen: View {
     @State var spokenFieldError: Int?
     @AccessibilityFocusState var submitFocused: Bool
     @AccessibilityFocusState var fieldErrorFocused: Bool
+    /// 「预计到账」问号、待确认卡【放弃】：弹层关闭后焦点回到它们（FU-IOS-A11Y-06 / 07）。
+    @AccessibilityFocusState var feeHelpFocused: Bool
+    @AccessibilityFocusState var abandonFocused: Bool
 
     public init(controller: WithdrawController, gates: WalletGates, context: WalletPageContext) {
         self.controller = controller
@@ -92,7 +95,7 @@ public struct WithdrawScreen: View {
                 }
             }
         }
-        .couliDialog(isPresented: flowState.abandonConfirmKey != nil) {
+        .couliDialog(isPresented: flowState.abandonConfirmKey != nil, restoreFocusTo: $abandonFocused) {
             FlowDialogs.abandon(texts, title: texts.text("pending_confirm.withdraw.abandon"),
                                 detail: pendingDetail(flowState, snapshot), actions: flowActions)
         }
@@ -101,7 +104,8 @@ public struct WithdrawScreen: View {
                              desc: texts.text("withdraw.risk_blocked.desc"), ok: flowActions.dismissRisk,
                              appeal: actions.appeal)
         }
-        .couliSheet(isPresented: feeHelp, dismissOnScrim: { feeHelp = false }, sheet: { feeSheet })
+        .couliSheet(isPresented: feeHelp, dismissOnScrim: { feeHelp = false }, restoreFocusTo: $feeHelpFocused,
+                    sheet: { feeSheet })
         .walletStepUpSheet(stepUp, texts: texts, smsBlocked: smsGate.blocked, verifyBlocked: verifyGate.blocked,
                            restoreFocus: $submitFocused)
         .couliToast($toast)

@@ -21,8 +21,26 @@ public final class LoginViewModel: ObservableObject {
     @Published public internal(set) var agreed = false
     @Published public internal(set) var sending = false
     @Published public internal(set) var submitting = false
-    @Published public var phoneError = ""
-    @Published public var codeError = ""
+    /// 每次设成非空（含同一句错误再出一次）都记一次，页面据此播报并把读屏焦点移到错误行（FU-IOS-A11Y-03）。
+    @Published public var phoneError = "" {
+        didSet {
+            if !phoneError.isEmpty {
+                phoneErrorCount += 1
+            }
+        }
+    }
+
+    @Published public var codeError = "" {
+        didSet {
+            if !codeError.isEmpty {
+                codeErrorCount += 1
+            }
+        }
+    }
+
+    /// 手机号 / 验证码错误出现的次数（播报与移焦的触发）。
+    @Published public private(set) var phoneErrorCount = 0
+    @Published public private(set) var codeErrorCount = 0
     @Published public internal(set) var sentTo = ""
     @Published public internal(set) var now: Int64 = 0
     @Published public var dialog: LoginDialog?

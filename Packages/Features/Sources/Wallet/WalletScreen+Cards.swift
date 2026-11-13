@@ -8,7 +8,7 @@ extension WalletScreen {
         WalletHeroPanel(
             view: view, hidden: mask.hidden, withdrawEnabled: snapshot.withdrawEnabled,
             disabledReason: disabledReason(view, snapshot), texts: texts, actions: actions,
-            onHelp: { help = $0 }
+            onHelp: open(help:), frozenHelpFocus: $frozenHelpFocused
         )
     }
 
@@ -101,8 +101,9 @@ extension WalletScreen {
                     .help,
                     base: CouliComponentMetric.iconSmall,
                     label: texts.text("wallet.help.estimated_label"),
-                    probe: "wallet.estimate.left.help"
-                ) { help = "estimated" }
+                    probe: "wallet.estimate.left.help",
+                    focus: $estimatedHelpFocused
+                ) { open(help: "estimated") }
             }
             .couliLineBox(.footnote)
             .walletProbe("wallet.estimate.left.labelRow", role: "row")
@@ -152,7 +153,7 @@ extension WalletScreen {
                 .accessibilityLabel(Text(verbatim: paused.spoken(hidden: mask.hidden)))
             WalletIconButton(.help, base: CouliComponentMetric.iconSmall,
                              label: texts.text("wallet.help.pending_paused_label"),
-                             probe: "wallet.paused.help") { help = "pending_paused" }
+                             probe: "wallet.paused.help", focus: $pausedHelpFocused) { open(help: "pending_paused") }
             Spacer(minLength: 0)
         }
         .foregroundColor(CouliColor.textSecondary)
@@ -184,6 +185,22 @@ extension WalletScreen {
         ) { actions.entry($0.id) }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("wallet.entries")
+    }
+
+    /// 打开问号说明，并记下是哪个问号（关闭后焦点还给它，FU-IOS-A11Y-06）。
+    func open(help topic: String) {
+        helpTopic = topic
+        help = topic
+    }
+
+    /// 说明半屏关闭后焦点要回到的问号（按最近打开的主题，三个问号各回各的）。
+    var helpFocus: AccessibilityFocusState<Bool>.Binding? {
+        switch helpTopic {
+        case "frozen": $frozenHelpFocused
+        case "estimated": $estimatedHelpFocused
+        case "pending_paused": $pausedHelpFocused
+        default: nil
+        }
     }
 
     /// 问号说明半屏（W15，WalletNote*）：正文 14/21、【知道了】描边次按钮。

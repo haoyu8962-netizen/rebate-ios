@@ -256,6 +256,8 @@ extension OrdersScreen {
             CouliButton(texts.text(OrderKeys.retry), kind: .secondary, size: .compact, isEnabled: !snapshot.blocked) {
                 controller.retryPage()
             }
+            // 失败行出现时立即播报错误，播完读屏焦点移到【重试】（FU-IOS-A11Y-08，同搜索页翻页失败）
+            .couliAnnounceThenFocus(message, focusProbeID: "orders.pageRetry")
             .accessibilityIdentifier("orders.pageRetry")
         }
     }

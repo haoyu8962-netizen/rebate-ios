@@ -35,6 +35,11 @@ public struct WalletScreen: View {
     @ObservedObject var readGate: RetryAfterGate
     @ObservedObject var context: WalletPageContext
     @State var help: String?
+    /// 最近打开的说明主题（半屏关闭后 `help` 已清空，还焦点时仍要知道是哪个问号）。
+    @State var helpTopic: String?
+    @AccessibilityFocusState var frozenHelpFocused: Bool
+    @AccessibilityFocusState var estimatedHelpFocused: Bool
+    @AccessibilityFocusState var pausedHelpFocused: Bool
     @State var toast: CouliToastMessage?
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
@@ -60,7 +65,9 @@ public struct WalletScreen: View {
         } bottom: {
             OpenErrorCard(context: context)
         }
-        .couliSheet(isPresented: help != nil, dismissOnScrim: { help = nil }, sheet: { helpSheet(help ?? "") })
+        // 关闭（【知道了】、关闭键、遮罩、读屏返回手势）后焦点回到打开它的问号（FU-IOS-A11Y-06）
+        .couliSheet(isPresented: help != nil, dismissOnScrim: { help = nil }, restoreFocusTo: helpFocus,
+                    sheet: { helpSheet(help ?? "") })
         .couliToast($toast)
         .task { controller.load() }
     }

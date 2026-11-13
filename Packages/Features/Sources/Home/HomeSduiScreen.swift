@@ -95,18 +95,23 @@ public struct HomeSduiScreen: View {
                                  width: $width, viewport: $viewport))
     }
 
-    /// 整页最后防线（包内默认也坏）：通用错误版式。
+    /// 整页最后防线（包内默认也坏）：通用错误版式。读屏同 DS `ErrorState`（FU-IOS-A11Y-08）：标题是标题，出现时立即播报「标题，说明」，
+    /// 播完焦点移到【重试】（外观不变，所以不直接换成 ErrorState：这里的【重试】还要跟 `retryEnabled` 置灰）。
     private func loadFailed(_ failed: HomeFailureUi, owner: HomeController, render: HomeRenderTicket) -> some View {
-        VStack(spacing: CouliSpacing.s4) {
-            Text(verbatim: owner.text("home.load_failed")).couliFont(.title, weight: .couliSemibold)
+        let title = owner.text("home.load_failed")
+        return VStack(spacing: CouliSpacing.s4) {
+            Text(verbatim: title).couliFont(.title, weight: .couliSemibold)
                 .foregroundColor(CouliColor.textPrimary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             Text(verbatim: failed.message).couliFont(.footnote).foregroundColor(CouliColor.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             CouliButton(owner.text("home.retry"), kind: .secondary, size: .compact,
                         isEnabled: failed.retryEnabled) { owner.retryLoadFailed(render) }
+                .couliAnnounceThenFocus([title, failed.message].filter { !$0.isEmpty }
+                    .joined(separator: PriceTerms.spokenPause), focusProbeID: "home.loadFailed.retry")
         }
         .frame(maxWidth: .infinity)
         .padding(CouliSpacing.s6)
@@ -224,6 +229,8 @@ public struct HomeSduiScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                 CouliButton(owner.text("home.retry"), kind: .secondary, size: .compact,
                             isEnabled: failure.retryEnabled) { owner.retryFeed(ticket) }
+                    // 失败行出现时立即播报，播完读屏焦点移到【重试】（FU-IOS-A11Y-08，同搜索页翻页失败）
+                    .couliAnnounceThenFocus(failure.message, focusProbeID: "home.feed.retry")
                     .accessibilityIdentifier("home.feed.retry")
                     .couliProbe("home.feed.retry", role: "independent-hit")
             }

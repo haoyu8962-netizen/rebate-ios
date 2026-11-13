@@ -38,6 +38,7 @@ extension WithdrawScreen {
             note: texts.text("pending_confirm.withdraw.note"), notice: flowState.pendingNotice,
             blocked: gate.blocked, busy: flowState.pendingCardBusy, actionsEnabled: flowState.pendingActionsEnabled,
             actions: flowActions,
+            abandonFocus: $abandonFocused,
             link: PendingCard.Link(title: texts.text("pending_confirm.withdraw.records"), action: actions.records)
         )
     }
@@ -281,7 +282,8 @@ extension WithdrawScreen {
             HStack(spacing: CouliSpacing.s1) {
                 WithdrawEstimateText(line: estimateText(line), net: estimateNet(line))
                 WalletIconButton(.help, base: CouliComponentMetric.iconInline - 2, relativeTo: .footnote,
-                                 label: texts.text("wallet.help.fee_tax_label"), probe: "withdraw.estimate.help") {
+                                 label: texts.text("wallet.help.fee_tax_label"), probe: "withdraw.estimate.help",
+                                 focus: $feeHelpFocused) {
                     feeHelp = true
                 }
             }

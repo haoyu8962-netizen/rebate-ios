@@ -87,7 +87,8 @@ struct OrderCard: View {
         Color.clear
             .accessibilityElement()
             .accessibilityLabel(Text(verbatim: OrderCardSpeech.label(item, texts: texts, hidden: hidden)))
-            .accessibilityAddTraits(.isStaticText)
+            // 按钮角色：双击进订单详情（FU-IOS-A11Y-10）
+            .accessibilityAddTraits(.isButton)
             .accessibilitySortPriority(1)
             .accessibilityAction { onOpen() }
             .accessibilityIdentifier(OrderNumberDisplay.view(item).copyable ? "order.number" : "order.maskedNumber")

@@ -14,8 +14,7 @@ public struct CouliDialogAction {
 }
 
 /// 居中弹窗（GUIDE §3「弹窗」、§6、§7.2；adaptation-a11y-spec §4、§8）：模态，焦点进标题，底层对读屏隐藏，
-/// 关闭后焦点回到触发控件（`couliDialog(restoreFocusTo:)`）；
-/// 正文放不下时只有正文滚动，标题与按钮行固定可见（320×568、200% 字号、长正文同样）。
+/// 关闭后焦点回到触发控件（`couliDialog(restoreFocusTo:)`）；正文放不下时只有正文滚动，标题与按钮行固定可见（320×568、200% 字号）。
 /// 按钮行：次按钮在前、主按钮在后，放不下时整块换行、主按钮在上（wrap-reverse）。点遮罩不关闭（由调用方的按钮关闭）。
 public struct CouliDialog: View {
     private let title: String
@@ -28,15 +27,15 @@ public struct CouliDialog: View {
     private let onEscape: (() -> Void)?
     @AccessibilityFocusState private var titleFocused: Bool
 
-    /// `centeredTitle`、`probeID` 同自定义正文版（缺省不变），测量多一个 `.message`（带设计字号）。
+    /// `centeredTitle`、`probeID`、`onEscape`（读屏「返回」手势，FU-IOS-A11Y-01）同自定义正文版（缺省不变），测量多一个 `.message`。
     public init(title: String, message: String? = nil, centeredTitle: Bool = false, probeID: String? = nil,
-                primary: CouliDialogAction, secondary: CouliDialogAction? = nil) {
+                onEscape: (() -> Void)? = nil, primary: CouliDialogAction, secondary: CouliDialogAction? = nil) {
         self.title = title
         self.message = message
         content = nil
         self.centeredTitle = centeredTitle
         self.probeID = probeID
-        onEscape = nil
+        self.onEscape = onEscape
         self.primary = primary
         self.secondary = secondary
     }
@@ -249,6 +248,7 @@ public struct CouliSheet<Content: View, Actions: View>: View {
         .accessibilityElement(children: .contain)
         .modifier(SheetPaneName(name: showsTitle ? nil : title))
         .accessibilityAddTraits(.isModal)
+        .modifier(DialogEscape(action: onClose)) // 读屏「返回」手势 = 关闭键（FU-IOS-A11Y-02，见 DialogEscape）
         .task {
             // 等面板挂上无障碍树、底层隐藏生效后再把读屏焦点放到标题（adaptation-a11y-spec §4）；无标题时放到关闭。
             try? await Task.sleep(nanoseconds: ModalFocus.titleFocusDelayNanos)

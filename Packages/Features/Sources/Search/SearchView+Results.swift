@@ -247,12 +247,11 @@ extension SearchView {
                 mapping.data.buyState = .disabled
             }
         }
-        let key = item["product_key"] as? String
+        let key = item["product_key"] as? String ?? ""
         let ref = item["item_ref"] as? String
         let open = {
-            if let key, !key.isEmpty {
-                config.onOpenProduct(platform, key, ref)
-            }
+            guard !key.isEmpty else { return }
+            config.onOpenProduct(platform, key, ref)
         }
         return ProductCard(
             mapping.data,
@@ -267,11 +266,13 @@ extension SearchView {
                 disclaimer = DisclaimerNote(lines: mapping.disclaimerLines)
             },
             disclaimerFocus: disclaimerIndex == index ? $infoFocused : nil,
+            // 整卡读屏一项、按钮角色、双击进详情（FU-IOS-A11Y-04）；卡上方的下架胶囊、卡下的比价原因句并进这一项
+            onOpen: open, spokenLabel: SearchCardSpeech.label(mapping.data, item, texts, offShelf: offShelf),
             // 契约 image（共性 22）：加载中、为空、失败时显示占位底。
             image: { ProductRemoteImage(url: ProductImageSource.url(item["image"])) }
         )
         .contentShape(Rectangle())
-        // 点卡片（读屏双击标题）进详情；卡内 i 按钮与购买按钮各自独立聚焦。
+        // 点卡片进详情（读屏另由整卡一项双击）；卡内 i 按钮与购买按钮各自独立聚焦。
         .onTapGesture(perform: open)
         // 卡下的比价原因行；下架灰胶囊（APP-06v G-D07：下架不出轻提示，卡下可读「商品已下架」，Android b r1 S2-1 同口径）
         .modifier(SearchCardRows(item: item, texts: texts, offShelf: offShelf, onOpen: open) { config.onSimilar(item) })
@@ -308,6 +309,8 @@ struct SearchCompareReason: ViewModifier {
                         .couliFont(.footnote)
                         .foregroundColor(CouliColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        // 原因句由整卡一项读出（SearchCardSpeech），这里不再单独停留
+                        .accessibilityHidden(true)
                     CouliButton(texts.text(SearchKeys.similar), kind: .text, size: .compact, action: onSimilar)
                         .accessibilityIdentifier("search.similar")
                 }
@@ -352,6 +355,8 @@ struct SearchOffShelfState: ViewModifier {
                     .padding(.horizontal, CouliSpacing.s3)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onOpen)
+                    // 「商品已下架」由整卡一项最先读出（SearchCardSpeech），胶囊不再单独停留
+                    .accessibilityHidden(true)
                     .accessibilityIdentifier("search.offShelf")
             }
             content
@@ -360,5 +365,20 @@ struct SearchOffShelfState: ViewModifier {
             guard CouliStatusAnnouncer.shouldAnnounce(was: !now, now: now) else { return }
             CouliStatusAnnouncer.polite(label)
         }
+    }
+}
+
+/// 搜索结果卡的整卡读屏名（FU-IOS-A11Y-04）：下架胶囊（卡上方）→ 卡片本身（DS `ProductCardSpeech.list`）→ 比价原因句（卡下方），
+/// 与眼睛看到的顺序一致；【看看相似商品】仍是独立按钮。
+enum SearchCardSpeech {
+    static func label(_ data: ProductCardData, _ item: [String: Any], _ texts: SearchTexts, offShelf: Bool) -> String {
+        var parts = [ProductCardSpeech.list(data)]
+        if offShelf {
+            parts.insert(texts.text("error.30141"), at: 0)
+        }
+        if item["no_rebate_cause"] as? String == "price_compare" {
+            parts.append(texts.text(SearchKeys.compareReason))
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: PriceTerms.spokenPause)
     }
 }

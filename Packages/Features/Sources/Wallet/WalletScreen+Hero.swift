@@ -18,6 +18,8 @@ struct WalletHeroPanel: View {
     let texts: WalletTexts
     let actions: WalletActions
     let onHelp: (String) -> Void
+    /// 冻结中问号的读屏焦点绑定（说明半屏关闭后焦点回到它，FU-IOS-A11Y-06）。
+    let frozenHelpFocus: AccessibilityFocusState<Bool>.Binding?
     @ScaledMetric(relativeTo: .footnote) private var rowLine: CGFloat = CouliTextStyle.footnote.baseSize
         * CouliTextStyle.footnote.lineHeightMultiple
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -145,7 +147,7 @@ struct WalletHeroPanel: View {
                     .accessibilityLabel(Text(verbatim: label + PriceTerms.spokenPause + spoken(amount.fen)))
                 if let help {
                     WalletIconButton(.help, base: CouliComponentMetric.iconSmall, label: help, onBrand: true,
-                                     probe: id + ".help") { onHelp("frozen") }
+                                     probe: id + ".help", focus: frozenHelpFocus) { onHelp("frozen") }
                 }
             }
             .walletProbe(id + ".labelRow", role: "row")

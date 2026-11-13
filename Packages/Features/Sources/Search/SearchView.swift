@@ -71,6 +71,8 @@ public struct SearchView: View {
             CouliDialog(
                 title: texts.text(SearchKeys.disclaimerTitle),
                 message: disclaimer?.lines.joined(separator: "\n") ?? "",
+                // 读屏「返回」手势等同【知道了】（FU-IOS-A11Y-01）
+                onEscape: { disclaimer = nil },
                 primary: CouliDialogAction(texts.text(SearchKeys.disclaimerClose)) { disclaimer = nil }
             )
         }

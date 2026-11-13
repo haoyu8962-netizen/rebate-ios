@@ -47,6 +47,8 @@ struct PendingCard: View {
     /// 【确认上一笔】/【放弃】可用（不在途、没有待身份确认的结果）。
     let actionsEnabled: Bool
     let actions: FlowActions
+    /// 【放弃】的读屏焦点绑定（「放弃上一笔」确认框关闭后焦点回到它，FU-IOS-A11Y-07）；nil 不挂。
+    var abandonFocus: AccessibilityFocusState<Bool>.Binding?
     var extra: AnyView?
     /// 注释行右侧的链接（提现：【查看提现记录 ›】）。
     var link: Link?
@@ -174,6 +176,7 @@ struct PendingCard: View {
                     labelProbeID: "pending.abandon.label", horizontalPadding: CouliSpacing.s2,
                     weight: .couliMedium, mutedWhenDisabled: true, action: actions.askAbandon)
             .walletProbe("pending.abandon", role: "button")
+            .modifier(WalletFocusBinding(focus: abandonFocus))
             .accessibilityIdentifier("pending.abandon")
     }
 

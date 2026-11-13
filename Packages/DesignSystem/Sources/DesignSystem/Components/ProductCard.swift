@@ -19,6 +19,10 @@ public struct ProductCard<ImageContent: View>: View {
     private let onBuy: () -> Void
     private let onDisclaimer: (() -> Void)?
     private let disclaimerFocus: AccessibilityFocusState<Bool>.Binding?
+    /// 点整卡（读屏双击整卡）的出口；给了就把卡内文字合成一个整卡读屏按钮（FU-IOS-A11Y-04），只留口径 i 与购买两个独立按钮。
+    private let onOpen: (() -> Void)?
+    /// 整卡读屏名（nil = `ProductCardSpeech.list(data)`）；调用方要在前后加卡外的状态（下架、比价原因）时传。
+    private let spokenLabel: String?
     /// false（APP-11v-b 识别卡单张，HomeClipboardCard-v3）：不画卡底与内边距，直接排在半屏里；默认 true，其余调用方不变。
     private let framed: Bool
     @State private var disclaimerExpanded = false
@@ -27,12 +31,16 @@ public struct ProductCard<ImageContent: View>: View {
     /// - Parameters:
     ///   - onDisclaimer: 给了就由调用方打开口径说明弹层（SearchDisclaimerNote），i 按钮不在卡内展开。
     ///   - disclaimerFocus: i 按钮的读屏焦点绑定（弹层关闭后焦点回到这里，`couliDialog(restoreFocusTo:)`）。
+    ///   - onOpen: 整卡打开详情（缺省 nil：读屏结构不变，各段文字各自一项）。点卡的手势仍由调用方挂（与以前一样），这里只给读屏。
+    ///   - spokenLabel: 整卡读屏名（只在 `onOpen` 给了时用；nil 按 `ProductCardSpeech.list`）。
     public init(
         _ data: ProductCardData,
         layout: ProductCardLayout = .list,
         onBuy: @escaping () -> Void,
         onDisclaimer: (() -> Void)? = nil,
         disclaimerFocus: AccessibilityFocusState<Bool>.Binding? = nil,
+        onOpen: (() -> Void)? = nil,
+        spokenLabel: String? = nil,
         framed: Bool = true,
         @ViewBuilder image: () -> ImageContent
     ) {
@@ -41,6 +49,8 @@ public struct ProductCard<ImageContent: View>: View {
         self.onBuy = onBuy
         self.onDisclaimer = onDisclaimer
         self.disclaimerFocus = disclaimerFocus
+        self.onOpen = onOpen
+        self.spokenLabel = spokenLabel
         self.framed = framed
         self.image = image()
     }
@@ -55,6 +65,11 @@ public struct ProductCard<ImageContent: View>: View {
         dynamicTypeSize >= .accessibility1
     }
 
+    /// 卡内文字合进整卡一项（只读看得见的内容，D10-1248 ⑦）。
+    private var summarized: Bool {
+        onOpen != nil
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: CouliSpacing.s2) {
             ImageLeadingLayout(spacing: CouliSpacing.s3) {
@@ -64,6 +79,7 @@ public struct ProductCard<ImageContent: View>: View {
                         platform: data.platformName, platformCode: data.platformCode, title: data.title,
                         style: .footnote, lineLimit: 2
                     )
+                    .accessibilityHidden(summarized)
                     .padding(
                         .trailing,
                         layout == .agent && ProductCardData.showsDisclaimerButton(data)
@@ -86,6 +102,7 @@ public struct ProductCard<ImageContent: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .background(summaryElement)
         .modifier(ProductCardFrame(framed: framed))
         .overlay(alignment: .topTrailing) {
             if layout == .agent, ProductCardData.showsDisclaimerButton(data) {
@@ -117,6 +134,7 @@ public struct ProductCard<ImageContent: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityHidden(summarized)
     }
 
     private var bottomRow: some View {
@@ -131,6 +149,7 @@ public struct ProductCard<ImageContent: View>: View {
                                 .couliFont(.caption)
                                 .foregroundColor(CouliColor.textSecondary)
                                 .fixedSize()
+                                .accessibilityHidden(summarized)
                         }
                         if showsInfo {
                             DisclaimerInfoButton(
@@ -156,6 +175,19 @@ public struct ProductCard<ImageContent: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 整卡读屏一项（同订单卡写法）：读「平台，商品名，标签，价格，返利，副行，结算说明」、按钮角色、双击打开详情；排在卡内第一项。
+    @ViewBuilder private var summaryElement: some View {
+        if let onOpen {
+            Color.clear
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: spokenLabel ?? ProductCardSpeech.list(data)))
+                .accessibilityAddTraits(.isButton)
+                .accessibilitySortPriority(1)
+                .accessibilityAction { onOpen() }
+                .accessibilityIdentifier("product.card.summary")
+        }
+    }
+
     private var buyContext: BuyButtonContext {
         layout == .agent ? .agent : .list
     }
@@ -172,18 +204,6 @@ public extension ProductCard where ImageContent == EmptyView {
     ) {
         self.init(data, layout: layout, onBuy: onBuy, onDisclaimer: onDisclaimer, disclaimerFocus: disclaimerFocus) {
             EmptyView()
-        }
-    }
-}
-
-extension View {
-    /// 有绑定时挂读屏焦点，没有时原样。
-    @ViewBuilder
-    func couliOptionalFocus(_ binding: AccessibilityFocusState<Bool>.Binding?) -> some View {
-        if let binding {
-            accessibilityFocused(binding)
-        } else {
-            self
         }
     }
 }

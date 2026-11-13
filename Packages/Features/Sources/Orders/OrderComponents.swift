@@ -40,7 +40,7 @@ enum OrderKeys {
     static let quantity = "order_list.quantity"
     static let orderNo = "order_list.order_no"
     static let copy = "order_list.copy"
-    static let copyLabel = "order_list.copy_label"
+    static let copySpoken = "order_list.copy_spoken"
     static let starSpoken = "order_list.star_spoken"
     static let imagePlaceholder = "order_list.image_placeholder"
     static let retry = "order_list.retry"

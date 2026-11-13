@@ -114,7 +114,9 @@ public struct OrderDraftTexts: OrderTexts {
         "order_list.quantity": "件数 {n}",
         "order_list.order_no": "订单号 {no}",
         "order_list.copy": "复制",
-        "order_list.copy_label": "复制订单号",
+        // 读屏：【复制】读出本行完整单号（FU-IOS-A11Y-05，D10-1248 ⑨，三端同名）。契约 texts.default.json 还没有这个键，
+        // 补进契约后删这一条（编排已请开契约单，notices 11-12 07:10）
+        "order_list.copy_spoken": "复制订单号 {no}",
         // 读屏：分享单脱敏号里的「*」读作「星号」（adaptation-a11y-spec §9）
         "order_list.star_spoken": "星号",
         "order_list.image_placeholder": "商品图",

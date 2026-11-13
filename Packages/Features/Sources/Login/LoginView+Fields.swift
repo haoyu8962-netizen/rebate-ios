@@ -28,6 +28,9 @@ extension LoginView {
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.statusErrorText)
                     .fixedSize(horizontal: false, vertical: true)
+                    // 出错立即播报，播完读屏焦点移到这一行（FU-IOS-A11Y-03）
+                    .couliAnnounceThenFocus(model.phoneError, trigger: model.phoneErrorCount,
+                                            focusProbeID: "login.phoneError")
                     .accessibilityIdentifier("login.phoneError")
             }
         }
@@ -55,6 +58,8 @@ extension LoginView {
                 .accessibilityLabel(Text(verbatim: text(LoginKeys.agreePrefix)))
                 .accessibilityHint(Text(verbatim: text(LoginKeys.agreeHint)))
                 .accessibilityAddTraits(model.agreed ? [.isButton, .isSelected] : .isButton)
+                // 合并成一项后按钮自带的默认动作不再保证保留（读屏双击只能靠模拟点按）：显式给默认动作 = 切换勾选
+                .accessibilityAction { model.toggleAgreement() }
                 .accessibilityIdentifier("login.agreeCheckbox")
                 AgreementLinkButton(title: text(LoginKeys.agreeAgreement), id: "login.link.agreement") {
                     model.config.onAgreement(LoginViewModel.agreementType)

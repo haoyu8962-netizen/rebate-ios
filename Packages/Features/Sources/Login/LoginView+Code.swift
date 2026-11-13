@@ -33,6 +33,9 @@ extension LoginView {
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.statusErrorText)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // 出错立即播报，播完读屏焦点移到这一行（FU-IOS-A11Y-03）
+                    .couliAnnounceThenFocus(model.codeError, trigger: model.codeErrorCount,
+                                            focusProbeID: "login.codeError")
                     .accessibilityIdentifier("login.codeError")
             }
             HStack {
@@ -84,6 +87,8 @@ extension LoginView {
             CouliDialog(
                 title: text(titleKey),
                 message: text(LoginKeys.riskBlockedDesc),
+                // 读屏「返回」手势等同【我知道了】，不走申诉 / 客服（FU-IOS-A11Y-01）
+                onEscape: { model.dialog = nil },
                 primary: CouliDialogAction(text(LoginKeys.riskBlockedOK)) { model.dialog = nil },
                 secondary: CouliDialogAction(text(LoginKeys.appeal)) {
                     model.dialog = nil
@@ -94,6 +99,7 @@ extension LoginView {
             // 第三方登录 44001（共性第 5 条）：对应文案 + 统一客服出口的申诉入口；不套用短信注册的专用说明句
             CouliDialog(
                 title: text(titleKey),
+                onEscape: { model.dialog = nil },
                 primary: CouliDialogAction(text(LoginKeys.riskBlockedOK)) { model.dialog = nil },
                 secondary: CouliDialogAction(text(LoginKeys.appeal)) {
                     model.dialog = nil
@@ -104,6 +110,7 @@ extension LoginView {
             CouliDialog(
                 title: text(LoginKeys.deletionTitle),
                 message: text(LoginKeys.deletionBody),
+                onEscape: { model.dialog = nil },
                 primary: CouliDialogAction(text(LoginKeys.deletionOK)) { model.dialog = nil },
                 secondary: CouliDialogAction(text(LoginKeys.deletionCS)) {
                     model.dialog = nil
@@ -115,6 +122,8 @@ extension LoginView {
             CouliDialog(
                 title: text(LoginKeys.confirmTitle),
                 centeredTitle: true,
+                // 读屏「返回」手势等同【取消】：不算同意、不发码
+                onEscape: model.cancelAgreement,
                 primary: CouliDialogAction(text(LoginKeys.confirmOK), action: model.confirmAgreement),
                 secondary: CouliDialogAction(text(LoginKeys.confirmCancel), action: model.cancelAgreement)
             ) {

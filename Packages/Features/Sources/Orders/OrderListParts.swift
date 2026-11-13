@@ -142,6 +142,8 @@ struct OrderListNumber: View {
                     CouliDigitsScroller(probe: probe + ".number") {
                         line(text).probedNumber(probe, text: text, size: size)
                     }
+                    // 单号由整卡一项读出；横滑条本身不进读屏（否则多出一个空名称的停留点，NUM-WRAP r2 S2-1）
+                    .accessibilityHidden(true)
                     if number.copyable {
                         copyBoxed(raw)
                     }
@@ -183,8 +185,13 @@ struct OrderListNumber: View {
         }
         .buttonStyle(.plain)
         .couliProbe(probe + ".copy", role: "hit")
-        .accessibilityLabel(Text(verbatim: texts.text(OrderKeys.copyLabel)))
+        .accessibilityLabel(Text(verbatim: copySpoken(raw)))
         .accessibilityIdentifier("order.copy")
+    }
+
+    /// 【复制】读「复制订单号 {本行完整单号}」（FU-IOS-A11Y-05，D10-1248 ⑨：列表与详情同读完整单号，同屏各行能区分）。
+    private func copySpoken(_ raw: String) -> String {
+        texts.format(OrderKeys.copySpoken, ["no": raw])
     }
 
     private func copyButton(_ raw: String) -> some View {
@@ -197,7 +204,7 @@ struct OrderListNumber: View {
         }
         .buttonStyle(.plain)
         .couliProbe(probe + ".copy", role: "hit")
-        .accessibilityLabel(Text(verbatim: texts.text(OrderKeys.copyLabel)))
+        .accessibilityLabel(Text(verbatim: copySpoken(raw)))
         .accessibilityIdentifier("order.copy")
     }
 }

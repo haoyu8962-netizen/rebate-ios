@@ -115,17 +115,21 @@ struct WalletIconButton: View {
     let label: String
     var onBrand = false
     let probe: String?
+    /// 读屏焦点绑定（弹层关闭后焦点回到这里，`restoreFocusTo:`）；nil 不挂。
+    let focus: AccessibilityFocusState<Bool>.Binding?
     let action: () -> Void
     @ScaledMetric private var size: CGFloat
 
     init(_ icon: CouliIcon, base: CGFloat, relativeTo: Font.TextStyle = .footnote, label: String,
-         onBrand: Bool = false, probe: String?, action: @escaping () -> Void) {
+         onBrand: Bool = false, probe: String?, focus: AccessibilityFocusState<Bool>.Binding? = nil,
+         action: @escaping () -> Void) {
         self.icon = icon
         self.base = base
         self.relativeTo = relativeTo
         self.label = label
         self.onBrand = onBrand
         self.probe = probe
+        self.focus = focus
         self.action = action
         _size = ScaledMetric(wrappedValue: base, relativeTo: relativeTo)
     }
@@ -142,6 +146,20 @@ struct WalletIconButton: View {
         .buttonStyle(CouliPlainButtonStyle(cornerRadius: CouliRadius.small, onBrand: onBrand))
         .padding(-(hit - size) / 2)
         .accessibilityLabel(Text(verbatim: label))
+        .modifier(WalletFocusBinding(focus: focus))
+    }
+}
+
+/// 有绑定时挂读屏焦点（`accessibilityFocused(_:)`），没有时原样。
+struct WalletFocusBinding: ViewModifier {
+    let focus: AccessibilityFocusState<Bool>.Binding?
+
+    func body(content: Content) -> some View {
+        if let focus {
+            content.accessibilityFocused(focus)
+        } else {
+            content
+        }
     }
 }
 

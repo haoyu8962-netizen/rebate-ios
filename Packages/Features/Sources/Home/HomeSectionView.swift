@@ -109,6 +109,13 @@ struct HomeSectionView: View {
         }
     }
 
+    /// 「更多」的读屏名：文案键 `home.more_spoken`（「{title} 更多」）；取不到时用标题 + 「更多」。
+    static func moreLabel(title: String, text: (String) -> String) -> String {
+        let template = text("home.more_spoken")
+        guard template.contains("{title}") else { return title + " " + text("home.more") }
+        return template.replacingOccurrences(of: "{title}", with: title)
+    }
+
     /// 区段标题 17/600 +「更多 ›」强调色 14（命中区 44，Main-v3）。没有标题的区段不画。
     @ViewBuilder private var header: some View {
         if let title = section.title {
@@ -128,6 +135,8 @@ struct HomeSectionView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    // 读屏名带区段标题（「今日精选 更多」），同屏几个「更多」能区分（FU-IOS-A11Y-11）
+                    .accessibilityLabel(Text(verbatim: Self.moreLabel(title: title, text: controller.text)))
                     .accessibilityIdentifier("home.more.\(section.id)")
                     .couliProbe("home.more.\(section.id)", role: "independent-hit")
                 }
