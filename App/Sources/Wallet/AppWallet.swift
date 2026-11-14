@@ -3,6 +3,7 @@ import Combine
 import CouliNetwork
 import Foundation
 import Generated
+import Login
 import OrderCore
 import Privacy
 import Router
@@ -37,8 +38,11 @@ final class AppWallet: ObservableObject, WalletEnv {
     var writer: ClipboardWriter?
     /// 埋点（route_params_dropped）。
     var track: (TrackEvent) -> Void = { _ in }
-    /// 二次验证发码的号码（G31）：Release 恒为 nil（本机不保存手机号，iOS I01）；Debug 假服务给测试号。
+    /// 二次验证发码槽位的键（G31 起的旧名；D10-1658 ①）：号码不上送，只作本机发码截止时间与在途占用的键。Release 为 nil（面板用占位）；
+    /// Debug 假服务给测试号。能否发码不看它，看 `phoneBound`。
     var phoneProvider: (String) -> String? = { _ in nil }
+    /// 给定会话世代那一代会话的 Me.phone_bound（AppLogin 的 PhoneBindingStore：短信登录、getMe、绑定成功记下；未知为 nil；D10-1682 ②）。
+    var phoneBound: @MainActor (UInt64) -> Bool? = { _ in nil }
     /// 统一客服出口（APP-12 接上 AppMe.cs；接入前经 Router 打开 Help，同 APP-08 G09）。
     var customerService: (String) -> Void
     /// getMe 的共享读取截止时间（APP-12 MeGates.read；实名查询与「我的」、桥 auth.getUser 共用，双向生效）。nil = 没接。
@@ -97,6 +101,8 @@ final class AppWallet: ObservableObject, WalletEnv {
         deps = WalletDeps(
             api: self.api, env: self, gates: gates, cache: cleaner.store, mask: mask, realname: realname, labor: nil
         )
+        let binding = login.phone
+        phoneBound = { generation in binding.bound(generation: generation) }
         // 摘要与金额草稿按「账号 + 持久化登录世代」分区（FU-IOS-0712）：世代与会话可用性同口径，未知不读不写；世代只取执行器构造时
         // 固定的那一份（WalletOwner.loginEpoch，R1-01），存储不读当前世代
         cleaner.store.partitionedByLoginEpoch = true
@@ -219,6 +225,12 @@ final class AppWallet: ObservableObject, WalletEnv {
 
     func stepUpPhone(account: String) -> String? {
         phoneProvider(account)
+    }
+
+    /// 面板身份固定的那一代会话的绑定状态（按 `WalletOwner.request.generation` 取，不读此刻的会话；会话已换代即未知）。
+    func stepUpPhoneBound(_ owner: WalletOwner) -> Bool? {
+        guard owner.account != nil, let generation = owner.request?.generation else { return nil }
+        return phoneBound(generation)
     }
 
     func markWalletDirty(_ owner: WalletOwner) {

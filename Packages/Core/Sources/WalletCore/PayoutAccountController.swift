@@ -56,7 +56,8 @@ public final class PayoutAccountController: ObservableObject, IdentityResumable 
         self.deps = deps
         flow = SensitiveFlow(
             deps: deps, operationId: Self.operation, action: Self.action, outcomeOp: SensitiveOutcome.payoutAccount,
-            gate: deps.gates.payout, marksWalletDirty: false, alive: { true }, owner: owner
+            gate: deps.gates.payout, marksWalletDirty: false, alive: { true }, owner: owner,
+            stepUpSummary: StepUpSummary.payoutChange(body:)
         )
         flow.alive = { [weak self] in self.map { !$0.left } ?? false }
         flow.host = self

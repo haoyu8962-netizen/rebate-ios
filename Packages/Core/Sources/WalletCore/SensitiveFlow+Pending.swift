@@ -8,6 +8,8 @@ final class PendingIntent {
     let account: String
     let key: String
     var stepUpReplayed = false
+    /// 点击时本机未决记录里这个键的原请求体（推二次验证的业务摘要；读不到为 nil）。
+    var body: String?
 
     init(owner: WalletOwner, account: String, key: String) {
         self.owner = owner
@@ -26,9 +28,16 @@ public extension SensitiveFlow {
             state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
         }
+        // 缓存的令牌只在业务摘要与未决记录原体相同时带上（改收款；提现摘要为 nil，照旧按同 action，D10-1667）
+        let summary = StepUpSummary.key(stepUpSummary(intent.body))
         runConfirm(
             intent,
-            token: deps.tokens.take(action: action, account: intent.account, nowMs: deps.env.nowMillis())
+            token: deps.tokens.take(
+                action: action,
+                account: intent.account,
+                nowMs: deps.env.nowMillis(),
+                summary: summary
+            )
         )
     }
 
@@ -142,7 +151,9 @@ extension SensitiveFlow {
         guard let pending = state.pending, pending.key == key, alive(), !pending.inFlight, !state.awaitingIdentity,
               owns(owner), let account = owner.account
         else { return nil }
-        return PendingIntent(owner: owner, account: account, key: key)
+        let intent = PendingIntent(owner: owner, account: account, key: key)
+        intent.body = pendingBody?.key == key ? pendingBody?.body : nil
+        return intent
     }
 
     /// 点击时的目标（共性第 14、15 条）：记录账号与原键、固定的网络归属；共享禁用期是发送前闸门（首次发送与管线续发前都核对）。
@@ -223,9 +234,11 @@ extension SensitiveFlow {
         case .unreadable:
             state.pendingUnreadable = true
         case .none:
+            pendingBody = nil
             reconcile(nil)
         case let .record(record):
             guard record.account == account else { return }
+            pendingBody = (record.key, record.body)
             reconcile(PendingView(
                 key: record.key, summary: record.summary, createdAtMillis: record.createdAtMillis,
                 inFlight: record.stateRaw == PendingKeyStore.inFlight
@@ -303,6 +316,7 @@ extension SensitiveFlow {
         lastBody = nil
         lastSummary = ""
         lastClick = nil
+        pendingBody = nil
         stepUpIntent = nil
         guideOwner = nil
         stepUp.dismiss()

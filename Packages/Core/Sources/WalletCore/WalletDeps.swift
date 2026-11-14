@@ -107,8 +107,12 @@ public protocol WalletEnv: AnyObject {
     func copy(_ text: String) -> Bool
     /// 【联系客服】/【联系客服申诉】：统一客服出口接入前经 Router 打开 Help（同 APP-08 G09）。
     func contactService(from route: String)
-    /// 二次验证发码用的手机号（G31）：本机有当前账号、并且绑定了账号归属的号码才给；没有为 nil（不编造，不让用户另填；iOS I01）。
+    /// 二次验证发码槽位的键（G31 起的旧名）：B1-02zzz 起 step_up 发码不带 phone，这个值只作本机发码截止时间、限流与在途占用的键，不上送、
+    /// 不显示；没有为 nil（面板用占位 `StepUpController.boundSlot`）。能否发码改看 `stepUpPhoneBound`（D10-1682 ②）。
     func stepUpPhone(account: String) -> String?
+    /// 面板身份那一代会话的 Me.phone_bound（D10-1682 ②）：true 已绑；false 未绑——面板不发码（noPhone）；nil 未知（没查清、已换代）——照常发码，
+    /// 服务端没绑手机回 20001 data.fields=[code]（D10-1658 ①）。缺省 nil。
+    func stepUpPhoneBound(_ owner: WalletOwner) -> Bool?
     /// 钱包摘要需要刷新（提现成功、放弃得到 completed 成功，G19）：`owner` 是共享结算已核对的点击时身份，原样放进失效通知。
     func markWalletDirty(_ owner: WalletOwner)
     /// 实名成功：刷新 GET /v1/me 的 realname_status，守卫按已实名放行（G05）。
@@ -299,6 +303,10 @@ public final class SmsDeadlines {
 }
 
 public extension WalletEnv {
+    func stepUpPhoneBound(_: WalletOwner) -> Bool? {
+        nil
+    }
+
     func check(_ owner: WalletOwner) -> IdentityCheck {
         isCurrent(owner) ? .current : .stale
     }

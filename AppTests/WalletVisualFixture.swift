@@ -183,6 +183,11 @@ final class WalletVisualEarningsEnv: WalletEnv {
         base.stepUpPhone(account: account)
     }
 
+    /// Me.phone_bound 原样转给 AppWallet（不转就落到协议缺省 nil，面板永远不进 noPhone）。// modify_existing ruling D10-1720 ④
+    func stepUpPhoneBound(_ owner: WalletOwner) -> Bool? {
+        base.stepUpPhoneBound(owner)
+    }
+
     func markWalletDirty(_ owner: WalletOwner) {
         base.markWalletDirty(owner)
     }

@@ -200,7 +200,8 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     /// 取不到号码：说明位换成 no_phone，不发码、无倒计时无重发、按钮置灰、格子不可输入。
     func testNoPhoneState() async throws {
-        let host = try await panelOnWithdraw(phone: false)
+        // modify_existing ruling D10-1720 ④：noPhone 只由已知没绑手机的改收款面板进入（提现不再按号码 / phone_bound 本地拦）
+        let host = try await panelOnPayout(phoneBound: false)
         _ = await host.stable { $0.probes["stepUp.title"] != nil }
         XCTAssertEqual(try text("stepUp.sent"), texts.text("step_up.no_phone"))
         XCTAssertEqual(smsSends.count, 0, "不发码")

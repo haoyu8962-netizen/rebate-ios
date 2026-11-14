@@ -59,15 +59,19 @@ class StepUpVisualTestCase: WithdrawVisualTestCase {
     }
 
     /// 打开提现页并点【提交】→ 10003 → 面板就绪（不要求任何新测量：资金守卫不能把「测量桥未接」混进来）。
+    /// `phoneBound`：给定时把 App 的 Me.phone_bound 接线（`AppWallet.phoneBound`，面板经 `stepUpPhoneBound` 读）固定为它；nil 保持夹具缺省。
     @discardableResult
     func panelOnWithdraw(canvas: WithdrawVisualHost.Canvas = .init(), large: UIContentSizeCategory? = nil,
-                         sms: WalletStubProtocol.Reply? = nil, phone: Bool = true, file: StaticString = #filePath,
-                         line: UInt = #line) async throws -> WithdrawVisualHost {
+                         sms: WalletStubProtocol.Reply? = nil, phone: Bool = true, phoneBound: Bool? = nil,
+                         file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
         let (host, _) = try await openWithdraw(amount: "10", estimate: "estimated", canvas: canvas,
                                                needProbes: false, file: file, line: line)
         host.wallet.clock = { Self.frozenMillis }
         if !phone {
             host.wallet.phoneProvider = { _ in nil }
+        }
+        if let phoneBound {
+            host.wallet.phoneBound = { _ in phoneBound } // modify_existing ruling D10-1720 ④
         }
         host.server.script.on("POST /v1/withdrawals", Self.need, .envelope(
             code: 0, data: WalletSamples.withdrawal("W-step"), headers: [:]
@@ -82,11 +86,15 @@ class StepUpVisualTestCase: WithdrawVisualTestCase {
         return host
     }
 
-    /// 打开收款账号页（未绑定）、填表单、点【保存】→ 10003 → 面板就绪。
+    /// 打开收款账号页（未绑定）、填表单、点【保存】→ 10003 → 面板就绪。`phoneBound`：同 `panelOnWithdraw`（false 时改收款面板进 noPhone、
+    /// 不发码，D10-1682 ②）。
     @discardableResult
-    func panelOnPayout(canvas: WithdrawVisualHost.Canvas = .init(), file: StaticString = #filePath,
-                       line: UInt = #line) async throws -> WithdrawVisualHost {
+    func panelOnPayout(canvas: WithdrawVisualHost.Canvas = .init(), phoneBound: Bool? = nil,
+                       file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
         let host = try await freshPage(payout: "empty")
+        if let phoneBound {
+            host.wallet.phoneBound = { _ in phoneBound } // modify_existing ruling D10-1720 ④
+        }
         host.server.script.on("PUT /v1/me/payout-account", Self.need, .envelope(
             code: 0, data: WalletSamples.alipay, headers: [:]
         ))

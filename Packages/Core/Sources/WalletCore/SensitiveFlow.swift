@@ -120,6 +120,8 @@ public final class SensitiveFlow: ObservableObject {
     public let action: String
     /// 结局表的 op：withdraw / payout_account。
     let outcomeOp: String
+    /// 按原请求体推出二次验证令牌要绑定的业务摘要（改收款为 `StepUpSummary.payoutChange`；提现恒为 nil，D10-1665 / D10-1667）。
+    let stepUpSummary: (String?) -> [String: String]?
     let gate: RetryAfterGate
     /// 原操作成功时通知钱包刷新（提现为 true；共享结算由 `WalletSettlement` 按任务持有的 `WriteTicket` 完成）。
     let marksWalletDirty: Bool
@@ -135,6 +137,8 @@ public final class SensitiveFlow: ObservableObject {
     var lastSummary = ""
     /// 最近一次点击【提交】/【保存】时固定的身份（二次验证后的原键重放沿用它，共性第 39 条）。
     var lastClick: WalletOwner?
+    /// 最近一次按本机记录重建待确认时读到的未决键与原请求体（确认上一笔推业务摘要用；只在内存，不进界面状态）。
+    var pendingBody: (key: String, body: String)?
     var serial = 0
     /// 同一个流程同时只有一个提交 / 确认 / 放弃在途：发出时的可见世代。
     var sentViewGen = 0
@@ -150,11 +154,13 @@ public final class SensitiveFlow: ObservableObject {
     public let deferral = IdentityDeferral()
 
     init(deps: WalletDeps, operationId: String, action: String, outcomeOp: String, gate: RetryAfterGate,
-         marksWalletDirty: Bool, alive: @escaping () -> Bool, owner: WalletOwner) {
+         marksWalletDirty: Bool, alive: @escaping () -> Bool, owner: WalletOwner,
+         stepUpSummary: @escaping (String?) -> [String: String]? = { _ in nil }) {
         self.deps = deps
         self.operationId = operationId
         self.action = action
         self.outcomeOp = outcomeOp
+        self.stepUpSummary = stepUpSummary
         self.gate = gate
         self.marksWalletDirty = marksWalletDirty
         self.alive = alive
@@ -218,7 +224,11 @@ public final class SensitiveFlow: ObservableObject {
         state.fieldErrors = []
         state.fieldErrorKey = nil
         state.guideRoute = nil
-        let token = deps.tokens.take(action: action, account: account, nowMs: deps.env.nowMillis())
+        // 缓存的令牌只在业务摘要与本次请求体相同时带上（改收款；提现摘要为 nil，照旧按同 action，D10-1667）
+        let token = deps.tokens.take(
+            action: action, account: account, nowMs: deps.env.nowMillis(),
+            summary: StepUpSummary.key(stepUpSummary(body))
+        )
         send(click: owner, payload: Submission(key: key, body: body, summary: summary), token: token, replayed: false)
     }
 

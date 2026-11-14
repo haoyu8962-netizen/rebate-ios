@@ -12,6 +12,13 @@ final class PayoutAccountTests: WalletFlowTestCase {
         PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
     }
 
+    /// 这次【保存】会发出的 PUT 请求体（与控制器同一份 `PayoutAccountForm.build` → `WalletJSON.text`）推出的二次验证摘要键：
+    /// 预置的改收款令牌按它绑定，才会被带上（LOCK-ios 段 3，D10-1667）。// modify_existing ruling D10-1720
+    func stepUpSummaryKey(_ controller: PayoutAccountController) -> String? {
+        let body = PayoutAccountForm.build(controller.state.form).body.map { WalletJSON.text($0) }
+        return StepUpSummary.key(StepUpSummary.payoutChange(body: body))
+    }
+
     /// 已绑定只显示服务端脱敏字段与本月剩余次数；【更换收款账号】打开表单（回调核对渲染版本与账号身份）。
     func testBoundShowsMaskedFieldsOnly() async throws {
         let fixture = make()
@@ -68,7 +75,8 @@ final class PayoutAccountTests: WalletFlowTestCase {
         payoutActions(controller).payee("测试三")
         controller.flow.stepUp.state.map { StepUpActions.make(controller.flow.stepUp, $0).close() }
         script.fail("PUT /v1/me/payout-account", 20001, data: "{\"fields\":[\"card_no\"]}")
-        fixture.wallet.deps.tokens.put(action: "payout_account_change", account: "user-a", token: "t", expireAtMs: .max)
+        fixture.wallet.deps.tokens.put(action: "payout_account_change", account: "user-a", token: "t", expireAtMs: .max,
+                                       summary: stepUpSummaryKey(controller)) // modify_existing ruling D10-1720
         payoutActions(controller).save()
         await waitUntil { controller.flow.state.fieldErrors == ["card_no"] }
         XCTAssertEqual(controller.state.form.cardNo, "6222 0000 0000 0009", "保留输入")
@@ -80,7 +88,8 @@ final class PayoutAccountTests: WalletFlowTestCase {
                 action: "payout_account_change",
                 account: "user-a",
                 token: "t",
-                expireAtMs: .max
+                expireAtMs: .max,
+                summary: stepUpSummaryKey(controller) // modify_existing ruling D10-1720
             )
             payoutActions(controller).save()
             await waitUntil { controller.flow.state.error?.key == key }

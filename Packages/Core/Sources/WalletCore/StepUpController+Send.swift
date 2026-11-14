@@ -9,17 +9,22 @@ struct SmsArrival {
 
 /// 发码（共性第 6、17、26、27、40、60 条）。
 extension StepUpController {
-    /// 按面板的身份读号码、占用槽位、发包（共性第 60 条）：会话已换（清空通知还没执行）的不读、不占、不发，等清空通知收起面板。
+    /// 按面板的身份读绑定状态、占用槽位、发包（共性第 60 条）：会话已换（清空通知还没执行）的不读、不占、不发，等清空通知收起面板。
     func send() {
         guard var current = state else { return }
         guard admit(current.instance, current.owner, resume: { [weak self] in self?.send() }) else { return }
         current.awaitingIdentity = false
-        guard let account = current.owner.account, let phone = deps.env.stepUpPhone(account: account) else {
-            // 本机取不到当前账号的号码：不编造、不让用户另填，不发码（iOS I01，G31）
+        // 能否发码只看 Me.phone_bound（D10-1682 ②，不再看本机是否知道号码）：已知没绑手机不发码、不让用户另填；未知照常发（服务端没绑手机回
+        // 20001 data.fields=[code]，D10-1658 ①）。号码不上送，槽位键只作本机发码截止时间与在途占用的键（App 没给用占位）。
+        // 本地按 phone_bound 拦只用于改收款 / 换号 / 注销，不碰提现（D10-1667：提现只剩旧后端 10003 兼容路径，交给服务端判）
+        let unbound = deps.env.stepUpPhoneBound(current.owner) == false
+        let blockUnbound = unbound && current.action != WithdrawController.action
+        guard let account = current.owner.account, !blockUnbound else {
             current.phase = .noPhone
             state = current
             return
         }
+        let phone = deps.env.stepUpPhone(account: account) ?? Self.boundSlot
         if deps.gates.sms.active {
             current.phase = .ready
             current.error = notice("error.42901")
@@ -50,18 +55,20 @@ extension StepUpController {
     }
 
     /// 实际发码：不随面板关闭取消（已发出的码要更新共享倒计时）；结果先按点击时的身份写入共享倒计时 / 限流，再按面板是否有效更新界面；
-    /// 结束时只释放本次请求的占用。请求带面板身份的网络归属（共性第 39、60 条）。
+    /// 结束时只释放本次请求的占用。请求带面板身份的网络归属（共性第 39、60 条）。请求体不带 phone（B1-02zzz：step_up 带 phone 回 20001），
+    /// 调用置 `requiresSession`（D10-1658 ④、段 2 评审 S2-1）：受限会话先等刷新，组好的请求没有本人令牌就本地 session_unreadable、零发送。
     func launchSend(slot: SmsDeadlines.Slot, ticket: Int, owner: WalletOwner, panel: Int) {
         // 发码禁用期是本请求的发送前限流闸门（共性第 62 条）；同一截止时间已在占用槽位前核对（槽位占用期间不会有别的发码改它）
         let probe = deps.gates.sms.probe()
-        let body = WalletJSON.text(["phone": slot.phone, "purpose": Self.purpose, "action": slot.action])
+        let body = WalletJSON.text(["purpose": Self.purpose, "action": slot.action])
         let api = deps.api
         let tasks = tasks
         tasks.begin()
         Task { @MainActor [weak self, deps] in
             defer { tasks.end() }
             let result = await api.send(
-                ApiCall(operationId: Self.sendOperation, body: body), isValid: { true }, sendAllowed: probe.allowed,
+                ApiCall(operationId: Self.sendOperation, body: body, requiresSession: true), isValid: { true },
+                sendAllowed: probe.allowed,
                 expected: owner.request
             )
             var deadline: Int64?

@@ -313,11 +313,15 @@ public enum SensitiveOutcome {
 
 /// 二次验证 token 的复用（G17）：只放内存，按会话、账号与 action 隔离，不落盘。本机时钟早于 expire_at 才带上；成功提交（服务端核销）后
 /// 立即丢弃；会话换代、登出、换账号、撤回同意时清空；得到 10003 就丢弃并重新弹面板。`take` 只读，不核销服务端 token。
+/// 业务摘要（BR-ID-08 细则「绑定业务摘要」，LOCK-ios 段 3）：令牌签发时绑定了摘要的（改收款 payout_account_change）按摘要键
+/// （`StepUpSummary.key`）再隔离一层——取用时摘要不同不复用（不带摘要的旧令牌也不用于带摘要的请求）；提现不带摘要（D10-1665 / D10-1667），
+/// 摘要键为 nil，照旧按「同 action」复用。丢弃仍只按 action。
 public final class StepUpTokenCache: @unchecked Sendable {
     private struct Entry {
         let account: String
         let token: String
         let expireAtMs: Int64
+        let summary: String?
     }
 
     private let lock = NSLock()
@@ -325,13 +329,17 @@ public final class StepUpTokenCache: @unchecked Sendable {
 
     public init() {}
 
-    public func put(action: String, account: String, token: String, expireAtMs: Int64) {
-        lock.withLock { entries[action] = Entry(account: account, token: token, expireAtMs: expireAtMs) }
+    public func put(action: String, account: String, token: String, expireAtMs: Int64, summary: String? = nil) {
+        lock.withLock {
+            entries[action] = Entry(account: account, token: token, expireAtMs: expireAtMs, summary: summary)
+        }
     }
 
-    public func take(action: String, account: String, nowMs: Int64) -> String? {
+    public func take(action: String, account: String, nowMs: Int64, summary: String? = nil) -> String? {
         lock.withLock {
-            guard let entry = entries[action], entry.account == account, nowMs < entry.expireAtMs else { return nil }
+            guard let entry = entries[action], entry.account == account, nowMs < entry.expireAtMs,
+                  entry.summary == summary
+            else { return nil }
             return entry.token
         }
     }

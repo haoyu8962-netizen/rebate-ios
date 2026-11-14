@@ -38,7 +38,9 @@ extension DebugFakeWallet {
         if let done = results[key] {
             return .answer(code: done.code, data: done.data, headers: [:])
         }
-        guard stepUpPassed(headers, action: "payout_account_change", state) else { return fail(10003) }
+        // 改收款令牌绑定了业务摘要：与本次请求体推出的不一致回 10003、不核销（幂等重放已在上面按键返回，不比对）
+        guard stepUpPassed(headers, action: "payout_account_change", state, claim: Self.bodyClaim(body) ?? "")
+        else { return fail(10003) }
         let account: [String: Any]
         if body["payout_method"] as? String == WalletJSON.bankCard {
             let card = (body["card_no"] as? String ?? "").filter(\.isNumber)
@@ -79,8 +81,13 @@ extension DebugFakeWallet {
         return validTokens.contains(token) && token.hasPrefix("fake-step-up-\(action)-")
     }
 
-    func stepUpPassed(_ headers: [String: String], action: String, _ state: [String: String]) -> Bool {
+    /// `claim`：要求令牌绑定的业务摘要（改收款）；nil 不比对（提现，过渡期不带摘要，D10-1667）。不一致不核销。
+    func stepUpPassed(_ headers: [String: String], action: String, _ state: [String: String],
+                      claim: String? = nil) -> Bool {
         guard tokenValid(headers, action: action), let token = Self.header(headers, "X-Step-Up-Token") else {
+            return false
+        }
+        if let claim, tokenClaims[token] != claim {
             return false
         }
         // 一次性：step_up=always 时每次都要重新验证
@@ -92,17 +99,47 @@ extension DebugFakeWallet {
 
     func stepUp(_ body: [String: Any]) -> Reply {
         let action = body["action"] as? String ?? ""
+        // 业务摘要（openapi POST /v1/auth/step-up）：改收款必须带、形状要对；其它 action（含提现，D10-1666 / D10-1667）带了就回 20001
+        var claim: String?
+        if action == "payout_account_change" {
+            guard let summary = body["summary"] as? [String: Any],
+                  let value = Self.payoutClaim(summary, strict: true)
+            else { return fail(20001, data: Self.summaryField) }
+            claim = value
+        } else if body["summary"] != nil {
+            return fail(20001, data: Self.summaryField)
+        }
         switch body["code"] as? String {
         case "123456":
             serial += 1
             let token = "fake-step-up-\(action)-\(serial)"
             validTokens.insert(token)
+            tokenClaims[token] = claim
             return ok(["step_up_token": token, "expire_at": "2099-01-01T00:05:00+08:00"])
         case "200030":
             return fail(20003)
         default:
             return fail(20002)
         }
+    }
+
+    static let summaryField = "{\"fields\":[\"summary\"]}"
+
+    /// 改收款的业务摘要串（假服务的规范化：支付宝登录号去首尾空白，卡号只留数字；同服务端 `p:<payout_method>:<规范化账号>` 的思路，不算 HMAC）。
+    /// 摘要与保存请求体共用：只认 payout_method + alipay_logon_id / card_no 两种形状；`strict`（摘要）时多出别的字段（如收款人姓名）算形状不对。
+    static func payoutClaim(_ object: [String: Any], strict: Bool) -> String? {
+        let method = object["payout_method"] as? String
+        let field = method == "alipay" ? "alipay_logon_id" : (method == "bank_card" ? "card_no" : nil)
+        guard let method, let field, let raw = object[field] as? String, !raw.isEmpty,
+              !strict || object.count == 2
+        else { return nil }
+        let account = method == "bank_card" ? raw.filter(\.isNumber) : raw.trimmingCharacters(in: .whitespaces)
+        return account.isEmpty ? nil : "p:\(method):\(account)"
+    }
+
+    /// 保存请求体推出的摘要串（请求体还带收款人姓名、开户行，不按形状严格比）。
+    static func bodyClaim(_ body: [String: Any]) -> String? {
+        payoutClaim(body, strict: false)
     }
 
     func abandon(_ state: [String: String], _ body: [String: Any]) -> Reply {
@@ -117,6 +154,17 @@ extension DebugFakeWallet {
         }
         let original = "{\"code\":\(done.code),\"msg\":\"\",\"data\":\(done.data)}"
         return .answer(code: 0, data: "{\"outcome\":\"completed\",\"original\":\(original)}", headers: [:])
+    }
+
+    /// 二次验证发码（purpose=step_up；B1-02zzz、D10-1658 ①）：带 phone 回 20001 fields=[phone]；没带令牌回 10001；假账号没绑手机回 20001
+    /// fields=[code]；其余照改前回 60 秒倒计时。都不计数、不发真短信。
+    func stepUpSms(_ body: [String: Any], _ headers: [String: String]) -> Reply {
+        if body["phone"] != nil {
+            return fail(20001, data: "{\"fields\":[\"phone\"]}")
+        }
+        guard Self.header(headers, "Authorization") != nil else { return fail(10001) }
+        guard DebugFakeOAuth.shared.phoneBound else { return fail(20001, data: "{\"fields\":[\"code\"]}") }
+        return .answer(code: 0, data: "{\"resend_after_sec\":60,\"expires_in_sec\":300}", headers: [:])
     }
 
     static let laborVersion = "v1"

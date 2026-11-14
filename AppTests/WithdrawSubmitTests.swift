@@ -50,7 +50,7 @@ final class WithdrawSubmitTests: WalletFlowTestCase {
         let sms = try XCTUnwrap(WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").first?.json)
         XCTAssertEqual(sms["purpose"] as? String, "step_up")
         XCTAssertEqual(sms["action"] as? String, "withdraw")
-        XCTAssertEqual(sms["phone"] as? String, "13800005678")
+        XCTAssertNil(sms["phone"]) // modify_existing ruling D10-1682 ③（发码体不带 phone）
         let verify = try XCTUnwrap(WalletStubProtocol.requests("POST", "/v1/auth/step-up").first?.json)
         XCTAssertEqual(verify["action"] as? String, "withdraw")
         XCTAssertEqual(posts.count, 2)

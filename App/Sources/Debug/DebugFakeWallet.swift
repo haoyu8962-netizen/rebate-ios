@@ -13,6 +13,10 @@ import WalletCore
 ///
 /// - 签名、step-up、幂等走网络层真实管线，只把传输层换成本服务：createWithdrawal / savePayoutAccount 没带有效 X-Step-Up-Token 回 10003；同一
 ///   Idempotency-Key 回同一结果；作废接口按键回 abandoned 或 completed（原结果）；二次验证码 123456 通过，200030 → 20003，其余 → 20002。
+/// - 二次验证发码与业务摘要（B1-02zzz、BR-ID-08 细则「绑定业务摘要」，LOCK-ios 段 3）：sendSmsCode purpose=step_up 带 phone 回 20001
+///   fields=[phone]，没带令牌回 10001，假账号没绑手机（phone_bound=false）回 20001 fields=[code]；stepUp 的 payout_account_change 缺摘要或
+///   形状不对回 20001 fields=[summary]，withdraw（及其它 action）带摘要回 20001 fields=[summary]（过渡期提现照旧要令牌、不带摘要，
+///   D10-1667）；签发的改收款令牌记下摘要，保存时按请求体比对，不一致回 10003 且不核销；提现不比对。假 Me 带 masked_phone（没绑为 null）。
 /// - 实名与劳务协议（契约没有接口，G01 / G02）：只由本服务在进程内实现，不经网络管线。
 ///
 /// 开关（启动参数 `-CouliFakeWallet wallet=frozen,payout=none,…`）：wallet=normal|frozen|negative|risk|disabled|new；
@@ -28,6 +32,8 @@ final class DebugFakeWallet: @unchecked Sendable {
     static let marker = "COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52"
     static let launchArgument = "CouliFakeWallet"
     static let phone = "13800005678"
+    /// 假账号绑定手机号的脱敏展示（Me.masked_phone，BR-TEXT-02 细则「前 3 后 4」）。
+    static let maskedPhone = "138****5678"
     static let shared = DebugFakeWallet()
 
     enum Reply {
@@ -39,6 +45,8 @@ final class DebugFakeWallet: @unchecked Sendable {
     let lock = NSLock()
     var results: [String: (code: Int, data: String)] = [:]
     var validTokens: Set<String> = []
+    /// 签发时绑定了业务摘要的令牌 → 摘要（改收款；`payoutClaim` 的规范化串）。
+    var tokenClaims: [String: String] = [:]
     var created: [[String: Any]] = []
     var realnameVerified: Bool?
     var laborSigned: Bool?
@@ -53,7 +61,7 @@ final class DebugFakeWallet: @unchecked Sendable {
     /// `records=empty_once` 时收到的列表读取次数（iOS R3-02）。
     var listCalls = 0
 
-    /// 把假服务接到 App（只在假登录服务打开时）：测试号码、假实名与假劳务协议后端。
+    /// 把假服务接到 App（只在假登录服务打开时）：测试号码（只作发码槽位键，不上送）、假实名与假劳务协议后端。
     @MainActor
     static func install(_ wallet: AppWallet, arguments: [String] = ProcessInfo.processInfo.arguments) {
         guard arguments.contains(DebugFakeLoginServer.launchArgument) else { return }
@@ -102,6 +110,10 @@ final class DebugFakeWallet: @unchecked Sendable {
     /// 回答钱包类路径；不是本服务的为 nil。
     func answer(method: String, path: String, query: [String: String], body: [String: Any],
                 headers: [String: String]) -> Reply? {
+        // 二次验证发码（只接 purpose=step_up；登录 / 绑手机发码仍由假登录服务回答）。不受 offline 开关影响（与改前一致）
+        if method == "POST", path == "/v1/auth/sms-codes", body["purpose"] as? String == "step_up" {
+            return stepUpSms(body, headers)
+        }
         let mine = path.hasPrefix("/v1/wallet/") || path.hasPrefix("/v1/withdrawals") || path == "/v1/me"
             || path == "/v1/me/payout-account" || path == "/v1/auth/step-up" || path == "/v1/idempotency-keys/abandon"
         guard mine else { return nil }
@@ -169,9 +181,14 @@ final class DebugFakeWallet: @unchecked Sendable {
     func me(_ state: [String: String]) -> [String: Any] {
         [
             "user_id": "debug-user", "realname_status": realname(state) ? "verified" : "none",
-            "phone_bound": DebugFakeOAuth.shared.phoneBound,
+            "phone_bound": DebugFakeOAuth.shared.phoneBound, "masked_phone": Self.maskedPhoneNow,
             "risk": ["state": "normal"], "need_reconsent": false,
         ]
+    }
+
+    /// 此刻假账号的 masked_phone：已绑给脱敏号，没绑为 null（openapi Me.masked_phone）。
+    static var maskedPhoneNow: Any {
+        DebugFakeOAuth.shared.phoneBound ? maskedPhone : NSNull()
     }
 
     func realname(_ state: [String: String]) -> Bool {

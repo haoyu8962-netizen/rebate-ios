@@ -228,8 +228,22 @@ extension WithdrawVisualHost {
         laborPage.map { LaborActions.make($0, $0.state) }
     }
 
-    /// 未过期的 step-up 令牌（跳过二次验证半屏，它归 d 组）。
-    func grantStepUp() {
-        wallet.deps.tokens.put(action: "payout_account_change", account: "user-a", token: "t", expireAtMs: .max)
+    /// 未过期的 step-up 令牌（跳过二次验证半屏，它归 d 组）。改收款令牌绑定业务摘要（LOCK-ios 段 3，D10-1667）：按将要保存的请求体
+    /// 推出——`form` 是随后要填的 fixture 表单（alipay / bank，与 `fillAlipay` / `fillBank` 同一份值），请求体与控制器同一份
+    /// `PayoutAccountForm.build` → `WalletJSON.text`；摘要不同的保存不会带上它。// modify_existing ruling D10-1720
+    func grantStepUp(_ form: String = "alipay") {
+        let fields = (try? PayoutVisualData.form(form)) ?? [:]
+        let built = PayoutAccountForm.build(form == "bank"
+            ? PayoutForm(
+                method: WalletJSON.bankCard,
+                cardNo: fields["cardNo"] ?? "",
+                bankName: fields["bankName"] ?? "",
+                payeeName: fields["payeeName"] ?? ""
+            )
+            : PayoutForm(method: WalletJSON.alipay, alipayLogonId: fields["alipayAccount"] ?? "",
+                         payeeName: fields["payeeName"] ?? ""))
+        let summary = StepUpSummary.key(StepUpSummary.payoutChange(body: built.body.map { WalletJSON.text($0) }))
+        wallet.deps.tokens.put(action: "payout_account_change", account: "user-a", token: "t", expireAtMs: .max,
+                               summary: summary) // modify_existing ruling D10-1720
     }
 }

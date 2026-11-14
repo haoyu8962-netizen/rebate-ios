@@ -28,7 +28,8 @@ extension StepUpVisualMoneyTests {
 
     /// F7：取不到号码时输入框同样不可编辑。
     func testInputFieldLockedWithoutPhone() async throws {
-        try await panelOnWithdraw(phone: false)
+        // modify_existing ruling D10-1720 ④：noPhone 只由已知没绑手机的改收款面板进入
+        try await panelOnPayout(phoneBound: false)
         await waitUntil("半屏里没有输入框") { self.sheetField() != nil }
         await waitUntil("noPhone 输入框要锁定") { self.sheetField()?.isEnabled == false }
     }

@@ -196,11 +196,26 @@ extension SensitiveFlow {
             }
             return
         }
+        // 业务摘要取自要重放的那份原请求体：确认取未决记录原体，首次提交取保存的请求体（改收款；提现为 nil，D10-1667）
+        let summary = stepUpSummary(intent == nil ? lastBody : intent?.body)
+        // 改收款必须带摘要：推不出（未决记录原体缺失 / 读不出）就不打开面板、不发明知会 20001 的验证（D10-1720），
+        // 与用户关闭面板同口径收尾，并提示稍后再试（确认上一笔会重新查一次记录）
+        guard summary != nil || action != PayoutAccountController.action else {
+            if phase == SensitiveOutcome.submit {
+                reuseKey = nil
+                state.phase = .editing
+                state.error = notice(SensitiveOutcome.retryLaterKey)
+            } else {
+                state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
+            }
+            refreshPending()
+            return
+        }
         if phase == SensitiveOutcome.submit {
             state.phase = .submitting
         }
         stepUpIntent = intent
-        stepUp.open(action: action, owner: panelOwner, onToken: { [weak self] token in
+        stepUp.open(action: action, owner: panelOwner, summary: summary, onToken: { [weak self] token in
             self?.tokenArrived(token, phase: phase, intent: intent)
         }, onClosed: { [weak self] in
             guard let self else { return }
