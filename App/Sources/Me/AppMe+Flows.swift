@@ -25,11 +25,20 @@ extension AppMe {
             deviceRegistered: deviceRegistered() && version != nil, consentedVersion: version ?? 0, nowMs: clock()
         )
         let gate = gates.consent
-        let call = body.map { ApiCall(operationId: Self.recordConsent, body: MeJson.text($0)) }
+        // D10-1711：只有「隐私中心撤回隐私同意」（type=privacy、accepted=false，设备级、靠设备签名）在身份未知（存着会话但读不出）时
+        // 也照发；其余同意类型身份未知时由网络层本地拒（session_unreadable）
+        let call = body.map {
+            ApiCall(
+                operationId: Self.recordConsent, body: MeJson.text($0),
+                sendsWhenIdentityUnknown: $0["type"] as? String == "privacy" && $0["accepted"] as? Bool == false
+            )
+        }
         let client = client
         // R1-03（共性第 30 条）：撤回记录绑定**确认时**固定的请求归属（账号、会话世代、作废世代），发送与续发只比较、不按执行时的状态重新绑定；
         // 外层 Task / 限时子任务开始前会话或环境已换代 → 网络层零发送（旧确认的版本与撤回记录不发给新会话、新环境），本地撤回照常完成
-        let owner = identity.request
+        // D10-1713：撤回写的是设备级记录（BR-ID-13，以设备为主体、靠设备签名），只固定会话世代 / 作废世代、不固定账号（同 D10-1707 的
+        // OAuth）——普通会员确认后会话读不出时撤回记录照发；会话世代变了（换人 / 退出）仍零发送
+        let owner = identity.request?.sessionOnly
         Task { @MainActor [weak self] in
             if let call, !gate.active {
                 // 有令牌也是设备级（服务端处理）；结果不影响本地撤回（G24）。写接口 10 秒超时、不重试；另设上限，防止卡住撤回

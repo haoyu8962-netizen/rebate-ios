@@ -67,7 +67,7 @@ extension ApiClient {
             var skipped = false
             let outcome: RefreshOutcome = await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
-                    guard let admission = lock.withLock({ admit(continuation) }) else {
+                    guard let admission = withSessionLock({ admit(continuation) }) else {
                         skipped = true
                         continuation.resume(returning: .superseded)
                         return
@@ -128,6 +128,10 @@ extension ApiClient {
             return .now(.superseded, emit: nil, retry: false)
         }
         let read = readSessionLocked()
+        guard bound == generation else {
+            // 这次读取发现条目损坏、已按清会话换代并记下 `.cleared`（D10-1716）：本世代已结束，按已换代结束，不再清一次。
+            return .now(.superseded, emit: nil, retry: false)
+        }
         if read == .unreadable {
             // 会话读不出（可能还在）：不刷新、不清会话，原调用按网络错误结束（R2-01）。
             return .now(.transient(LocalRejectReason.sessionUnreadable), emit: nil, retry: false)
@@ -233,6 +237,8 @@ extension ApiClient {
         case let .tokens(access, refresh, scope):
             do {
                 try window.saveRefreshed(into: tokens, access: access, refresh: refresh, scope: scope)
+                // 刷新保存覆盖了存储里的条目：「已按损坏处理」随之失效（D10-1716 ②）
+                sessionChanges.corruptEntryHandled = false
                 settled.outcome = .refreshed(access)
                 // 屏障在本窗口上等待且其间没有重新挂上新屏障：在这把锁里结算该屏障（会话世代 + 编号），
                 // 不由各等待者醒来后各自清标记（R3-01）。
@@ -276,12 +282,15 @@ extension ApiClient {
     /// 带令牌的请求先等一次单飞刷新。按窗口的完整结果结算（lessons 31）：被拒清会话、结束原调用（session_cleared，
     /// 跳登录 / 停在强更页）；超时或暂时失败不清会话、屏障保留，原调用按网络错误结束，不带旧受限令牌发出；
     /// 会话已换代的按 session_changed 结束。
+    /// 不需要会话的调用（`needsSession`：x-auth=none、未置 requiresSession 的 optional）不受屏障约束：不等、也不由它触发屏障刷新
+    /// （D10-1658 ④）；optional 此时有令牌照常带出。
     func restrictedBarrierIfNeeded(
         _ state: NetworkContext,
         _ operation: ApiOperation,
+        _ call: ApiCall,
         _ options: RunOptions
     ) async -> ApiResult? {
-        await restrictedBarrier(state, authenticated: operation.auth != "none", options)
+        await restrictedBarrier(state, authenticated: Self.needsSession(operation, call), options)
     }
 
     private func restrictedBarrier(

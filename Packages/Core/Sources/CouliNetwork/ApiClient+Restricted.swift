@@ -16,7 +16,7 @@ public enum RestrictedRecheck: String, Sendable, Equatable {
 public extension ApiClient {
     /// 当前会话的作用域（经过会话隔离判断：隔离中、读取失败、没有会话时为 nil）。守卫的会话状态据此区分受限会话。
     var isolatedSessionScope: String? {
-        lock.withLock {
+        withSessionLock {
             // 撤回禁读屏障竖着时不读令牌（r3f NEW-01）
             guard !readBarrier, let live = readSessionLocked().live, live.access != nil else {
                 return nil
@@ -65,11 +65,13 @@ extension ApiClient {
     /// 刷新完成后的读取（APP-08 iOS r3f NEW-01）：同一把锁里先比较（快照仍可信、撤回禁读屏障已放下、会话世代未变）、再读取；
     /// 刷新等待期间撤回过同意 / 切过环境 / 换过会话的，零读取、按已失效结束。
     func recheckAfterRefresh(_ state: NetworkContext, _ bound: UInt64) -> RestrictedRecheck {
-        let scope: String?? = lock.withLock {
+        let scope: String?? = withSessionLock {
             guard credentialsReadableLocked(state), generation == bound else {
                 return nil
             }
-            return .some(readSessionLocked().live?.scope)
+            let scope = readSessionLocked().live?.scope
+            // 读取本身可能发现损坏条目而换代（D10-1716）：换过代就按已失效结束，不当成完整会话。
+            return generation == bound ? .some(scope) : nil
         }
         guard let scope else {
             return .cancelled

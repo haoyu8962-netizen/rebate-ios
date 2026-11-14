@@ -25,8 +25,9 @@ public enum ConfigFetcher {
         { etag, completion in
             let callback = MainThreadCallback(completion)
             Task { @MainActor in
+                // 声明「身份未知也可发」（D10-1709 ③）：会话读不出时配置拉取照常不带令牌发出，不停摆
                 let (result, meta) = await client.sendWithResponseHeaders(
-                    ApiCall(operationId: ConfigReply.operationId, ifNoneMatch: etag)
+                    ApiCall(operationId: ConfigReply.operationId, ifNoneMatch: etag, sendsWhenIdentityUnknown: true)
                 )
                 callback.call(ConfigReply.from(result, meta: meta))
             }

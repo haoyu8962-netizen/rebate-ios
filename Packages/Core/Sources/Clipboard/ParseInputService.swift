@@ -2,11 +2,45 @@ import CouliNetwork
 import Foundation
 
 /// parse 的发送端口（生产为 ApiClient；测试可给假实现）。`isValid` 在每次等待结束、重试与实际发送前检查（请求归属，brief §0）。
+/// 固定归属（D10-1709 ④，接 D10-1703）：`ParseInputService.parse` 每次发送前用 `parseOwnership()` 取一次请求归属，经
+/// `send(_:isValid:expected:)` 交给网络层做发送前固定账号核对（首次绑定前、组请求后、实际写出前只比较：换代 session_changed、
+/// 换人 account_mismatch，零发送）。两者都有缺省实现（归属 nil、转给 `send(_:isValid:)`），只实现 `send(_:isValid:)` 的假实现照常可用。
 public protocol ParseApi: AnyObject, Sendable {
     func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool) async -> ApiResult
+    /// 此刻的请求归属（只在发送前取一次，之后只比较）；nil = 不固定。
+    func parseOwnership() -> RequestOwnership?
+    /// 带固定归属发送；`expected` 为 nil 时与 `send(_:isValid:)` 相同。
+    func send(_ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?) async -> ApiResult
 }
 
-extension ApiClient: ParseApi {}
+public extension ParseApi {
+    func parseOwnership() -> RequestOwnership? {
+        nil
+    }
+
+    func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected _: RequestOwnership?
+    ) async -> ApiResult {
+        await send(call, isValid: isValid)
+    }
+}
+
+extension ApiClient: ParseApi {
+    /// 与其它固定归属调用同法（登录、绑手机、第三方登录）：`currentOwnership(credentialsReadable: true)`——基本模式 / 撤回清理未完成时
+    /// parseInput 本就被放行判定拒绝（basic_mode_denied），这里不另看可读性；禁读屏障竖着时账号为 nil。
+    public func parseOwnership() -> RequestOwnership? {
+        currentOwnership(credentialsReadable: true)
+    }
+
+    public func send(
+        _ call: ApiCall, isValid: @escaping @Sendable () -> Bool, expected: RequestOwnership?
+    ) async -> ApiResult {
+        guard let expected else {
+            return await send(call, isValid: isValid)
+        }
+        return await send(call, isValid: isValid, sendAllowed: { true }, expected: expected)
+    }
+}
 
 /// 一次 parse 的结果：action 为页面动作；dropped = 本地没发出或归属已失效（不出卡、不提示）。
 public struct ParseOutcome: @unchecked Sendable {
@@ -46,8 +80,10 @@ public final class ParseInputService: Sendable {
     public func parse(
         _ upload: String, title: String? = nil, isValid: @escaping @Sendable () -> Bool
     ) async -> ParseOutcome {
+        // 不声明 sendsWhenIdentityUnknown（D10-1709 ③）：身份未知时网络层按 session_unreadable 本地拒（→ dropped，不出卡）
         let call = ApiCall(operationId: Self.operationId, body: Self.body(upload), forceUpdateByCaller: true)
-        let result = await api.send(call, isValid: isValid)
+        // 发送前固定一次请求归属（D10-1709 ④），网络层只比较、不重新绑定
+        let result = await api.send(call, isValid: isValid, expected: api.parseOwnership())
         return Self.outcome(result, title: title)
     }
 

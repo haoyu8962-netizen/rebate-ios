@@ -278,6 +278,13 @@ public struct ApiCall: Sendable, Equatable {
     /// 照常随 `.failure` 返回，调用方在主线程复核请求归属（发起页、会话、环境、取消）后再进强更；迟到或已失效的响应不跳强更、不落盘。
     /// 缺省 false：其余调用的 10405 行为不变。
     public var forceUpdateByCaller: Bool
+    /// x-auth=optional 的接口这一次必须有就绪的本人会话（D10-1658 ④）。缺省 false：有令牌就带、确认游客不带，不等受限会话刷新屏障。置 true
+    /// 按要会话的接口处理（读不出 session_unreadable、受限会话先等刷新；预留给段 3 的 step_up 发码）。x-auth 不是 optional 的不看它。
+    public var requiresSession: Bool
+    /// x-auth=optional 的接口**身份未知**（存着会话但读不出，或读得出却没有可用 access）时也照常不带令牌发出（D10-1709 / D10-1710）；
+    /// 缺省 false = session_unreadable 本地拒、零发送（确认游客 = 本机没有会话，照常匿名发）。只给四类调用点：sendSmsCode login / bind、
+    /// createOauthAttempt login、getConfig、ingestEvents。不放宽固定账号核对（D10-1703 / D10-1704）；置了 requiresSession 时不看它。
+    public var sendsWhenIdentityUnknown: Bool
 
     public init(
         operationId: String,
@@ -289,7 +296,9 @@ public struct ApiCall: Sendable, Equatable {
         summary: String = "",
         fromProductCard: Bool = true,
         ifNoneMatch: String? = nil,
-        forceUpdateByCaller: Bool = false
+        forceUpdateByCaller: Bool = false,
+        requiresSession: Bool = false,
+        sendsWhenIdentityUnknown: Bool = false
     ) {
         self.operationId = operationId
         self.pathParams = pathParams
@@ -301,6 +310,8 @@ public struct ApiCall: Sendable, Equatable {
         self.fromProductCard = fromProductCard
         self.ifNoneMatch = ifNoneMatch
         self.forceUpdateByCaller = forceUpdateByCaller
+        self.requiresSession = requiresSession
+        self.sendsWhenIdentityUnknown = sendsWhenIdentityUnknown
     }
 }
 

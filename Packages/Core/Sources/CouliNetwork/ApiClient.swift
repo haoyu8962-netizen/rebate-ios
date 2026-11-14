@@ -92,8 +92,8 @@ public final class ApiClient: @unchecked Sendable {
     /// （取快照前后作废世代未变）表明完整模式且撤回清理已完成时才放下（`readContext`）。网络层每一处令牌读取——包括没有状态快照的
     /// 登出、刷新入队、后台删除重试、Restricted 刷新后的读取、对外的隔离账号 / 作用域 / 请求归属——都先在锁里比较它，竖着时不读令牌。
     var readBarrier = false
-    /// 会话变化的观察者（F-X-25 可信容器切号）：在锁外调用，见 `observeSessionChanges`。
-    var sessionObservers: [@Sendable (SessionChange) -> Void] = []
+    /// 会话变化的观察者（F-X-25 可信容器切号，锁外调用，见 `observeSessionChanges`）、待发通知与损坏条目标记（D10-1716）。
+    var sessionChanges = SessionChangeState()
 
     public init(
         identity: ClientIdentity,
@@ -312,6 +312,7 @@ public final class ApiClient: @unchecked Sendable {
         /// 当前会话账号（凭据可读时）。
         let account: String?
         let generation: UInt64
+        let sessionWithoutAccess: Bool // 读到会话却没有可用 access：身份未知的第二种（D10-1709，`readyMismatch`）
     }
 
     enum Prepared {

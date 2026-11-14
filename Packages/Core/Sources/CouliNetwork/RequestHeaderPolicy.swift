@@ -133,7 +133,7 @@ public enum RequestHeaderPolicy {
         if operation.signed, deviceId == nil {
             return .reject(LocalRejectReason.deviceNotReady)
         }
-        let authorization = credentials && state.hasAccessToken && operation.auth != "none"
+        let authorization = credentials && state.hasAccessToken && operation.auth != ApiClient.authNone
         var names = HeaderNames.anonymous
         if authorization {
             names.append(HeaderNames.authorization)

@@ -85,7 +85,7 @@ extension ApiClient {
             }
             let state = await readContext()
             // 固定归属比较（RC-01）→ 绑定归属 → 受限会话屏障
-            if let failure = await bindAndPassBarrier(state, operation, &options) {
+            if let failure = await bindAndPassBarrier(state, operation, call, &options) {
                 if case let .localReject(reason) = failure {
                     return .finished(rejected(reason, options))
                 }
@@ -136,7 +136,7 @@ extension ApiClient {
         guard case let .ready(ready) = prepared else {
             return prepared
         }
-        if let reason = expectedMismatch(ready, options) {
+        if let reason = readyMismatch(ready, operation, call, options) {
             return .rejected(reason)
         }
         // 会话世代：带过令牌的调用之后只在同一世代里重试、重放。

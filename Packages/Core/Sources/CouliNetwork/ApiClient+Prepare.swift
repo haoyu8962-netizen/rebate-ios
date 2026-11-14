@@ -23,9 +23,10 @@ extension ApiClient {
         // 可读性判断、世代比较与会话读取在同一把锁里，按「先比较、再读取」的顺序（已作废的会话按没有）。
         let guarded = guardedSessionRead(state, options)
         let (read, session, readable) = (guarded.read, guarded.generation, guarded.readable)
-        // 会话读取失败（可能有会话）：需要会话的接口一律不发（不能当成没有会话匿名发出，也拿不到可信的 scope、账号），
-        // 不需要会话的接口照常不带令牌发出（R2-01）。
-        if read == .unreadable, operation.auth != "none" {
+        // 会话读取失败（可能有会话 = 身份未知）：不能当成没有会话匿名发出，也拿不到可信的 scope、账号——只有 x-auth=none 与声明了
+        // `sendsWhenIdentityUnknown` 的 optional 照常不带令牌发出，其余一律 session_unreadable 本地拒绝（R2-01、D10-1709）。
+        // 这一步先于固定账号核对：未声明的调用固定了账号也报 session_unreadable；声明了的再由 `expectedMismatch(_:_:_:)` 核账号。
+        if read == .unreadable, !Self.sendsWhenIdentityUnknown(operation, call) {
             return .rejected(LocalRejectReason.sessionUnreadable)
         }
         let live = read.live
@@ -74,9 +75,58 @@ extension ApiClient {
             idempotencyKey: key,
             accessToken: accessToken,
             account: live?.account.flatMap { $0.isEmpty ? nil : $0 },
-            generation: session
+            generation: session, sessionWithoutAccess: live != nil && accessToken == nil
         ))
     }
+
+    /// 身份未知（会话读不出，或读得出但没有可用 access，D10-1709）时这一次调用能否照常不带令牌发出：x-auth=none 能；x-auth=optional
+    /// 只有调用点声明了 `ApiCall.sendsWhenIdentityUnknown`、且没置 `requiresSession` 才能；其余（login / phone / realname、置了
+    /// requiresSession 的 optional）不能。确认游客（本机没有会话）不走这里，optional 照常匿名发出。
+    static func sendsWhenIdentityUnknown(_ operation: ApiOperation, _ call: ApiCall) -> Bool {
+        switch operation.auth {
+        case authNone:
+            true
+        case authOptional:
+            !call.requiresSession && call.sendsWhenIdentityUnknown
+        default:
+            false
+        }
+    }
+
+    /// 组请求之后的核对（返回本地结束原因，nil = 可发）：先核固定归属（`expectedMismatch(_:_:_:)`），再核身份未知的第二种——
+    /// x-auth=optional 的调用读到了会话却没有可用 access（D10-1709 本线口径），未声明 `sendsWhenIdentityUnknown` 的按 session_unreadable
+    /// 本地拒绝、零发送（不当成游客匿名发出）。固定账号核对在前：固定了账号的调用照旧 account_mismatch（LockIosPinnedAccountTests 3）。
+    /// 置了 requiresSession 的 optional（段 3 的 step_up 发码）必须带着本人令牌发出：组好的请求没有 Authorization（没有会话、或会话没有可用
+    /// access）就按 session_unreadable 本地拒（段 2 第 3 次评审 S2-2：不能比缺省调用更松、不带令牌发出）。
+    func readyMismatch(_ ready: Ready, _ operation: ApiOperation, _ call: ApiCall, _ options: RunOptions) -> String? {
+        if let reason = expectedMismatch(ready, operation, options) {
+            return reason
+        }
+        guard operation.auth == Self.authOptional else { return nil }
+        if call.requiresSession {
+            return ready.request.headers[HeaderNames.authorization] == nil ? LocalRejectReason.sessionUnreadable : nil
+        }
+        return ready.sessionWithoutAccess && !call.sendsWhenIdentityUnknown ? LocalRejectReason.sessionUnreadable : nil
+    }
+
+    /// 这一次调用要不要等受限会话刷新屏障（D10-1658 ④）：x-auth=none 不要；x-auth=optional 缺省不要——有令牌就带、没有就不带，不等屏障
+    /// （登录 / 绑手机发码在受限会话刷新在途时照常发出），只有调用方置了 `ApiCall.requiresSession`（预留给二次验证面板的 step_up 发码，
+    /// 段 3 接入）才要；其余（login / phone / realname）都要。会话读不出时能不能发另由 `sendsWhenIdentityUnknown(_:_:)` 决定（D10-1709）。
+    /// 是否带 Authorization 另由 `RequestHeaderPolicy.decide` 按「有令牌且 x-auth 不是 none」决定，与这里无关；固定了账号的 optional
+    /// 调用没带上那个账号的令牌时，由组请求之后的 `expectedMismatch(_:_:_:)` 按 account_mismatch 拒（不在这里）。
+    static func needsSession(_ operation: ApiOperation, _ call: ApiCall) -> Bool {
+        switch operation.auth {
+        case authNone:
+            false
+        case authOptional:
+            call.requiresSession
+        default:
+            true
+        }
+    }
+
+    static let authNone = "none"
+    static let authOptional = "optional"
 
     /// 调用自带的头：step-up 操作的 X-Step-Up-Token（凭据可读时）、读接口的 If-None-Match（原样）；个性化推荐关闭时的
     /// X-Personalization: off（APP-12 G03：只在已同意时带，基本模式、未决不带）。
@@ -135,7 +185,7 @@ extension ApiClient {
     }
 
     func guardedSessionRead(_ state: NetworkContext, _ options: RunOptions?) -> GuardedRead {
-        lock.withLock {
+        withSessionLock {
             let allowed = admitLocked(state, options)
             return GuardedRead(
                 read: allowed ? readSessionLocked() : SessionRead.none, generation: generation, readable: allowed

@@ -105,8 +105,9 @@ public final class LoginService {
         let body = Self.json(["phone": normalized, "purpose": "login"])
         sending = true
         let client = client
-        let result = await run { await client.send(ApiCall(operationId: LoginErrorMapper.sendSmsCode, body: body),
-                                                   isValid: { attempt.isValid }) }
+        // 声明「身份未知也可发」（D10-1709 ③）：本机存着会话但这一刻读不出 / 没有可用 access 时照常不带令牌发码，不被拦在登录页
+        let call = ApiCall(operationId: LoginErrorMapper.sendSmsCode, body: body, sendsWhenIdentityUnknown: true)
+        let result = await run { await client.send(call, isValid: { attempt.isValid }) }
         sending = false
         return sendSettled(result, phone: normalized, attempt: attempt)
     }

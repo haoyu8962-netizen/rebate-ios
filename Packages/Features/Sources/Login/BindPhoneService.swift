@@ -195,11 +195,10 @@ public final class BindPhoneService {
         let body = LoginService.json(["phone": phone, "purpose": Self.smsPurpose])
         let client = client
         // 发码离页不取消（共性第 40 条）：结算按固定身份完成；归属变了网络层零发送
+        // 声明「身份未知也可发」（D10-1709 ③，purpose=bind）；固定了账号时网络层照旧核账号（读不出 / 换人 → account_mismatch）
+        let call = ApiCall(operationId: BindPhoneAction.smsOperation, body: body, sendsWhenIdentityUnknown: true)
         Task { @MainActor [weak self] in
-            let result = await client.send(
-                ApiCall(operationId: BindPhoneAction.smsOperation, body: body), isValid: { true },
-                sendAllowed: { true }, expected: owner.request
-            )
+            let result = await client.send(call, isValid: { true }, sendAllowed: { true }, expected: owner.request)
             guard let self else { return }
             smsSending.remove(slot)
             completion(smsSettled(result, owner: owner, slot: slot))

@@ -45,7 +45,7 @@ public struct OAuthOutcome: Equatable, Sendable {
 /// - 流程：createOauthAttempt → 拉起第三方（nonce 交给 SDK）→ 拿到授权凭证 → loginByWechat / loginByApple；只上送授权凭证，不在客户端
 ///   换 token；凭证只在内存，不落盘、不进日志；
 /// - 归属（共性第 1 条）：流程开始时一次固定会话 / 隐私 / 环境归属（`ownership`）与登录页尝试（LoginService 的 AttemptOwner）；
-///   两个请求都带固定归属发送（网络层只比较、零发送），授权返回后、提交前再比较一次——授权等待期间保存了另一会话、离页、取消、超时，
+///   两个请求都带固定归属发送（只固定会话世代与环境 / 隐私，不固定账号，D10-1707；网络层只比较、零发送），授权返回后、提交前再比较一次——授权等待期间保存了另一会话、离页、取消、超时，
 ///   整个 attempt 终止，迟到回调只丢弃（`OAuthAttemptSession`）；同一 attempt 只提交一次；
 /// - 登录保存沿用 APP-05a 的原子保存（ApiClient 在保存那把锁里核对归属）；保存成功才算登录成功；
 /// - 分流：受限会话（deletion_only）走 APP-05a 的登录后计划；full：先暂缓待办（重置计时、不执行），新号记「未绑手机」并弹绑手机引导，
@@ -124,7 +124,7 @@ public final class OAuthLoginService {
             return OAuthOutcome(OAuthOutcome.unavailable, provider: provider, textKey: Self.unavailableKey(provider))
         }
         let attempt = login.attemptOwner
-        let owner = ownership()
+        let owner = loginOwnership()
         restrictedAttempt = restricted
         running = true
         defer { running = false }
@@ -147,8 +147,9 @@ public final class OAuthLoginService {
         guard let credential = accept(authorization, handle: handle, provider: provider) else {
             return finishWithout(authorization, provider: provider)
         }
-        // 授权等待之后、提交之前复核归属（共性第 1 条）：登录页尝试、会话 / 隐私 / 环境归属任一变了 → 终止整个 attempt
-        guard attempt.isValid, ownership() == owner else {
+        // 授权等待之后、提交之前复核归属（共性第 1 条）：登录页尝试、会话世代 / 隐私 / 环境归属任一变了 → 终止整个 attempt
+        // （账号不参与比较，见 `loginOwnership`：会话读不出 / 恢复可读不算换人；换人必然换会话世代）
+        guard attempt.isValid, loginOwnership() == owner else {
             attempts.leave()
             return OAuthOutcome(LoginOutcome.stale, provider: provider)
         }
@@ -159,20 +160,29 @@ public final class OAuthLoginService {
         )
     }
 
+    /// 第三方登录固定的请求归属（D10-1707 ①）：会话世代与作废世代（环境 / 隐私）照旧固定，**账号置 nil**——createOauthAttempt
+    /// （x-auth=optional）与 loginBy*（x-auth=none）不把账号固定进发送前核对（固定了账号的调用会话读不出即 account_mismatch，
+    /// D10-1704），本机存着过期 / 受限会话或会话暂时读不出时登录请求照常发出。原来固定账号要防的「授权回跳期间本机换了人」由会话世代
+    /// 防：另一账号登录成功、退出、清会话都会让世代 +1——发送前（首次绑定前、组请求后）按 session_changed 零发送，响应到达后
+    /// `ApiClient.captureLogin` 在写令牌的同一把锁里核对世代，不一致不落盘（sessionNotSaved(session_changed)，按 stale 丢弃）。
+    private func loginOwnership() -> RequestOwnership {
+        ownership().sessionOnly
+    }
+
     private enum Created {
         case success(attemptId: String, nonce: String)
         case failure(OAuthOutcome)
     }
 
-    /// createOauthAttempt（purpose=login）：带固定归属；失败按 OAuthLoginErrorAction 给页面动作。
+    /// createOauthAttempt（purpose=login）：带固定归属（不固定账号，见 `loginOwnership`）；失败按 OAuthLoginErrorAction 给页面动作。
     private func createAttempt(provider: String, attempt: AttemptOwner, owner: RequestOwnership) async -> Created {
         let body = LoginService.json(["provider": provider, "purpose": "login"])
         let client = login.client
+        // 只有 purpose=login 声明「身份未知也可发」（D10-1709 ③ / D10-1710）：本机存着读不出 / 没有可用 access 的会话时照常取尝试；
+        // step_up / payout_bind / reverify 的取尝试不声明
+        let call = ApiCall(operationId: "createOauthAttempt", body: body, sendsWhenIdentityUnknown: true)
         let result = await login.run {
-            await client.send(
-                ApiCall(operationId: "createOauthAttempt", body: body), isValid: { attempt.isValid },
-                sendAllowed: { true }, expected: owner
-            )
+            await client.send(call, isValid: { attempt.isValid }, sendAllowed: { true }, expected: owner)
         }
         guard attempt.isValid else { return .failure(OAuthOutcome(LoginOutcome.stale, provider: provider)) }
         switch result {

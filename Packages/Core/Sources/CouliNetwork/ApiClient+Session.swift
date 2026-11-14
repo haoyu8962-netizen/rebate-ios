@@ -60,7 +60,7 @@ extension ApiClient {
 
     /// 凭据可读时的当前会话读取结果（隐私不允许读时按没有）。可读性判断与读取在同一把锁里（APP-08 iOS NEW-01）。
     func readSession(_ state: NetworkContext) -> SessionRead {
-        lock.withLock { credentialsReadableLocked(state) ? readSessionLocked() : .none }
+        withSessionLock { credentialsReadableLocked(state) ? readSessionLocked() : .none }
     }
 
     /// 调用方持有 `lock`（APP-08 iOS NEW-01）：此刻能否读取凭据。必须同时满足——
@@ -97,11 +97,7 @@ extension ApiClient {
         do {
             snapshot = try tokens.readSession()
         } catch SessionReadError.corrupted {
-            // 损坏的条目不能当会话用；尽力删除（删不掉下次读还会再试）。不涉及隔离的解除：删除成功才算确认没有。
-            if (try? tokens.clear()) != nil {
-                revokedSession = nil
-            }
-            return .none
+            return corruptSessionLocked()
         } catch {
             if revokedSession != nil, (try? tokens.clear()) != nil {
                 revokedSession = nil
@@ -130,6 +126,26 @@ extension ApiClient {
         return .live(live)
     }
 
+    /// 调用方持有 `lock`，且出锁时发出待发通知（经 `withSessionLock` 取锁）。读到损坏条目（D10-1716）：与清会话同口径——
+    /// 第一次发现时会话换代、记下待发的 `.cleared`（出锁后通知，不在持锁时回调），之后按确认没有会话；固定了旧世代的在途请求按
+    /// session_changed 结束。尽力删除（删不掉下次读还会再试）；删不掉时记下「已按损坏处理」，反复读到同一损坏条目不再换代、不再通知，
+    /// 直到删掉或成功写入会话。删除结果只影响隔离与标记，不记录条目内容。
+    /// 隔离中（`revokedSession` 非空，只由 `clearSessionLocked` 设置，含撤回 / 切换期间的 signOut：已换代、调用方已发 `.cleared`、删不掉）
+    /// 读到损坏条目按已处理：只重试删除，不再换代、不再通知。
+    private func corruptSessionLocked() -> SessionRead {
+        let isolated = revokedSession != nil
+        let deleted = (try? tokens.clear()) != nil
+        if deleted {
+            revokedSession = nil
+        }
+        if !sessionChanges.corruptEntryHandled, !isolated {
+            generation &+= 1
+            sessionChanges.pending.append(.cleared)
+        }
+        sessionChanges.corruptEntryHandled = !deleted
+        return .none
+    }
+
     /// 调用方持有 `lock`。清本世代会话并换代：先在内存里作废（不可读），再删除；删除失败保持作废、返回 true（要重试）。
     /// 读不出当前会话（读取失败、损坏）时同样隔离（身份未知），只有确认没有会话才不隔离。
     /// 撤回禁读屏障竖着时（撤回同意 / 切换环境的清理期间，r3f NEW-01）只删除、不读取：身份按未知隔离（存储里的任何会话都按它处理；
@@ -149,6 +165,12 @@ extension ApiClient {
             }
             let live = LiveSession(snapshot)
             revoked = RevokedSession(access: live.access, refresh: live.refresh, identityKnown: true)
+        } catch SessionReadError.corrupted {
+            // 清会话已换代、调用方会通知 `.cleared`：删不掉时记下「已按损坏处理」，之后读到同一损坏条目不再换代、通知（D10-1716 ②）。
+            revokedSession = RevokedSession(access: nil, refresh: nil, identityKnown: false)
+            let retry = deleteRevokedLocked()
+            sessionChanges.corruptEntryHandled = retry
+            return retry
         } catch {
             revoked = RevokedSession(access: nil, refresh: nil, identityKnown: false)
         }
@@ -162,6 +184,7 @@ extension ApiClient {
         do {
             try tokens.clear()
             revokedSession = nil
+            sessionChanges.corruptEntryHandled = false
             return false
         } catch {
             return true
@@ -205,7 +228,7 @@ public extension ApiClient {
     /// 不判断隐私状态（调用方先确认凭据可读）。埋点的 user_id 取它（APP-03b 共性 9）。
     /// 撤回禁读屏障竖着时（r3f NEW-01）不读令牌，按 nil。
     var isolatedAccount: String? {
-        lock.withLock {
+        withSessionLock {
             readBarrier ? nil : readSessionLocked().live?.account.flatMap { $0.isEmpty ? nil : $0 }
         }
     }
@@ -214,7 +237,7 @@ public extension ApiClient {
     /// （`credentialsReadable` 由调用方传入此刻 `WithdrawalCleanupRunner.credentialsReadable`）、隔离中（清会话删除失败）、读取失败、
     /// 内容损坏、被撤销标记阻断、没有令牌、升级前没有世代的会话 → nil。按账号分区的本机缓存只经它取世代，nil 一律不读不写。
     func sessionLoginEpoch(credentialsReadable: Bool) -> String? {
-        lock.withLock {
+        withSessionLock {
             guard credentialsReadable, !readBarrier, let live = readSessionLocked().live,
                   live.access != nil, live.refresh != nil
             else { return nil }
@@ -224,7 +247,7 @@ public extension ApiClient {
 
     /// 给定账号此刻的持久化登录世代：会话账号就是它时才给（同一次读取里核对账号与取世代），其余同 `sessionLoginEpoch`。
     func loginEpoch(forAccount account: String, credentialsReadable: Bool) -> String? {
-        lock.withLock {
+        withSessionLock {
             guard credentialsReadable, !readBarrier, !account.isEmpty, let live = readSessionLocked().live,
                   live.access != nil, live.refresh != nil, live.account == account
             else { return nil }

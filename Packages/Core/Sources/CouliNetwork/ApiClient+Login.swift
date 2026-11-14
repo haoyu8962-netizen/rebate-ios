@@ -65,6 +65,8 @@ extension ApiClient {
             }
             generation &+= 1
             revokedSession = nil
+            // 新会话已覆盖存储里的条目：「已按损坏处理」随之失效，之后再损坏重新按清会话处理（D10-1716 ②）
+            sessionChanges.corruptEntryHandled = false
             onSaved?(generation)
             return .saved
         }
@@ -113,7 +115,7 @@ extension ApiClient {
     /// - 世代变了、此刻没有会话（原会话已被 10404 / 刷新失败清除）：不删任何东西（`alreadyCleared`），调用方照样完成登出收尾；
     /// - 世代变了、已有新会话（等待期间重新登录）：不动新会话（`superseded`）。
     public func signOut(expectedGeneration: UInt64) -> SignOutOutcome {
-        let (outcome, retry): (SignOutOutcome, Bool) = lock.withLock {
+        let (outcome, retry): (SignOutOutcome, Bool) = withSessionLock {
             if generation == expectedGeneration {
                 return (.signedOut, clearSessionLocked())
             }
@@ -155,7 +157,8 @@ public extension ApiClient {
     }
 
     /// 第三方登录的发送（APP-05b 共性第 1 条）：同上，另带授权流程开始时固定的请求归属 `expected`——首次绑定前、组请求后、实际写出前都只
-    /// 比较（会话世代、作废世代、账号），授权等待期间别处保存了另一会话时零发送（session_changed），之后保存会话时核对的也是这一份世代，
+    /// 比较（会话世代、作废世代；`pinsAccount` 时还有账号——第三方登录传 `sessionOnly`，不核账号，D10-1707），授权等待期间别处保存了
+    /// 另一会话（或退出）时零发送（session_changed），之后保存会话时在写令牌的同一把锁里核对的也是这一份世代（`captureLogin`），
     /// 不会把旧授权的登录写进新会话之上。
     func send(
         _ call: ApiCall,
