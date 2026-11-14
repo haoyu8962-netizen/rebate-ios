@@ -7,6 +7,8 @@
 #   R3 照 Staging 包实际含的串合成（staging 主机 + couli-debug 等调试标记）：--self-test --expect -stg.couliapp.cn 退出 0
 #   R4 同一包去掉 staging 主机：--self-test --expect -stg.couliapp.cn 退出 1（证明 verify.sh 的 Staging 自检真有牙齿）
 #   R5 旧占位 staging.couli.invalid 不再是期望项：只含旧占位的合成包 --self-test --expect -stg.couliapp.cn 退出 1
+#   R6 剪贴板调试计数的最近判定记录（FU-IOS-CLIP-DIAG-REASON）：只含类型名 DebugClipboardEvaluation（裸名、Swift 重整名
+#      两种形态各一包）→ 扫描退出 1；含它的 Debug 形态包 --self-test --expect DebugClipboardEvaluation 退出 0，去掉它退出 1
 # 只用合成文件，不碰真实构建产物；verify.sh 在 lint 阶段真跑这一步（跳过算失败）。兼容 macOS 自带 bash 3.2。
 set -uo pipefail
 
@@ -99,6 +101,24 @@ for text in https://api.staging.couli.invalid couli-debug; do
     put_utf8 "$app" "$text"
 done
 expect 1 "R5 只有旧占位时 --self-test --expect -stg.couliapp.cn" --self-test --expect -stg.couliapp.cn "$app"
+
+n=0
+for text in DebugClipboardEvaluation '$s5Couli24DebugClipboardEvaluationV'; do
+    n=$((n + 1))
+    app="$(make_app "r6-$n")"
+    put_utf8 "$app" "$text"
+    expect 1 "R6 Release 包含 $text" "$app"
+done
+
+app="$(make_app r6-self)"
+for text in COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a DebugClipboardEvaluation; do
+    put_utf8 "$app" "$text"
+done
+expect 0 "R6 Debug 形态 --self-test --expect DebugClipboardEvaluation" --self-test --expect DebugClipboardEvaluation "$app"
+
+app="$(make_app r6-missing)"
+put_utf8 "$app" COULI_DEBUG_CLIPBOARD_APP07_IOS_4e1b9a
+expect 1 "R6 去掉类型名后 --self-test --expect DebugClipboardEvaluation" --self-test --expect DebugClipboardEvaluation "$app"
 
 if [ "$FAILS" -gt 0 ]; then
     echo "release-scan staging 主机用例：${FAILS} / ${COUNT} 不符"

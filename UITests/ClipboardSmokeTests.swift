@@ -39,6 +39,11 @@ final class ClipboardSmokeTests: XCTestCase {
         return label.label
     }
 
+    /// 计数段 `detect=… parse=… writes=…`（去掉 ` last=` 及其后的最近判定，FU-IOS-CLIP-DIAG-REASON）。
+    private func counts(_ text: String) -> String {
+        text.components(separatedBy: " last=")[0]
+    }
+
     /// 系统「允许粘贴」弹窗一次都不出（brief §3 iOS）：App 内与 springboard 上都没有。
     private func assertNoPasteAlert(_ app: XCUIApplication, _ step: String) {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -95,11 +100,15 @@ final class ClipboardSmokeTests: XCTestCase {
         let before = diagnostics(app)
         backgroundAndReturn(app, clip: sampleLink + " 登录页")
         XCTAssertTrue(element(app, "login.page").waitForExistence(timeout: 5))
-        XCTAssertEqual(diagnostics(app), before, "停在 Login 回前台不读（d）")
+        XCTAssertEqual(counts(diagnostics(app)), counts(before), "停在 Login 回前台不读（d）")
+        // 回前台的判定在 scenePhase 处理里，可能晚于这次取快照：显式等到记下本次结果（不重试、不放宽）
+        UIWait.until("Login 是敏感页：\(diagnostics(app))", ceiling: 5) {
+            element(app, "clipboard.debug").label.contains("last=foreground_after_background:sensitive")
+        }
         element(app, "login.close").tap()
         sleep(1)
         XCTAssertFalse(element(app, "clipboard.prompt").exists, "返回首页不补出")
-        XCTAssertEqual(diagnostics(app), before)
+        XCTAssertEqual(counts(diagnostics(app)), counts(before))
         assertNoPasteAlert(app, "敏感页")
     }
 

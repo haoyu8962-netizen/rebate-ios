@@ -75,6 +75,14 @@ final class AppClipboard: ObservableObject {
     var parseCount = 0
     /// 诊断（不含内容）：商品粘贴入口发起系统读取的次数（首页常驻卡、SearchTyping、商品提示条共用，R2-02）。
     var readCount = 0
+    #if DEBUG
+    /// 调试计数用（Debug / Staging，FU-IOS-CLIP-DIAG-REASON）：最近一次自动识别判定的事件名与落点（不含剪贴板内容与 changeCount）；
+    /// nil = 还没判定过。只由 AppClipboard+Detect.swift 的各个返回点记录，不参与判定。
+    /// 不是 @Published：改了要主动通知，否则停在敏感页等不改别的状态的分支里 clipboard.debug 不重画、读到旧值。
+    var debugLastEvaluation: DebugClipboardEvaluation? {
+        didSet { objectWillChange.send() }
+    }
+    #endif
 
     /// 本机开关「打开 App 自动识别剪贴板」（设备级；设置页经 AppMe 读写同一实例）。关闭立即作废自动识别出的提示条，挂起的探测回来复核时
     /// 读取策略按 switch_off 跳过；之后回前台零探测。手动粘贴不看它。
@@ -282,50 +290,6 @@ final class AppClipboard: ObservableObject {
         } else {
             suppressedWeb.insert(container)
         }
-    }
-
-    // MARK: - 自动识别
-
-    func evaluate(event: String, round: Int64) {
-        #if DEBUG
-        // 首页视觉 UI 测试场景（-CouliHomeVisual）一律关掉自动识别：模拟器剪贴板里前一个用例留下的链接不能变成提示条、
-        // 卡住截图矩阵（主线裁定，APP-11v-b）。本轮照常算读过；Release 不编译这段
-        if DebugHomeVisual.shared != nil {
-            watcher.consume(round)
-            return
-        }
-        #endif
-        let state = readState(event: event)
-        let decision = ClipboardReadPolicy.decide(platform: Self.platform, state: state)
-        // 一次前台最多判定一次（共性第 1 条）：不论结果，本轮都算读过
-        watcher.consume(round)
-        let unchanged = decision.reasonRaw == ClipboardReadPolicy.reasonUnchanged
-        guard decision.actionRaw == ClipboardReadPolicy.actionDetect || unchanged else { return }
-        let count = system.changeCount
-        try? store.write(Self.lastChangeKey, String(count))
-        // TODO(N-30) rule-gaps A01 / I01：提示条只在首页根页显示，别的页面上回前台不探测（探测了也不会提示），回到首页不补做
-        guard !unchanged, homeRoot(), !ledger.containsChangeCount(count) else { return }
-        let gen = homeGen
-        detectCount += 1
-        system.detectLink { [weak self] hit in
-            self?.detected(hit, event: event, round: round, homeGen: gen, changeCount: count)
-        }
-    }
-
-    func detected(_ hit: Bool, event: String, round: Int64, homeGen gen: Int64, changeCount: Int) {
-        // 等待之后复核：仍是这一轮前台、仍在首页根页、隐私仍已同意、没有敏感浮层、剪贴板没再变
-        guard round == watcher.round, watcher.inForeground, gen == homeGen, homeRoot(), overlayClear(),
-              system.changeCount == changeCount
-        else { return }
-        var state = readState(event: event)
-        state.readThisForeground = false
-        state.iosChangeCountChanged = true
-        state.iosDetectHit = hit
-        guard ClipboardReadPolicy.decide(platform: Self.platform, state: state).actionRaw
-            == ClipboardReadPolicy.actionShowPrompt
-        else { return }
-        counter += 1
-        prompt = ClipboardPrompt(id: counter)
     }
 
     /// 商品提示条的【关闭】：放弃（同一 changeCount 不再提示，G08 iOS 口径见 rule-gaps I02）。
