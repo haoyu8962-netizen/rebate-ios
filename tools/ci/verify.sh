@@ -549,8 +549,32 @@ visual_groups_needed() {
 # 金额相关用例不吃重试：类名或用例名含下面任一词的，首轮红即算红（approvals #24「不得削弱资金测试」）。
 # 名单：Money Amount Fen Rebate FormatVector Funds。同一用例连续两次合并前验都靠重试才过的转缺陷单，不再算偶发。
 readonly NO_RETRY_TEST_PATTERN='Money|Amount|Fen|Rebate|FormatVector|Funds'
+# FU-IOS-VERIFY-RETRIED-LOCALE（D10-1681 ①）：按字节处理（LC_ALL=C）。UTF-8 下 sed 遇失败行尾截断的多字节字符会报 RE error 整段退出，
+# 名单变空，金额用例「首轮红、重试后过」就被放过；C 下中文按字节照样匹配，用例名只含 ASCII
 retried_tests_in() {
-    grep -E "^Test [Cc]ase '[^']*' failed" "$1" | sed -E "s/^Test [Cc]ase '([^']*)'.*/\\1/" | sort -u || true
+    LC_ALL=C grep -aE "^Test [Cc]ase '[^']*' failed" "$1" | LC_ALL=C sed -E "s/^Test [Cc]ase '([^']*)'.*/\\1/" | LC_ALL=C sort -u || true
+}
+# 自测（UTF-8 下跑）：两份样例分开（文件里一有 NUL，BSD grep -a 就改按字节匹配，会掩盖 grep 前 LC_ALL=C 的回退）——
+# 样例一：失败行尾带截断多字节（\xe4\xb8，锁 sed）、失败行里 failed 之前带坏字节（\xe4，锁 grep 的 LC_ALL=C），其后跟金额用例失败行；
+# 样例二：日志里有 NUL（锁 grep -a），其后跟金额用例失败行。都要取到全部用例名、金额名单要命中。
+# 先确认 UTF-8 环境真的生效（旧写法在这里必须出错），否则自测形同虚设
+retried_tests_selftest() {
+    local f g got want
+    f="$(mktemp "${TMPDIR:-/tmp}/retried-selftest.XXXXXX")" || return 1
+    g="$(mktemp "${TMPDIR:-/tmp}/retried-selftest.XXXXXX")" || { rm -f "$f"; return 1; }
+    printf "Test Case '-[T.A testA]' failed (1.0 seconds). \xe4\xb8\nTest Case '-[T.B te\xe4stB]' failed (1.0 seconds).\nTest Case '-[T.FenTests testFen]' failed (2.0 seconds).\nTest Case '-[T.FenTests testFen]' passed (2.0 seconds).\n" >"$f"
+    printf "binary \000 here\nTest Case '-[T.MoneyTests testMoney]' failed (2.0 seconds).\n" >"$g"
+    if LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sed -E 's/x/x/' "$f" >/dev/null 2>&1; then
+        rm -f "$f" "$g"; echo "自测前提不成立：en_US.UTF-8 下 sed 没有因坏字节出错（本机 locale 不可用？）"; return 1
+    fi
+    got="$(LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 retried_tests_in "$f")"
+    want="$(printf '%s\n%s\n%s' '-[T.A testA]' "-[T.B te$(printf '\xe4')stB]" '-[T.FenTests testFen]')"
+    [ "$got" = "$want" ] || { rm -f "$f" "$g"; echo "retried_tests_in 自测（坏字节）失败，取到：[$got]"; return 1; }
+    printf '%s\n' "$got" | LC_ALL=C grep -qE "$NO_RETRY_TEST_PATTERN" || { rm -f "$f" "$g"; echo "金额名单没拦到 FenTests"; return 1; }
+    got="$(LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 retried_tests_in "$g")"
+    rm -f "$f" "$g"
+    [ "$got" = '-[T.MoneyTests testMoney]' ] || { echo "retried_tests_in 自测（NUL）失败，取到：[$got]"; return 1; }
+    echo "retried_tests_in 自测通过（坏字节 / NUL 之后仍取到金额用例）"
 }
 report_retried_tests() {
     local log failed money
@@ -686,6 +710,7 @@ step "源码树可完整读取（自测 + 全仓，F-X-07）" bash -c 'python3 t
 step "swiftformat --lint" swiftformat --lint .
 step "swiftlint --strict" swiftlint lint --strict --no-cache
 step "lint 违反样例必须被拦" lint_fixtures
+step "金额用例重试名单解析自测（UTF-8 坏字节，D10-1681）" retried_tests_selftest
 step "Feature 之间无依赖（依赖图 + import 检查自测 + 源码）" feature_isolation
 step "check-feature-imports 违反样例必须被拦（含扫不完整退出 4）" feature_import_fixtures
 step "身份未知展示接线（FU-IOS-0713：漏接样例自测 + 源码）" bash -c 'python3 tools/ci/check-identity-wiring.py --self-test && python3 tools/ci/check-identity-wiring.py'
