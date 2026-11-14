@@ -1,3 +1,4 @@
+import ClientCore
 import Combine
 import Config
 import CouliNetwork
@@ -163,7 +164,7 @@ import UIKit
                                                      ),
                                                      account: fixed.account, known: fixed.known),
                                                      now: now, cleared: 0)
-                        })
+                        }, configVersion: { [weak config] in Self.configVersion(config) })
     }
 
     func checkSession() {
@@ -272,5 +273,12 @@ import UIKit
         let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
         let flags = (object?["features"] as? [String: Any])?["flags"] as? [String: Any]
         grayscale = flags?["ui.grayscale"] as? Bool ?? false
+    }
+}
+
+extension AppHome {
+    /// sdui_card_error 的诊断字段 config_version（03 §4.7）：生效配置（current → LKG → 包内）的 config_version，取不到为 unknown。
+    static func configVersion(_ config: AppConfig?) -> String {
+        EventDiagnostics.configVersion(configJson: config?.store.snapshotJson ?? "{}")
     }
 }

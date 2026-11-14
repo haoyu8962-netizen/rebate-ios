@@ -33,10 +33,13 @@ final class CtLock01LinkJumpWiringTests: XCTestCase {
         XCTAssertEqual(event.fields["attempt_id"], .string("A7"))
         XCTAssertEqual(event.fields["link_id"], .string("L1"))
         XCTAssertEqual(event.fields["step"], .string("sdk"))
-        XCTAssertEqual(event.fields["result"], .string("launched"))
+        // LOCK-ios（D10-1682 ①）：契约 d47f660e5 起 link_jump.result 取 requested / failed / unknown，执行器的 launched 映射为
+        // requested
+        XCTAssertEqual(event.fields["result"], .string("requested"))
         XCTAssertNil(event.fields["sdk_open_by"])
         XCTAssertNil(event.fields["sdk_error_code"])
-        XCTAssertEqual(TrackerEvents.version, "2")
+        // LOCK-ios（D10-1682 ①）：契约 d47f660e5 的 events.yaml version 2 → 6
+        XCTAssertEqual(TrackerEvents.version, "6")
     }
 
     func testStartupStepHasNoPurchaseFields() throws {

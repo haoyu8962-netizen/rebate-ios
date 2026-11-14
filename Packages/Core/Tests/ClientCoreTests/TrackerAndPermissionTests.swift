@@ -218,12 +218,13 @@ final class TrackerAndPermissionTests: XCTestCase {
     func testConditionalRequiredFieldsAreRejected() {
         let queue = makeQueue(MemoryFile(), Sink())
         let incomplete = ClientEvents.linkJump(
-            page: "Home", phase: .purchase, unionPlatform: .taobao, step: .sdk, result: .launched
+            page: "Home", phase: .purchase, unionPlatform: .taobao, step: .sdk, result: .requested
         )
         XCTAssertFalse(incomplete.missingRequired.isEmpty)
         XCTAssertFalse(queue.track(event: incomplete), "purchase 缺 attempt_id 等条件必填字段")
         let startup = ClientEvents.linkJump(
-            page: "Home", phase: .startup, unionPlatform: .taobao, step: .sdk, result: .sdkInitFailed
+            page: "Home", phase: .startup, unionPlatform: .taobao, step: .sdk, result: .failed,
+            failureReason: .sdkInitFailed
         )
         XCTAssertTrue(queue.track(event: startup))
     }

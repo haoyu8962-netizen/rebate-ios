@@ -36,7 +36,7 @@ final class DisabledMethodsServices: BridgeServices, BridgeUI {
     }
 
     func reportRejected(method: String, code: Int) {
-        rejected.append(TrackerEvents.bridgeCall(page: AppWeb.page, method: method, code: code))
+        rejected.append(AppBridgeServices.rejectedEvent(method: method, code: code, configJson: "{}"))
     }
 
     func config(keys _: [String]) -> BridgeOutcome {

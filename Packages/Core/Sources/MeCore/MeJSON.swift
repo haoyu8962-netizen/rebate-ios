@@ -105,12 +105,24 @@ public enum MeJson {
             inviteCode: raw["invite_code"] as? String,
             inviterBound: JSONKind.bool(raw["inviter_bound"]) ?? false,
             phoneBound: JSONKind.bool(raw["phone_bound"]) ?? false,
+            maskedPhone: maskedPhone(value, phoneBound: JSONKind.bool(raw["phone_bound"]) ?? false),
             withdrawableFen: JSONKind.int64(balance["withdrawable_fen"]) ?? 0,
             estimatedTotalFen: JSONKind.int64(balance["estimated_total_fen"]) ?? 0,
             riskState: risk["state"] as? String ?? "",
             reasonCategory: risk["reason_category"] as? String,
             frozenUntil: risk["frozen_until"] as? String
         )
+    }
+
+    /// masked_phone（B1-02zzza，openapi Me.masked_phone）：服务端按 BR-TEXT-02 细则「手机号脱敏」给的「前 3 后 4」（138****8000），只用于展示，
+    /// 本端不自己脱敏、不补全。phone_bound=false、字段缺失（旧服务端）、null、或不是「3 位数字 + 4 个 * + 4 位数字」时为 nil（不显示任何号码，
+    /// 也不因此把整份 Me 当坏数据；与 Android MeJson.maskedPhone 同口径）。不在 `raw` 的 13 个字段里。
+    public static func maskedPhone(_ value: Any?, phoneBound: Bool) -> String? {
+        guard phoneBound, let text = (value as? [String: Any])?["masked_phone"] as? String,
+              // \A…\z 整串匹配：末尾带换行也不认（同 Android 整串匹配）
+              text.range(of: #"\A[0-9]{3}\*{4}[0-9]{4}\z"#, options: .regularExpression) != nil
+        else { return nil }
+        return text
     }
 
     /// 一条申诉（openapi Appeal 七个必填字段）；坏数据为 nil。status 只要求是字符串（不认识的按「处理中」显示）。
@@ -161,6 +173,8 @@ public struct MeProfile {
     public let inviteCode: String?
     public let inviterBound: Bool
     public let phoneBound: Bool
+    /// 绑定手机号的脱敏展示（`MeJson.maskedPhone`；没有为 nil）。不在 `raw` 的 13 个字段里；本单只解码、暂不展示。
+    public let maskedPhone: String?
     public let withdrawableFen: Int64
     public let estimatedTotalFen: Int64
     public let riskState: String
@@ -177,8 +191,9 @@ public struct MeProfile {
         raw["nickname"] = nickname
         return MeProfile(
             raw: raw, userId: userId, nickname: nickname, inviteCode: inviteCode, inviterBound: inviterBound,
-            phoneBound: phoneBound, withdrawableFen: withdrawableFen, estimatedTotalFen: estimatedTotalFen,
-            riskState: riskState, reasonCategory: reasonCategory, frozenUntil: frozenUntil
+            phoneBound: phoneBound, maskedPhone: maskedPhone, withdrawableFen: withdrawableFen,
+            estimatedTotalFen: estimatedTotalFen, riskState: riskState, reasonCategory: reasonCategory,
+            frozenUntil: frozenUntil
         )
     }
 }

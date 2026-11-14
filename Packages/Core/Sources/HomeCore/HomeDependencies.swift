@@ -1,3 +1,4 @@
+import ClientCore
 import Combine
 import CouliNetwork
 import Foundation
@@ -91,6 +92,8 @@ final class HomeLifetime: @unchecked Sendable {
     let forceUpdate: @MainActor () -> Void
     let text: @MainActor (String, [String: String]) -> String
     let identityCheck: @MainActor () -> IdentityCheck
+    /// sdui_card_error 诊断字段 config_version（03 §4.7；`EventDiagnostics.configVersion`）：生效配置的 config_version，取不到为 unknown。
+    let configVersion: @MainActor () -> String
     public func checkIdentity() -> IdentityCheck {
         identityCheck()
     }
@@ -101,7 +104,8 @@ final class HomeLifetime: @unchecked Sendable {
                 gate: RetryAfterGate, dedupe: CardErrorDedupeBox, track: @escaping @MainActor (TrackEvent) -> Void,
                 open: @escaping @MainActor (HomeTap) -> Void, forceUpdate: @escaping @MainActor () -> Void,
                 text: @escaping @MainActor (String, [String: String]) -> String,
-                identityCheck: @escaping @MainActor () -> IdentityCheck = { .current }) {
+                identityCheck: @escaping @MainActor () -> IdentityCheck = { .current },
+                configVersion: @escaping @MainActor () -> String = { EventDiagnostics.unknown }) {
         self.port = port
         self.articles = articles
         self.lkg = lkg
@@ -119,5 +123,6 @@ final class HomeLifetime: @unchecked Sendable {
         self.forceUpdate = forceUpdate
         self.text = text
         self.identityCheck = identityCheck
+        self.configVersion = configVersion
     }
 }

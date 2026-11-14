@@ -94,10 +94,12 @@ final class CtLock01ContractUpgradeTests: XCTestCase {
         XCTAssertFalse(ApiOperations.all.values.contains { ["admin", "super"].contains($0.auth) })
         // #24 test-change（FU-X-HOME-PAGE-API-ios 升锁 00deded0ef6f）：新锁 planned 逐个钉——4 个已实现（false）、3 个仍 planned（true），
         // 与安卓 U3（编排 11-04 15:01）同口径；路径与方法不变
+        // LOCK-ios（D10-1682 ①）：契约 d47f660e5 起 listAgentSessionMessages / setAgentMessageFeedback / reportAgentMessage
+        // 去掉 x-planned（true → false），7 个全部已实现
         let planned: [String: Bool] = [
-            "createAgentSession": false, "getCurrentAgentSession": false, "listAgentSessionMessages": true,
-            "sendAgentMessage": false, "cancelAgentRun": false, "setAgentMessageFeedback": true,
-            "reportAgentMessage": true,
+            "createAgentSession": false, "getCurrentAgentSession": false, "listAgentSessionMessages": false,
+            "sendAgentMessage": false, "cancelAgentRun": false, "setAgentMessageFeedback": false,
+            "reportAgentMessage": false,
         ]
         let expected: [[String]] = [
             ["createAgentSession", "POST", "/v1/agent/sessions"],

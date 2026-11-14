@@ -40,7 +40,7 @@ public struct TrackEvent: Swift.Sendable, Swift.Equatable {
 /// events.yaml 的事件构造函数。
 public enum TrackerEvents {
     /// events.yaml 的 version。
-    public static let version = "2"
+    public static let version = "6"
     /// 公共字段名（契约顺序）。
     public static let commonFields: [Swift.String] = ["event_id", "name", "client_at", "session_id", "device_id", "user_id", "platform", "app_version", "channel", "page", "spm", "trace_id"]
     /// 必填的公共字段名。
@@ -48,7 +48,7 @@ public enum TrackerEvents {
     /// platform 公共字段的取值。
     public static let platformValues: [Swift.String] = ["ios", "android", "harmony", "h5"]
     /// 全部事件名。
-    public static let allNames: [Swift.String] = ["link_jump", "external_page_union_host", "external_page_nav_host", "external_page_blocked_nav", "route_entry_blocked", "route_params_dropped", "bridge_call", "sdui_card_error", "app_launch", "page_view", "exposure", "click", "search", "convert", "h5_white_screen"]
+    public static let allNames: [Swift.String] = ["link_jump", "external_page_union_host", "external_page_nav_host", "external_page_blocked_nav", "route_entry_blocked", "route_params_dropped", "bridge_call", "sdui_card_error", "agent_stream_seq_gap", "agent_stream_frame_too_large", "agent_stream_limit", "agent_stream_unknown_event", "app_launch", "page_view", "exposure", "click", "search", "convert", "h5_white_screen"]
 
     /// link_jump 的枚举字段取值。
     public enum LinkJump {
@@ -75,10 +75,13 @@ public enum TrackerEvents {
             case copyTpwd = "copy_tpwd"
         }
         public enum ResultValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
-            case launched = "launched"
+            case requested = "requested"
             case failed = "failed"
+            case contractUnknown = "unknown"
+        }
+        public enum FailureReasonValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
             case sdkInitFailed = "sdk_init_failed"
-            case copied = "copied"
+            case stepFailed = "step_failed"
         }
         public enum SdkOpenByValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
             case url = "url"
@@ -91,7 +94,7 @@ public enum TrackerEvents {
         }
     }
 
-    /// link_jump：外跳的每一步结果（BR-ATTR-27 ③；BR-ATTR-21 细则「待跟单卡按实际外跳选」）；另记百川初始化失败（BR-ATTR-27 淘宝行）
+    /// link_jump：外跳的每一步结果（BR-ATTR-27 ③；BR-ATTR-21 细则「待跟单卡按实际外跳选」）；另记百川初始化失败（BR-ATTR-27 淘宝行，result=failed 且 failure_reason=sdk_init_failed）
     public static func linkJump(
         page: Swift.String,
         phase: LinkJump.PhaseValue,
@@ -100,6 +103,7 @@ public enum TrackerEvents {
         unionPlatform: LinkJump.UnionPlatformValue,
         step: LinkJump.StepValue,
         result: LinkJump.ResultValue,
+        failureReason: LinkJump.FailureReasonValue? = nil,
         sdkOpenBy: LinkJump.SdkOpenByValue? = nil,
         sdkErrorCode: Swift.String? = nil,
         durationMs: Swift.Int? = nil,
@@ -118,6 +122,9 @@ public enum TrackerEvents {
         fields["union_platform"] = .string(unionPlatform.rawValue)
         fields["step"] = .string(step.rawValue)
         fields["result"] = .string(result.rawValue)
+        if let failureReasonValue = failureReason {
+            fields["failure_reason"] = .string(failureReasonValue.rawValue)
+        }
         if let sdkOpenByValue = sdkOpenBy {
             fields["sdk_open_by"] = .string(sdkOpenByValue.rawValue)
         }
@@ -136,6 +143,9 @@ public enum TrackerEvents {
         }
         if fields["phase"] == .string("purchase"), fields["link_id"] == nil {
             missing.append("link_id")
+        }
+        if fields["result"] == .string("failed"), fields["failure_reason"] == nil {
+            missing.append("failure_reason")
         }
         if fields["phase"] == .string("purchase"), fields["duration_ms"] == nil {
             missing.append("duration_ms")
@@ -331,12 +341,20 @@ public enum TrackerEvents {
         page: Swift.String,
         method: Swift.String,
         code: Swift.Int,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
         spm: Swift.String? = nil,
         traceId: Swift.String? = nil
     ) -> TrackEvent {
         var fields: [Swift.String: TrackValue] = [:]
         fields["method"] = .string(method)
         fields["code"] = .integer(code)
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
         let missing: [Swift.String] = []
         return TrackEvent(
             name: "bridge_call", page: page, spm: spm, traceId: traceId, fields: fields,
@@ -349,8 +367,12 @@ public enum TrackerEvents {
         page: Swift.String,
         type: Swift.String,
         version: Swift.Int? = nil,
-        pageVersion: Swift.Int,
+        pageVersion: Swift.Int? = nil,
         reason: Swift.String,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
         spm: Swift.String? = nil,
         traceId: Swift.String? = nil
     ) -> TrackEvent {
@@ -359,11 +381,154 @@ public enum TrackerEvents {
         if let versionValue = version {
             fields["version"] = .integer(versionValue)
         }
-        fields["page_version"] = .integer(pageVersion)
+        if let pageVersionValue = pageVersion {
+            fields["page_version"] = .integer(pageVersionValue)
+        }
         fields["reason"] = .string(reason)
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
         let missing: [Swift.String] = []
         return TrackEvent(
             name: "sdui_card_error", page: page, spm: spm, traceId: traceId, fields: fields,
+            missingRequired: missing
+        )
+    }
+
+    /// agent_stream_seq_gap：原生 Agent 页流诊断：text.delta 缺号（收到的 seq 大于本地已应用值 +1），本地结束该条消息（03 §7.2）；不带用户消息原文、输入框原文、帧的 data 与 delta、卡片内容和 fallback_text
+    public static func agentStreamSeqGap(
+        page: Swift.String,
+        runId: Swift.String? = nil,
+        messageId: Swift.String? = nil,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
+        expected: Swift.Int,
+        received: Swift.Int,
+        spm: Swift.String? = nil,
+        traceId: Swift.String? = nil
+    ) -> TrackEvent {
+        var fields: [Swift.String: TrackValue] = [:]
+        if let runIdValue = runId {
+            fields["run_id"] = .string(runIdValue)
+        }
+        if let messageIdValue = messageId {
+            fields["message_id"] = .string(messageIdValue)
+        }
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
+        fields["expected"] = .integer(expected)
+        fields["received"] = .integer(received)
+        let missing: [Swift.String] = []
+        return TrackEvent(
+            name: "agent_stream_seq_gap", page: page, spm: spm, traceId: traceId, fields: fields,
+            missingRequired: missing
+        )
+    }
+
+    /// agent_stream_frame_too_large：原生 Agent 页流诊断：单帧 data 超过上限，按协议错误本地结束该条消息（03 §7.2）；只有共有字段，不带帧内容
+    public static func agentStreamFrameTooLarge(
+        page: Swift.String,
+        runId: Swift.String? = nil,
+        messageId: Swift.String? = nil,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
+        spm: Swift.String? = nil,
+        traceId: Swift.String? = nil
+    ) -> TrackEvent {
+        var fields: [Swift.String: TrackValue] = [:]
+        if let runIdValue = runId {
+            fields["run_id"] = .string(runIdValue)
+        }
+        if let messageIdValue = messageId {
+            fields["message_id"] = .string(messageIdValue)
+        }
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
+        let missing: [Swift.String] = []
+        return TrackEvent(
+            name: "agent_stream_frame_too_large", page: page, spm: spm, traceId: traceId, fields: fields,
+            missingRequired: missing
+        )
+    }
+
+    /// agent_stream_limit 的枚举字段取值。
+    public enum AgentStreamLimit {
+        public enum KindValue: Swift.String, Swift.Sendable, Swift.CaseIterable {
+            case text = "text"
+            case cards = "cards"
+            case frames = "frames"
+        }
+    }
+
+    /// agent_stream_limit：原生 Agent 页流诊断：同一 run 的累计文本、卡片数或内容帧数超过输出上限，本地结束该条消息（03 §7.2；上限见 02 §9.2）
+    public static func agentStreamLimit(
+        page: Swift.String,
+        runId: Swift.String? = nil,
+        messageId: Swift.String? = nil,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
+        kind: AgentStreamLimit.KindValue,
+        spm: Swift.String? = nil,
+        traceId: Swift.String? = nil
+    ) -> TrackEvent {
+        var fields: [Swift.String: TrackValue] = [:]
+        if let runIdValue = runId {
+            fields["run_id"] = .string(runIdValue)
+        }
+        if let messageIdValue = messageId {
+            fields["message_id"] = .string(messageIdValue)
+        }
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
+        fields["kind"] = .string(kind.rawValue)
+        let missing: [Swift.String] = []
+        return TrackEvent(
+            name: "agent_stream_limit", page: page, spm: spm, traceId: traceId, fields: fields,
+            missingRequired: missing
+        )
+    }
+
+    /// agent_stream_unknown_event：原生 Agent 页流诊断：收到不在 04 §8.2 表内的 event 类型，忽略该帧、不中断流（03 §7.2）
+    public static func agentStreamUnknownEvent(
+        page: Swift.String,
+        runId: Swift.String? = nil,
+        messageId: Swift.String? = nil,
+        schemaVersion: Swift.String,
+        bridgeVersion: Swift.String,
+        configVersion: Swift.String,
+        h5Release: Swift.String,
+        type: Swift.String,
+        spm: Swift.String? = nil,
+        traceId: Swift.String? = nil
+    ) -> TrackEvent {
+        var fields: [Swift.String: TrackValue] = [:]
+        if let runIdValue = runId {
+            fields["run_id"] = .string(runIdValue)
+        }
+        if let messageIdValue = messageId {
+            fields["message_id"] = .string(messageIdValue)
+        }
+        fields["schema_version"] = .string(schemaVersion)
+        fields["bridge_version"] = .string(bridgeVersion)
+        fields["config_version"] = .string(configVersion)
+        fields["h5_release"] = .string(h5Release)
+        fields["type"] = .string(type)
+        let missing: [Swift.String] = []
+        return TrackEvent(
+            name: "agent_stream_unknown_event", page: page, spm: spm, traceId: traceId, fields: fields,
             missingRequired: missing
         )
     }

@@ -7,6 +7,7 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
     case orderInvalid = "ORDER_INVALID"
     case credited = "CREDITED"
     case clawback = "CLAWBACK"
+    case settleAdjusted = "SETTLE_ADJUSTED"
     case wdSuccess = "WD_SUCCESS"
     case wdRejected = "WD_REJECTED"
     case wdFailed = "WD_FAILED"
@@ -28,6 +29,7 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
         .orderInvalid,
         .credited,
         .clawback,
+        .settleAdjusted,
         .wdSuccess,
         .wdRejected,
         .wdFailed,

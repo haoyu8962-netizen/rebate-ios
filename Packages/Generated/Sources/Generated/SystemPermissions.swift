@@ -13,5 +13,9 @@ public enum SystemPermissions {
     public static let entries: [SystemPermissionEntry] = [
         SystemPermissionEntry(type: "photos", platform: "ios", purposeKey: "perm.photos.system_purpose"),
         SystemPermissionEntry(type: "push", platform: "ios", purposeKey: "perm.push.card_hint"),
+        SystemPermissionEntry(type: "vibrate", platform: "harmony", purposeKey: "perm.vibrate.system_purpose"),
+        SystemPermissionEntry(type: "network", platform: "android", purposeKey: nil),
+        SystemPermissionEntry(type: "dynamic_receiver", platform: "android", purposeKey: nil),
+        SystemPermissionEntry(type: "network", platform: "harmony", purposeKey: nil),
     ]
 }

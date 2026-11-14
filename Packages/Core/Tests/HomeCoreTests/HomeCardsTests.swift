@@ -29,7 +29,11 @@ final class HomeCardsTests: HomeRigTestCase {
         )
         for event in errors {
             XCTAssertEqual(event.page, "Home")
-            XCTAssertTrue(Set(event.fields.keys).isSubset(of: ["type", "version", "page_version", "reason"]))
+            // LOCK-ios（D10-1682 ①）：契约 d47f660e5 起 sdui_card_error 必填四项诊断字段（03 §4.7），白名单补这四项
+            XCTAssertTrue(Set(event.fields.keys).isSubset(of: [
+                "type", "version", "page_version", "reason",
+                "schema_version", "bridge_version", "config_version", "h5_release",
+            ]))
             XCTAssertEqual(event.fields["page_version"], .integer(13))
             let dump = String(describing: event)
             XCTAssertFalse(dump.contains("https://") || dump.contains("测试"), "事件里不得有链接与文案：\(dump)")

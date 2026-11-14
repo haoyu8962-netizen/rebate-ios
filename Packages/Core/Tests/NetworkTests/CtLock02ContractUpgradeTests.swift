@@ -57,10 +57,12 @@ final class CtLock02ContractUpgradeTests: XCTestCase {
         let addedByLockA89c1ec = ["submitProductFeedback", "openProductShop"]
         XCTAssertEqual(ApiOperations.byId("submitProductFeedback")?.auth, "optional")
         XCTAssertEqual(ApiOperations.byId("openProductShop")?.auth, "login")
-        for id in added + addedByLock00deded + addedByLockA89c1ec {
+        // LOCK-ios（D10-1682 ①）：契约 d47f660e5 再新增 1 个 ingestEvents（POST /v1/events，103 → 104，只增不删）
+        let addedByLockD47f660 = ["ingestEvents"]
+        for id in added + addedByLock00deded + addedByLockA89c1ec + addedByLockD47f660 {
             XCTAssertNotNil(ApiOperations.byId(id), id)
         }
-        XCTAssertEqual(ApiOperations.all.count, 103)
+        XCTAssertEqual(ApiOperations.all.count, 104)
         XCTAssertFalse(ApiOperations.all.values.contains { $0.pathTemplate.hasPrefix("/admin/") })
     }
 

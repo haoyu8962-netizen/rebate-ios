@@ -13,28 +13,28 @@ import XCTest
 /// 升锁前（锁 a7c9f1f）本文件多数用例红属预期，由实现者的提交 1（升锁）转绿。
 @MainActor
 final class HomePageApiLockTests: XCTestCase {
-    static let lockedCommit = "a89c1ec3a7f4de0b069742af909eba6545358ea3"
+    static let lockedCommit = "d47f660e5d42729899ade06298ddf5457791ff3d"
     /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交。
     static let designLockCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
 
     /// 鸿蒙 main contract.lock（ee878ac3…cd03，与安卓 84b4dde 整文件相同）里与 iOS 同名的 23 项。
     static let sameNameHashes: [String: String] = [
         "contracts/agent-stream.schema.json":
-            "895bd7458fc9185e5b9022e316fc4313b90b84f91d75f72227bd3e907139fb9e",
+            "c7c6960cd0d606ef3b07757f44aad653681788d5ed1338d9ec4ea4d728c7a38d",
         "contracts/apps.json":
-            "b7c3e07ad63d52e7ec5b6021b13dc2003cabb0755adffa4af5079aa3ac2267dd",
+            "755f083b1ab1c58eeb7e80b1d1db8158e6118b0ecfbc8f1d07557a0b46105dc8",
         "contracts/bridge.schema.json":
-            "553c7f79b4a803fcdab70d6efa5c0d631f9a8a3263f9fd7f373a053c654dc1e3",
+            "65605d08e15edda6a49036413b534a77f89202cedae7398d145e47b81833a874",
         "contracts/enums/admin.json":
-            "15169659cbc717065f12d3c17893972a473b47d6271832e5c4acc026ea00a8ca",
+            "b2f84f6c3749f43793c11fbbaf58b3035752f2e8eab200d2857e6f745b1e0db2",
         "contracts/enums/fund.json":
-            "609f58a2598222e9b9c88364a77662c9c7efce5612fad7f84b43c133b62e3f5e",
+            "fbdfbe6f4698b6e55d4ce613774a6d7dd1477b042fe33b30988f05b0549439ac",
         "contracts/enums/identity.json":
             "1fc21235dbe4c642da2bb698ca03a100828dba5366184fd5ec2e1bf92da45a19",
         "contracts/enums/ops.json":
-            "cf931b2a615086bc3a37e781041baf2ab937fbce8457e4da04f029ef77f7ffc6",
+            "e999d6072cd5d22dfec81526a65f72e01ab52d7cea1cfdb1e71d207c073b0b23",
         "contracts/enums/order.json":
-            "9c520a728229f8636b5d1c4556719d61d8cee0d2fd7d5739fb07580134e3007e",
+            "10cb34f7028892b0c4a2a30a7523e1d203017a3bdb1c6abe0ded1d6cda78a9e0",
         "contracts/enums/pay.json":
             "d77e1a6f1ccfb414500cf2c420e9dfa6babcab14441a533ebf6ec06449e297f1",
         "contracts/enums/platform.json":
@@ -42,13 +42,13 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/enums/trade.json":
             "2baee49aac11b903b942fedf65835f6528baed8ba99c33aaad6afbcfc0f15fd8",
         "contracts/error-codes.json":
-            "954c14c589f9681d66fa5c8518ad482ee892638a1b6f2adfc2cd8c801dcb2d8f",
+            "a312384e185aefcc1db7f0538ac98b63082b064a3c9fe77f19a0a889b6a398db",
         "contracts/openapi.json":
-            "4b658d0079bc173d5bed9081b122c202032b49247dc4afd45db0d2f2c0787214",
+            "4815635c38d6c2d90af40304a8e87cfff65834e78a8fdf7f7590b4e2163e1295",
         "contracts/routes.json":
-            "ab9b31952c979f61b40608edc982423423a38617f40b0937e3541e0766a31b06",
+            "0afda43347552bb3f875fe2b76c6ab9e30d37ec22dedc77fd5a1fe88c376522b",
         "contracts/texts.default.json":
-            "3ddce957d12e696d6276fd676cd0e78a719d337615f8d99d0d511b551d3022db",
+            "9892db319fa5d29da786d5feaf1ffd1fd1e61f97ff2ecbfa3d72bcf33d322a2e",
         "design/design-tokens.json":
             "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c",
         "specs/app-stores.json":
@@ -60,11 +60,11 @@ final class HomePageApiLockTests: XCTestCase {
         "specs/device-hash.vectors.json":
             "9c679ba2d4a7a0c5723602dd8879f251ae5250663702b3ef6e3ad0ba359065aa",
         "specs/events.json":
-            "2f3628e7a02e48f10269d60e54f5116a9934e500582e9aa6fefb55587dfe8d3a",
+            "87f144bee6ce0f3d7025b9ab56ac0193ea61f9be26fe0ba2adde2bae0bec15a5",
         "specs/request-sign.vectors.json":
             "42512225bf4ada0642b761176d5cf5010c44c0d168f99b087166459518c1cbf9",
         "specs/system-permissions.json":
-            "bd7c09ae405d0ed5493704be0a51e59ec2628bf7a0c24c2433c39acfe8175b2f",
+            "e5040ac178dc76fe2be510351827425a54d65b1a4cd616683237241a38a479b5",
     ]
 
     private func lock() throws -> [String: Any] {

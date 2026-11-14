@@ -252,7 +252,22 @@ final class AppBridgeServices: BridgeServices {
     }
 
     func reportRejected(method: String, code: Int) {
-        web?.tracker.track(TrackerEvents.bridgeCall(page: AppWeb.page, method: method, code: code))
+        guard let web else { return }
+        web.tracker.track(Self.rejectedEvent(method: method, code: code, configJson: web.configJson))
+    }
+
+    /// bridge_call 被拒事件（03 §4.7，D10-1612 ④ (i)；与 Android EventDiagnostics.bridgeCall 同口径）：四项诊断字段各有来源——
+    /// schema_version 取打包的桥契约顶层 version（`EventDiagnostics.bridgeSchemaVersion`）；bridge_version 与 app.getEnv 的
+    /// bridge_version 同一来源（`BridgeProtocol.contractVersion`）；config_version 取生效配置；h5_release 原生取不到（地址不带版本），
+    /// 填 unknown。两个版本号数值可以相同，但不互相借用。
+    static func rejectedEvent(method: String, code: Int, configJson: String) -> TrackEvent {
+        TrackerEvents.bridgeCall(
+            page: AppWeb.page, method: method, code: code,
+            schemaVersion: EventDiagnostics.bridgeSchemaVersion,
+            bridgeVersion: String(BridgeProtocol.contractVersion),
+            configVersion: EventDiagnostics.configVersion(configJson: configJson),
+            h5Release: EventDiagnostics.unknown
+        )
     }
 
     private static let h5Events: [String: (String) -> TrackEvent] = [

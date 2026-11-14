@@ -26,6 +26,20 @@ public enum PrivacyCenterView {
     public static let listCollect = "个人信息收集清单"
     public static let listShare = "第三方共享清单"
 
+    /// 权限清单条目类型的归类：向用户申请（运行时弹系统框）或安装即授予（不弹窗）。
+    public enum PermissionKind: Sendable { case userRequested, installGranted }
+
+    /// 「系统权限」一节的判据，只此一处（编排 D10-1606 ①、D10-1612 2，与 Android PrivacyCenterView.PERMISSION_KINDS 同表）：
+    /// 权限清单（specs/system-permissions 快照）里每个 type 显式归类，只列 userRequested；看类型、不看 purpose_key 是否为空。
+    /// 清单出现这里没有的类型时不列（保守），由守卫用例报红、要求在此补归类。
+    public static let permissionKinds: [String: PermissionKind] = [
+        "push": .userRequested,
+        "photos": .userRequested,
+        "vibrate": .installGranted,
+        "network": .installGranted,
+        "dynamic_receiver": .installGranted,
+    ]
+
     /// PermissionRequester 的状态 → 系统权限一节的状态（granted / denied / not_asked）。
     public static func statusOf(_ raw: String) -> String {
         switch raw {
@@ -41,7 +55,9 @@ public enum PrivacyCenterView {
     ) -> PrivacyCenterModel {
         let basic = level == MeLevel.basic
         let rows: [PermissionRow] = forceUpdate ? [] : permissionEntries.compactMap { entry in
-            guard let type = entry["type"] as? String, entry["platform"] as? String == platform else { return nil }
+            guard let type = entry["type"] as? String, entry["platform"] as? String == platform,
+                  permissionKinds[type] == .userRequested
+            else { return nil }
             return PermissionRow(
                 type: type, purposeKey: entry["purpose_key"] as? String,
                 statusKey: "privacy.system_permissions.status." + statusOf(permissionStatus[type] ?? "not_asked")

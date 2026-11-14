@@ -40,6 +40,23 @@ public enum LedgerType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.
     }
 }
 
+/// 契约枚举 `ledger_sub_account`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum LedgerSubAccount: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case available
+    case frozen
+    case unknown = "__unknown__"
+
+    public static let allCases: [LedgerSubAccount] = [
+        .available,
+        .frozen,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = LedgerSubAccount(rawValue: rawValue) ?? .unknown
+    }
+}
+
 /// 契约枚举 `referral_credit_sub_type`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum ReferralCreditSubType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case direct = "DIRECT"
@@ -781,6 +798,7 @@ public enum ReconDiffType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
     case settleMissing = "settle_missing"
     case appealRestore = "appeal_restore"
     case estimateChangedAfterCredit = "estimate_changed_after_credit"
+    case blacklistAfterCredit = "blacklist_after_credit"
     case payMismatch = "pay_mismatch"
     case payAnomaly = "pay_anomaly"
     case unknown = "__unknown__"
@@ -795,6 +813,7 @@ public enum ReconDiffType: Swift.String, Swift.Sendable, Swift.CaseIterable, Swi
         .settleMissing,
         .appealRestore,
         .estimateChangedAfterCredit,
+        .blacklistAfterCredit,
         .payMismatch,
         .payAnomaly,
     ]

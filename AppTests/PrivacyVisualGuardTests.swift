@@ -46,7 +46,7 @@ final class PrivacyVisualGuardTests: XCTestCase {
             "Packages/Core/Sources/MeCore/PrivacyCenterController.swift":
                 "d0e5470b1673c430399dd1add5b6f0123a427408cb56ef5d9ec55b32d16550a5",
             "Packages/Core/Sources/MeCore/PrivacyCenterView.swift":
-                "71874283bb504603af43609dfafecba0e5cf96c6f40f7574e6e29c61a4ecbafb",
+                "3ca4c944c2124cc61183e81709ed26f067b98a4519a680c2696fbc2aa1554dd8",
             "Packages/Core/Sources/MeCore/AboutController.swift":
                 "86bb750f85f78c31a5d253aa3dc1f147ab07a82be61cef7b217b530384221bfb",
             "Packages/Core/Sources/MeCore/AboutRules.swift":
@@ -64,9 +64,9 @@ final class PrivacyVisualGuardTests: XCTestCase {
             "App/Sources/Me/AppMe+Flows.swift":
                 "ea68a8bf4c9aa02761e024d35eb8101e32360887ebe6d4fe524f69e386e639f1",
             "contract.lock":
-                "b65d6556e620f25f7f39f2aca9370c242a5e6b85cb12ac916dc909bc43d70117",
+                "2b1d624134188bd0beafdf8a09a0b0f8fc84777de5e018ba9c1a978150a4fe05",
             "contracts/snapshot/specs/system-permissions.json":
-                "bd7c09ae405d0ed5493704be0a51e59ec2628bf7a0c24c2433c39acfe8175b2f",
+                "e5040ac178dc76fe2be510351827425a54d65b1a4cd616683237241a38a479b5",
             "specs/me-vectors.json":
                 "c40b21e1e9da5a12c0ba5b2401f593c3fb258d4e8a46d028b4c8485b64dff05d",
         ]

@@ -19,7 +19,7 @@ final class CtaKeyVectorTests: XCTestCase {
     func testVectorFileShape() throws {
         let file = try loadVectors()
         XCTAssertEqual(file["version"] as? Int, 1)
-        XCTAssertEqual(file["contractCommit"] as? String, "a89c1ec3a7f4de0b069742af909eba6545358ea3")
+        XCTAssertEqual(file["contractCommit"] as? String, "d47f660e5d42729899ade06298ddf5457791ff3d")
         let cases = try XCTUnwrap(file["cases"] as? [[String: Any]])
         XCTAssertGreaterThanOrEqual(cases.count, 20)
         let ids = cases.compactMap { $0["id"] as? String }

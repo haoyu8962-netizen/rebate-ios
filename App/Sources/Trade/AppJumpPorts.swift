@@ -102,14 +102,36 @@ final class AppLinkJumpSink: LinkJumpSink {
         guard let phase = (fields["phase"] as? String).flatMap(Values.PhaseValue.init(rawValue:)),
               let platform = (fields["union_platform"] as? String).flatMap(Values.UnionPlatformValue.init(rawValue:)),
               let step = (fields["step"] as? String).flatMap(Values.StepValue.init(rawValue:)),
-              let result = (fields["result"] as? String).flatMap(Values.ResultValue.init(rawValue:))
+              case let (result, failureReason)? = linkJumpResult(fields["result"] as? String)
         else { return nil }
         let duration = (fields["duration_ms"] as? NSNumber)?.intValue
         let installed = (fields["installed"] as? String).flatMap(Values.InstalledValue.init(rawValue:))
         return TrackerEvents.linkJump(
             page: page, phase: phase, attemptId: fields["attempt_id"] as? String, linkId: fields["link_id"] as? String,
-            unionPlatform: platform, step: step, result: result, durationMs: duration, installed: installed
+            unionPlatform: platform, step: step, result: result, failureReason: failureReason, durationMs: duration,
+            installed: installed
         )
+    }
+
+    /// 外跳步骤结果 → events.yaml link_jump 的 result 与 failure_reason（events version 6，03 §4.5；
+    /// 与 Android AppTrade.linkJumpResult 同口径）。步骤执行器仍用自己的结果词（launched / copied / failed /
+    /// sdk_init_failed，购买流程的判定靠它们），只在这里换成契约取值：
+    /// 拉起与已复制口令都记 requested；已初始化但这一步明确失败记 failed + step_failed；百川初始化失败记 failed + sdk_init_failed。
+    /// 失败一律带 failure_reason、绝不记成 requested；契约的 requested、unknown 原样认；其余取值不上报。
+    /// TODO(N-20)：接上报 sink 时由交易模块直接产契约新取值（含 unknown），并删掉本映射。
+    static func linkJumpResult(_ raw: String?)
+        -> (TrackerEvents.LinkJump.ResultValue, TrackerEvents.LinkJump.FailureReasonValue?)? {
+        typealias Result = TrackerEvents.LinkJump.ResultValue
+        typealias Reason = TrackerEvents.LinkJump.FailureReasonValue
+        guard let raw else { return nil }
+        switch raw {
+        case JumpTypes.launched, JumpTypes.copied: return (Result.requested, nil)
+        case JumpTypes.failed: return (Result.failed, Reason.stepFailed)
+        case JumpTypes.sdkInitFailed: return (Result.failed, Reason.sdkInitFailed)
+        case Result.requested.rawValue: return (Result.requested, nil)
+        case Result.contractUnknown.rawValue: return (Result.contractUnknown, nil)
+        default: return nil
+        }
     }
 }
 

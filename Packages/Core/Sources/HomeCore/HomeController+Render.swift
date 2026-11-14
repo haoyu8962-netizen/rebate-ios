@@ -1,3 +1,4 @@
+import ClientCore
 import CouliNetwork
 import Foundation
 import Generated
@@ -29,8 +30,14 @@ extension HomeController {
                 sectionId: drop.id,
                 reason: drop.reason
             ) {
-                deps.track(TrackerEvents.sduiCardError(page: "Home", type: drop.type, version: drop.version,
-                                                       pageVersion: page.version, reason: drop.reason))
+                // 诊断字段（03 §4.7）：schema_version 取卡片自带 version，正是缺它而失败时填 unknown；首页是原生页，没有桥与 H5
+                deps.track(TrackerEvents.sduiCardError(
+                    page: "Home", type: drop.type, version: drop.version, pageVersion: page.version,
+                    reason: drop.reason,
+                    schemaVersion: drop.version.map(String.init) ?? EventDiagnostics.unknown,
+                    bridgeVersion: EventDiagnostics.unknown, configVersion: deps.configVersion(),
+                    h5Release: EventDiagnostics.unknown
+                ))
             }
         }
         rebuild()

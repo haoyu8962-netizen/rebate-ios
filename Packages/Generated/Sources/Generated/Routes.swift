@@ -143,6 +143,7 @@ public enum Routes {
             agentGuide: false,
             agentGuideAccount: nil,
             params: [
+                RouteParamSpec(name: "order_id", type: .string, minLength: 1),
             ],
             requiredParams: [],
             additionalParams: false

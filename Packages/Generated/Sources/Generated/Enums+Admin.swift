@@ -11,6 +11,7 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     case fundView = "fund.view"
     case auditViewAll = "audit.view_all"
     case export
+    case feedbackView = "feedback.view"
     case contentPage = "content.page"
     case contentPool = "content.pool"
     case contentArticle = "content.article"
@@ -44,6 +45,7 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
     case orderAssign = "order.assign"
     case orderHold = "order.hold"
     case orderRestore = "order.restore"
+    case orderBlacklistClawback = "order.blacklist_clawback"
     case withdrawReview = "withdraw.review"
     case payoutExecute = "payout.execute"
     case payView = "pay.view"
@@ -71,6 +73,7 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
         .fundView,
         .auditViewAll,
         .export,
+        .feedbackView,
         .contentPage,
         .contentPool,
         .contentArticle,
@@ -104,6 +107,7 @@ public enum AdminPermission: Swift.String, Swift.Sendable, Swift.CaseIterable, S
         .orderAssign,
         .orderHold,
         .orderRestore,
+        .orderBlacklistClawback,
         .withdrawReview,
         .payoutExecute,
         .payView,
@@ -313,11 +317,15 @@ public enum AuditActorKind: Swift.String, Swift.Sendable, Swift.CaseIterable, Sw
 public enum AuditSystemActor: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case systemRisk = "system:risk"
     case systemPayout = "system:payout"
+    case systemLedger = "system:ledger"
+    case systemSettlement = "system:settlement"
     case unknown = "__unknown__"
 
     public static let allCases: [AuditSystemActor] = [
         .systemRisk,
         .systemPayout,
+        .systemLedger,
+        .systemSettlement,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {

@@ -200,6 +200,49 @@ public enum OrderReason: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift
     }
 }
 
+/// 契约枚举 `order_reason_sub`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
+public enum OrderReasonSub: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
+    case violationPromo = "VIOLATION_PROMO"
+    case shopTk = "SHOP_TK"
+    case insitePromo = "INSITE_PROMO"
+    case proxyBuy = "PROXY_BUY"
+    case fakeTrade = "FAKE_TRADE"
+    case insiteResale = "INSITE_RESALE"
+    case overLimit = "OVER_LIMIT"
+    case marketDisrupt = "MARKET_DISRUPT"
+    case multiTradeAbnormal = "MULTI_TRADE_ABNORMAL"
+    case singleTradeAbnormal = "SINGLE_TRADE_ABNORMAL"
+    case riskOrder = "RISK_ORDER"
+    case punishOrder = "PUNISH_ORDER"
+    case inSale = "IN_SALE"
+    case afterSettle = "AFTER_SETTLE"
+    case afterSale = "AFTER_SALE"
+    case unknown = "__unknown__"
+
+    public static let allCases: [OrderReasonSub] = [
+        .violationPromo,
+        .shopTk,
+        .insitePromo,
+        .proxyBuy,
+        .fakeTrade,
+        .insiteResale,
+        .overLimit,
+        .marketDisrupt,
+        .multiTradeAbnormal,
+        .singleTradeAbnormal,
+        .riskOrder,
+        .punishOrder,
+        .inSale,
+        .afterSettle,
+        .afterSale,
+    ]
+
+    public init(from decoder: any Swift.Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(Swift.String.self)
+        self = OrderReasonSub(rawValue: rawValue) ?? .unknown
+    }
+}
+
 /// 契约枚举 `diff_reason`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum DiffReason: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
     case partRefund = "PART_REFUND"

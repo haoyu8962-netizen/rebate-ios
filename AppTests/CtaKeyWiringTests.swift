@@ -34,7 +34,7 @@ final class CtaKeyWiringTests: XCTestCase {
         let data = try Data(contentsOf: directory.appendingPathComponent("contract.lock"))
         let lock = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let platform = try XCTUnwrap(lock["rebate_platform"] as? [String: Any])
-        XCTAssertEqual(platform["commit"] as? String, "a89c1ec3a7f4de0b069742af909eba6545358ea3")
+        XCTAssertEqual(platform["commit"] as? String, "d47f660e5d42729899ade06298ddf5457791ff3d")
     }
 
     /// 搜索 / 详情的文案函数：契约字典优先，升锁后 btn.buy 取契约新值「购买」（草稿「去购买」被覆盖）。
