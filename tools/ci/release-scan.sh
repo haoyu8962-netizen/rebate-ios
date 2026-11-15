@@ -41,6 +41,7 @@
 #   - 剪贴板调试计数的最近判定记录（FU-IOS-CLIP-DIAG-REASON）：类型名 DebugClipboardEvaluation（App/Sources/Debug/DebugClipboard.swift，
 #     AppClipboard 的 #if DEBUG 存储属性引用它；last= 与各落点短值不超过 15 字节会被内联、strings 看不到，靠类型名兜底）
 #   - 剪贴板本机开关重置（FU-X-CLIP-DEFAULT-ON）：启动参数 CouliClipboardSwitchReset（App/Sources/Clipboard/ClipboardSystem.swift 的 #if DEBUG）
+#   - 剪贴板自写账本重置（D10-1746 ②）：启动参数 CouliClipboardSelfWrittenReset（App/Sources/Clipboard/ClipboardSystem.swift 的 #if DEBUG）
 #   - 订单本机假服务（APP-08）：标记 COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19、类型名 DebugFakeOrders、启动参数 CouliFakeOrders
 #     （App/Sources/Debug/DebugFakeOrders.swift）
 #   - 「我的」本机假服务与假推送令牌来源（APP-12）：标记 COULI_FAKE_ME_SERVER_APP12_IOS_2b9e47、类型名 DebugFakeMe、DebugPushTokenSource、
@@ -164,6 +165,7 @@ HITS_LOG="$WORK/hits"
     echo "CouliClipboardDiagnostics"
     echo "DebugClipboardEvaluation"
     echo "CouliClipboardSwitchReset"
+    echo "CouliClipboardSelfWrittenReset"
     echo "COULI_FAKE_ORDERS_SERVER_APP08_IOS_6a2f19"
     echo "DebugFakeOrders"
     echo "CouliFakeOrders"

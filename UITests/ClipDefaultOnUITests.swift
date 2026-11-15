@@ -7,6 +7,8 @@ import XCTest
 ///
 /// 新 Debug 输入（实现者接，交回 §5）：`-CouliClipboardSwitchReset 1`：在 AppClipboard 组装之前清掉本机开关存储（回到「从未选择」），
 /// 只在 Debug / Staging 编译。开关行标识 `settings.row.clipboard_auto`（MeSwitchRow：读屏值「开关，已打开 / 已关闭」）。
+/// `-CouliClipboardSelfWrittenReset 1`（D10-1746 ②，reset 为真时与上一个一起带）：同一时机清掉 App 自写账本（self_written、
+/// self_written_change），免得前面用例留下的自写记录让本条的识别被跳过；提示记录、ios_change_seen 等其他记录不动。只在 Debug / Staging 编译。
 /// 旧键 `couli.clipboard.autoDetect` 经启动参数放进 UserDefaults 参数域，验证它不影响新开关（C6）。
 @MainActor
 final class ClipDefaultOnUITests: XCTestCase {
@@ -46,7 +48,7 @@ final class ClipDefaultOnUITests: XCTestCase {
         app.launchArguments = [
             "-CouliPrivacyPreset", "consented", "-CouliFakeLoginServer", "-CouliUpdateReset", "1",
             "-CouliHideDebugInfo", "1", "-CouliClipboardDiagnostics",
-        ] + (reset ? ["-CouliClipboardSwitchReset", "1"] : []) + extra
+        ] + (reset ? ["-CouliClipboardSwitchReset", "1", "-CouliClipboardSelfWrittenReset", "1"] : []) + extra
         app.launch()
         XCTAssertTrue(ShellTabBar.bar(app).waitForExistence(timeout: 30), "没有进入 Tab 外壳")
         return app

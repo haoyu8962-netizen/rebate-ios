@@ -15,6 +15,7 @@ extension AppClipboard {
         let client = network.client
         #if DEBUG
         ClipboardAutoSwitch.debugResetIfRequested()
+        records.store.debugResetSelfWrittenIfRequested()
         #endif
         let clipboard = AppClipboard(
             system: system, store: records.store, api: client, router: routing.router,

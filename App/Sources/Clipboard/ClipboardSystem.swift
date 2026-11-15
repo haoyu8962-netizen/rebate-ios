@@ -74,6 +74,19 @@ final class ClipboardFileStore: ClipboardHashStore, @unchecked Sendable {
     }
 }
 
+#if DEBUG
+extension ClipboardFileStore {
+    /// UI 测试输入 `-CouliClipboardSelfWrittenReset 1`（D10-1746 ②）：在 AppClipboard 组装之前清掉 App 自写账本（ClipboardWriteLedger 的
+    /// `self_written`、`self_written_change` 两项），提示过的记录、ios_change_seen 等其他记录不动。Release 不编译。
+    static let debugSelfWrittenResetArgument = "CouliClipboardSelfWrittenReset"
+
+    func debugResetSelfWrittenIfRequested(_ defaults: UserDefaults = .standard) {
+        guard defaults.bool(forKey: Self.debugSelfWrittenResetArgument) else { return }
+        try? ClipboardWriteLedger(store: self).clear()
+    }
+}
+#endif
+
 /// 撤回同意的清理项：删除剪贴板 hash 记录（APP-03b 第 11 条思路、brief §0）。只登记在撤回同意的注册表（切换环境不清：记录是设备级）。
 /// 删除失败抛错，撤回清理据此保留「待清理」标记并在冷启动、读凭据前重试（共性第 14 条）。在启动对账之前登记（CouliApp.init）。
 @MainActor
