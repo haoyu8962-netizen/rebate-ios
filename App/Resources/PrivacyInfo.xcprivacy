@@ -5,6 +5,11 @@
   UserDefaults（Config 记住调试环境选择、切换环境时清理本 App 命名空间的键）。
   理由码 CA92.1：只读写本 App 自己的数据，不与其他 App / 扩展共享
   （Apple「Describing use of required reason API」当期文档，NSPrivacyAccessedAPICategoryUserDefaults）。
+  SystemBootTime（ProcessInfo.systemUptime：桥 awaitUpdate 的 5 秒等待、WebTapRecorder 的 1 秒手势窗口、
+  TradeJumpExecutor 每步耗时）。理由码 35F9.1：只在 App 内计算事件间隔 / 实现计时器；开机时刻及派生值不外传，
+  只有 App 内事件经过的时长（link_jump 的 duration_ms）上报，属该理由允许的例外（NSPrivacyAccessedAPICategorySystemBootTime）。
+  ClipboardBoot 读 sysctl kern.boottime（不在 Apple 列举的 API 内，一并按本类登记），只在本机比对是否同一次开机，
+  不进请求、埋点与日志（守卫：AppTests/BootTimeSourceGuardTests.swift）。
   后续任务引入新 API 或第三方 SDK 时在此补登记。
 -->
 <plist version="1.0">
@@ -23,6 +28,14 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
 			</array>
 		</dict>
 	</array>
