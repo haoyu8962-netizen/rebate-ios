@@ -10,6 +10,10 @@
   只有 App 内事件经过的时长（link_jump 的 duration_ms）上报，属该理由允许的例外（NSPrivacyAccessedAPICategorySystemBootTime）。
   ClipboardBoot 读 sysctl kern.boottime（不在 Apple 列举的 API 内，一并按本类登记），只在本机比对是否同一次开机，
   不进请求、埋点与日志（守卫：AppTests/BootTimeSourceGuardTests.swift）。
+  FileTimestamp（SessionRevocation 读撤销标记文件时 fstat 只取 st_mode 判断是否普通文件；设置页「清除缓存」显示的
+  Caches 下 WebKit 目录大小经 FileManager.attributesOfItem 只取 .size）。两处文件都在本 App 容器内（Application Support、
+  Caches），两处都不取时间戳字段，结果只在本机用（类型判断 / 页面显示），不进请求、埋点与日志。理由码 C617.1：访问 App 容器内文件的时间戳、大小或其他元数据
+  （NSPrivacyAccessedAPICategoryFileTimestamp；守卫：AppTests/FileTimestampSourceGuardTests.swift）。
   后续任务引入新 API 或第三方 SDK 时在此补登记。
 -->
 <plist version="1.0">
@@ -36,6 +40,14 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>35F9.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
 			</array>
 		</dict>
 	</array>
