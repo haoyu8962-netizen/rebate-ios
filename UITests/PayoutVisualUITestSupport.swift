@@ -129,9 +129,22 @@ extension PayoutVisualUITest {
     func paste(_ app: XCUIApplication, _ field: XCUIElement, _ text: String, file: StaticString = #filePath,
                line: UInt = #line) throws {
         UIPasteboard.general.string = text
-        field.press(forDuration: 1.2)
-        Thread.sleep(forTimeInterval: 0.8)
-        let item = app.menuItems.allElementsBoundByIndex.first { $0.label.contains("Paste") || $0.label.contains("粘贴") }
+        // modify_existing ruling D10-1746（FU-IOS-PASTE-MENU-FLAKE：只重试取菜单，≤3 次，判据不动）
+        // 长按后没出现粘贴菜单：单击框本身收起残留的放大镜 / 选择态（框已是焦点，单击只移光标，不输入不删除），
+        // 再重新长按；最多共 3 次，3 次都没有照旧按下面的 XCTUnwrap 判失败。
+        var item: XCUIElement?
+        for attempt in 1...3 {
+            if attempt > 1 {
+                field.tap()
+                Thread.sleep(forTimeInterval: 0.5)
+            }
+            field.press(forDuration: 1.2)
+            Thread.sleep(forTimeInterval: 0.8)
+            item = app.menuItems.allElementsBoundByIndex.first { $0.label.contains("Paste") || $0.label.contains("粘贴") }
+            if item != nil {
+                break
+            }
+        }
         try XCTUnwrap(item, "长按没有出现粘贴菜单", file: file, line: line).tap()
         Thread.sleep(forTimeInterval: 0.8)
     }
