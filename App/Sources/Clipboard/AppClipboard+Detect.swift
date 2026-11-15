@@ -26,7 +26,9 @@ extension AppClipboard {
             return
         }
         let count = system.changeCount
-        try? store.write(Self.lastChangeKey, String(count))
+        changeSeen.write(String(count))
+        // 自写计数只在同一次开机内、且正是 App 最近一次写入后记下的那个时才跳过（D10-1753 ②）；拿不准照常探测，
+        // 用户点提示条读到正文后再按 hash 排除自写（AppClipboard+Paste.swift handlePaste）
         // TODO(N-30) rule-gaps A01 / I01：提示条只在首页根页显示，别的页面上回前台不探测（探测了也不会提示），回到首页不补做
         guard !unchanged, homeRoot(), !ledger.containsChangeCount(count) else {
             #if DEBUG

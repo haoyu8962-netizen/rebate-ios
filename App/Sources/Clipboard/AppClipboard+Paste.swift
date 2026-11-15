@@ -38,6 +38,8 @@ extension AppClipboard {
     struct PasteTicket {
         let id: Int64
         let entry: String
+        /// 自动识别出的商品提示条里点的（读到正文后按 hash 排除 App 自写）；首页常驻卡、SearchTyping 的手动粘贴为 false。
+        let autoTask: Bool
         let origin: String
         let screen: Int64
         let manual: Int64
@@ -46,11 +48,11 @@ extension AppClipboard {
         let epoch: UInt64
     }
 
-    func startRead(entry: String) -> PasteDelivery {
+    func startRead(entry: String, autoTask: Bool = false) -> PasteDelivery {
         counter += 1
         let ticket = PasteTicket(
-            id: counter, entry: entry, origin: currentOrigin(), screen: screenGen, manual: manualGen,
-            round: watcher.round, session: deps.sessionGeneration(), epoch: deps.networkEpoch()
+            id: counter, entry: entry, autoTask: autoTask, origin: currentOrigin(), screen: screenGen,
+            manual: manualGen, round: watcher.round, session: deps.sessionGeneration(), epoch: deps.networkEpoch()
         )
         reading = ticket.id
         readCount += 1
@@ -82,11 +84,13 @@ extension AppClipboard {
               deps.privacy() == .consented, deps.sessionGeneration() == ticket.session,
               deps.networkEpoch() == ticket.epoch, !blockActive
         else { return }
-        handlePaste(entry: ticket.entry, text: text, origin: ticket.origin)
+        handlePaste(entry: ticket.entry, text: text, origin: ticket.origin, autoTask: ticket.autoTask)
     }
 
-    func handlePaste(entry: String, text: String?, origin: String) {
-        let selfWritten = text.map(ledger.contains) ?? false
+    /// - Parameter autoTask: 提示条（自动识别发起）读到的正文按 hash 排除 App 自写（自写的最终判据，D10-1753 ②）；手动粘贴不读自写账本、
+    ///   自写内容照常识别（BR-ID-16 细则「去重与自写排除只对自动任务……手动任务不读不写这两项缓存」，D10-420 / D10-593 J1）。
+    func handlePaste(entry: String, text: String?, origin: String, autoTask: Bool = false) {
+        let selfWritten = autoTask ? (text.map(ledger.contains) ?? false) : false
         if let text, !text.isEmpty {
             // 用户主动粘贴不套 24 小时去重，但同样记下（H02 同口径）
             history.record(ClipboardText.sha256(text))

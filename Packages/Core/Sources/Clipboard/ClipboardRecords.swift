@@ -35,8 +35,10 @@ public enum ClipboardStoreError: Error, Equatable {
 }
 
 /// App 自己写入剪贴板的内容（F-CLIP-02；brief §2.3）：桥 clipboard.write、复制口令 copy_tpwd、各原生复制按钮都经同一个写入口
-/// （`ClipboardWriter`），写入前先 `record`。保留最近 `capacity` 条 hash（重复写入同一内容移到最新），商品与邀请两种识别都排除。
-/// iOS 另记写入后的 changeCount（brief §3：「写入后记下的 changeCount + 读到后的 hash」两道），同样保留最近 `capacity` 个。
+/// （`ClipboardWriter`），写入前先 `record`。保留最近 `capacity` 条 hash（重复写入同一内容移到最新），
+/// 只对自动任务排除（商品与邀请）；手动粘贴不读（BR-ID-16 细则「去重与自写排除只对自动任务」）。
+/// iOS 另记最近一次写入后的 changeCount（brief §3 第一道），连同本次开机标识（`ClipboardBootScopedRecord`，D10-1753 ①）：
+/// 只作「可以不探测」的提示，换了开机或拿不准就照常识别，读到正文后按 hash 排除（hash 是最终判据，D10-1753 ②）。
 /// 撤回同意时 `clear`。三端同名。
 public struct ClipboardWriteLedger {
     public static let defaultCapacity = 10
@@ -47,15 +49,18 @@ public struct ClipboardWriteLedger {
     private let capacity: Int
     private let hash: (String) -> String
     private let store: ClipboardHashStore
+    private let changes: ClipboardBootScopedRecord
 
     public init(
         capacity: Int = defaultCapacity,
         hash: @escaping (String) -> String = ClipboardText.sha256,
-        store: ClipboardHashStore = MemoryClipboardHashStore()
+        store: ClipboardHashStore = MemoryClipboardHashStore(),
+        boot: @escaping () -> String? = { ClipboardBoot.current }
     ) {
         self.capacity = capacity
         self.hash = hash
         self.store = store
+        changes = ClipboardBootScopedRecord(key: Self.changeKey, store: store, boot: boot)
     }
 
     /// 记下一段自写内容的 hash；返回是否确认落盘（没落盘时调用方不得写系统剪贴板，共性第 23、25 条）。
@@ -75,22 +80,23 @@ public struct ClipboardWriteLedger {
         Array(list(Self.hashKey).suffix(capacity))
     }
 
-    /// iOS：自写之后系统剪贴板的 changeCount。
+    /// iOS：自写之后系统剪贴板的 changeCount。只留最近一次写入的那一个（同一次开机内计数只增不减，更早的计数不可能再等于当前值），
+    /// 连同本次开机标识；取不到开机标识时只放内存。
     @discardableResult
     public func recordChangeCount(_ count: Int) -> Bool {
-        let value = String(count)
-        let next = Array((list(Self.changeKey).filter { $0 != value } + [value]).suffix(capacity))
-        return (try? store.write(Self.changeKey, next.joined(separator: String(Self.separator)))) != nil
+        changes.write(String(count))
     }
 
+    /// 当前 changeCount 是不是本 App 最近一次写入后、在本次开机内记下的那个计数（D10-1753 ②）。开机标识不同、旧格式记录（没有开机标识）、
+    /// 不是最近一次写入的计数都返回 false——调用方照常识别，读到正文后再按 hash 排除。
     public func containsChangeCount(_ count: Int) -> Bool {
-        list(Self.changeKey).contains(String(count))
+        changes.read() == String(count)
     }
 
-    /// 撤回同意：删除自写记录（失败抛错，清理器据此保留待清理标记）。
+    /// 撤回同意：删除自写记录（hash、changeCount 与其开机标识；失败抛错，清理器据此保留待清理标记）。
     public func clear() throws {
         try store.write(Self.hashKey, nil)
-        try store.write(Self.changeKey, nil)
+        try changes.clear()
     }
 
     private func list(_ key: String) -> [String] {
@@ -142,7 +148,7 @@ public protocol SystemClipboard: AnyObject {
 }
 
 /// App 写剪贴板的唯一入口（桥 clipboard.write、复制口令 copy_tpwd、各原生复制按钮）：写入前先确认自写 hash 已落盘，失败不写并返回 false
-/// （共性第 23、25 条）；写入后记下 changeCount（iOS 第一道排除）。
+/// （共性第 23、25 条）；写入后记下 changeCount 与本次开机标识（iOS 第一道：只作可以不探测的提示，D10-1753）。
 @MainActor
 public final class ClipboardWriter {
     /// 写入成功的旁路（不带内容）：只供 App 的 Debug 只读记录用（APP-12v `debug.me.log` 的 `copy`）；生产为 nil。

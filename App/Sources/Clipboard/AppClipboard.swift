@@ -16,8 +16,10 @@ import UIKit
 ///   每次最多判定 1 次。前提由 `readState` 现取：本机已同意当前版本隐私政策、本机开关「打开 App 自动识别剪贴板」开启（`autoSwitch`，
 ///   BR-ID-16 2026-10-30 默认开启、不再有首次用途说明与功能同意，FU-X-CLIP-DEFAULT-ON）、配置开关 clipboard.enabled.ios 不为 false（G05）、当前路由与
 ///   浮层不在敏感清单、栈顶网页容器没有经 setAutoDetect(false) 抑制（G06）；另外只在首页 Tab 根页判定（A01 同口径，提示条只在首页显示）。
-/// - 判定方式（brief §3 iOS）：先比 changeCount（没变化跳过；App 自写后记下的 changeCount 也跳过），变化了才 detectPatterns；命中出商品提示条，
-///   条内是系统粘贴控件。用户点了才拿到文本，再做本地分类（App 自写 hash 排除）：商品 → parse；只有邀请内容且是游客 → 邀请提示条（G07）。
+/// - 判定方式（brief §3 iOS）：先比 changeCount（没变化跳过；当前计数正是 App 最近一次自写后记下的也跳过），变化了才 detectPatterns；
+///   两项计数都连同本次开机标识存，换了开机整条作废、照常探测（D10-1753：计数只作可以不探测的提示）。命中出商品提示条，条内是系统粘贴控件。
+///   用户点了才拿到文本，再做本地分类（App 自写按 hash 排除，是自写的最终判据）：商品 → parse；只有邀请内容且是游客 → 邀请提示条（G07）。
+///   首页常驻卡、SearchTyping 的手动粘贴不读自写账本（BR-ID-16 细则：去重与自写排除只对自动任务）。
 ///   全程不读 `.string`、不调 detectValues，不出系统「允许粘贴」弹窗。
 /// - 请求归属（brief §0、共性第 2、3、4、12 条）：手动粘贴与提示条的请求绑定发起页（`currentOrigin`）与界面世代（页面被覆盖、出栈、切 Tab、
 ///   敏感浮层出现时在 Router 发布的同步出口加 1，回到同一页面实例也不恢复）、前台、隐私、会话世代、网络作废世代；每次等待之后在主线程全量复核，
@@ -88,6 +90,8 @@ final class AppClipboard: ObservableObject {
     /// 读取策略按 switch_off 跳过；之后回前台零探测。手动粘贴不看它。
     let autoSwitch: ClipboardAutoSwitch
     let ledger: ClipboardWriteLedger
+    /// 最近判定过的 changeCount（ios_change_seen，连同本次开机标识；取不到开机标识只放内存，D10-1753 ①）。
+    let changeSeen: ClipboardBootScopedRecord
     let history: PromptHistory
     let writer: ClipboardWriter
     let seeds = ProductSeeds()
@@ -164,7 +168,8 @@ final class AppClipboard: ObservableObject {
         deps: Deps,
         clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
         pendingInvite: PendingInviteCode = PendingInviteCode(),
-        autoSwitch: ClipboardAutoSwitch = ClipboardAutoSwitch(store: MemoryClipboardHashStore())
+        autoSwitch: ClipboardAutoSwitch = ClipboardAutoSwitch(store: MemoryClipboardHashStore()),
+        boot: @escaping () -> String? = { ClipboardBoot.current }
     ) {
         self.system = system
         self.autoSwitch = autoSwitch
@@ -173,7 +178,8 @@ final class AppClipboard: ObservableObject {
         self.router = router
         self.deps = deps
         self.clock = clock
-        ledger = ClipboardWriteLedger(store: store)
+        ledger = ClipboardWriteLedger(store: store, boot: boot)
+        changeSeen = ClipboardBootScopedRecord(key: Self.lastChangeKey, store: store, boot: boot)
         history = PromptHistory(clock: clock, store: store)
         writer = ClipboardWriter(system: system, ledger: ledger)
         parser = ParseInputService(api: api)
@@ -305,7 +311,8 @@ final class AppClipboard: ObservableObject {
         guard prompt?.id == id, !busy else { return nil }
         prompt = nil
         guard watcher.inForeground, homeRoot(), overlayClear(), !blockActive else { return nil }
-        return startRead(entry: ManualPasteAction.entryHome)
+        // 提示条由自动识别发起：读到正文后照自动任务按 hash 排除 App 自写（D10-1753 ②）
+        return startRead(entry: ManualPasteAction.entryHome, autoTask: true)
     }
 
     // MARK: - 归属快照（网络线程只读它）

@@ -32,16 +32,19 @@ final class UIKitSystemClipboard: SystemClipboard {
     }
 }
 
-/// 剪贴板的本机记录（自写 hash、提示过的 hash 与时间、iOS 最近判定过的 changeCount；不存原文）：Application Support 下一个小文件，
+/// 剪贴板的本机记录（自写 hash、提示过的 hash 与时间、iOS 最近判定过与最近自写后的 changeCount 及各自的开机标识；不存原文）：Application Support 下一个小文件，
 /// 设备级（登录、退出、换账号、切换环境都不清）。写入经原子替换，失败抛错（共性第 14、23、25 条：确认落盘才算成功）。
 final class ClipboardFileStore: ClipboardHashStore, @unchecked Sendable {
     static let fileName = "clipboard-records.json"
 
     private let file: ClientFile
+    private let excludedFromBackup: Bool
     private let lock = NSLock()
 
-    init(file: ClientFile = ClientFile(name: ClipboardFileStore.fileName)) {
+    /// `excludedFromBackup`：只有剪贴板记录文件不进备份（D10-1756）；开关文件 `clipboard-switch.json` 要随备份带走（关闭态本机保留），传 false。
+    init(file: ClientFile = ClientFile(name: ClipboardFileStore.fileName), excludedFromBackup: Bool = true) {
         self.file = file
+        self.excludedFromBackup = excludedFromBackup
     }
 
     func read(_ key: String) -> String? {
@@ -58,12 +61,24 @@ final class ClipboardFileStore: ClipboardHashStore, @unchecked Sendable {
             }
             let data = try JSONSerialization.data(withJSONObject: all, options: [.sortedKeys])
             try file.write(String(bytes: data, encoding: .utf8) ?? "{}")
+            if excludedFromBackup {
+                excludeFromBackup()
+            }
         }
     }
 
     /// 撤回同意：整个文件删除（失败抛错）。
     func clear() throws {
         try lock.withLock { try file.write(nil) }
+    }
+
+    /// 不进 iCloud / 电脑备份（D10-1756，做法同订单 OrderPageStateFile、钱包 WalletStaleCache）：原子替换后是新文件，每次写完都重设；
+    /// 设属性失败不影响写入成功。
+    private func excludeFromBackup() {
+        var target = file.url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? target.setResourceValues(values)
     }
 
     private func load() -> [String: String] {
@@ -77,7 +92,8 @@ final class ClipboardFileStore: ClipboardHashStore, @unchecked Sendable {
 #if DEBUG
 extension ClipboardFileStore {
     /// UI 测试输入 `-CouliClipboardSelfWrittenReset 1`（D10-1746 ②）：在 AppClipboard 组装之前清掉 App 自写账本（ClipboardWriteLedger 的
-    /// `self_written`、`self_written_change` 两项），提示过的记录、ios_change_seen 等其他记录不动。Release 不编译。
+    /// `self_written`、`self_written_change` 及其开机标识 `self_written_change_boot`），提示过的记录、ios_change_seen 等其他记录不动。
+    /// Release 不编译。
     static let debugSelfWrittenResetArgument = "CouliClipboardSelfWrittenReset"
 
     func debugResetSelfWrittenIfRequested(_ defaults: UserDefaults = .standard) {
@@ -122,8 +138,12 @@ final class ClipboardRecordsCleaner: EnvironmentSwitchCleaning {
 extension ClipboardAutoSwitch {
     static let liveFileName = "clipboard-switch.json"
 
-    static func liveStore() -> ClipboardFileStore {
-        ClipboardFileStore(file: ClientFile(name: liveFileName))
+    /// 开关文件随备份带走（不设 isExcludedFromBackup；D10-1756 只排除记录文件）。`baseDirectory` 只给测试用。
+    static func liveStore(baseDirectory: URL? = nil) -> ClipboardFileStore {
+        ClipboardFileStore(
+            file: ClientFile(name: liveFileName, baseDirectory: baseDirectory),
+            excludedFromBackup: false
+        )
     }
 
     /// 生产实例：每次调用都从同一个本机文件读（重启即重新读）。

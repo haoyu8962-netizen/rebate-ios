@@ -206,10 +206,10 @@ final class ClipboardWiringTests: XCTestCase {
         fixture.clipboard.sceneActive()
         XCTAssertEqual(fixture.system.detectCalls, 0, "写入后记下的 changeCount：回前台不提示")
         XCTAssertNil(fixture.clipboard.prompt)
-        // 第二道：读到后的 hash（手动粘贴同样排除，共性第 17 条）
+        // 手动粘贴不读自写账本、照常识别（08 第 882 行；modify_existing ruling D10-1753 + D10-1754，rule_change）
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: link)
         await settle()
-        XCTAssertEqual(fixture.api.bodies.count, 0)
+        XCTAssertEqual(fixture.api.bodies.count, 1)
     }
 
     func testWriterRefusesWhenLedgerNotPersisted() {

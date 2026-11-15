@@ -85,7 +85,11 @@ final class FollowupIos0730ClearTests: FollowupIos0730TestCase {
         _ = try showUnrecognized(fixture, entry: ManualPasteAction.entryHome)
         fixture.clipboard.pasted(entry: ManualPasteAction.entryHome, text: invite)
         await settle()
-        XCTAssertNil(fixture.clipboard.result, "粘贴本 App 自写的邀请内容（none）：旧 ① 卡收起")
+        // modify_existing ruling D10-1753 + D10-1754（rule_change，08 第 882 行 / BR-INV-04 细则：手动粘贴不做自写排除）
+        guard case let .inviteConfirm(code)? = fixture.clipboard.result?.kind else {
+            return XCTFail("游客手动粘贴本 App 自写的邀请内容：照常识别，出邀请确认（实际 \(String(describing: fixture.clipboard.result))）")
+        }
+        XCTAssertEqual(code, "K7M2QX")
     }
 
     // MARK: - 路径 3：parse 被丢弃（dropped）

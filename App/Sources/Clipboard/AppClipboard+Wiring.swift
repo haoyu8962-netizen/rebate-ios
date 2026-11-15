@@ -132,7 +132,8 @@ extension AppClipboard {
         state.configEnabled = configEnabled()
         state.webSuppressed = path.last.map { suppressedWeb.contains($0.id) } ?? false
         state.readThisForeground = watcher.readThisForeground
-        state.iosChangeCountChanged = String(system.changeCount) != store.read(Self.lastChangeKey)
+        // 开机标识不同或旧格式（没有开机标识）的记录读作 nil，按「变了」照常判定（D10-1753 ①）
+        state.iosChangeCountChanged = String(system.changeCount) != changeSeen.read()
         return state
     }
 }
@@ -171,7 +172,7 @@ extension AppClipboard {
         invalidateAll()
         try? ledger.clear()
         try? history.clear()
-        try? store.write(Self.lastChangeKey, nil)
+        try? changeSeen.clear()
     }
 
     /// 撤回清理项删掉记录之后：作废内存里的提示与请求。
