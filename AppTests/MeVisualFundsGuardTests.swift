@@ -131,6 +131,7 @@ final class MeVisualFundsGuardTests: XCTestCase {
     /// test-change（APP-12w-b，D10-403 ⑥ G-P07、G-P16；tests-b-ios-handback §4）：`cs.safety` 只许是定稿句或旧句这两个整行值，比对前还原成旧句；
     /// 放行新键 `privacy.system_permissions.purpose.push`。F-IOS-68 ④ 收紧：整行匹配（含 me.amount_shown，原来是 contains）、
     /// 值里不许反斜杠（防插值）、文件头不许 BOM（解码会吃掉 BOM）。原哈希不变。
+    /// test-change（D10-1838）：另放行新键 `privacy_center.personalization_reverted`（个性化回滚提示）一行，原哈希不变。
     func testDraftTableOnlyAdds() throws {
         let path = "Packages/Core/Sources/MeCore/MeDraftTable.swift"
         let data = try read(path)
@@ -142,7 +143,7 @@ final class MeVisualFundsGuardTests: XCTestCase {
         XCTAssertEqual(lines.filter { $0 == safety || $0 == original }.count, 1, "cs.safety 只改这一行的值")
         let restored = lines.map { $0 == safety ? original : $0 }.joined(separator: "\n")
         let added = #"^\s*"(me\.amount_shown|notify\.not_asked|settings\.delete_account"#
-            + #"|privacy\.system_permissions\.purpose\.push)": "[^"\\]*",$"#
+            + #"|privacy\.system_permissions\.purpose\.push|privacy_center\.personalization_reverted)": "[^"\\]*",$"#
         XCTAssertEqual(digest(try droppingLines(of: Data(restored.utf8), matching: added)),
                        "1188ce7f79435b7ee164a4000b170665b54296f0353faa2287ba165788a669f1", "已有草稿被改")
     }

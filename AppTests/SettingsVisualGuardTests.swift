@@ -49,7 +49,7 @@ final class SettingsVisualGuardTests: XCTestCase {
             "Packages/Core/Sources/MeCore/NicknameRules.swift":
                 "3978bb5552a6447a2141242688085b92f971d03df8ed761c69b9ac1f9c7cac8c",
             "Packages/Core/Sources/MeCore/MeDeps.swift":
-                "e888fafe4d96c1fbec6f66a100d253be6b4da01dab04a3bd3651c3ba5a28b48a",
+                "fa80520e101b6a060f9e243bd149929a5d7f1ec8c5ffabe8ea3982009568baea",
             "Packages/Core/Sources/MeCore/MeSupport.swift":
                 "5ac5f71f68c7450b7e3c0aca9d129186334a0ff47e0b6f7de9d6ab6b266773d1",
             "Packages/Core/Sources/MeCore/MePageHost.swift":

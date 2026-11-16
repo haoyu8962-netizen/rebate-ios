@@ -39,15 +39,20 @@ public struct PrivacyCenterScreen: View {
     }
 
     public var body: some View {
-        PrivacyCenterBody(controller: host.controller, withdraw: host.controller.deps.withdraw)
-            .id(host.serial)
-            .onAppear { host.onAppear() }
+        PrivacyCenterBody(
+            controller: host.controller, withdraw: host.controller.deps.withdraw,
+            personalizationSync: host.controller.deps.personalization
+        )
+        .id(host.serial)
+        .onAppear { host.onAppear() }
     }
 }
 
 struct PrivacyCenterBody: View {
     @ObservedObject var controller: PrivacyCenterController
     @ObservedObject var withdraw: MeWithdrawState
+    /// 个性化同意记录在途（应用级，D10-1838）：开关不可用。
+    @ObservedObject var personalizationSync: MePersonalizationSync
     @AccessibilityFocusState private var withdrawFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
@@ -68,6 +73,9 @@ struct PrivacyCenterBody: View {
                 withdrawDialog(state.dialog ?? MeDialog(kind: "", id: 0), actions)
             }
             .meToast(state.toast, texts: texts) { controller.consumeToast($0) }
+            .onChange(of: personalizationSync.settled) { _ in
+                controller.syncPersonalization()
+            }
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
                     controller.refresh()
@@ -112,7 +120,8 @@ struct PrivacyCenterBody: View {
                 MeSwitchRow(
                     title: texts.text("privacy_center.personalization"),
                     subtitle: texts.text("privacy_center.personalization_desc"), isOn: state.personalizationOn,
-                    enabled: !withdraw.busy, texts: texts, identifier: "privacy.personalization", style: .settings,
+                    enabled: !withdraw.busy && !personalizationSync.pending, texts: texts,
+                    identifier: "privacy.personalization", style: .settings,
                     probe: "privacy.personalization", controlProbe: "privacy.personalization.control",
                     settingsVerticalPadding: CouliSpacing.s3, settingsTextSpacing: CouliSpacing.s1,
                     onChange: actions.personalization

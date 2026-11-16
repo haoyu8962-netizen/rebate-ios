@@ -208,6 +208,7 @@ struct MeSwitchRow: View {
                 }
             }
             .accessibilityIdentifier(identifier)
+            .disabled(!enabled) // 放在合并读屏元素外层：读屏元素也标不可用（D10-1831 ①）
     }
 
     @ViewBuilder

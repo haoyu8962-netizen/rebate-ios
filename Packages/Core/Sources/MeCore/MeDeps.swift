@@ -182,6 +182,8 @@ public final class MeDeps {
     public let nickname: NicknameBackend?
     public let notify: NotifyBackend?
     public let withdraw: MeWithdrawState
+    /// 个性化切换的应用级同步状态（在途、切换序号；D10-1838）。
+    public let personalization: MePersonalizationSync
     public var newKey: () -> String = { UUID().uuidString.lowercased() }
     /// 「我的」与设置共用的 Me 快照（会话级）。
     public private(set) lazy var repo = MeRepository(deps: self)
@@ -189,7 +191,7 @@ public final class MeDeps {
     public init(
         api: MeApi, env: MeEnv, gates: MeGates, texts: MeTexts = MeDraftTexts(), local: MeLocalStore?,
         mask: AmountMaskStore?, nickname: NicknameBackend?, notify: NotifyBackend?,
-        withdraw: MeWithdrawState = MeWithdrawState()
+        withdraw: MeWithdrawState = MeWithdrawState(), personalization: MePersonalizationSync = MePersonalizationSync()
     ) {
         self.api = api
         weakEnv = env
@@ -200,6 +202,7 @@ public final class MeDeps {
         self.nickname = nickname
         self.notify = notify
         self.withdraw = withdraw
+        self.personalization = personalization
     }
 }
 

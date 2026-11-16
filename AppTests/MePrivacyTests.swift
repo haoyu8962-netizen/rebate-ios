@@ -57,12 +57,12 @@ final class MePrivacyTests: MeTestCase {
         _ = await fixture.enterMeTab()
         await waitUntil("Me 没请求") { !self.requests("GET", "/v1/me").isEmpty }
         XCTAssertEqual(requests("GET", "/v1/me").last?.header("X-Personalization"), "off")
-        // 同步失败不回滚，提示一次
+        // 同步失败：登录用户回滚到切换前（D10-1728 / D10-1830），提示一次
         script.fail("POST /v1/consents", 50001)
         let again = try center(fixture)
         PrivacyCenterActions.make(again, again.state).personalization(true)
-        await waitUntil("没提示") { again.state.toast?.key == PrivacyCenterController.failedKey }
-        XCTAssertTrue(fixture.local.personalizationOn, "不回滚")
+        await waitUntil("没提示") { again.state.toast?.key == PrivacyCenterController.revertedKey }
+        XCTAssertFalse(fixture.local.personalizationOn, "登录用户回滚到切换前（D10-1728 / D10-1830）")
     }
 
     /// 撤回同意：确认框【取消】不撤回；确认后一条设备级 recordConsent {privacy, false, privacy_center}，进入基本模式，推送不再发出，

@@ -212,5 +212,6 @@ enum MeDraftTable {
         // iOS 追加（FU-X-CLIP-DEFAULT-ON，BR-TEXT-14 表 C，契约快照未同步；与 Android ClipboardDraftTexts 同字）：设置页剪贴板开关
         "settings.clipboard_auto": "打开 App 自动识别剪贴板",
         "settings.clipboard_auto.desc": "开启后，在系统支持并允许时回到 App 会自动识别复制的商品链接或口令，否则可以用粘贴入口；可以随时关闭",
+        "privacy_center.personalization_reverted": "没有保存成功，已恢复原来的设置",
     ]
 }

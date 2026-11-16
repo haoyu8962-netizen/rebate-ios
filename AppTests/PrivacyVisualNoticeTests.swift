@@ -48,15 +48,15 @@ final class PrivacyVisualNoticeTests: PrivacyVisualTestCase {
         XCTAssertFalse(ticked, "失败不带对勾")
     }
 
-    /// 个性化切换失败：错误类不带图标，提示一次，不回滚（G03）。
+    /// 个性化切换失败：错误类不带图标，提示一次，登录用户回滚到切换前（D10-1728 / D10-1830）。
     func testPersonalizationFailureNoTick() async throws {
         try await openPrivacy()
         let host = try XCTUnwrap(page)
         host.script.fail("POST /v1/consents", 50001)
         try centerActions.personalization(false)
         await waitUntil("提示没有出现") { !self.toasts.isEmpty }
-        XCTAssertEqual(toasts, [try center.deps.texts.text(PrivacyCenterController.failedKey)])
-        XCTAssertFalse(host.fixture.local.personalizationOn, "不回滚")
+        XCTAssertEqual(toasts, [try center.deps.texts.text(PrivacyCenterController.revertedKey)])
+        XCTAssertTrue(host.fixture.local.personalizationOn, "回滚到切换前（D10-1728 / D10-1830）")
         let ticked = await pollFrame { self.toastGreen($0) > 10 }
         XCTAssertFalse(ticked, "错误类不带对勾")
     }

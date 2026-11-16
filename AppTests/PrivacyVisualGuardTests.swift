@@ -44,7 +44,7 @@ final class PrivacyVisualGuardTests: XCTestCase {
     func testRedLineFilesByteIdentical() throws {
         let pinned: [String: String] = [
             "Packages/Core/Sources/MeCore/PrivacyCenterController.swift":
-                "d0e5470b1673c430399dd1add5b6f0123a427408cb56ef5d9ec55b32d16550a5",
+                "04b7e2ce1bdf876adcc540b161270f35c5d0975d3c904ae61bd554b98ceee17e",
             "Packages/Core/Sources/MeCore/PrivacyCenterView.swift":
                 "3ca4c944c2124cc61183e81709ed26f067b98a4519a680c2696fbc2aa1554dd8",
             "Packages/Core/Sources/MeCore/AboutController.swift":
