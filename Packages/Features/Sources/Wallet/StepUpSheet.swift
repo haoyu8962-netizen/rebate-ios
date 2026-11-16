@@ -184,9 +184,12 @@ struct StepUpSheetBody: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($titleFocused)
                         .accessibilityIdentifier("stepUp.title")
-                    RecordText(texts.text(state.phase == .noPhone ? "step_up.no_phone" : "step_up.sent"),
-                               style: .footnote, color: CouliColor.textSecondary, probe: "stepUp.sent")
-                        .accessibilityIdentifier(state.phase == .noPhone ? "stepUp.noPhone" : "stepUp.sent")
+                    // 发码没有发出（发送失败态，D10-1790）不显示「已发送」那句：失败提示在格下一行
+                    if !state.sendFailed {
+                        RecordText(texts.text(state.phase == .noPhone ? "step_up.no_phone" : "step_up.sent"),
+                                   style: .footnote, color: CouliColor.textSecondary, probe: "stepUp.sent")
+                            .accessibilityIdentifier(state.phase == .noPhone ? "stepUp.noPhone" : "stepUp.sent")
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: actions.close) {

@@ -77,15 +77,16 @@ public final class WalletSettlement {
         }
     }
 
-    /// 短信结果占住原槽位直到确认；截止时间取响应到达时刻，关闭面板也不丢结算。
+    /// 短信结果占住原槽位直到确认；截止时间取响应到达时刻，关闭面板也不丢结算。点击时的身份已核对不过（stale）：只释放本次占用，
+    /// 不读结果体、不写共享截止时间（D10-1790：同账号同世代没有 access 时没有换代清空，不释放槽位就再也发不出）。
     func settleSms(_ arrival: SmsArrival, owner: WalletOwner, sms: SmsDeadlines, gate: RetryAfterGate) {
-        let (slot, ticket, deadline) = (arrival.slot, arrival.ticket, arrival.deadline)
-        settle(owner, slot: "sms", gate: gate) { _ in
-            if let deadline {
+        let (slot, ticket) = (arrival.slot, arrival.ticket)
+        settle(owner, slot: "sms", gate: gate, stale: { sms.release(slot, ticket: ticket) }, apply: { _ in
+            if let deadline = arrival.deadline {
                 sms.start(slot, deadline: deadline)
             }
             sms.release(slot, ticket: ticket)
-        }
+        })
         if sms.busy(slot) {
             sms.waitForIdentity(slot, ticket: ticket)
         }
@@ -97,11 +98,11 @@ public final class WalletSettlement {
     /// （App 的会话核对，判据相同也调 `resumeAfterIdentityConfirmed`）只结算一次，禁用期按原截止（扣掉等待的时长）；已确定换代 → 丢弃。
     /// 不依赖页面是否还在。
     private func settle(
-        _ owner: WalletOwner, slot: String, gate: RetryAfterGate,
-        _ apply: @escaping @MainActor (_ elapsed: Int64) -> Void
+        _ owner: WalletOwner, slot: String, gate: RetryAfterGate, stale: @escaping @MainActor () -> Void = {},
+        apply: @escaping @MainActor (_ elapsed: Int64) -> Void
     ) {
         let arrived = env.nowMillis()
-        attempt(Held(owner: owner, slot: slot, gate: gate, arrived: arrived), apply)
+        attempt(Held(owner: owner, slot: slot, gate: gate, arrived: arrived), stale: stale, apply)
     }
 
     /// 一份等身份确认的结算：点击时的身份、所在禁用期与到达时刻。
@@ -112,16 +113,21 @@ public final class WalletSettlement {
         let arrived: Int64
     }
 
-    private func attempt(_ item: Held, _ apply: @escaping @MainActor (Int64) -> Void) {
+    private func attempt(
+        _ item: Held, stale: @escaping @MainActor () -> Void, _ apply: @escaping @MainActor (Int64) -> Void
+    ) {
         serial += 1
         let key = "\(item.slot)#\(serial)"
         let check = env.check(item.owner)
         let admitted = held.admit(check, slot: key, resume: { [weak self] in
             self?.holding[key] = nil
-            self?.attempt(item, apply)
+            self?.attempt(item, stale: stale, apply)
         })
         if check == .unknown {
             holding[key] = item.gate
+        }
+        if check == .stale {
+            stale()
         }
         guard admitted else { return }
         apply(max(0, env.nowMillis() - item.arrived))

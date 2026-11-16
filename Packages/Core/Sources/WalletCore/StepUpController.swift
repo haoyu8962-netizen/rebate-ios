@@ -16,6 +16,8 @@ public struct StepUpUiState: Equatable, Sendable {
     public var resendLeftSec: Int64 = 0
     public var error: Notice?
     public var awaitingIdentity = false
+    /// 最近一次发码没有发出（本地拒绝、一条没发，或结果回来时身份核对不过）：说明位不显示「已发送」；再次发码时清掉（D10-1790）。
+    public var sendFailed = false
     public var showsSending: Bool {
         phase == .sending && !awaitingIdentity
     }
@@ -50,9 +52,11 @@ public final class StepUpController: ObservableObject {
     public static let sendOperation = "sendSmsCode"
     public static let verifyOperation = "stepUp"
     public static let purpose = "step_up"
-    public static let defaultResendSec: Int64 = 60
+    public nonisolated static let defaultResendSec: Int64 = 60
     /// 发码槽位里代表「账号当前绑定的手机号」的占位（App 没给槽位键时；不含数字、不上送、不显示，同 Android BOUND_SLOT）。
     static let boundSlot = "bound"
+    /// 发码的本地拒绝里「一条没发、面板身份仍有效」的原因：落到发送失败（共用分类器 `WalletErrors.of` 对 account_mismatch 的静默口径不动）。
+    static let unsentRejects = [LocalRejectReason.accountMismatch, LocalRejectReason.sessionUnreadable]
 
     @Published public internal(set) var state: StepUpUiState?
     let deps: WalletDeps
@@ -146,15 +150,20 @@ public final class StepUpController: ObservableObject {
         onVerified(result, account: account, action: current.action, probe: probe, summary: StepUpSummary.key(summary))
     }
 
-    /// 固定面板的结果只延后采用；重试只请 App 核对身份。
-    func admit(_ panel: Int, _ owner: WalletOwner, waiting: Bool = false,
+    /// 固定面板的结果只延后采用；重试只请 App 核对身份。核对不过（stale）时执行 `stale`（发码结果落到发送失败，其余调用方不动面板）。
+    func admit(_ panel: Int, _ owner: WalletOwner, waiting: Bool = false, stale: () -> Void = {},
                resume: @escaping @MainActor () -> Void) -> Bool {
         guard alive(), panel == instance, state != nil else { return false }
         let check = waiting ? IdentityCheck.unknown : deps.env.check(owner)
         guard deferral.admit(check, slot: "panel", resume: resume, settle: {
             state?.awaitingIdentity = true
             state?.error = nil
-        }) else { return false }
+        }) else {
+            if check == .stale {
+                stale()
+            }
+            return false
+        }
         state?.awaitingIdentity = false
         return true
     }

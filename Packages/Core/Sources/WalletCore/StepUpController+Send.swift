@@ -1,10 +1,19 @@
 import CouliNetwork
 import Foundation
 
+/// 一次发码的结果与到达时刻。截止时间只在身份核对放行后才从结果里取：核对不过（stale）时结果体一个字段都不读（D10-1790 ②）。
 struct SmsArrival {
     let slot: SmsDeadlines.Slot
     let ticket: Int
-    let deadline: Int64?
+    let result: ApiResult
+    let arrived: Int64
+
+    /// 成功时的重新获取截止时间（到达时刻起按 resend_after_sec，未返回按 60 秒）；不是成功为 nil。
+    var deadline: Int64? {
+        guard case let .success(data, _, _) = result else { return nil }
+        let seconds = WalletJSON.sendSmsCode(WalletJSON.parse(data))?.resendAfterSec ?? 0
+        return arrived + (seconds > 0 ? seconds : StepUpController.defaultResendSec) * 1000
+    }
 }
 
 /// 发码（共性第 6、17、26、27、40、60 条）。
@@ -12,8 +21,11 @@ extension StepUpController {
     /// 按面板的身份读绑定状态、占用槽位、发包（共性第 60 条）：会话已换（清空通知还没执行）的不读、不占、不发，等清空通知收起面板。
     func send() {
         guard var current = state else { return }
-        guard admit(current.instance, current.owner, resume: { [weak self] in self?.send() }) else { return }
+        // 打开 / 重新获取那一刻身份就核对不过（stale）：不读、不占、零发送，落到发送失败 + 可重新获取（D10-1792 ③a）
+        guard admit(current.instance, current.owner, stale: { sendFailed() },
+                    resume: { [weak self] in self?.send() }) else { return }
         current.awaitingIdentity = false
+        current.sendFailed = false
         // 能否发码只看 Me.phone_bound（D10-1682 ②，不再看本机是否知道号码）：已知没绑手机不发码、不让用户另填；未知照常发（服务端没绑手机回
         // 20001 data.fields=[code]，D10-1658 ①）。号码不上送，槽位键只作本机发码截止时间与在途占用的键（App 没给用占位）。
         // 本地按 phone_bound 拦只用于改收款 / 换号 / 注销，不碰提现（D10-1667：提现只剩旧后端 10003 兼容路径，交给服务端判）
@@ -71,25 +83,22 @@ extension StepUpController {
                 sendAllowed: probe.allowed,
                 expected: owner.request
             )
-            var deadline: Int64?
-            if case let .success(data, _, _) = result {
-                let seconds = WalletJSON.sendSmsCode(WalletJSON.parse(data))?.resendAfterSec ?? 0
-                let resend = seconds > 0 ? seconds : Self.defaultResendSec
-                let until = deps.env.nowMillis() + resend * 1000
-                deadline = until
-            }
             // 失败限流与成功倒计时一样由任务持有的会话级依赖直接结算（共性第 27、40、66 条）：旧面板关闭、释放后迟到的 42901 也写入共享禁用期
             deps.settlement.settleRetryAfter(result, gate: deps.gates.sms, owner: owner)
-            let arrival = SmsArrival(slot: slot, ticket: ticket, deadline: deadline)
+            let arrival = SmsArrival(slot: slot, ticket: ticket, result: result, arrived: deps.env.nowMillis())
             deps.settlement.settleSms(arrival, owner: owner, sms: deps.sms, gate: deps.gates.sms)
             self?.sentArrived(result, arrival: arrival, panel: panel, owner: owner, probe: probe)
         }
     }
 
+    /// 结果回来时面板身份核对不过（stale：换会话、登出，或同账号同世代此刻没有可用 access）：不交付结果（不读结果体、不起倒计时），
+    /// 面板落到发送失败 + 可重新获取（D10-1790）；真换会话 / 登出时随后的会话变化通知照旧收起面板。
     func sentArrived(_ result: ApiResult, arrival: SmsArrival, panel: Int, owner: WalletOwner, probe: SendProbe) {
-        guard admit(panel, owner, waiting: deps.sms.awaitingIdentity(arrival.slot), resume: { [weak self] in
+        let resume: @MainActor () -> Void = { [weak self] in
             self?.sentArrived(result, arrival: arrival, panel: panel, owner: owner, probe: probe)
-        }) else { return }
+        }
+        guard admit(panel, owner, waiting: deps.sms.awaitingIdentity(arrival.slot), stale: { sendFailed() },
+                    resume: resume) else { return }
         onSent(result, deadline: arrival.deadline, probe: probe)
     }
 
@@ -105,11 +114,17 @@ extension StepUpController {
         otherSettled(slot, panel: panel, owner: owner)
     }
 
+    /// 那次发码结束时面板身份核对不过（stale）：同 `sentArrived`，不再等、落到发送失败 + 可重新获取（D10-1790；结算对 stale 释放槽位）。
     func otherSettled(_ slot: SmsDeadlines.Slot, panel: Int, owner: WalletOwner) {
         guard !deps.sms.busy(slot) || deps.sms.awaitingIdentity(slot) else { return }
-        guard admit(panel, owner, waiting: deps.sms.awaitingIdentity(slot), resume: { [weak self] in
+        let resume: @MainActor () -> Void = { [weak self] in
             self?.otherSettled(slot, panel: panel, owner: owner)
-        }), var now = state else { return }
+        }
+        guard admit(panel, owner, waiting: deps.sms.awaitingIdentity(slot), stale: {
+            waitOther?()
+            waitOther = nil
+            sendFailed()
+        }, resume: resume), var now = state else { return }
         waitOther?()
         waitOther = nil
         now.phase = .ready
@@ -129,7 +144,25 @@ extension StepUpController {
             countdown(to: deadline)
             return
         }
+        // 本地拒绝、一条没发（发码那一刻会话读得到同一账号却没有可用 access → account_mismatch；会话读不出）：不静默（D10-1790）
+        if case let .localReject(reason) = result, Self.unsentRejects.contains(reason) {
+            sendFailed()
+            return
+        }
         current.error = failure(result, probe: probe)
+        state = current
+    }
+
+    /// 发送失败提示的文案键只在这一处取（D10-1792，待换专用键 step_up.sms.send_failed，换时只动这一行）。
+    static let sendFailedKey = WalletErrors.networkKey
+
+    /// 发码没有发出、也不交付结果：停在可输入、提示发送失败（网络错误文案键）、不起倒计时、【重新获取】可点，说明位不显示「已发送」。
+    func sendFailed() {
+        guard var current = state else { return }
+        current.phase = .ready
+        current.awaitingIdentity = false
+        current.sendFailed = true
+        current.error = notice(Self.sendFailedKey)
         state = current
     }
 

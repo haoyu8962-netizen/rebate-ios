@@ -9,7 +9,7 @@ import XCTest
 /// LOCK-ios 段 3（App 接线）：二次验证面板的发码经真实 ApiClient 发出的样子，以及 AppWallet 的 phone_bound 接线。全部经生产入口
 /// （提现【提交】/ 收款【保存】→ 10003 → 面板），只把传输层换成本地假服务。
 /// - 发码 sendSmsCode {purpose: step_up, action}：full 会话带 Authorization、请求体不带 phone（即使 App 给了号码，B1-02zzz）；
-/// - requiresSession（D10-1658 ④、S2-1）：发码那一刻会话读不出 / 没有可用 access → 本地拒、零发送，面板不起倒计时；受限会话屏障到期时
+/// - requiresSession（D10-1658 ④、S2-1）：发码那一刻会话读不出 / 没有可用 access → 本地拒、零发送，面板不起倒计时并提示发送失败（D10-1790）；受限会话屏障到期时
 ///   发码先等屏障刷新、带新令牌（D10-1722 (b)：只有这条在去掉 requiresSession 时变红）；
 /// - phoneProvider 为 nil（Release）照常发码，倒计时内重开不重复发；
 /// - phone_bound（AppLogin.phone 按面板身份那一代会话取，D10-1682 ②）：false 时改收款 noPhone、提现照发；true / nil 照发（D10-1667）。
@@ -119,8 +119,9 @@ final class LockIosStepUpWiringTests: WalletFlowTestCase {
     }
 
     /// 发码那一刻会话没有可用 access（只剩 refresh）：不带令牌的发码零发送，面板不起倒计时。
-    /// 只断言零发送与不起倒计时：网络层 `readyMismatch` 先核固定归属，面板固定了账号、optional 没带上令牌按 account_mismatch 结束
-    /// （静默，不提示错误），走不到 requiresSession 的 session_unreadable 分支；会话少了 access 时持久化登录世代也读为 nil，面板身份随即作废。
+    /// 只断言零发送与不起倒计时：网络层 `readyMismatch` 先核固定归属，面板固定了账号、optional 没带上令牌按 account_mismatch 本地结束、
+    /// 零发送，走不到 requiresSession 的 session_unreadable 分支；会话少了 access 时持久化登录世代也读为 nil，面板身份核对不过，按 D10-1790
+    /// 落到发送失败、可重新获取，不起倒计时（modify_existing ruling D10-1791：只改注释，断言不动）。
     func testSessionWithoutAccessAtSendSendsNothing() async throws {
         let fixture = make()
         let armed = LockIosOnceFlag()
