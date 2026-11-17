@@ -67,6 +67,8 @@ final class StubURLProtocol: URLProtocol {
         let query: String?
         let headers: [String: String]
         let body: String
+        /// 本次实际选中的 hold 应答；保留历史，stop / release 后也不清除。
+        var holdId: String?
 
         func header(_ name: String) -> String? {
             headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
@@ -93,6 +95,22 @@ final class StubURLProtocol: URLProtocol {
 
     static func requests(path: String) -> [Recorded] {
         requests.filter { $0.path == path }
+    }
+
+    static func requests(holdId: String) -> [Recorded] {
+        requests.filter { $0.holdId == holdId }
+    }
+
+    /// 同一把锁内读取累计到达与中止；避免两次采样之间迟到的旧请求漏过中止判定。
+    static func closeRaceObservation(freshQuery: String, oldHoldId: String) -> TransportCloseObservation {
+        lock.withLock {
+            let freshCount = recorded.filter { $0.query == freshQuery }.count
+            return TransportCloseObservation(
+                oldCount: recorded.count - freshCount,
+                freshCount: freshCount,
+                oldStopped: stopped.contains(oldHoldId)
+            )
+        }
     }
 
     static func configuration() -> URLSessionConfiguration {
@@ -132,8 +150,13 @@ final class StubURLProtocol: URLProtocol {
             body: String(data: body, encoding: .utf8) ?? ""
         )
         let reply: Reply? = Self.lock.withLock {
+            let index = Self.recorded.count
             Self.recorded.append(entry)
-            return Self.handler?(entry)
+            let selected = Self.handler?(entry)
+            if case let .hold(id) = selected {
+                Self.recorded[index].holdId = id
+            }
+            return selected
         }
         if case let .hold(id) = reply {
             holdId = id

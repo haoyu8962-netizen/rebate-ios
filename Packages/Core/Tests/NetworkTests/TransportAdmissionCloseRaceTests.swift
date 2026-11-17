@@ -83,13 +83,23 @@ final class TransportAdmissionCloseRaceTests: XCTestCase {
         semaphore.wait(timeout: .now() + seconds) == .success
     }
 
+    private static func observeClose(freshQuery: String) async -> TransportCloseObservation {
+        let clock = ContinuousClock()
+        let start = clock.now
+        return await TransportCloseObservationWindow.observe(
+            now: { start.duration(to: clock.now) },
+            sleepUntil: { try? await clock.sleep(until: start.advanced(by: $0)) },
+            read: { StubURLProtocol.closeRaceObservation(freshQuery: freshQuery, oldHoldId: "old") }
+        )
+    }
+
     /// 准入通过后被抢占、切换的关闭步骤同时发起：启动与作废有严格先后（已准入的请求在作废之前启动），旧任务被取消；
     /// 作废之后的准入一律不通过；之后的新请求正常完成。
+    /// test-change（D10-1965）：按 #24 以固定标记认身份，在最多 2 秒的统一窗口内观察到达与中止。
     func testAdmittedRequestStartsBeforeInvalidationAndIsCancelledNewRequestCompletes() async {
-        let holdOld = Box<Bool>()
-        holdOld.value = true
-        StubURLProtocol.install { _ in
-            (holdOld.value ?? false) ? .hold("old") : ok()
+        let freshQuery = "probe=fresh"
+        StubURLProtocol.install { request in
+            request.query == freshQuery ? ok() : .hold("old")
         }
         let harness = makeHarness()
         let client = harness.client
@@ -102,7 +112,6 @@ final class TransportAdmissionCloseRaceTests: XCTestCase {
         let closing = Task.detached { client.invalidateSessions() }
         await closing.value
         let oldResult = await old.value
-        holdOld.value = false
 
         let observed = probe.pauseObservation
         XCTAssertTrue(observed.closeRequested, "前提：关闭步骤在旧请求准入之后、启动之前发起 \(probe.events)")
@@ -128,13 +137,17 @@ final class TransportAdmissionCloseRaceTests: XCTestCase {
         }()
         XCTAssertTrue(oldCancelled, "旧任务被取消 \(oldResult)")
         XCTAssertFalse(oldResult.isSuccess, "\(oldResult)")
-        let oldReachedServer = StubURLProtocol.requests.count
-        XCTAssertTrue(oldReachedServer == 0 || StubURLProtocol.wasStopped("old"), "到达假服务的旧请求也被中止")
+        // stopLoading 异步送达；按发起时的标记认身份，旧请求迟到也始终被 hold，不会误算成新请求。
 
         // 新请求：作废之后取得的可读快照放下屏障，正常完成。
-        let fresh = await client.send(ApiCall(operationId: "getMe"))
+        // 即使旧请求在新请求之后才到达，也只有无标记的旧请求被 hold；带标记的新请求照常完成。
+        let fresh = await client.send(ApiCall(operationId: "getMe", query: freshQuery))
         XCTAssertTrue(fresh.isSuccess, "\(fresh)")
-        XCTAssertEqual(StubURLProtocol.requests.count, oldReachedServer + 1, "新请求写出一次")
+        // 首次没有旧请求也不能跳过观察；中止与两项计数只使用窗口结束时的同一份原子快照。
+        let final = await Self.observeClose(freshQuery: freshQuery)
+        XCTAssertTrue(final.oldStopSatisfied, "到达假服务的旧请求须在 2 秒内收到中止")
+        XCTAssertLessThanOrEqual(final.oldCount, 1, "旧请求至多写出一次")
+        XCTAssertEqual(final.freshCount, 1, "新请求写出一次")
         client.transport.installProbe(nil)
     }
 }
