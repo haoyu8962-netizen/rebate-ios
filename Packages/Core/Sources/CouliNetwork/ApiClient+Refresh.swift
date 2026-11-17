@@ -127,12 +127,18 @@ extension ApiClient {
         guard !readBarrier else {
             return .now(.superseded, emit: nil, retry: false)
         }
+        // 读之前记下是否处于会话隔离（已清过、删不掉的旧会话还在隔离中）：读取本身可能删掉它并解除隔离
+        let isolated = revokedSession != nil
         let read = readSessionLocked()
         guard bound == generation else {
             // 这次读取发现条目损坏、已按清会话换代并记下 `.cleared`（D10-1716）：本世代已结束，按已换代结束，不再清一次。
             return .now(.superseded, emit: nil, retry: false)
         }
         if read == .unreadable {
+            // 会话隔离中读不出（会话早已清过）：不刷新、不清、不发 Effect，原调用按已换代结束（评审 r1 S2-2，D10-1911）。
+            if isolated {
+                return .now(.superseded, emit: nil, retry: false)
+            }
             // 会话读不出（可能还在）：不刷新、不清会话，原调用按网络错误结束（R2-01）。
             return .now(.transient(LocalRejectReason.sessionUnreadable), emit: nil, retry: false)
         }
@@ -149,6 +155,11 @@ extension ApiClient {
             return .joined
         }
         guard let refresh = live?.refresh, !refresh.isEmpty else {
+            if isolated {
+                // 会话隔离期间（会话早已清过、已通知过会话变化与跳转）：不再清一次、不再发跳登录的 Effect，
+                // 原调用按已换代结束（D10-1718 ⑤ / D10-1909）。
+                return .now(.superseded, emit: nil, retry: false)
+            }
             // 本世代已没有可刷新的会话（存储里只剩不完整的条目）：按刷新失败清一次，结果记在本世代上。
             let needsRetry = clearSessionLocked()
             let effect = sessionLostEffectLocked()
