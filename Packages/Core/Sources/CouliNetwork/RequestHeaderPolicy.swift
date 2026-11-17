@@ -65,7 +65,8 @@ public struct HeaderDecision: Sendable, Equatable {
 /// 判定顺序：环境未就绪 → 不发；隐私不是已同意、或撤回清理未完成（凭据不可读）→ 只放行匿名白名单
 /// （基本模式 BR-ID-11；尚未决定只放行配置与协议文本），剥离 Authorization、X-Device-Id、签名头；
 /// 会话 deletion_only → 只放行 x-session-scopes 含 deletion_only 的接口，按请求体才接受的五个接口再看请求体
-/// （没有请求体按不接受）；签名接口没有可读的设备凭据 → device_not_ready。
+/// （没有请求体按不接受）；签名接口没有可读的设备凭据 → device_not_ready；隐私撤回记录（recordConsent type=privacy、
+/// accepted=false，设备级）没有可读的设备标识 → device_not_ready（D10-1940 ③）。
 public enum RequestHeaderPolicy {
     /// 基本模式匿名白名单（BR-ID-11）：配置、搜索、商品详情、帮助与规则文章列表、首页（getPage 与区块取数
     /// listPageSectionItems，D10-607 ②）。撤回清理未完成（凭据不可读）时同样按这张表。
@@ -103,6 +104,13 @@ public enum RequestHeaderPolicy {
         }
     }
 
+    private static let recordConsent = "recordConsent"
+
+    /// 隐私中心撤回隐私同意的请求体（type=privacy、accepted=false；AppMe.withdrawConsent / PrivacyWithdrawFlow.request）。
+    static func isPrivacyWithdrawal(_ body: [String: Any]) -> Bool {
+        JSONFields.string(body, "type") == "privacy" && JSONFields.bool(body, "accepted") == false
+    }
+
     static let restrictedBodyOperations: Set<String> = [
         "sendSmsCode", "createOauthAttempt", "stepUp", "abandonIdempotencyKey", "recordConsent",
     ]
@@ -131,6 +139,12 @@ public enum RequestHeaderPolicy {
         let credentials = privacy == PrivacyRaw.full
         let deviceId = credentials ? state.deviceId.flatMap { $0.isEmpty ? nil : $0 } : nil
         if operation.signed, deviceId == nil {
+            return .reject(LocalRejectReason.deviceNotReady)
+        }
+        // D10-1940 ③（FU-IOS-WITHDRAW-REQUIRES-DEVICE-ID）：隐私撤回记录是设备级（BR-ID-13，以设备为主体；契约不签名、靠 X-Device-Id），
+        // 组请求时读不出设备标识（确认后设备凭据变得读不出 / 设备屏障未决）→ 本地拒、零发送，不发不带 X-Device-Id 的撤回记录；
+        // 调用点按「未发出」处理（本地撤回照常完成，G24）。
+        if deviceId == nil, operation.operationId == recordConsent, let body, isPrivacyWithdrawal(body) {
             return .reject(LocalRejectReason.deviceNotReady)
         }
         let authorization = credentials && state.hasAccessToken && operation.auth != ApiClient.authNone
