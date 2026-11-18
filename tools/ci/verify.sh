@@ -707,7 +707,7 @@ check_design_tokens() {
     python3 "$ROOT/tools/ci/check-design-tokens.py" --couli "$dt_dir" "$ROOT"
 }
 step "源码树可完整读取（自测 + 全仓，F-X-07）" bash -c 'python3 tools/ci/check-source-tree.py --self-test && python3 tools/ci/check-source-tree.py'
-step "swiftformat --lint" swiftformat --lint .
+step "swiftformat --lint（不用缓存，D10-2071）" swiftformat --lint --cache ignore .
 step "swiftlint --strict" swiftlint lint --strict --no-cache
 step "lint 违反样例必须被拦" lint_fixtures
 step "金额用例重试名单解析自测（UTF-8 坏字节，D10-1681）" retried_tests_selftest
