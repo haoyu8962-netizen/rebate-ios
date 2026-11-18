@@ -158,6 +158,10 @@ struct CouliApp: App {
         let open: @MainActor (String) -> Void = { [weak me] route in me?.cs.open(from: route) }
         wallet.customerService = open
         wallet.meReadGate = me.gates.read
+        // APP-13a-1：注销页撤回成功回到设置页后，在那个导航实例上轻提示（G18）
+        wallet.settingsDeletionToast = { [weak me] id in
+            (me?.pages[id]?.controller() as? SettingsController)?.showDeletionWithdrawn()
+        }
         // APP-05b：手机号绑定状态的 getMe 与「我的」、钱包实名查询、桥 auth.getUser 共用读取截止时间；绑定成功清全部 action 的 step-up token
         login.phoneSync.readGate = me.gates.read
         login.connect(wallet: wallet)

@@ -99,6 +99,13 @@ public protocol FlowHost: AnyObject {
     func onGuide(_ route: String)
     /// 键结束的业务错误（提现 30306 等，APP-09 共性第 10 条）。
     func onBusinessError(_ code: Int)
+    /// 每个结局落到页面之后（页面仍有效、身份已核对）：发起页按原始结果补自己的页面去向（注销页 30416 取本次 data.amount_fen、
+    /// 10007 重取进度、30412 给【去提现】，APP-13a-1）。缺省不做事（提现、收款账号不用）。
+    func onOutcome(_ outcome: Outcome, result: ApiResult, phase: String)
+}
+
+public extension FlowHost {
+    func onOutcome(_: Outcome, result _: ApiResult, phase _: String) {}
 }
 
 /// 提现与收款账号变更的提交、二次验证、未决键与待确认（brief §0 第 3、4 条；BR-ID-10 细则「敏感操作的幂等键」；BR-WDR-07 细则）：
@@ -244,9 +251,10 @@ public final class SensitiveFlow: ObservableObject {
         }, settle: { state.awaitingIdentity = true }), let account = click.account else { return }
         sentViewGen = visibility.generation
         let probe = gate.probe()
+        // 没有请求体的操作（申请注销，APP-13a 共性第 1 条）不带 body：签名按空字节算，未决记录原体为空串
         let call = ApiCall(
-            operationId: operationId, body: payload.body, idempotencyKey: payload.key, stepUpToken: token,
-            summary: payload.summary
+            operationId: operationId, body: payload.body.isEmpty ? nil : payload.body, idempotencyKey: payload.key,
+            stepUpToken: token, summary: payload.summary
         )
         let api = deps.api
         // 共享结算由任务持有的固定依据直接完成（共性第 66 条）：页面执行器释放后迟到的成功、42901 照常结算

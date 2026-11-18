@@ -8,13 +8,14 @@ import SwiftUI
 /// - 品牌图形 + 「发现新版本 x.y.z」+ 副标题；有 update_notes 时显示「更新内容」卡片（按行分条）；
 /// - 主按钮【去更新】（`app_update.go_store`）：按 Gate 选店打开商店；一家都不行时换成提示条 `app_update.unavailable`
 ///   与【重试】（`app_update.retry`），不给任何下载地址；
-/// - 次要入口「隐私政策」（PrivacyCenter）与「注销账号」（TODO(APP-12)：冷静期内为「撤销注销」`app_update.cancel_deletion`，
-///   注销进度此时不可知，先只显示「注销账号」）；
+/// - 次要入口「隐私政策」（PrivacyCenter）与「注销账号」：已登录（含 deletion_only）时按 getDeletion 结果，冷静期且 can_cancel=true 显示
+///   「撤销注销」`app_update.cancel_deletion`，其余、游客、读取失败、限流期间显示「注销账号」（APP-13a-1，`ForceUpdateDeletionLabel`）；
 /// - 没有返回按钮，不能侧滑离开（导航栏隐藏）；AppRouting 另外在强更状态下把导航栈拉回强更页。
 /// 正文放不下（200% 字号）时只有正文滚动，主按钮与次要入口固定在底部。
 struct ForceUpdateScreen: View {
     @EnvironmentObject private var update: AppUpdate
     @EnvironmentObject private var router: Router
+    @EnvironmentObject private var wallet: AppWallet
 
     var body: some View {
         VStack(spacing: 0) {
@@ -140,8 +141,8 @@ struct ForceUpdateScreen: View {
                     .couliFont(.footnote)
                     .foregroundColor(CouliColor.borderSubtle)
                     .accessibilityHidden(true)
-                // TODO(APP-12): 冷静期内显示「撤销注销」（app_update.cancel_deletion）；注销进度要等会话与注销页实现。
-                link(DefaultTexts.text("app_update.delete_account") ?? "", id: "update.force.deleteAccount") {
+                // 「注销账号 / 撤销注销」：标签按 getDeletion（与注销页共用读取闸门）；点击一律经 Router（APP-13a-1）
+                ForceUpdateDeletionLink(label: wallet.forceUpdateDeletion) {
                     openDeleteAccount()
                 }
             }
@@ -164,12 +165,36 @@ struct ForceUpdateScreen: View {
         .accessibilityIdentifier(id)
     }
 
-    /// 「注销账号」：需要登录的先登录（受限登录，03 §4.1），登录后进 DeleteAccount（TODO(APP-05、APP-12)）。
+    /// 「注销账号 / 撤销注销」：经 Router 从强更页次要入口打开；游客先进受限登录（03 §4.1）。
     /// DeleteAccount 的 since.ios 还是 null（未发布，rule-gaps G02 / N-14）：已登录时守卫给升级提示（与别处点到未发布路由相同，
-    /// 强更页留在下面，D10-1562 过渡）；N-14 上线后改为进 DeleteAccount。
+    /// 强更页留在下面，D10-1562 过渡）；N-14 上线后守卫自然放行进 DeleteAccount（注销页已在 RouteViewRegistry 登记）。
+    /// TODO(N-14): 过渡期保留「游客 → Login」的写法（守卫在 since=null 时先给升级提示、不会先要求登录；过渡用例 UpdateSmokeTests 断言
+    /// 游客进受限登录），since 填上后改为一律请求 DeleteAccount、由守卫按 login 要求先进受限登录（13a-3）。
     private func openDeleteAccount() {
         let route = router.currentGuardState.session == .guest ? RoutePolicy.login : "DeleteAccount"
         router.openFromForceUpdatePage(RouteRequest(route: route, from: .inApp))
+    }
+}
+
+/// 强更页「注销账号 / 撤销注销」入口（标识沿用 update.force.deleteAccount）：出现时按此刻会话取一次标签，离开即作废在途读取；会话变化由
+/// AppWallet 的会话同步出口通知重取。
+private struct ForceUpdateDeletionLink: View {
+    @ObservedObject var label: ForceUpdateDeletionLabel
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: DefaultTexts.text(label.key) ?? "")
+                .couliFont(.footnote)
+                .foregroundColor(CouliColor.textLink)
+                .padding(.horizontal, CouliSpacing.s2)
+                .frame(minHeight: CouliHitTarget.minimum)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("update.force.deleteAccount")
+        .onAppear { label.appeared() }
+        .onDisappear { label.disappeared() }
     }
 }
 

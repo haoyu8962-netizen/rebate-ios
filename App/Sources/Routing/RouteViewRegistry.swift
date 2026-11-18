@@ -29,6 +29,8 @@ enum RouteViewRegistry {
             "About": { AnyView(MeRouteView(destination: $0)) },
             "RiskNotice": { AnyView(MeRouteView(destination: $0)) },
             "Appeal": { AnyView(MeRouteView(destination: $0)) },
+            // APP-13a-1：注销页（Features/Me；入口仍被 EntryGuard 过渡守卫挡着，since.ios=null，D10-1562）。
+            "DeleteAccount": { AnyView(DeleteAccountRouteView(destination: $0)) },
             "Messages": { AnyView(H5RouteView(destination: $0)) },
             "InviteShare": { AnyView(H5RouteView(destination: $0)) },
             // APP-06a：搜索（Features/Search）与商品详情（Features/Product）。

@@ -69,6 +69,12 @@ final class AppWallet: ObservableObject, WalletEnv {
     var realnameSerial = 0
     var realnameFlag: RequestFlag?
     var errorSerial = 0
+    /// 上一次会话同步时的作用域（APP-13a-1：受限 → full 时清空内存 step-up token、注销页按新作用域重建）。nil = 没有会话。
+    var lastDeletionScope: String?
+    /// 注销页撤回成功回到 Settings 后在那个导航实例上轻提示（App 组装时接 AppMe 的设置页执行器；G18）。
+    var settingsDeletionToast: (UUID) -> Void = { _ in }
+    /// 强更页「注销账号 / 撤销注销」标签（APP-13a-1 brief §2.8）。
+    lazy var forceUpdateDeletion = ForceUpdateDeletionLabel(wallet: self)
     private var subscriptions: Set<AnyCancellable> = []
 
     init(

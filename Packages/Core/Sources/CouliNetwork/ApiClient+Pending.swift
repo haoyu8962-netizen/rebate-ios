@@ -65,7 +65,8 @@ public extension ApiClient {
             return .localReject(reason: LocalRejectReason.pendingStoreFailed)
         }
         let call = ApiCall(
-            operationId: operationId, body: record.body, idempotencyKey: record.key,
+            // 原体为空串（没有请求体的申请注销）时照首次发送不带 body（APP-13a 共性第 1 条）
+            operationId: operationId, body: record.body.isEmpty ? nil : record.body, idempotencyKey: record.key,
             stepUpToken: stepUpToken, summary: record.summary
         )
         var options = RunOptions(epoch: currentEpoch)

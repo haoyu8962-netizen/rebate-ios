@@ -29,6 +29,8 @@ extension AppWallet {
     /// - 启动态落定：按本次身份对账后同上；
     /// - 已知换代（含首次确认没有会话 RC-04、同账号换登录世代 R3-03）：共享状态清空、按本次身份对账（不另读，RC-03）、各页换上新身份重取。
     func checkSession() {
+        // 作用域变化不改会话世代（刷新拿到 full）：在同一个同步出口另核对（APP-13a-1）
+        defer { resyncDeletionScope() }
         let snapshot = identity.snapshot()
         cache.completePendingClear()
         switch reconciler.observe(snapshot) {

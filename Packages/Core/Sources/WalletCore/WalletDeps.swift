@@ -139,6 +139,12 @@ public final class WalletGates {
     public let verify: RetryAfterGate
     public let realname: RetryAfterGate
     public let labor: RetryAfterGate
+    /// 注销的申请 / 确认上一次 / 放弃上一次共用一个截止时间（APP-13a §0「Retry-After」）。
+    public let deletion: RetryAfterGate
+    /// 撤回注销一个（APP-13a §0「Retry-After」）。
+    public let deletionCancel: RetryAfterGate
+    /// getDeletion 的读取：注销页与强更页「注销账号 / 撤销注销」标签共用发送前检查与 42901 结算（APP-13a 共性第 32 条）。
+    public let deletionRead: RetryAfterGate
 
     public init(clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
         read = RetryAfterGate(clock: clock)
@@ -148,10 +154,13 @@ public final class WalletGates {
         verify = RetryAfterGate(clock: clock)
         realname = RetryAfterGate(clock: clock)
         labor = RetryAfterGate(clock: clock)
+        deletion = RetryAfterGate(clock: clock)
+        deletionCancel = RetryAfterGate(clock: clock)
+        deletionRead = RetryAfterGate(clock: clock)
     }
 
     public func reset() {
-        for gate in [read, withdraw, payout, sms, verify, realname, labor] {
+        for gate in [read, withdraw, payout, sms, verify, realname, labor, deletion, deletionCancel, deletionRead] {
             gate.reset()
         }
     }

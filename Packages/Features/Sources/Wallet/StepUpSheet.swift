@@ -179,7 +179,7 @@ struct StepUpSheetBody: View {
             StepUpHandle()
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
                 VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-                    RecordText(texts.text("error.10003"), style: .body, weight: .couliSemibold,
+                    RecordText(texts.text(Self.titleKey(state.action, texts)), style: .body, weight: .couliSemibold,
                                color: CouliColor.textPrimary, probe: "stepUp.title")
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($titleFocused)
@@ -189,6 +189,12 @@ struct StepUpSheetBody: View {
                         RecordText(texts.text(state.phase == .noPhone ? "step_up.no_phone" : "step_up.sent"),
                                    style: .footnote, color: CouliColor.textSecondary, probe: "stepUp.sent")
                             .accessibilityIdentifier(state.phase == .noPhone ? "stepUp.noPhone" : "stepUp.sent")
+                    }
+                    // 说明随 action 变（APP-13a 共性第 3 条）：申请注销多一行「申请注销账号」（step_up.summary.deletion）；提现、改收款不变
+                    if let summaryKey = Self.summaryKey(state.action) {
+                        RecordText(texts.text(summaryKey), style: .footnote, color: CouliColor.textSecondary,
+                                   probe: "stepUp.summary")
+                            .accessibilityIdentifier("stepUp.summary")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -209,6 +215,17 @@ struct StepUpSheetBody: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, StepUpMetric.topInset)
         .padding(.bottom, CouliSpacing.s4)
+    }
+
+    /// 面板标题随 action 变（APP-13a 共性第 3 条）：申请注销取 step_up.title.account_deletion（注销页的文案表有这个键时）；其余与提现、
+    /// 改收款相同（error.10003）。
+    static func titleKey(_ action: String, _ texts: WalletTexts) -> String {
+        let key = "step_up.title.\(action)"
+        return action == "account_deletion" && texts.has(key) ? key : "error.10003"
+    }
+
+    static func summaryKey(_ action: String) -> String? {
+        action == "account_deletion" ? "step_up.summary.deletion" : nil
     }
 
     /// 6 格 + 格下一行。底部留白在滚动区内：【重新获取】44 命中区伸出视觉行，不留就被中段滚动裁掉（Android r1 S2-1）。

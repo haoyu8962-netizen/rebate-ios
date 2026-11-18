@@ -4,6 +4,7 @@ import Foundation
 /// 结局落到页面（禁用期、token 失效、钱包刷新通知已由 `WalletSettlement` 按任务持有的固定依据结算）。
 extension SensitiveFlow {
     func apply(_ outcome: Outcome, result: ApiResult, phase: String, replayed: Bool, intent: PendingIntent?) {
+        defer { host?.onOutcome(outcome, result: result, phase: phase) }
         if outcome.nextSubmitNewKey {
             reuseKey = nil
         }
@@ -83,7 +84,7 @@ extension SensitiveFlow {
     func applyRest(_ outcome: Outcome, result: ApiResult, phase: String, message: Notice?) {
         let ending: Set<String> = [
             SensitiveOutcome.showErrorKeyEnds, SensitiveOutcome.retryAfter, SensitiveOutcome.errorTrace6,
-            SensitiveOutcome.busyRetry, SensitiveOutcome.autoResend,
+            SensitiveOutcome.busyRetry, SensitiveOutcome.autoResend, SensitiveOutcome.deletionLocked,
         ]
         guard ending.contains(outcome.actionRaw) else {
             // pending_confirm / show_error_keep_pending / abandon_busy：进入或保持待确认（键不结束、不自动重发）

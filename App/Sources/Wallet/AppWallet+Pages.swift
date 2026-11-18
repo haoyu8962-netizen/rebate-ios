@@ -1,5 +1,6 @@
 import CouliNetwork
 import Foundation
+import MeCore
 import Router
 import SwiftUI
 import Wallet
@@ -21,6 +22,8 @@ final class WalletPageEntry {
     lazy var identityConfirmed: (WalletOwner) -> Void = self.sessionChanged
     /// 身份确认后统一补做中止读取与迟到结果的执行器（FU-IOS-0712 整体重理：钱包摘要、提现、提现记录、收款账号、实名、劳务协议都接）。
     weak var resumable: IdentityResumable?
+    /// 会话同步出口里的作用域核对（只有注销页接：固定作用域与此刻不同就按新作用域重建，APP-13a-1）。
+    var scopeCheck: (() -> Void)?
 
     /// 构造时（或最近一次换上身份时）那一次身份读取是否已确认（RC-02）。
     var identityKnown: Bool {
@@ -87,6 +90,9 @@ extension AppWallet {
             return realnameEntry(destination, context)
         case WalletRoutes.laborAgreement:
             return laborEntry(destination, context)
+        case DeleteAccountController.route:
+            // APP-13a-1：注销页（页面在 Features/Me，复用钱包的敏感写操作依赖）
+            return deletionEntry(destination, context)
         default:
             return nil
         }

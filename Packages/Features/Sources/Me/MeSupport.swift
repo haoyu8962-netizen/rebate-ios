@@ -25,7 +25,7 @@ enum MeToastMessage {
     /// 成功类带对勾，错误、限流类不带（G-S06）。关于页「已复制诊断信息」不属设置一族，保持原有对勾。
     private static let successKeys: Set<String> = [
         SettingsController.clearedKey, SettingsController.savedKey, SettingsController.resetDoneKey,
-        "deletion.cancelled_toast", AboutController.copiedKey,
+        "deletion.cancelled_toast", SettingsController.deletionWithdrawnKey, AboutController.copiedKey,
     ]
 
     static func make(_ notice: MeNotice, texts: MeTexts) -> CouliToastMessage {
