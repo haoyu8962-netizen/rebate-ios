@@ -50,10 +50,14 @@ public struct DeleteAccountActions {
 public struct DeleteAccountScreen: View {
     @ObservedObject var host: MePageHost<DeleteAccountController>
     let texts: AccountDraftTexts
+    /// 【申请注销】的读屏焦点（由套二次验证半屏的一方持有并传入，半屏关闭后焦点回到这里，A11yFocusStepUp）；nil = 本页自己持有。
+    let applyFocus: AccessibilityFocusState<Bool>.Binding?
 
-    public init(host: MePageHost<DeleteAccountController>, texts: AccountDraftTexts = AccountDraftTexts()) {
+    public init(host: MePageHost<DeleteAccountController>, texts: AccountDraftTexts = AccountDraftTexts(),
+                applyFocus: AccessibilityFocusState<Bool>.Binding? = nil) {
         self.host = host
         self.texts = texts
+        self.applyFocus = applyFocus
     }
 
     public var body: some View {
@@ -61,7 +65,7 @@ public struct DeleteAccountScreen: View {
         DeleteAccountBody(
             controller: controller, flow: controller.flow, writeGate: controller.writeGate,
             cancelGate: controller.cancelGate, readGate: controller.readGate, fundsGate: controller.fundsGate,
-            texts: texts
+            texts: texts, applyFocus: applyFocus
         )
         .id(host.serial)
         .onAppear { host.onAppear() }
@@ -76,8 +80,14 @@ struct DeleteAccountBody: View {
     @ObservedObject var readGate: RetryAfterGate
     @ObservedObject var fundsGate: RetryAfterGate
     let texts: AccountDraftTexts
+    let applyFocus: AccessibilityFocusState<Bool>.Binding?
     @State private var toast: CouliToastMessage?
-    @AccessibilityFocusState private var applyFocused: Bool
+    @AccessibilityFocusState private var ownApplyFocus: Bool
+
+    /// 【申请注销】的读屏焦点：二次验证半屏与放弃确认框关闭后都回到这里。
+    var applyFocused: AccessibilityFocusState<Bool>.Binding {
+        applyFocus ?? $ownApplyFocus
+    }
 
     var body: some View {
         let state = controller.state
@@ -96,7 +106,7 @@ struct DeleteAccountBody: View {
         .navigationTitle(texts.text("deletion.title"))
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("deletion.page")
-        .couliDialog(isPresented: flowState.abandonConfirmKey != nil, restoreFocusTo: $applyFocused) {
+        .couliDialog(isPresented: flowState.abandonConfirmKey != nil, restoreFocusTo: applyFocused) {
             CouliDialog(
                 title: texts.text("pending_confirm.abandon"),
                 onEscape: actions.cancelAbandon,
@@ -286,7 +296,7 @@ struct DeleteAccountBody: View {
                 texts.text("deletion.apply"), isLoading: flowState.phase == .submitting && !flowState.awaitingIdentity,
                 isEnabled: controller.applyEnabled && !writeGate.blocked, fillsWidth: true, action: actions.apply
             )
-            .accessibilityFocused($applyFocused)
+            .accessibilityFocused(applyFocused)
             .accessibilityIdentifier("deletion.apply")
             let hintKey = view.kind == .pendingConfirm ? "deletion.pending.apply_blocked" : "deletion.agree_hint"
             bodyText(texts.text(hintKey), secondary: true)
@@ -299,7 +309,7 @@ struct DeleteAccountBody: View {
                   _ actions: DeleteAccountActions) -> some View {
         // 30416 的提示由负余额提示块显示（取本次 amount_fen），不重复显示不带金额的错误条
         if let error = flowState.error, error.key != "error.30416" {
-            errorLine(error.message(texts), id: error.id, identifier: "deletion.error")
+            errorLine(flowMessage(error, state), id: error.id, identifier: "deletion.error")
             if state.withdrawHint, view.showGoWithdraw {
                 CouliButton(texts.text("deletion.funds.go_withdraw"), kind: .text, size: .compact,
                             action: actions.goWithdraw)
@@ -351,7 +361,7 @@ struct DeleteAccountBody: View {
                     .accessibilityIdentifier("deletion.pending.confirm")
             }
             if let notice = flowState.pendingNotice {
-                errorLine(notice.message(texts), id: notice.id, identifier: "deletion.pending.notice",
+                errorLine(flowMessage(notice, controller.state), id: notice.id, identifier: "deletion.pending.notice",
                           assertive: notice.assertive)
             }
             bodyText(texts.text("deletion.pending.no_repeat"), secondary: true)
@@ -436,6 +446,16 @@ struct DeleteAccountBody: View {
     }
 
     // MARK: - 共用件
+
+    /// 写请求的提示文字（G26）：字典里没有这个键（表外码）时回落到服务端 msg；msg 也空时用统一兜底句。
+    func flowMessage(_ notice: Notice, _ state: DeletionSnapshot) -> String {
+        if !texts.has(notice.key), let msg = state.serverMsg[notice.key],
+           !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return msg
+        }
+        let text = notice.message(texts)
+        return text.isEmpty ? texts.text("error.50001") : text
+    }
 
     func failure(_ title: String, _ error: Notice?, retryEnabled: Bool, actions: DeleteAccountActions,
                  id: String) -> some View {

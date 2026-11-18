@@ -54,6 +54,8 @@ public struct DeletionSnapshot: Equatable, Sendable {
     public var amount30416: Int64?
     /// 30412（有进行中的提现）：错误条旁给【去提现】（受限会话、从强更进入不给，G12）。
     public var withdrawHint = false
+    /// 表外码的服务端 msg（G26）：文案键 → msg。字典没有 error.<code> 时页面显示它（键是写请求错误条的文案键）。
+    public var serverMsg: [String: String] = [:]
     /// 本页提示（未绑手机、撤回结果、读取的 42901 等）。
     public var notice: Notice?
     /// 撤回注销在途（按钮「提交中…」）。
@@ -365,7 +367,12 @@ public final class DeleteAccountController: ObservableObject, FlowHost, Identity
             state.waiver = false
             return
         }
-        guard case let .failure(code, _, data, _, _, _) = result else { return }
+        guard case let .failure(code, msg, data, _, _, _) = result else { return }
+        // G26：字典没有 error.<code> 的码（表外 3xxxx 等），记下服务端 msg 给错误条回落用
+        let key = "error.\(code)"
+        if DefaultTexts.text(key) == nil {
+            state.serverMsg[key] = msg
+        }
         switch code {
         case 30416:
             // 本次提示金额取这一次响应（缺失走兜底）；资格只在用户主动刷新后按新读取更新（共性第 10、34 条）

@@ -109,13 +109,27 @@ final class StepUpVisualFundsGuardTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(hits.sorted(), ["PayoutAccountScreen.swift", "WithdrawScreen.swift"], "二次验证半屏的页面清单变了")
+        // APP-13a-1（D10-2090 ①③）：注销页落地并补了真点用例（App13a1DeletionStepUpTapTests），清单加注销页调用点这一项
+        XCTAssertEqual(
+            hits.sorted(), ["AppWallet+Deletion.swift", "PayoutAccountScreen.swift", "WithdrawScreen.swift"],
+            "二次验证半屏的页面清单变了"
+        )
         for page in ["WithdrawScreen.swift", "PayoutAccountScreen.swift"] {
             let text = try normalized(walletFile(page))
             let call = ".walletStepUpSheet(stepUp, texts: texts, smsBlocked: smsGate.blocked, "
                 + "verifyBlocked: verifyGate.blocked,"
             assertOnce(call, in: text, page)
         }
+        // 注销页（APP-13a-1）同样核对调用写法：面板在 Features/Wallet，Feature 之间不依赖，由 App 层套上，所以文件在 App/Sources/Wallet；
+        // 第一个参数取宿主当前执行器的面板（整页按新身份 / 作用域重建时换成新面板），三个闸门参数与上面两页同一写法
+        let deletion = try normalized(String(
+            contentsOf: root.appendingPathComponent("App/Sources/Wallet/AppWallet+Deletion.swift"), encoding: .utf8
+        ))
+        assertOnce(
+            ".walletStepUpSheet( host.controller.flow.stepUp, texts: texts, smsBlocked: smsGate.blocked, "
+                + "verifyBlocked: verifyGate.blocked",
+            in: deletion, "AppWallet+Deletion.swift"
+        )
     }
 
     /// 输入类型：一次性验证码 + 数字键盘，整串一个输入框（设计 A11yFocusStepUp、brief §7）。

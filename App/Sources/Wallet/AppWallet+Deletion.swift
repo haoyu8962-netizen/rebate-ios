@@ -158,12 +158,14 @@ struct DeleteAccountRouteContent: View {
     let texts: AccountDraftTexts
     @ObservedObject var smsGate: RetryAfterGate
     @ObservedObject var verifyGate: RetryAfterGate
+    /// 【申请注销】的读屏焦点：半屏关闭后回到触发控件（同提现页、收款账号页的 restoreFocus，A11yFocusStepUp）。
+    @AccessibilityFocusState private var applyFocused: Bool
 
     var body: some View {
-        DeleteAccountScreen(host: host, texts: texts)
+        DeleteAccountScreen(host: host, texts: texts, applyFocus: $applyFocused)
             .walletStepUpSheet(
                 host.controller.flow.stepUp, texts: texts, smsBlocked: smsGate.blocked,
-                verifyBlocked: verifyGate.blocked
+                verifyBlocked: verifyGate.blocked, restoreFocus: $applyFocused
             )
     }
 }
@@ -214,6 +216,8 @@ final class ForceUpdateDeletionLabel: ObservableObject {
         flag?.invalidate()
         flag = nil
         let owner = wallet.currentOwner()
+        // 发起时的完整身份：账号 + 会话世代 + 持久化登录世代（WalletOwner）+ 作用域（共性第 49 条）
+        let scope = wallet.deletionScopeNow()
         ownerKey = owner.key
         guard owner.account != nil, owner.identityKnown else {
             key = Self.deleteKey
@@ -233,7 +237,10 @@ final class ForceUpdateDeletionLabel: ObservableObject {
                 ApiCall(operationId: "getDeletion"), isValid: { request.isValid }, sendAllowed: probe.allowed,
                 expected: owner.request
             )
-            guard let self, request.isValid, ticket == serial, wallet.isCurrent(owner) else { return }
+            // 写闸门、改标签之前复核完整身份：同世代作用域刷新后迟到的旧 42901 不写进新作用域的闸门（共性第 49 条）
+            guard let self, request.isValid, ticket == serial, wallet.isCurrent(owner),
+                  wallet.deletionScopeNow() == scope
+            else { return }
             flag = nil
             let millis = WalletErrors.disableMillis(result)
             if millis > 0 {
