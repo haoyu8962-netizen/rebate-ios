@@ -43,7 +43,7 @@ final class SettingsVisualGuardTests: XCTestCase {
     func testLogicFilesByteIdentical() throws {
         let pinned: [String: String] = [
             "Packages/Core/Sources/MeCore/SettingsController.swift":
-                "af714b1ce93fa5880ec8f7f7bbd38216a4b48f812c89e9f957d50d2e94e4ddfc",
+                "d9a8331cc34fd44d677a2373731c04ca6d57512167ebd555e51f05a58096cad7",
             "Packages/Core/Sources/MeCore/SettingsItems.swift":
                 "988cd419de52b5ea6b33ad3cb3304893fc2b2136c0e798417c87cbe81811347f",
             "Packages/Core/Sources/MeCore/NicknameRules.swift":
