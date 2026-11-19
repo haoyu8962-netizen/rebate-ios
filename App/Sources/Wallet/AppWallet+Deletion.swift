@@ -10,7 +10,7 @@ import WalletCore
 /// 注销页（APP-13a-1）的 App 接线：页面放在钱包的页面表里（与提现、收款账号共用 WalletDeps：未决键、二次验证、token 缓存、发码槽位、
 /// 共享结算），页面本身在 Features/Me（执行器在 MeCore）。
 /// - 固定身份 = WalletOwner + 会话作用域 + 入口来源，构造时一次取得；会话换代（登录、退出、换账号、撤回同意、切环境）随钱包页面同步重建；
-///   作用域变化（受限 → full）在会话同步出口按新作用域重建，并清空内存 step-up token（brief §2.7）；
+///   作用域变化（受限 → full）在会话同步出口按新作用域重建，并清空内存 step-up token（brief 第 15 行）；
 /// - 入口来源不走路由参数（DeleteAccount 丢参）：从强更页进入看目的地标记，其余按导航栈下面一层交接一次（共性第 4 条）；
 /// - 入口仍被 EntryGuard 过渡守卫挡着（DeleteAccount since.ios=null，D10-1562）：这里只登记页面，不改守卫。
 extension AppWallet: DeleteAccountPorts {
@@ -128,7 +128,8 @@ extension AppWallet: DeleteAccountPorts {
         return entry
     }
 
-    /// 会话同步出口（`checkSession` 末尾）：作用域变了就清空内存 step-up token（受限 → full，brief §2.7），栈里的注销页按新作用域重建；
+    /// 会话同步出口（`checkSession` 末尾）：作用域变了就清空内存 step-up token（brief 第 15 行；无注销页时
+    /// full → deletion_only 不跟踪、不清，D10-2136），栈里的注销页按新作用域重建；
     /// 强更页标签按此刻会话重取。
     /// 只在需要时读作用域（读作用域要读一次令牌存储 / 钥匙串；`checkSession` 是所有钱包页的高频路径，`entry(for:)` 的建页快照也依赖读取
     /// 次数不变）。需要 = 页面表里有注销页，或上次看到的是受限作用域（deletion_only）：
