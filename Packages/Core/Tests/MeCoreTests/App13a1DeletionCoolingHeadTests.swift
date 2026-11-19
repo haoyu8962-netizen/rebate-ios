@@ -21,9 +21,11 @@ final class App13a1DeletionCoolingHeadTests: XCTestCase {
     /// 快照 texts.default.json 的键 → 文字。
     private func contractTexts() throws -> [String: String] {
         let url = try repositoryRoot().appendingPathComponent("contracts/snapshot/contracts/texts.default.json")
-        let texts = try XCTUnwrap(
+        let root = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any], "texts.default.json 不是对象"
         )
+        // 文案在顶层 texts 对象里（同级还有 version、fallbacks）
+        let texts = try XCTUnwrap(root["texts"] as? [String: Any], "texts.default.json 缺 texts 对象")
         XCTAssertFalse(texts.isEmpty, "texts.default.json 为空（守卫失效）")
         return texts.compactMapValues { $0 as? String }
     }
