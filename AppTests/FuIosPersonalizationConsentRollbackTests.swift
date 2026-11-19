@@ -1,3 +1,4 @@
+import Combine
 @testable import Couli
 import CouliNetwork
 import Foundation
@@ -76,37 +77,41 @@ final class FuIosPersonalizationConsentRollbackTests: FuIosPersonalizationConsen
         await assertNoResend(0, never: true, "本地拒绝")
     }
 
-    /// ① 身份未知被本地拒（会话读取暂时失败 → session_unreadable）：在发送入口布设「第 n 次会话读取失败一次」，n 从 1 起遍历。
-    /// 每一轮：零发送的（本地拒绝）必须回滚并提示；发出去且服务端成功的必须保持新值、不提示。至少一轮是本地拒绝（前提成立）。
-    /// 删掉 Task 结果里的 member 回滚会让本地拒绝那一轮红。
+    /// ① 身份暂时未知被本地拒、结果回来时读取已恢复（FU-IOS-PERSONALIZATION-ROLLBACK-FLAKY，D10-2153）：发送入口起会话读取持续失败
+    /// （`ReadFailureWindow.open` → `failReads(fromNth: 1)`，与读取次数、别的任务谁先读无关，这次发送必按 session_unreadable 本地拒绝、
+    /// 零发送）；在途结束 `personalization.end()` 里 `settled` 同步发布时恢复读取——Task 里 send 返回 → end() → `check(identity)`
+    /// 同在主线程、中间没有挂起点，所以恢复一定在发送被拒之后、结果处理之前。结果落定时身份是 `.current`（持续未知由下一条覆盖）：
+    /// 登录用户回滚本机值 / 网络头 / 页面并提示一次，不自动再发。删掉 `personalizationFailed` 里 member 回滚那段（只提示不回滚）会红。
     func testMemberIdentityUnknownLocalRejectRollsBack() async throws {
+        let fixture = make()
+        let controller = try center(fixture)
         let operation = PrivacyCenterController.recordConsent
-        var rejected = 0
-        for nth in 1...6 {
-            let fixture = fresh()
-            let controller = try center(fixture)
-            fixture.api.onEntry { [store = fixture.store] entered in
-                if entered == operation {
-                    store.failRead(nth: nth)
-                }
-            }
-            toggle(controller, false)
-            await waitUntil("第 \(nth) 次：没结算") {
-                self.revertedToast(controller) || !self.requests("POST", "/v1/consents").isEmpty
-            }
-            await settle()
-            fixture.api.onEntry(nil)
-            fixture.store.disarm()
-            if requests("POST", "/v1/consents").isEmpty {
-                rejected += 1
-                assertValue(fixture, controller, true, "第 \(nth) 次：本地拒绝后回滚")
-                XCTAssertTrue(revertedToast(controller), "第 \(nth) 次：本地拒绝要提示")
-            } else {
-                assertValue(fixture, controller, false, "第 \(nth) 次：发出并成功，保持新值")
-                XCTAssertNil(controller.state.toast, "第 \(nth) 次：成功不提示")
+        let window = ReadFailureWindow(fixture.store)
+        fixture.api.onEntry { entered in
+            if entered == operation {
+                window.open()
             }
         }
-        XCTAssertGreaterThan(rejected, 0, "没有一轮被身份未知本地拒绝，前提不成立")
+        // 在途结束（settled 同步发布）时关窗；产品 Task 里 end() 写在 check(identity) 之前，本用例依赖这条时序、不验证它
+        // （把 end() 挪到 check 之后在这里与原逻辑行为等价：.unknown 与 .current 都回滚并提示，见 FU 目录 mut-2 说明）
+        let ended = fixture.me.deps.personalization.$settled.dropFirst().sink { _ in window.close() }
+        toggle(controller, false)
+        await waitUntil("没提示") { self.revertedToast(controller) }
+        await settle()
+        ended.cancel()
+        fixture.api.onEntry(nil)
+        fixture.store.disarm()
+        XCTAssertTrue(revertedToast(controller), "本地拒绝要提示（落定后仍在）")
+        XCTAssertEqual(fixture.api.calls(operation), 1, "确实进了发送入口")
+        XCTAssertTrue(requests("POST", "/v1/consents").isEmpty, "本地拒绝，零发送")
+        XCTAssertGreaterThan(window.failedReads, 0, "发送窗口里确有会话读取且都失败，窗口在在途结束时关上（前提）")
+        XCTAssertEqual(fixture.me.check(controller.identity), .current, "关窗后读取恢复、身份回到当前（不是持续未知）")
+        assertValue(fixture, controller, true, "本地拒绝后回滚")
+        XCTAssertEqual(fixture.local.personalizationChangedAt, 0, "切换时刻写回 0")
+        XCTAssertFalse(controller.hasLeft, "页面还在")
+        let toastId = controller.state.toast?.id
+        await assertNoResend(0, never: true, "身份暂时未知")
+        XCTAssertEqual(controller.state.toast?.id, toastId, "只提示一次")
     }
 
     /// ① 身份持续未知（评审 S2-2）：发送入口起会话读取一直失败（`failReads(fromNth: 1)`，不是只失败一次），send 按 session_unreadable
@@ -319,5 +324,32 @@ class FuIosPersonalizationConsentTestCase: MeTestCase {
             XCTAssertEqual(request.header("X-Personalization"), expected, "\(tag)：\(request.method) \(request.path)",
                            file: file, line: line)
         }
+    }
+}
+
+/// 会话读取的故障窗口（本文件「身份暂时未知被本地拒」用）：`open()` 起读取持续失败，`close()` 恢复，并记下窗口里失败了几次读取
+/// （`close()` 没在 `open()` 之后发生则为 0）。
+private final class ReadFailureWindow: @unchecked Sendable {
+    private let store: CountingSessionTokens
+    private let lock = NSLock()
+    private var openedAt: Int?
+    private var failed = 0
+
+    init(_ store: CountingSessionTokens) {
+        self.store = store
+    }
+
+    var failedReads: Int {
+        lock.withLock { failed }
+    }
+
+    func open() {
+        lock.withLock { openedAt = store.reads }
+        store.failReads(fromNth: 1)
+    }
+
+    func close() {
+        lock.withLock { failed = openedAt.map { store.reads - $0 } ?? 0 }
+        store.stopFailing()
     }
 }
