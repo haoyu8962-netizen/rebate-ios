@@ -7,7 +7,8 @@ import XCTest
 /// 只断言三件事：键是否结束（keyEnds）、下次点击是否用新键（nextSubmitNewKey）、提示键（textKey）；必要时附 42901 禁用毫秒、trace6。
 ///
 /// 依据（按优先级）：
-/// - 契约 openapi requestDeletion x-error-codes [30412, 30416, 10003, 20903, 10010]；error-codes 10007 / 20903 / 40901 / 10405；
+/// - 契约 openapi requestDeletion x-error-codes [30412, 30416, 10003, 20903, 10010]；error-codes 10007 / 20903 / 40901 /
+/// 10405；
 /// - 三端任务书 APP-13a/brief.md §0 第 1 条（键只在业务成功、写入幂等记录的 3xxxx、已作废三种结果下结束；其余 1xxxx、20903 以外的 2xxxx、
 ///   40901、42901、5xxxx、10405、无响应都不结束；**从未结果未知**的键只在 42901、明确的 40901、20001–20003、44001 后结束、下次用新键），
 ///   §2 第 3 项（申请 / 确认 / 放弃各分支），G26（表外 3xxxx 显示 error.<code>、回落服务端 msg，键结束）；

@@ -5,7 +5,8 @@ import XCTest
 /// APP-13a-1-ios 写测（独立写测方）：getDeletion / 写请求 data 的手写解析（`DeletionJson`）。
 ///
 /// 依据：契约 openapi `Deletion`（7 个字段全部 required，additionalProperties false；status 取 deletion_status 四值；cancel_reason 取
-/// user / negative_balance 或 null；三个时间字段 date-time，可空的为 string | null）、`DeletionResponse.data` 为 Deletion | null（null = 从未申请）；
+/// user / negative_balance 或 null；三个时间字段 date-time，可空的为 string | null）、`DeletionResponse.data` 为 Deletion | null（null =
+/// 从未申请）；
 /// 三端任务书 §2 第 1 项（必填缺失或类型不符整条按坏数据、不补默认值；不认识的 status 按坏数据、不当初始态；不认识的 cancel_reason 只当 cancelled、
 /// 不显示原因）；30416 data.amount_fen（拍板第二批 §8 ADD-07）。
 final class App13a1DeletionJsonTests: XCTestCase {
@@ -40,7 +41,7 @@ final class App13a1DeletionJsonTests: XCTestCase {
     // MARK: - null 与四种 status
 
     /// data 为 null、缺失或空：从未申请（不是坏数据）。
-    func testNullMeansNeverApplied() throws {
+    func testNullMeansNeverApplied() {
         XCTAssertEqual(DeletionJson.read(nil as Data?), DeletionRead.none)
         XCTAssertEqual(DeletionJson.read(Data("null".utf8)), DeletionRead.none)
         XCTAssertEqual(DeletionJson.read(value: NSNull()), DeletionRead.none)
@@ -121,7 +122,15 @@ final class App13a1DeletionJsonTests: XCTestCase {
 
     /// 7 个字段任一缺失（可空的三项也必须出现）：整条坏数据，不补默认值。
     func testMissingRequiredIsBad() throws {
-        for key in ["status", "apply_at", "cooling_until", "can_cancel", "cancelled_at", "cancel_reason", "processed_at"] {
+        for key in [
+            "status",
+            "apply_at",
+            "cooling_until",
+            "can_cancel",
+            "cancelled_at",
+            "cancel_reason",
+            "processed_at",
+        ] {
             XCTAssertEqual(DeletionJson.read(try data(object(removing: key))), .bad, "缺 \(key)")
         }
     }
@@ -171,7 +180,12 @@ final class App13a1DeletionJsonTests: XCTestCase {
 
     /// 钱包摘要只用三项（G11），整数分；缺任一项或不是整数 → 读取失败（不当 0）。
     func testFunds() {
-        let full: [String: Any] = ["withdrawable_fen": 1000, "estimated_total_fen": 1019, "negative_fen": 0, "frozen_fen": 200]
+        let full: [String: Any] = [
+            "withdrawable_fen": 1000,
+            "estimated_total_fen": 1019,
+            "negative_fen": 0,
+            "frozen_fen": 200,
+        ]
         XCTAssertEqual(
             DeletionJson.funds(full), DeletionFunds(withdrawableFen: 1000, estimatedFen: 1019, negativeFen: 0)
         )

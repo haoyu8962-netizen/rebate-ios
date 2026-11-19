@@ -19,10 +19,11 @@ public struct AccountDraftTexts: WalletTexts, MeTexts {
         "deletion.withdrawable": "可提现余额",
         "deletion.estimated": "预估收益",
         "deletion.negative_label": "待抵扣",
-        // 注销须知六条（设计稿 DeleteAccount 逐字；G13：不显示「查看完整《注销须知》」）
-        "deletion.notice.1": "提交后有 7 天冷静期，冷静期内可以随时撤回",
+        // 注销须知六条：占位（待法务定稿、不入字典，D10-2094 ③），文字取设计稿 DeleteAccount；G13：不显示「查看完整《注销须知》」。
+        // 天数不写死在句子里（BR-TEXT-13）：{cooling_days} / {process_workdays} 由 `noticeVars` 填
+        "deletion.notice.1": "提交后有 {cooling_days} 天冷静期，冷静期内可以随时撤回",
         "deletion.notice.2": "冷静期内账号只能查看，不能领券购买、提现和邀请好友",
-        "deletion.notice.3": "冷静期满后进入注销处理，自提交起 15 个工作日内完成",
+        "deletion.notice.3": "冷静期满后进入注销处理，自提交起 {process_workdays} 个工作日内完成",
         "deletion.notice.4": "注销后手机号、昵称、实名信息、收款账号等会被删除，账号无法恢复",
         "deletion.notice.5": "注销后用同一手机号可以重新注册，但不能再领新人奖励",
         "deletion.notice.6": "有进行中的提现时不能申请，请等提现完成",
@@ -31,6 +32,9 @@ public struct AccountDraftTexts: WalletTexts, MeTexts {
         "deletion.waiver.role": "复选框",
         "deletion.waiver.on": "已选中",
         "deletion.waiver.off": "未选中",
+        // 读屏拼接（只是把两段已有文字连起来，不是新句）：勾选框标签、待确认卡进入时的播报
+        "deletion.waiver.spoken": "{label}，{role}",
+        "deletion.pending.spoken": "{title}，{desc}",
         // 【联系客服】（设计稿 DeleteAccountNegative）
         "deletion.contact_cs": "联系客服",
         // 代拟：G10 未绑手机账号、full 会话给的入口（编排者补充 3）
@@ -38,18 +42,24 @@ public struct AccountDraftTexts: WalletTexts, MeTexts {
         // 代拟：读取失败态（待补稿）
         "deletion.load_failed": "注销进度没有加载出来，请重试",
         "deletion.funds_failed": "账户资金没有加载出来，加载后才能申请注销",
-        // 代拟：撤回已不可用（10007）；撤回结果未知（brief §2.4 原文）
-        "deletion.cooling.cancel_expired": "冷静期已结束，不能再撤回注销",
+        // 撤回结果未知（brief §2.4 原文）。撤回得到 10007 用契约 error.10007（D10-2094 ①）
         "deletion.cooling.cancel_unknown": "暂时没有收到结果，请稍后再试",
-        // 代拟：冷静期 can_cancel=false（G15，待补稿）
-        "deletion.cooling.cannot_cancel": "冷静期已结束，注销正在处理",
         // 代拟：二次验证面板随 action 变的标题（error.10003 的句子写的是「资金安全」）
         "step_up.title.account_deletion": "为保障账号安全，请先完成短信验证",
     ]
 
-    /// 冷静期处理时长（timeline.processing_desc 的 {process_workdays}）：契约与接口都没有下发，取设计稿 / BR-ID-27 的 15 个工作日。
-    /// TODO(N-37) 待契约给出取值来源。
+    /// 冷静期处理时长（timeline.processing_desc、notice.3 的 {process_workdays}）：契约与接口都没有下发，取设计稿 / BR-ID-27 的 15 个工作日。
+    /// TODO(N-37) 待契约给出取值来源（D10-2094 ④ 盘点）。
     public static let processWorkdays = 15
+
+    /// 冷静期天数（notice.1 的 {cooling_days}）：契约与接口都没有下发，取设计稿 / BR-ID-27 的 7 天。
+    /// TODO(N-37) 待契约给出取值来源（D10-2094 ④ 盘点）。
+    public static let coolingDays = 7
+
+    /// 注销须知六条的变量。
+    public static let noticeVars: [String: String] = [
+        "cooling_days": "\(coolingDays)", "process_workdays": "\(processWorkdays)",
+    ]
 
     private let base = WalletDraftTexts()
 

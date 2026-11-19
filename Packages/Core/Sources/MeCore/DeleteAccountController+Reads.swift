@@ -58,8 +58,8 @@ extension DeleteAccountController {
 
     /// 一次读调用：发出前按固定身份核对（暂时未知记待补做），禁用期内不发（按 42901 结算）；结果只在归属、序号、身份、作用域都仍有效时交给 `settle`。
     func read(
-        _ operationId: String, gate: RetryAfterGate, gated: @escaping @MainActor (Notice) -> Void,
-        settle: @escaping @MainActor (ApiResult, SendProbe) -> Void
+        _ operationId: String, gate: RetryAfterGate, gated: @escaping @MainActor @Sendable (Notice) -> Void,
+        settle: @escaping @MainActor @Sendable (ApiResult, SendProbe) -> Void
     ) {
         guard alive else { return }
         let owner = identity.owner
@@ -87,7 +87,7 @@ extension DeleteAccountController {
     }
 
     /// 到达后的身份核对（暂时未知 → 留到身份确认后再采用；已换代 → 丢弃）。
-    func arrive(_ slot: String, owner: WalletOwner, ticket: Int, _ adopt: @escaping @MainActor () -> Void) {
+    func arrive(_ slot: String, owner: WalletOwner, ticket: Int, _ adopt: @escaping @MainActor @Sendable () -> Void) {
         guard alive, readSerials[slot] == ticket else { return }
         guard deferral.admit(deps.env.check(owner), slot: "arrive.\(slot)", resume: { [weak self] in
             self?.arrive(slot, owner: owner, ticket: ticket, adopt)
@@ -227,117 +227,19 @@ extension DeleteAccountController {
         }
         for gate in gates {
             gate.$blocked.dropFirst().sink { [weak self] blocked in
-                MainActor.assumeIsolated {
-                    guard !blocked, let self, alive else { return }
-                    if state.readFailed {
-                        loadDeletion()
-                    }
-                    if state.fundsFailed {
-                        loadFunds(explicit: false)
-                    }
-                }
+                MainActor.assumeIsolated { self?.gateChanged(blocked: blocked) }
             }.store(in: &subscriptions)
         }
     }
 
-    // MARK: - 撤回注销
-
-    /// 【撤回注销】（只在 can_cancel=true 时显示，G15）：不弹确认框（G16），按钮进「提交中…」；不写未决记录、不自动重发。
-    /// 写请求离开页面不取消：共享禁用期与强更标签按固定身份结算（共性第 45、48、49 条），页面更新另核对页面是否还在。
-    public func cancelDeletion(version: Int, owner: WalletOwner) {
-        guard owns(version, owner), view.showCancel, !state.cancelling else { return }
-        let gate = deps.gates.deletionCancel
-        if gate.active {
-            state.notice = notice("error.42901")
-            return
-        }
-        state.cancelling = true
-        state.notice = nil
-        let probe = gate.probe()
-        let api = deps.api
-        let identity = identity
-        let deps = deps
-        let portsRef = ports
-        Task { @MainActor [weak self] in
-            let result = await api.send(
-                ApiCall(operationId: Self.cancelOperation), isValid: { true }, sendAllowed: probe.allowed,
-                expected: identity.owner.request
-            )
-            // 会话级结算：发起时的完整身份（含作用域）仍是此刻的才写共享禁用期、通知强更页标签（共性第 49 条）
-            if deps.env.isCurrent(identity.owner),
-               DeletionScope.normalized(portsRef?.sessionScope()) == identity.scope {
-                let millis = WalletErrors.disableMillis(result)
-                if millis > 0 {
-                    gate.start(millis)
-                }
-                if case .success = result {
-                    portsRef?.deletionChanged(identity.owner)
-                }
-            }
-            self?.cancelArrived(result, probe: probe)
-        }
-    }
-
-    func cancelArrived(_ result: ApiResult, probe: SendProbe) {
-        guard alive, deferral.admit(deps.env.check(identity.owner), slot: "cancel", resume: { [weak self] in
-            self?.cancelArrived(result, probe: probe)
-        }), scopeHolds else { return }
-        state.cancelling = false
-        var code: Int?
-        var traceId: String?
-        var deletion: Deletion?
-        switch result {
-        case let .success(data, _, _):
-            code = 0
-            deletion = DeletionJson.deletion(WalletJSON.parse(data))
-        case let .failure(raw, _, _, trace, effect, _):
-            // 确需强更的 10405：网络层已进强更分流，页面不按码重判（共性第 12、37 条）
-            guard effect.kind != .forceUpdate else { return }
-            code = NonForcedUpdate.pageCode(code: raw, effect: effect)
-            traceId = trace
-        case .transportFailure:
-            code = nil
-        case .localReject:
-            state.notice = notice(probe.gated(result) ? "error.42901" : WalletErrors.networkKey)
-            return
-        default:
-            return
-        }
-        let outcome = DeletionCancelOutcome.of(
-            code: code, source: identity.source, serverKey: SensitiveOutcome.serverKey, errorKey: Self.errorKey
-        )
-        switch outcome.next {
-        case .cancelled:
-            cancelSucceeded(deletion)
-        case .stay:
-            state.notice = notice(outcome.textKey, traceId: traceId, trace6: outcome.showTrace6)
-            if outcome.reconcile {
-                cancelReconcile = true
-            }
-            if outcome.refetch {
-                loadDeletion()
-            }
-        }
-    }
-
-    /// 撤回成功的结算（直接成功、或结果未知后核对查明已撤回）：推进读取世代、清勾选与 30416 标记，按来源去向（G18）。
-    func cancelSucceeded(_ deletion: Deletion?) {
-        state.waiver = false
-        state.blocked30416 = false
-        state.amount30416 = nil
-        if let deletion {
-            setRead(.record(deletion))
-        } else {
+    /// 读闸门变化：限流结束且页面仍在时，重做因限流失败的读取。
+    func gateChanged(blocked: Bool) {
+        guard !blocked, alive else { return }
+        if state.readFailed {
             loadDeletion()
         }
-        loadFunds(explicit: false)
-        let navigate = DeletionCancelOutcome.of(
-            code: 0, source: identity.source, serverKey: SensitiveOutcome.serverKey, errorKey: Self.errorKey
-        ).navigate
-        if navigate == .none {
-            state.toast = notice(DeletionCancelOutcome.withdrawnKey, assertive: false)
-        } else {
-            leaveTo(navigate)
+        if state.fundsFailed {
+            loadFunds(explicit: false)
         }
     }
 

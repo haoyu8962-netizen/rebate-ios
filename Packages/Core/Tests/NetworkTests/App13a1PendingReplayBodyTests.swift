@@ -5,7 +5,8 @@ import Session
 import XCTest
 
 /// APP-13a-1-ios 写测 r2（D10-2090 ⑥）：钉住网络层「待确认重发时原体为空串就不带 body」这两行（`ApiClient+Pending.swift`
-/// `confirmPending(operationId:stepUpToken:)`、`ApiClient+PendingTarget.swift` `confirmPending(operationId:stepUpToken:target:)`）。
+/// `confirmPending(operationId:stepUpToken:)`、`ApiClient+PendingTarget.swift`
+/// `confirmPending(operationId:stepUpToken:target:)`）。
 /// - 有请求体的操作（提现申请 createWithdrawal、改收款 savePayoutAccount）：结果未知后【确认上一笔】重发，请求体逐字节不变，Content-Type、
 ///   Idempotency-Key、方法与路径都与首次发送相同（BR-ID-10「原键、原体」；APP-09 不得回归）；
 /// - 没有请求体的申请注销（requestDeletion）：首次与重发都不带 body（没有 Content-Type），签名按零字节计算（APP-13a 共性第 1 条）。
@@ -92,7 +93,11 @@ final class App13a1PendingReplayBodyTests: XCTestCase {
                 let replay = try XCTUnwrap(StubURLProtocol.requests(path: item.path).first, "\(label)：没有重发")
                 assertSameRequest(first, replay, label)
                 XCTAssertEqual(replay.body, item.body, "\(label)：原体")
-                XCTAssertEqual(replay.header("Content-Type"), "application/json; charset=utf-8", "\(label)：有体就带 Content-Type")
+                XCTAssertEqual(
+                    replay.header("Content-Type"),
+                    "application/json; charset=utf-8",
+                    "\(label)：有体就带 Content-Type"
+                )
             }
         }
     }

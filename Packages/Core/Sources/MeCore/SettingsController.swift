@@ -293,12 +293,12 @@ public final class SettingsController: ObservableObject, MeReader {
         }
     }
 
-    private func nextId() -> Int {
+    func nextId() -> Int {
         ids += 1
         return ids
     }
 
-    private func toast(_ notice: MeNotice) {
+    func toast(_ notice: MeNotice) {
         state.toast = notice
     }
 
@@ -306,14 +306,6 @@ public final class SettingsController: ObservableObject, MeReader {
         if state.toast?.id == id {
             state.toast = nil
         }
-    }
-
-    /// 注销页撤回成功、出栈回到本页（APP-13a-1 G18）：在这里轻提示「已撤回注销申请，账号恢复正常使用」。已出栈的执行器不受理。
-    public static let deletionWithdrawnKey = "deletion.withdrawn_toast"
-
-    public func showDeletionWithdrawn() {
-        guard !left else { return }
-        toast(MeNotice(Self.deletionWithdrawnKey, id: nextId(), assertive: false))
     }
 
     /// 出栈、换代、撤回的同步出口：撤销本页发起的 Me 读取（R1-03），清空子页草稿、关闭确认框与半屏。

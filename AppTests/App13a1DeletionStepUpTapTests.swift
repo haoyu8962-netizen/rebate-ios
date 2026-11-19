@@ -2,6 +2,7 @@
 import CouliNetwork
 import DesignSystem
 import Foundation
+import Me
 import MeCore
 import Router
 import SwiftUI
@@ -12,7 +13,8 @@ import XCTest
 
 /// APP-13a-1-ios 写测 r2（D10-2090 ①）：注销页的「真点」用例——`StepUpVisualFundsGuardTests.testConsumersAreKnown` 注释要求的「注销落地时补真点
 /// 用例再改这里」。到达方式只走生产链路（照 `StepUpVisualTestCase.panelOnWithdraw` / `panelOnPayout` 的写法）：真实 App 组装（WalletAppFixture）→
-/// 生产的 `DeleteAccountRouteView`（AppWallet.entry → DeleteAccountScreen + DeleteAccountController + SensitiveFlow，App 套上 `.walletStepUpSheet`）
+/// 生产的 `DeleteAccountRouteView`（AppWallet.entry → DeleteAccountScreen + DeleteAccountController + SensitiveFlow，App 套上
+/// `.walletStepUpSheet`）
 /// 挂进窗口 → 用页面**同一份**渲染时回调（`DeleteAccountActions.make`）勾选、点【申请注销】→ 假服务 10003 → 生产代码开半屏并发码。
 /// 测试只控制网络答复，不伪造面板状态。进程内点不到 SwiftUI 按钮，同提现 / 改收款真点用例的约定。
 ///
@@ -69,7 +71,8 @@ final class App13a1DeletionStepUpTapTests: WalletFlowTestCase {
         mount(fixture, destination)
 
         await waitUntil("注销页执行器没有建立") { fixture.wallet.pages[destination.id] != nil }
-        let host = try XCTUnwrap(fixture.wallet.pages[destination.id]?.controller as? MePageHost<DeleteAccountController>)
+        let host = try XCTUnwrap(fixture.wallet.pages[destination.id]?
+            .controller as? MePageHost<DeleteAccountController>)
         let controller = host.controller
         await waitUntil("注销页没有进入可申请的初始态", timeout: 8) {
             controller.view.kind == .initial && controller.view.applyEnabledWhenChecked

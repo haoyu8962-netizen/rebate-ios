@@ -116,7 +116,7 @@ extension AppWallet: DeleteAccountPorts {
         entryRef = entry
         entry.resumable = host.controller
         entry.scopeCheck = { [weak host, unowned self] in
-            guard let host, host.controller.identity.scope != deletionScopeNow() else { return }
+            guard let host, host.controller.identity.scope != self.deletionScopeNow() else { return }
             rebuild(currentOwner())
         }
         return entry

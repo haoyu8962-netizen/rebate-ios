@@ -2,7 +2,8 @@ import Foundation
 @testable import MeCore
 import XCTest
 
-/// APP-13a-1-ios 写测（独立写测方）：注销页显示规则（纯值输入 `DeletionInput` → `DeletionView`）与撤回结局表（`DeletionCancelOutcome`）。
+/// APP-13a-1-ios 写测（独立写测方）：注销页显示规则（纯值输入 `DeletionInput` → `DeletionView`）；【去提现】、撤回结局表与 D10-2094 文案口径在
+/// App13a1DeletionCancelOutcomeTests。
 ///
 /// 依据：三端任务书 APP-13a/brief.md §2 第 2 项（四态、优先级 pending_confirm > load_failed > cooling / processing > negative >
 /// funds_unavailable > initial；【去提现】只在 full 会话且不是从强更进入，G12；【撤回注销】只看服务端 can_cancel，G15；cancelled 按 initial、
@@ -131,7 +132,11 @@ final class App13a1DeletionPresentationTests: XCTestCase {
 
     /// 进页 negative_fen > 0：负余额态，金额取 negative_fen，【联系客服】，勾选与申请置灰（BR-ID-27「进页即提示」、AC-S2-58 ①）。
     func testEntryNegativeBalance() {
-        let view = DeletionPresentation.view(DeletionInput(read: DeletionRead.none, funds: negativeFunds, phoneBound: true))
+        let view = DeletionPresentation.view(DeletionInput(
+            read: DeletionRead.none,
+            funds: negativeFunds,
+            phoneBound: true
+        ))
         XCTAssertEqual(view.kind, .negative)
         XCTAssertEqual(view.negativeFen, 200)
         XCTAssertFalse(view.negativeFromSubmit, "进页提示的来源是 negative_fen")
@@ -192,7 +197,11 @@ final class App13a1DeletionPresentationTests: XCTestCase {
 
     /// 钱包摘要读取失败：funds_unavailable，申请置灰（申请前必须展示余额，BR-ID-27）；5xxxx 不伪装成「余额为 0」。
     func testFundsFailedDisablesApply() {
-        let view = DeletionPresentation.view(DeletionInput(read: DeletionRead.none, fundsFailed: true, phoneBound: true))
+        let view = DeletionPresentation.view(DeletionInput(
+            read: DeletionRead.none,
+            fundsFailed: true,
+            phoneBound: true
+        ))
         XCTAssertEqual(view.kind, .fundsUnavailable)
         XCTAssertFalse(view.applyEnabledWhenChecked)
         XCTAssertNil(view.funds, "没读到不显示数字")
@@ -228,112 +237,5 @@ final class App13a1DeletionPresentationTests: XCTestCase {
         let view = DeletionPresentation.view(input)
         XCTAssertFalse(view.applyEnabledWhenChecked)
         XCTAssertFalse(view.waiverEnabled)
-    }
-
-    // MARK: - 【去提现】（G12）
-
-    /// full 会话：除强更进入外都显示；deletion_only：一律不显示（受限会话不给表外入口）。
-    func testGoWithdrawByScopeAndSource() {
-        let sources: [DeletionSource] = [.settings, .forceUpdate, .riskNotice, .error10007, .other]
-        for source in sources {
-            let full = DeletionPresentation.view(ready(scope: DeletionScope.full, source: source))
-            XCTAssertEqual(full.showGoWithdraw, source != .forceUpdate, "full × \(source.rawValue)")
-            let restricted = DeletionPresentation.view(ready(scope: DeletionScope.deletionOnly, source: source))
-            XCTAssertFalse(restricted.showGoWithdraw, "deletion_only × \(source.rawValue)：不显示【去提现】")
-        }
-    }
-
-    /// 负余额、冷静期、读取失败等不可申请的状态下 deletion_only 也不给【去提现】。
-    func testGoWithdrawNeverShownInRestrictedSessionAnyState() {
-        let inputs: [DeletionInput] = [
-            DeletionInput(read: DeletionRead.none, funds: negativeFunds, phoneBound: true, scope: DeletionScope.deletionOnly),
-            DeletionInput(read: DeletionRead.none, funds: funds, phoneBound: true, pending: .unknown,
-                          scope: DeletionScope.deletionOnly),
-            DeletionInput(read: DeletionRead.none, funds: funds, phoneBound: false, scope: DeletionScope.deletionOnly),
-        ]
-        for input in inputs {
-            XCTAssertFalse(DeletionPresentation.view(input).showGoWithdraw, "\(input)")
-        }
-    }
-
-    /// 作用域取值：只有 deletion_only 是受限；其余（空、nil、未知）按 full。
-    func testScopeNormalization() {
-        XCTAssertEqual(DeletionScope.normalized("deletion_only"), DeletionScope.deletionOnly)
-        XCTAssertEqual(DeletionScope.normalized("full"), DeletionScope.full)
-        XCTAssertEqual(DeletionScope.normalized(nil), DeletionScope.full)
-        XCTAssertEqual(DeletionScope.normalized(""), DeletionScope.full)
-    }
-
-    /// 页面状态 → 未决：有待确认卡为 unknown，首次提交在途为 in_flight。
-    func testPendingMapping() {
-        XCTAssertEqual(DeletionPresentation.pending(hasPendingCard: true, submitting: true), .unknown)
-        XCTAssertEqual(DeletionPresentation.pending(hasPendingCard: false, submitting: true), .inFlight)
-        XCTAssertEqual(DeletionPresentation.pending(hasPendingCard: false, submitting: false), .none)
-    }
-
-    // MARK: - 撤回结局（brief §2 第 4 项）
-
-    private func cancelOutcome(_ code: Int?, _ source: DeletionSource) -> DeletionCancelOutcome {
-        DeletionCancelOutcome.of(
-            code: code, source: source, serverKey: { _ in "error.50001" }, errorKey: { "error.\($0)" }
-        )
-    }
-
-    /// 成功：settings → 回 Settings 并轻提示；force_update → 回强更页；其他 → 本页轻提示（G18）。
-    func testCancelSuccessDestinations() {
-        let settings = cancelOutcome(0, .settings)
-        XCTAssertEqual(settings.next, .cancelled)
-        XCTAssertEqual(settings.navigate, .settings)
-        XCTAssertEqual(settings.textKey, DeletionCancelOutcome.withdrawnKey)
-
-        XCTAssertEqual(cancelOutcome(0, .forceUpdate).navigate, .forceUpdate)
-
-        for source in [DeletionSource.riskNotice, .error10007, .other] {
-            let stay = cancelOutcome(0, source)
-            XCTAssertEqual(stay.next, .cancelled, source.rawValue)
-            XCTAssertEqual(stay.navigate, .none, "\(source.rawValue)：留在本页")
-            XCTAssertEqual(stay.textKey, DeletionCancelOutcome.withdrawnKey, "\(source.rawValue)：同一轻提示")
-        }
-    }
-
-    /// 10007：停在冷静期页，提示撤回已不可用，然后重取 getDeletion。
-    func testCancel10007StaysAndRefetches() {
-        let outcome = cancelOutcome(10007, .settings)
-        XCTAssertEqual(outcome.next, .stay)
-        XCTAssertEqual(outcome.navigate, .none)
-        XCTAssertTrue(outcome.refetch, "10007 后重取进度")
-        XCTAssertNotEqual(outcome.textKey, DeletionCancelOutcome.withdrawnKey)
-    }
-
-    /// 42901：停在本页提示限流（禁用期由执行层按 Retry-After 结算）。
-    func testCancel42901Stays() {
-        let outcome = cancelOutcome(42901, .settings)
-        XCTAssertEqual(outcome.next, .stay)
-        XCTAssertEqual(outcome.textKey, "error.42901")
-        XCTAssertEqual(outcome.navigate, .none)
-    }
-
-    /// 5xxxx：统一错误 + trace6，停在本页（不伪装成撤回成功或「没有申请」）。
-    func testCancel5xxxxShowsTrace6() {
-        let outcome = cancelOutcome(50401, .forceUpdate)
-        XCTAssertEqual(outcome.next, .stay)
-        XCTAssertTrue(outcome.showTrace6)
-        XCTAssertEqual(outcome.navigate, .none)
-    }
-
-    /// 无响应：不自动重发，提示「暂时没有收到结果」，重取 getDeletion 核对（共性第 14、33 条）。
-    func testCancelNoResponseReconcilesByRead() {
-        let outcome = cancelOutcome(nil, .settings)
-        XCTAssertEqual(outcome.next, .stay)
-        XCTAssertTrue(outcome.refetch, "结果未知：重取进度")
-        XCTAssertTrue(outcome.reconcile, "结果未知：按读取核对")
-        XCTAssertEqual(outcome.navigate, .none, "核对之前不离页")
-    }
-
-    /// 核对判据：用户撤回的 cancelled 才按撤回成功结算；系统按负余额撤销的不算（G20）。
-    func testCancelledByUserJudgement() {
-        XCTAssertTrue(deletion(Deletion.cancelled, reason: Deletion.reasonUser).cancelledByUser)
-        XCTAssertFalse(deletion(Deletion.cancelled, reason: Deletion.reasonNegative).cancelledByUser)
-        XCTAssertFalse(deletion(Deletion.cooling, canCancel: true).cancelledByUser)
     }
 }

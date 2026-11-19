@@ -109,10 +109,60 @@ public struct DeletionView: Equatable, Sendable {
 /// cancelled 按 initial 判断，是否为负只看这一次 negative_fen（G20）。
 public enum DeletionPresentation {
     public static func view(_ input: DeletionInput) -> DeletionView {
-        let deletion = input.read?.deletion
-        let full = DeletionScope.normalized(input.scope) == DeletionScope.full
-        let canWithdraw = full && input.source != .forceUpdate
+        let maker = Maker(input: input)
+        if input.pending == .unknown {
+            // 待确认卡独立于进度 / 资金读取（共性第 46 条）：资金区与须知保留，勾选与申请置灰
+            return maker.make(.pendingConfirm, withdraw: maker.canWithdraw && input.funds != nil)
+        }
+        return progress(input, maker) ?? form(input, maker)
+    }
+
+    /// 进度决定的几种（读取失败、读取中、冷静期、处理中）；从未申请或 cancelled 为 nil（交给表单规则）。
+    static func progress(_ input: DeletionInput, _ maker: Maker) -> DeletionView? {
+        if input.readFailed || input.read == .bad {
+            return maker.make(.loadFailed)
+        }
+        guard let read = input.read else {
+            return maker.make(.loading)
+        }
+        switch read.deletion?.status {
+        case .some(Deletion.cooling):
+            return maker.make(.cooling, cancel: read.deletion?.canCancel == true)
+        case .some(Deletion.processing), .some(Deletion.done):
+            return maker.make(.processing)
+        default:
+            return nil
+        }
+    }
+
+    /// 说明与条件确认一族（negative > funds_unavailable > 资金读取中 > no_phone_step_up > initial）。
+    static func form(_ input: DeletionInput, _ maker: Maker) -> DeletionView {
         let editable = input.pending == .none
+        if input.blocked30416 {
+            return maker.make(.negative, negative: input.amount30416, fromSubmit: true, cs: true)
+        }
+        if let funds = input.funds, funds.negativeFen > 0 {
+            return maker.make(.negative, negative: funds.negativeFen, cs: true)
+        }
+        if input.fundsFailed {
+            return maker.make(.fundsUnavailable)
+        }
+        guard input.funds != nil else {
+            // 申请前必须展示余额（BR-ID-27）：资金没读到之前申请置灰
+            return maker.make(.initial, waiver: editable)
+        }
+        let kind: DeletionStateKind = input.phoneBound == false ? .noPhone : .initial
+        return maker.make(kind, waiver: editable, apply: editable, withdraw: maker.canWithdraw)
+    }
+
+    /// 按同一份输入拼显示结论。
+    struct Maker {
+        let input: DeletionInput
+
+        /// 【去提现】只在 full 会话、不是从强更进入时（G12）。
+        var canWithdraw: Bool {
+            DeletionScope.normalized(input.scope) == DeletionScope.full && input.source != .forceUpdate
+        }
 
         func make(_ kind: DeletionStateKind, waiver: Bool = false, apply: Bool = false, withdraw: Bool = false,
                   cancel: Bool = false, negative: Int64? = nil, fromSubmit: Bool = false,
@@ -120,47 +170,9 @@ public enum DeletionPresentation {
             DeletionView(
                 kind: kind, waiverEnabled: waiver, applyEnabledWhenChecked: apply, showGoWithdraw: withdraw,
                 showCancel: cancel, negativeFen: negative, negativeFromSubmit: fromSubmit, showContactService: cs,
-                funds: input.funds, deletion: deletion
+                funds: input.funds, deletion: input.read?.deletion
             )
         }
-
-        if input.pending == .unknown {
-            // 待确认卡独立于进度 / 资金读取（共性第 46 条）：资金区与须知保留，勾选与申请置灰
-            return make(.pendingConfirm, withdraw: canWithdraw && input.funds != nil)
-        }
-        if input.readFailed || input.read == .bad {
-            return make(.loadFailed)
-        }
-        guard let read = input.read else {
-            return make(.loading)
-        }
-        if let deletion = read.deletion {
-            switch deletion.status {
-            case Deletion.cooling:
-                return make(.cooling, cancel: deletion.canCancel)
-            case Deletion.processing, Deletion.done:
-                return make(.processing)
-            default:
-                break
-            }
-        }
-        if input.blocked30416 {
-            return make(.negative, negative: input.amount30416, fromSubmit: true, cs: true)
-        }
-        if let funds = input.funds, funds.negativeFen > 0 {
-            return make(.negative, negative: funds.negativeFen, cs: true)
-        }
-        if input.fundsFailed {
-            return make(.fundsUnavailable)
-        }
-        guard input.funds != nil else {
-            // 申请前必须展示余额（BR-ID-27）：资金没读到之前申请置灰
-            return make(.initial, waiver: editable, withdraw: false)
-        }
-        if input.phoneBound == false {
-            return make(.noPhone, waiver: editable, apply: editable, withdraw: canWithdraw)
-        }
-        return make(.initial, waiver: editable, apply: editable, withdraw: canWithdraw)
     }
 
     /// 页面状态里的未决：有待确认卡 → unknown；本进程首次提交在途 → in_flight。
@@ -197,8 +209,9 @@ public struct DeletionCancelOutcome: Equatable, Sendable {
     public let showTrace6: Bool
 
     public static let withdrawnKey = "deletion.withdrawn_toast"
-    /// TODO(N-37) 草稿键：撤回已不可用（10007）、撤回结果未知。
-    public static let expiredKey = "deletion.cooling.cancel_expired"
+    /// 撤回得到 10007（冷静期已过）：显示契约的 error.10007（D10-2094 ①）。
+    public static let expiredKey = "error.10007"
+    /// TODO(N-37) 草稿键：撤回结果未知。
     public static let unknownKey = "deletion.cooling.cancel_unknown"
 
     /// `code`：nil = 没有统一外壳（超时、断连、网关错误页）；0 = 成功。`code` 为 5xxxx 时 `serverKey` 是统一错误文案键。

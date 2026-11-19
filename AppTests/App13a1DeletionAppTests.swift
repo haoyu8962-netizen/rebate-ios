@@ -22,12 +22,14 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
     private static let deletionPath = "GET /v1/me/deletion"
 
     private func cooling(_ canCancel: Bool) -> String {
-        "{\"status\":\"cooling\",\"apply_at\":\"2026-10-02T09:30:00+08:00\",\"cooling_until\":\"2026-10-09T09:30:00+08:00\","
+        "{\"status\":\"cooling\",\"apply_at\":\"2026-10-02T09:30:00+08:00\","
+            + "\"cooling_until\":\"2026-10-09T09:30:00+08:00\","
             + "\"can_cancel\":\(canCancel),\"cancelled_at\":null,\"cancel_reason\":null,\"processed_at\":null}"
     }
 
     private var cancelled: String {
-        "{\"status\":\"cancelled\",\"apply_at\":\"2026-10-02T09:30:00+08:00\",\"cooling_until\":\"2026-10-09T09:30:00+08:00\","
+        "{\"status\":\"cancelled\",\"apply_at\":\"2026-10-02T09:30:00+08:00\","
+            + "\"cooling_until\":\"2026-10-09T09:30:00+08:00\","
             + "\"can_cancel\":false,\"cancelled_at\":\"2026-10-03T10:00:00+08:00\",\"cancel_reason\":\"user\","
             + "\"processed_at\":null}"
     }
@@ -152,7 +154,7 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
 
     /// 受限会话下打开注销页；会话刷新成 full（同账号、同登录世代）后在会话同步出口：内存 step_up_token 清空，注销页按新作用域重建（旧执行器作废），
     /// 入口来源沿用第一次交接的结论（只交接一次）。
-    func testRestrictedToFullClearsTokensAndRebuildsPage() async throws {
+    func testRestrictedToFullClearsTokensAndRebuildsPage() throws {
         let fixture = fixture(scope: "deletion_only")
         let (_, host) = try push(fixture, below: ["Settings"])
         let old = host.controller
@@ -185,8 +187,8 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
         script.ok(Self.deletionPath, cooling(true))
         script.ok("POST /v1/me/deletion/cancel", cancelled)
         let fixture = fixture()
-        var toasted: [UUID] = []
-        fixture.wallet.settingsDeletionToast = { toasted.append($0) }
+        let toasted = App13a1ToastLog()
+        fixture.wallet.settingsDeletionToast = { toasted.ids.append($0) }
         let (_, host) = try push(fixture, below: ["Settings"])
         let settings = try XCTUnwrap(fixture.router.path.first)
         let controller = host.controller
@@ -196,7 +198,7 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
 
         controller.cancelDeletion(version: controller.state.version, owner: controller.identity.owner)
         await waitUntil("没有回到 Settings") { fixture.router.path.map(\.id) == [settings.id] }
-        XCTAssertEqual(toasted, [settings.id], "在 Settings 那个导航实例上轻提示")
+        XCTAssertEqual(toasted.ids, [settings.id], "在 Settings 那个导航实例上轻提示")
         XCTAssertEqual(WalletStubProtocol.requests("POST", "/v1/me/deletion/cancel").count, 1)
         XCTAssertTrue(WalletStubProtocol.requests("POST", "/v1/me/deletion/cancel").first?.body.isEmpty ?? false,
                       "撤回没有请求体")
@@ -232,4 +234,25 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
         let host = try XCTUnwrap(entry.controller as? MePageHost<DeleteAccountController>)
         XCTAssertEqual(host.controller.identity.source, .settings, "来源不从路由参数取")
     }
+
+    // MARK: - D10-2094 冷静期文案口径
+
+    /// D10-2094 ②（本单 brief.md「待改」）：can_cancel=false 只是不显示【撤回注销】，时间线停在「注销处理」一步（契约 deletion.timeline.processing /
+    /// processing_desc），不显示自拟的 cannot_cancel 句子；撤回 10007 不用自拟的 cancel_expired（D10-2094 ①）。页面源码核对（进程内读不到 SwiftUI 文本）。
+    func testCoolingPageUsesContractTimelineWithoutSelfDraftedSentences() throws {
+        let url = WalletVisualData.repo()
+            .appendingPathComponent("Packages/Features/Sources/Me/DeleteAccountScreen.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+            .replacingOccurrences(of: "(?m)^\\s*//.*$", with: "", options: .regularExpression)
+        XCTAssertFalse(source.contains("deletion.cooling.cannot_cancel"), "can_cancel=false 不新造句")
+        XCTAssertFalse(source.contains("deletion.cooling.cancel_expired"), "撤回 10007 不用自拟句")
+        XCTAssertTrue(source.contains("\"deletion.timeline.processing\""), "时间线有「注销处理」一步")
+        XCTAssertTrue(source.contains("\"deletion.timeline.processing_desc\""), "「注销处理」说明用契约键")
+    }
+}
+
+/// 记下设置页轻提示落在哪个导航实例上。
+@MainActor
+final class App13a1ToastLog {
+    var ids: [UUID] = []
 }
