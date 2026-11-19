@@ -240,9 +240,13 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
     /// D10-2094 ②（本单 brief.md「待改」）：can_cancel=false 只是不显示【撤回注销】，时间线停在「注销处理」一步（契约 deletion.timeline.processing /
     /// processing_desc），不显示自拟的 cannot_cancel 句子；撤回 10007 不用自拟的 cancel_expired（D10-2094 ①）。页面源码核对（进程内读不到 SwiftUI 文本）。
     func testCoolingPageUsesContractTimelineWithoutSelfDraftedSentences() throws {
-        let url = WalletVisualData.repo()
-            .appendingPathComponent("Packages/Features/Sources/Me/DeleteAccountScreen.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        // 注销页源码可拆文件（DeleteAccountScreen.swift 与 DeleteAccountScreen+*.swift），全部读入再核
+        let root = WalletVisualData.repo().appendingPathComponent("Packages/Features/Sources/Me")
+        let names = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .filter { $0.hasPrefix("DeleteAccountScreen") && $0.hasSuffix(".swift") }.sorted()
+        XCTAssertTrue(names.contains("DeleteAccountScreen.swift"))
+        let source = try names.map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
             .replacingOccurrences(of: "(?m)^\\s*//.*$", with: "", options: .regularExpression)
         XCTAssertFalse(source.contains("deletion.cooling.cannot_cancel"), "can_cancel=false 不新造句")
         XCTAssertFalse(source.contains("deletion.cooling.cancel_expired"), "撤回 10007 不用自拟句")
