@@ -31,7 +31,8 @@ public extension DeleteAccountController {
     }
 
     func onGuide(_ route: String) {
-        guard alive else { return }
+        // 受限会话（deletion_only）只发 BR-ID-01 受限表内的操作：共用引导（绑手机号 / 实名 / 收款账号）不导航，只留结局提示（首轮评审 S3-4）
+        guard alive, identity.scope == DeletionScope.full else { return }
         ports?.open(route, from: page)
     }
 

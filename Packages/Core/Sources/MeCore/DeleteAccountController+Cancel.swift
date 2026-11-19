@@ -92,6 +92,8 @@ extension DeleteAccountController {
 
     /// 撤回成功的结算（直接成功、或结果未知后核对查明已撤回）：推进读取世代、清勾选与 30416 标记，按来源去向（G18）。
     func cancelSucceeded(_ deletion: Deletion?) {
+        // 核对查明已撤回时清掉「暂时没有收到结果」提示，与直接成功同一结局（首轮评审 S2-1）
+        state.notice = nil
         state.waiver = false
         state.blocked30416 = false
         state.amount30416 = nil

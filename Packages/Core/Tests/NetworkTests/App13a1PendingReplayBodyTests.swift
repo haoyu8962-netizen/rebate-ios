@@ -132,4 +132,48 @@ final class App13a1PendingReplayBodyTests: XCTestCase {
             XCTAssertNil(harness.backend.read(account: "account-A", key: key), "\(label)：成功后记录删除")
         }
     }
+
+    /// 按实际发出的请求重算 X-Sign：方法、路径、该次的 X-Timestamp / X-Nonce、请求体字节（`bodyBytes`）。
+    private func expectedSign(
+        _ request: StubURLProtocol.Recorded, bodyBytes: Data, _ label: String
+    ) throws -> String {
+        let timestamp = try XCTUnwrap(request.header("X-Timestamp"), "\(label)：X-Timestamp")
+        let nonce = try XCTUnwrap(request.header("X-Nonce"), "\(label)：X-Nonce")
+        return RequestSigner.sign(
+            installSecret: TestDevice().installSecret ?? "",
+            signingString: RequestSigner.signingString(
+                method: request.method, pathWithQuery: request.path, timestamp: timestamp, nonce: nonce,
+                body: bodyBytes
+            )
+        )
+    }
+
+    /// 首轮评审 S3-2：提现申请、改收款的待确认重发，按请求体字节重算签名与 X-Sign 一致；签名输入的请求体与首次发送相同
+    /// （用首次的体字节配重发的时间戳 / 随机串也得到重发的 X-Sign），两个确认入口都一样。
+    func testConfirmReplaySignsOriginalBodyBytes() async throws {
+        for item in [withdrawal, payout] {
+            for entry in Entry.allCases {
+                StubURLProtocol.install { _ in ok() }
+                let harness = makeHarness()
+                let (key, first) = try await makeUnknown(harness, item)
+                let label = "\(item.operationId) / \(entry)"
+                let originalBytes = Data((item.body ?? "").utf8)
+                XCTAssertFalse(originalBytes.isEmpty, "\(label)：前提：有请求体")
+                let firstSign = try expectedSign(first, bodyBytes: Data(first.body.utf8), label)
+                XCTAssertEqual(first.header("X-Sign"), firstSign, "\(label)：首次签名按请求体字节")
+
+                StubURLProtocol.install { _ in ok() }
+                let result = await confirm(harness, item, key: key, via: entry)
+                XCTAssertTrue(result.isSuccess, "\(label)：\(result)")
+                let replay = try XCTUnwrap(StubURLProtocol.requests(path: item.path).first, "\(label)：没有重发")
+                let replaySign = try expectedSign(replay, bodyBytes: Data(replay.body.utf8), label)
+                XCTAssertEqual(replay.header("X-Sign"), replaySign, "\(label)：重发签名按请求体字节")
+                XCTAssertEqual(
+                    replay.header("X-Sign"), try expectedSign(replay, bodyBytes: originalBytes, label),
+                    "\(label)：重发的签名输入用原体字节（与首次发送相同）"
+                )
+                XCTAssertEqual(Data(replay.body.utf8), Data(first.body.utf8), "\(label)：签名输入的请求体首发与重发一致")
+            }
+        }
+    }
 }
