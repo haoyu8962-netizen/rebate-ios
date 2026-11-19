@@ -22,8 +22,9 @@ final class WalletPageEntry {
     lazy var identityConfirmed: (WalletOwner) -> Void = self.sessionChanged
     /// 身份确认后统一补做中止读取与迟到结果的执行器（FU-IOS-0712 整体重理：钱包摘要、提现、提现记录、收款账号、实名、劳务协议都接）。
     weak var resumable: IdentityResumable?
-    /// 会话同步出口里的作用域核对（只有注销页接：固定作用域与此刻不同就按新作用域重建，APP-13a-1）。
-    var scopeCheck: (() -> Void)?
+    /// 会话同步出口里的作用域核对（只有注销页接：固定作用域与此刻作用域——同步出口那一次读取、已按 full 归一——不同就按新作用域重建，
+    /// APP-13a-1）。非 nil 也是「页面表里有注销页」的判据。
+    var scopeCheck: ((String) -> Void)?
 
     /// 构造时（或最近一次换上身份时）那一次身份读取是否已确认（RC-02）。
     var identityKnown: Bool {

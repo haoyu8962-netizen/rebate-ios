@@ -116,24 +116,43 @@ extension AppWallet: DeleteAccountPorts {
         )
         entryRef = entry
         entry.resumable = host.controller
-        entry.scopeCheck = { [weak host, unowned self] in
-            guard let host, host.controller.identity.scope != self.deletionScopeNow() else { return }
+        // 作用域核对用会话同步出口那一次读取（不另读令牌存储）
+        entry.scopeCheck = { [weak host, unowned self] scope in
+            guard let host, host.controller.identity.scope != scope else { return }
             rebuild(currentOwner())
+        }
+        // 起点：没在跟踪作用域时，以本页固定身份的作用域（构造时那一次读取）为起点，保证建页后、下一次同步前发生的受限 → full 也能清 token
+        if lastDeletionScope == nil {
+            lastDeletionScope = host.controller.identity.scope
         }
         return entry
     }
 
     /// 会话同步出口（`checkSession` 末尾）：作用域变了就清空内存 step-up token（受限 → full，brief §2.7），栈里的注销页按新作用域重建；
     /// 强更页标签按此刻会话重取。
+    /// 只在需要时读作用域（读作用域要读一次令牌存储 / 钥匙串；`checkSession` 是所有钱包页的高频路径，`entry(for:)` 的建页快照也依赖读取
+    /// 次数不变）。需要 = 页面表里有注销页，或上次看到的是受限作用域（deletion_only）：
+    /// - 受限会话的 step-up token 只可能由注销页的二次验证签发（StepUpTokenCache 没有只读的判空接口、且在资金守卫锁定文件里，不从外面
+    ///   判空），有注销页就一直跟踪，注销页出栈后只要上次仍是受限就继续跟踪，直到看到 full / 无会话、清过 token 为止；
+    /// - 不需要时不读，并把 `lastDeletionScope` 置 nil：下次重新需要时不拿停止跟踪前的陈旧值比较（避免误清 / 漏清），起点由注销页建页时
+    ///   的固定作用域补上（`deletionEntry`）。
     func resyncDeletionScope() {
-        let scope = client.isolatedSessionScope.map { DeletionScope.normalized($0) }
-        if let last = lastDeletionScope, last != scope {
-            deps.tokens.onSessionChanged()
+        let deletionPages = pages.values.compactMap(\.scopeCheck)
+        if deletionPages.isEmpty, lastDeletionScope != DeletionScope.deletionOnly {
+            lastDeletionScope = nil
+        } else {
+            let raw = client.isolatedSessionScope
+            let scope = raw.map { DeletionScope.normalized($0) }
+            if let last = lastDeletionScope, last != scope {
+                deps.tokens.onSessionChanged()
+            }
+            lastDeletionScope = scope
+            let pageScope = DeletionScope.normalized(raw)
+            for check in deletionPages {
+                check(pageScope)
+            }
         }
-        lastDeletionScope = scope
-        for entry in pages.values {
-            entry.scopeCheck?()
-        }
+        // 自身只在强更页显示时才读身份（`showing` 先判），不显示时零读取
         forceUpdateDeletion.sessionMaybeChanged()
     }
 }
