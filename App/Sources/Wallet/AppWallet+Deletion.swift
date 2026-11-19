@@ -91,7 +91,8 @@ extension AppWallet: DeleteAccountPorts {
         let host = MePageHost(make(currentOwner()))
         let texts = AccountDraftTexts()
         let gates = gates
-        var entryRef: WalletPageEntry?
+        // 弱引用：页面表持有 entry，entry.sessionChanged 持有 rebuild；这里强持有会成环，出栈后 entry / host / 执行器都放不掉
+        weak var entryRef: WalletPageEntry?
         // 整页按新身份重建（共性第 15、36 条）：同步作废旧执行器（读请求、面板、确认框、勾选），换上新执行器并重读
         let rebuild: (WalletOwner) -> Void = { [weak host] owner in
             guard let host else { return }

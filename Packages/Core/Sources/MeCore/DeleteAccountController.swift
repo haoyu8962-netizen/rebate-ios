@@ -197,7 +197,8 @@ public final class DeleteAccountController: ObservableObject, FlowHost, Identity
         let api = deps.api
         Task { @MainActor [weak self] in
             await api.restorePending()
-            guard let self, alive else { return }
+            // ports 在 App 里就是 AppWallet（也是 deps.env，unowned）：弱引用已空说明钱包已释放，不再碰 env
+            guard let self, alive, ports != nil else { return }
             flow.syncPending()
         }
         watchGates()
