@@ -75,9 +75,12 @@ extension DeleteAccountBody {
             let applied = CouliFormat.timeListPast(epochMillis: deletion.applyAtMillis, nowEpochMillis: now)
             // 冷静期天数取服务端两个时刻的差（只用于显示，不据此判断能否撤回，G15）
             let days = max(1, (deletion.coolingUntilMillis - deletion.applyAtMillis + 43_200_000) / 86_400_000)
+            let head = DeletionCoolingHead.of(showCancel: view.showCancel)
+            let workdays = ["process_workdays": "\(AccountDraftTexts.processWorkdays)"]
             card {
-                bodyText(texts.text("deletion.cooling.badge"), secondary: true)
-                bodyText(texts.text("deletion.cooling.title"), weight: .couliSemibold)
+                bodyText(texts.text(head.badgeKey), secondary: true)
+                bodyText(head.titleNeedsWorkdays ? texts.format(head.titleKey, workdays) : texts.text(head.titleKey),
+                         weight: .couliSemibold)
                     .accessibilityAddTraits(.isHeader)
                 // can_cancel=false：不显示撤回与撤回截止句，时间线停在「注销处理」一步（G15，D10-2094 ②，不新造句）
                 if view.showCancel {

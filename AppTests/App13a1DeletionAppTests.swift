@@ -252,6 +252,9 @@ final class App13a1DeletionAppTests: WalletFlowTestCase {
         XCTAssertFalse(source.contains("deletion.cooling.cancel_expired"), "撤回 10007 不用自拟句")
         XCTAssertTrue(source.contains("\"deletion.timeline.processing\""), "时间线有「注销处理」一步")
         XCTAssertTrue(source.contains("\"deletion.timeline.processing_desc\""), "「注销处理」说明用契约键")
+        // D10-2126 ②：冷静期卡片的徽标与标题只经 DeletionCoolingHead 按 can_cancel 取
+        XCTAssertTrue(source.contains("DeletionCoolingHead.of(showCancel: view.showCancel)"), "卡片头按 showCancel 取键")
+        XCTAssertFalse(source.contains("texts.text(\"deletion.cooling.badge\")"), "徽标不直接写冷静期键")
     }
 }
 
