@@ -13,7 +13,7 @@ import XCTest
 /// 现状绿、改后仍须绿：这一组钉住「作用域核对只加在注销 flow 上」，防止把核对误加到提现 / 收款的 WriteTicket、发送前闸门或面板结算上
 /// （变异「把核对误加到提现 ticket」应让本组变红）。作用域变化同 (b) 组：存储里只换 scope，再走会话同步出口。
 @MainActor
-final class FuIosWalletSettlementScopeZeroChangeTests: FuIosWalletSettlementScopeTestCase {
+final class FuIosWalletScopeZeroChangeTests: FuIosWalletSettlementScopeTestCase {
     private func payoutActions(_ controller: PayoutAccountController) -> PayoutActions {
         PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
     }
