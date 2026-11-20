@@ -29,7 +29,8 @@ final class WithdrawVisualFundsGuardTests: XCTestCase {
     }
 
     func testLogicFilesUnchanged() throws {
-        XCTAssertEqual(WithdrawVisualBaseline.logicFiles.count, 33)
+        // APP-13a-2（#24）：登记 StepUpController+PhoneChange.swift（只转发、已有文件零字节变化），33 -> 34
+        XCTAssertEqual(WithdrawVisualBaseline.logicFiles.count, 34)
         for (path, digest) in WithdrawVisualBaseline.logicFiles {
             XCTAssertEqual(try sha(file(path)), digest, "\(path) 被改了：资金逻辑零改动（brief §3）")
         }
