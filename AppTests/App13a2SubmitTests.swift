@@ -131,6 +131,8 @@ final class App13a2SubmitTests: App13a2TestCase {
     /// 重放再遇 10003 不循环（不再弹面板、不再发）。
     func testSubmit10003ReplaysOnceWithSameKeyAndBody() async throws {
         script.on(Self.bindWrite, Self.code(10003), Self.code(10003))
+        // 倒计时 5 秒：第 1 步与面板共用同一份「账号 + action」发码截止时间（brief §1、共性第 31 条），面板打开时沿用、不自动发码
+        script.on(Self.smsSend, Self.code(0, "{\"resend_after_sec\":5,\"expires_in_sec\":300}"))
         let fixture = fixture()
         let (_, controller) = try await readyToSubmit(fixture)
         await submit(controller)
@@ -138,6 +140,13 @@ final class App13a2SubmitTests: App13a2TestCase {
         await waitUntil("面板没有打开") { stepUp.state?.phase == .ready }
         XCTAssertEqual(stepUp.state?.action, "phone_change")
         XCTAssertEqual(stepSms.last?.body, Self.oldBody, "面板发码体同第 1 步")
+        XCTAssertGreaterThan(stepUp.state?.resendLeftSec ?? 0, 0, "面板沿用第 1 步的倒计时")
+        XCTAssertEqual(stepSms.count, 1, "面板打开不自动发码（共用截止时间）")
+        await waitUntil("面板倒计时没有结束", timeout: 8) { stepUp.state?.resendLeftSec == 0 }
+        StepUpActions.make(stepUp, try XCTUnwrap(stepUp.state)).resend()
+        await waitUntil("面板【重新获取】没有发码") { self.stepSms.count == 2 }
+        XCTAssertEqual(stepSms.last?.body, Self.oldBody, "面板发码体同第 1 步")
+        await waitUntil("重新获取没有回来") { stepUp.state?.phase == .ready }
         let panel = try XCTUnwrap(stepUp.state)
         StepUpActions.make(stepUp, panel).code("112233")
         StepUpActions.make(stepUp, try XCTUnwrap(stepUp.state)).verify()
@@ -150,7 +159,6 @@ final class App13a2SubmitTests: App13a2TestCase {
         await quietWindow(1.0)
         XCTAssertEqual(binds.count, 2, "再遇 10003 不循环")
         XCTAssertNil(stepUp.state, "不再弹面板")
-        XCTAssertEqual(stepSms.count, 2, "只有第 1 步与面板各发 1 次码")
         XCTAssertNotEqual(controller.state.step, .done)
     }
 

@@ -207,7 +207,26 @@ struct SettingsRouteContent: View {
 
     var body: some View {
         SettingsScreen(host: host)
+            .environment(\.phoneChangeNumberField, Self.numberField)
             .background(PhoneChangeStepUpLayer(settings: host.controller, gates: gates).id(host.serial))
+    }
+
+    /// 换号第 2 步的新号输入框：Login 的共用手机号组件（同 BindPhone 页用法：「+86」前缀、读屏标签、清除按钮、错误描边与说明，
+    /// 电话键盘全 App 只写一处，BindPhoneLayoutTests）。
+    static let numberField: @MainActor @Sendable (PhoneChangeNumberInput) -> AnyView = { input in
+        var config = PhoneNumberInput<PhoneChangeField?>.Config()
+        config.prefix = LoginDraftTexts.text(LoginKeys.phonePrefix)
+        config.placeholder = input.placeholder
+        config.label = input.label
+        config.clearLabel = LoginDraftTexts.text(LoginKeys.phoneClear)
+        config.identifier = input.identifier
+        config.hint = input.hint
+        config.error = input.error
+        config.locked = input.locked
+        config.showsClear = input.showsClear
+        return AnyView(PhoneNumberInput(
+            text: input.text, focus: input.focus, focusValue: input.focusValue, config: config, onClear: input.onClear
+        ))
     }
 }
 

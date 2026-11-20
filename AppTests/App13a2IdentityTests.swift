@@ -143,6 +143,8 @@ final class App13a2IdentityTests: App13a2TestCase {
 
     /// T12（共性第 27、28、35 条）：第 2 步的页面返回与系统返回（设置页 closeSub）都回第 1 步（不提交），并重置第 2 步瞬时状态。
     func testBothBackPathsReturnToStep1() async throws {
+        // 倒计时 1 秒：第 1 步的发码截止时间在验证成功后不清零（brief §1、共性第 31 条），回到第 1 步要等它过了才能再发
+        script.on(Self.smsSend, Self.code(0, "{\"resend_after_sec\":1,\"expires_in_sec\":300}"))
         let fixture = fixture()
         let (settings, controller) = try await readyToSubmit(fixture)
         act(controller).back()
@@ -153,6 +155,7 @@ final class App13a2IdentityTests: App13a2TestCase {
         XCTAssertNil(controller.state.phoneError)
         XCTAssertNil(controller.state.codeError)
         XCTAssertEqual(settings.state.sub, .phoneChange, "仍在子页")
+        await waitUntil("第 1 步倒计时没有结束", timeout: 8) { controller.oldCodeSendEnabled }
         await passStep1(controller)
         fillStep2(controller)
         SettingsActions.make(settings, settings.state).closeSub()

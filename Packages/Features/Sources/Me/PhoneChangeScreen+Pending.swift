@@ -22,7 +22,8 @@ struct PhoneChangePendingView: View {
                 VStack(alignment: .leading, spacing: CouliSpacing.s1) {
                     MeText(texts.text("pending_confirm.title"), style: .body, weight: .couliSemibold,
                            probe: "phoneChange.pending.title")
-                    MeText(texts.format("pending_confirm.phone_change.desc", ["phone": card.maskedPhone ?? ""]),
+                    let phone = card.submittedPhoneDigits ?? ""
+                    MeText(texts.format("pending_confirm.phone_change.desc", ["phone": phone]),
                            style: .body, monospacedDigits: true, probe: "phoneChange.pending.desc")
                 }
                 .foregroundColor(CouliColor.statusWarningText)
@@ -31,7 +32,7 @@ struct PhoneChangePendingView: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isStaticText)
             VStack(alignment: .leading, spacing: CouliSpacing.s1) {
-                summaryRow(texts.text("bind_phone.pending.phone_label"), card.maskedPhone ?? "")
+                summaryRow(texts.text("bind_phone.pending.phone_label"), card.submittedPhoneDigits ?? "")
                 summaryRow(texts.text("bind_phone.pending.time_label"), Self.time(card.submittedAtMillis))
             }
             ViewThatFits(in: .horizontal) {

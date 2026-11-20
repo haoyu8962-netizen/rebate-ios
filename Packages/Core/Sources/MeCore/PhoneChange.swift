@@ -85,6 +85,11 @@ public struct PhoneChangePendingCard: Equatable, Sendable {
         self.maskedPhone = maskedPhone
         self.submittedAtMillis = submittedAtMillis
     }
+
+    /// 页面读的提交号码（就是 `maskedPhone`：本机脱敏的新号，不是当前号；Features/Me 按 G-S04 不出现脱敏当前号的字样，换名读）。
+    public var submittedPhoneDigits: String? {
+        maskedPhone
+    }
 }
 
 /// 换号子页的页面状态（token 不在这里：只在执行器内存，带失效世代，共性第 39、43 条）。
@@ -118,6 +123,11 @@ public struct PhoneChangeState: Equatable, Sendable {
     public var version = 0
 
     public init() {}
+
+    /// Done 页读的新号（就是 `doneMaskedPhone`：实际发送的固定摘要；Features/Me 换名读，同 `submittedPhoneDigits`）。
+    public var donePhoneDigits: String? {
+        doneMaskedPhone
+    }
 }
 
 // MARK: - App 给的端口（D10-2203 ①：MeCore 定端口，App 用 BindPhoneService 适配；首次绑定代码不搬家）

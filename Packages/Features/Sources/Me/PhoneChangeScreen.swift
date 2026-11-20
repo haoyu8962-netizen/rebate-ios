@@ -11,6 +11,7 @@ struct PhoneChangeView: View {
     @ObservedObject var controller: PhoneChangeController
     @State private var announced = 0
     @FocusState private var focus: PhoneChangeField?
+    @Environment(\.phoneChangeNumberField) private var numberField
 
     var texts: MeTexts {
         controller.texts
@@ -118,20 +119,29 @@ struct PhoneChangeView: View {
         }
     }
 
+    /// 新号输入框：用 App 注入的共用手机号组件（Login PhoneNumberField，电话键盘、读屏「新手机号 +86」、错误描边，全 App 只写一处，
+    /// D10-1223）；没注入（视觉替身等）时退回普通单行框。
+    @ViewBuilder
     private func phoneField(_ state: PhoneChangeState, _ actions: PhoneChangeActions) -> some View {
         let error = state.phoneError.map { $0.message(texts) }
         let phone = Binding(get: { state.newPhone }, set: { actions.newPhone($0) })
-        return TextField(texts.text("phone_change.new_label"), text: phone)
-            .couliFont(.body, monospacedDigits: true)
-            .keyboardType(.phonePad)
-            .textContentType(.telephoneNumber)
-            .focused($focus, equals: .newPhone)
-            .accessibilityLabel(Text(verbatim: texts.text("phone_change.new_label")))
-            .accessibilityHint(Text(verbatim: error ?? ""))
-            .accessibilityIdentifier("phoneChange.newPhone")
-            .padding(.horizontal, CouliSpacing.s3)
-            .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
-            .background(fieldBorder(error: error != nil, focused: focus == .newPhone))
+        if let numberField {
+            numberField(PhoneChangeNumberInput(
+                text: phone, focus: $focus, label: texts.text("phone_change.new_label"),
+                placeholder: texts.text("phone_change.new_label"), hint: error ?? "", error: error != nil,
+                locked: state.submitting, identifier: "phoneChange.newPhone", onClear: { actions.newPhone("") }
+            ))
+        } else {
+            TextField(texts.text("phone_change.new_label"), text: phone)
+                .couliFont(.body, monospacedDigits: true)
+                .focused($focus, equals: .newPhone)
+                .accessibilityLabel(Text(verbatim: texts.text("phone_change.new_label")))
+                .accessibilityHint(Text(verbatim: error ?? ""))
+                .accessibilityIdentifier("phoneChange.newPhone")
+                .padding(.horizontal, CouliSpacing.s3)
+                .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum)
+                .background(fieldBorder(error: error != nil, focused: focus == .newPhone))
+        }
     }
 
     private func codeRow(code: String, error: MeNotice?, field: PhoneChangeField, onChange: @escaping (String) -> Void,
@@ -206,7 +216,7 @@ struct PhoneChangeView: View {
                    probe: "phoneChange.done.title")
                 .foregroundColor(CouliColor.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            MeText(texts.format("phone_change.done.desc", ["phone": state.doneMaskedPhone ?? ""]), style: .body,
+            MeText(texts.format("phone_change.done.desc", ["phone": state.donePhoneDigits ?? ""]), style: .body,
                    monospacedDigits: true, probe: "phoneChange.done.desc")
                 .foregroundColor(CouliColor.textSecondary)
                 .multilineTextAlignment(.center)
@@ -293,6 +303,42 @@ struct PhoneChangePrimary {
     let action: () -> Void
 }
 
-enum PhoneChangeField: Hashable {
+/// 子页里的输入焦点（新号输入框由 App 注入时也用它，底部栏据此判断键盘是否弹起）。
+public enum PhoneChangeField: Hashable {
     case oldCode, newPhone, newCode
+}
+
+/// App 注入新号输入框时拿到的参数（Features 之间不依赖：共用手机号组件在 Features/Login，由 App 套进来）。
+@MainActor
+public struct PhoneChangeNumberInput {
+    public let text: Binding<String>
+    public let focus: FocusState<PhoneChangeField?>.Binding
+    public let label: String
+    public let placeholder: String
+    public let hint: String
+    public let error: Bool
+    public let locked: Bool
+    public let identifier: String
+    public let onClear: () -> Void
+
+    /// 新号框的焦点值；清除按钮只在聚焦且非空时出现（同 BindPhone 页）。
+    public var focusValue: PhoneChangeField? {
+        .newPhone
+    }
+
+    public var showsClear: Bool {
+        focus.wrappedValue == .newPhone && !text.wrappedValue.isEmpty && !locked
+    }
+}
+
+/// 新号输入框的构造（App 给；nil = 用子页自带的普通单行框）。
+public struct PhoneChangeNumberFieldKey: EnvironmentKey {
+    public static let defaultValue: (@MainActor @Sendable (PhoneChangeNumberInput) -> AnyView)? = nil
+}
+
+public extension EnvironmentValues {
+    var phoneChangeNumberField: (@MainActor @Sendable (PhoneChangeNumberInput) -> AnyView)? {
+        get { self[PhoneChangeNumberFieldKey.self] }
+        set { self[PhoneChangeNumberFieldKey.self] = newValue }
+    }
 }

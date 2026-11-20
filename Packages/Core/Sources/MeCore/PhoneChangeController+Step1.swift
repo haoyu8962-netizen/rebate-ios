@@ -128,10 +128,6 @@ extension PhoneChangeController {
     }
 
     private func enterStep2() {
-        // 这次的验证码已经用掉：本槽位的「重新获取」倒计时作废，之后 10003 面板可以立即发新码（交回「测试 / 口径」第 1 条）
-        if let slot = oldSlot, wallet.sms.remaining(slot, now: wallet.env.nowMillis()) > 0 {
-            wallet.sms.start(slot, deadline: wallet.env.nowMillis())
-        }
         stepGen += 1
         oldTicker?.cancel()
         oldTicker = nil
