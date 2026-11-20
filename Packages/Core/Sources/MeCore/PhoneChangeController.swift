@@ -205,7 +205,7 @@ public final class PhoneChangeController: ObservableObject {
         // 10003 面板自己的发码 / 验证遇 30414（换号开关关闭）：与第 1 步、提交、确认同一处理（D10-2203 补 (b)）。@Published 在赋值前
         // 发出，这里不同步改面板，排到下一拍再核对一次
         let unavailable = Self.unavailableKey
-        panel.$state.map { $0?.error?.key == unavailable }.removeDuplicates().filter { $0 }
+        panel.$state.map { $0?.error?.key == unavailable }.removeDuplicates().filter(\.self)
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in self?.panelUnavailable() }
             }.store(in: &watches)

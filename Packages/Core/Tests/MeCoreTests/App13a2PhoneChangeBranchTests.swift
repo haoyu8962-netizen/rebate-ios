@@ -71,7 +71,7 @@ final class App13a2PhoneChangeBranchTests: XCTestCase {
     }
 
     /// S2-4 同口径：确认得到强更 10405 → 子页存活、待确认卡保留、不弹面板、不回第 2 步。
-    func testConfirmForced10405BranchKeepsPendingWhileAlive() async throws {
+    func testConfirmForced10405BranchKeepsPendingWhileAlive() async {
         let fixture = make(pending: true)
         await enterPending(fixture)
         let controller = fixture.controller
