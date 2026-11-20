@@ -113,7 +113,12 @@ final class StepUpVisualFundsGuardTests: XCTestCase {
         // APP-13a-2（#24）：换号页落地并补了真点用例（App13a2StepUpTapTests），清单加换号页调用点这一项
         XCTAssertEqual(
             hits.sorted(),
-            ["AppMe+PhoneChange.swift", "AppWallet+Deletion.swift", "PayoutAccountScreen.swift", "WithdrawScreen.swift"],
+            [
+                "AppMe+PhoneChange.swift",
+                "AppWallet+Deletion.swift",
+                "PayoutAccountScreen.swift",
+                "WithdrawScreen.swift",
+            ],
             "二次验证半屏的页面清单变了"
         )
         for page in ["WithdrawScreen.swift", "PayoutAccountScreen.swift"] {
