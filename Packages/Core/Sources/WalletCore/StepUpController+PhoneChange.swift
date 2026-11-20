@@ -55,12 +55,24 @@ public extension WalletSettlement {
     /// 发码结果的共享结算（即 `settleSms`：截止时间取到达时刻，释放本次占用）。返回成功时的重新获取截止时间（不是成功为 nil），
     /// 页面只在自己仍有效时拿它起倒计时。
     @discardableResult
-    func settleStepUpSms(
-        slot: SmsDeadlines.Slot, ticket: Int, result: ApiResult, arrived: Int64, owner: WalletOwner,
-        sms: SmsDeadlines, gate: RetryAfterGate
-    ) -> Int64? {
-        let arrival = SmsArrival(slot: slot, ticket: ticket, result: result, arrived: arrived)
+    func settleStepUpSms(_ sent: StepUpSmsSent, owner: WalletOwner, sms: SmsDeadlines, gate: RetryAfterGate) -> Int64? {
+        let arrival = SmsArrival(slot: sent.slot, ticket: sent.ticket, result: sent.result, arrived: sent.arrived)
         settleSms(arrival, owner: owner, sms: sms, gate: gate)
         return arrival.deadline
+    }
+}
+
+/// 一次发码的结果与到达时刻（`settleStepUpSms` 的入参；同内部 `SmsArrival`）：槽位、占用票据、结果、到达时刻。
+public struct StepUpSmsSent: Sendable {
+    public let slot: SmsDeadlines.Slot
+    public let ticket: Int
+    public let result: ApiResult
+    public let arrived: Int64
+
+    public init(slot: SmsDeadlines.Slot, ticket: Int, result: ApiResult, arrived: Int64) {
+        self.slot = slot
+        self.ticket = ticket
+        self.result = result
+        self.arrived = arrived
     }
 }

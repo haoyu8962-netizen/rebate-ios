@@ -100,7 +100,7 @@ extension PhoneChangeController {
     }
 
     /// 确认 / 放弃得到的业务码（放弃时是 completed 的原结果或作废接口自己的码）。
-    private func settledFailure(_ code: Int, data: Data?, traceId: String?, effect: ErrorEffect,
+    private func settledFailure(_ code: Int, data _: Data?, traceId: String?, effect: ErrorEffect,
                                 abandoning: Bool = false) {
         switch code {
         case 40901 where abandoning:
@@ -191,24 +191,23 @@ extension PhoneChangeController {
             return
         }
         guard alive, event.account == owner.account else { return }
-        switch event.kind {
+        if state.step == .pending {
+            pendingSettledElsewhere(event.kind)
+        } else if event.kind == .pending, !state.submitting {
+            refreshPending()
+        }
+    }
+
+    /// 正在待确认时别处结算了（同一操作同一账号只有一条未决记录，即这张卡的键）。
+    private func pendingSettledElsewhere(_ kind: PhoneBindSettledKind) {
+        switch kind {
         case .done:
-            if state.step == .pending, let card = state.pending {
-                finishDone(masked: card.maskedPhone)
-            }
+            finishDone(masked: state.pending?.maskedPhone)
         case .abandoned:
-            if state.step == .pending {
-                resetToStep1()
-            }
+            resetToStep1()
         case .ended:
-            if state.step == .pending {
-                backToStep2(phoneError: nil, notice: notice(PhoneChangeTexts.endedElsewhere))
-            }
-        case .pending:
-            if state.step != .pending, !state.submitting {
-                refreshPending()
-            }
-        case .other:
+            backToStep2(phoneError: nil, notice: notice(PhoneChangeTexts.endedElsewhere))
+        case .pending, .other:
             break
         }
     }

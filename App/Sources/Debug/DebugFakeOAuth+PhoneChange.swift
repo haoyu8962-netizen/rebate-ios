@@ -30,15 +30,15 @@ extension DebugFakeOAuth {
     private func abandonChange() -> Answer? {
         switch options["abandon"] {
         case "completed":
-            return Answer(
+            Answer(
                 code: 0, data: "{\"outcome\":\"completed\",\"original\":{\"code\":0,\"msg\":\"\",\"data\":{}}}"
             )
         case "completed_30411":
-            return Answer(
+            Answer(
                 code: 0, data: "{\"outcome\":\"completed\",\"original\":{\"code\":30411,\"msg\":\"\",\"data\":null}}"
             )
         default:
-            return nil
+            nil
         }
     }
 

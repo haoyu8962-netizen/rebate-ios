@@ -120,8 +120,8 @@ struct PhoneChangeView: View {
 
     private func phoneField(_ state: PhoneChangeState, _ actions: PhoneChangeActions) -> some View {
         let error = state.phoneError.map { $0.message(texts) }
-        return TextField(texts.text("phone_change.new_label"), text: Binding(get: { state.newPhone },
-                                                                              set: { actions.newPhone($0) }))
+        let phone = Binding(get: { state.newPhone }, set: { actions.newPhone($0) })
+        return TextField(texts.text("phone_change.new_label"), text: phone)
             .couliFont(.body, monospacedDigits: true)
             .keyboardType(.phonePad)
             .textContentType(.telephoneNumber)
@@ -173,11 +173,12 @@ struct PhoneChangeView: View {
             .accessibilityIdentifier("phoneChange.getCode")
     }
 
+    /// 普通 `border.control` 1、错误 `status.error.text` 2（错误优先）；输入中 `border.active` 2（同昵称子页）。
     private func fieldBorder(error: Bool, focused: Bool) -> some View {
-        RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
-            .strokeBorder(error ? CouliColor.statusErrorText : (focused ? CouliColor.borderActive
-                    : CouliColor.borderControl),
-                lineWidth: error || focused ? CouliSpacing.s1 / 2 : CouliComponentMetric.controlBorderWidth)
+        let color = error ? CouliColor.statusErrorText : (focused ? CouliColor.borderActive : CouliColor.borderControl)
+        let width = error || focused ? CouliSpacing.s1 / 2 : CouliComponentMetric.controlBorderWidth
+        return RoundedRectangle(cornerRadius: CouliRadius.button, style: .continuous)
+            .strokeBorder(color, lineWidth: width)
     }
 
     @ViewBuilder
@@ -235,17 +236,19 @@ struct PhoneChangeView: View {
         }
     }
 
-    private func primary(_ state: PhoneChangeState, _ actions: PhoneChangeActions)
-        -> (title: String, loading: Bool, enabled: Bool, action: () -> Void)? {
+    private func primary(_ state: PhoneChangeState, _ actions: PhoneChangeActions) -> PhoneChangePrimary? {
         switch state.step {
         case .step1:
-            return (texts.text("phone_change.next"), state.verifying, controller.nextEnabled, actions.next)
+            PhoneChangePrimary(title: texts.text("phone_change.next"), loading: state.verifying,
+                               enabled: controller.nextEnabled, action: actions.next)
         case .step2:
-            return (texts.text("phone_change.submit"), state.submitting, controller.submitEnabled, actions.submit)
+            PhoneChangePrimary(title: texts.text("phone_change.submit"), loading: state.submitting,
+                               enabled: controller.submitEnabled, action: actions.submit)
         case .done:
-            return (texts.text("phone_change.finish"), false, true, actions.finish)
+            PhoneChangePrimary(title: texts.text("phone_change.finish"), loading: false, enabled: true,
+                               action: actions.finish)
         case .pending:
-            return nil
+            nil
         }
     }
 
@@ -254,20 +257,20 @@ struct PhoneChangeView: View {
     private func dialog(_ dialog: PhoneChangeDialog, _ actions: PhoneChangeActions) -> CouliDialog {
         switch dialog {
         case let .risk(titleKey, _):
-            return CouliDialog(
+            CouliDialog(
                 title: texts.text(titleKey), message: texts.text("phone_change.risk_blocked.desc"),
                 probeID: "phoneChange.dialog.risk",
                 primary: CouliDialogAction(texts.text("phone_change.ok")) { actions.dismissDialog(dialog) },
                 secondary: CouliDialogAction(texts.text("cs.appeal_entry")) { actions.contactService(dialog) }
             )
         case .unavailable:
-            return CouliDialog(
+            CouliDialog(
                 title: texts.text("error.30414"), centeredTitle: true, probeID: "phoneChange.dialog.unavailable",
                 primary: CouliDialogAction(texts.text("phone_change.ok")) { actions.dismissDialog(dialog) },
                 secondary: CouliDialogAction(texts.text("phone_change.contact_cs")) { actions.contactService(dialog) }
             )
         case .abandon:
-            return CouliDialog(
+            CouliDialog(
                 title: texts.text("pending_confirm.abandon"),
                 message: texts.text("pending_confirm.abandon.confirm") + "\n"
                     + texts.text("phone_change.pending.abandon_note"),
@@ -280,6 +283,14 @@ struct PhoneChangeView: View {
             )
         }
     }
+}
+
+/// 底部固定栏的主按钮（第 1 步【下一步】、第 2 步【提交】、Done【完成】；待确认没有）。
+struct PhoneChangePrimary {
+    let title: String
+    let loading: Bool
+    let enabled: Bool
+    let action: () -> Void
 }
 
 enum PhoneChangeField: Hashable {

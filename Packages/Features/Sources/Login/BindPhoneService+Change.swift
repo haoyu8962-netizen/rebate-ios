@@ -10,17 +10,32 @@ public struct BindChangeArrival: Sendable {
     public let notified: Bool
 }
 
+/// 一次更换提交的原键、原体、展示摘要与 X-Step-Up-Token（10003 后原键原体重放时原样再给一次，只换 token）。
+public struct BindChangeRequest: Sendable {
+    public let key: String
+    public let body: String
+    public let summary: String
+    public let stepUpToken: String?
+
+    public init(key: String, body: String, summary: String, stepUpToken: String?) {
+        self.key = key
+        self.body = body
+        self.summary = summary
+        self.stepUpToken = stepUpToken
+    }
+}
+
 /// 绑手机服务的「更换」入口（APP-13a-2）：与首次绑定共用同一份 phoneGate、在途登记、共享结算（成功 → recordBindSucceeded + onBound：
 /// 清全部 action 的 token、刷新「我的」、守卫重算）与未决通知（共性第 8、9、18 条）；结局分类沿用 `BindOutcomes.map` 的共享结局
 /// （键的去向与首次绑定同一写法，D10-2165 ① 现状）。首次绑定的 `submit` / `confirm` / `abandon` 一行不动（不带 token、确认不预先 step-up）。
 public extension BindPhoneService {
     /// 更换提交：原键原体（每次点击由换号页生成新键；10003 后沿用原键原体重放），带第 1 步 / 面板的 X-Step-Up-Token。
     func submitChange(
-        _ owner: BindPhoneOwner, key: String, body: String, summary: String, stepUpToken: String?,
-        completion: @escaping (BindChangeArrival) -> Void
+        _ owner: BindPhoneOwner, _ request: BindChangeRequest, completion: @escaping (BindChangeArrival) -> Void
     ) {
         let call = ApiCall(
-            operationId: Self.operationId, body: body, idempotencyKey: key, stepUpToken: stepUpToken, summary: summary
+            operationId: Self.operationId, body: request.body, idempotencyKey: request.key,
+            stepUpToken: request.stepUpToken, summary: request.summary
         )
         runChange(owner, phase: .submit, completion: completion) { [client] probe in
             await client.send(call, isValid: { true }, sendAllowed: probe.allowed, expected: owner.request)

@@ -163,7 +163,7 @@ public final class PhoneChangeController: ObservableObject {
         refreshPending()
     }
 
-    /// 同步出口（出栈、关子页、换代）：作废本实例、收起面板、清空输入 / 倒计时 / 弹窗 / 私有 token，并清 StepUpTokenCache 的
+    /// 同步出口（出栈、关子页、换代、强更分流）：作废本实例、收起面板、清空输入 / 倒计时 / 弹窗 / 卡片 / 私有 token（步骤不改），并清 StepUpTokenCache 的
     /// phone_change 条目（G23）。写请求不取消（未决记录兜底）。
     public func leave() {
         guard !left else { return }
@@ -181,9 +181,11 @@ public final class PhoneChangeController: ObservableObject {
         }
         unsubscribers = []
         watches.removeAll()
-        let version = state.version + 1
+        // 步骤保留（只清内容）：离开时停在哪一步就停在哪一步，迟到结果与强更分流都不把它改成「已放弃 / 第 1 步」（共性第 12 条）
+        let (version, step) = (state.version + 1, state.step)
         state = PhoneChangeState()
         state.version = version
+        state.step = step
     }
 
     /// 订阅：会话同步出口（身份变了同步作废）、共享未决通知、几把闸门的禁用期（页面重绘）。

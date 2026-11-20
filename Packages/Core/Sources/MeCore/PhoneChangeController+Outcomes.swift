@@ -27,13 +27,7 @@ extension PhoneChangeController {
             }
             return
         case let .localReject(reason):
-            if arrival.gated {
-                state.notice = sameForm ? notice(MeCodes.rateKey) : state.notice
-            } else if reason == LocalRejectReason.pendingKeyUnresolved {
-                refreshPending()
-            } else if reason == LocalRejectReason.pendingStoreFailed, sameForm {
-                state.notice = notice(MeCodes.networkKey)
-            }
+            submitUnsent(reason, gated: arrival.gated, sameForm: sameForm)
             return
         case let .failure(raw, _, data, traceId, effect, _):
             // 表单已换代（用户已返回第 1 步）：只认会改变整页去向的结局
@@ -44,6 +38,19 @@ extension PhoneChangeController {
             )
         default:
             return
+        }
+    }
+
+    /// 没有发出：phoneGate 拦下 → 限流提示；同一操作已有未决键 → 按记录进待确认；未决存储读不出 → 网络错误；其余（换会话等）静默。
+    private func submitUnsent(_ reason: String, gated: Bool, sameForm: Bool) {
+        if gated {
+            if sameForm {
+                state.notice = notice(MeCodes.rateKey)
+            }
+        } else if reason == LocalRejectReason.pendingKeyUnresolved {
+            refreshPending()
+        } else if reason == LocalRejectReason.pendingStoreFailed, sameForm {
+            state.notice = notice(MeCodes.networkKey)
         }
     }
 

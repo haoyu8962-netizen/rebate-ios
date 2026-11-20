@@ -90,6 +90,16 @@ final class DebugFakeLoginServer: URLProtocol {
     private let stoppedLock = NSLock()
     private nonisolated(unsafe) var stopped = false
 
+    /// 第三方登录与绑手机（含 APP-13a-2 换号分支，按请求头区分）的回答；不是本服务的返回 false。
+    private func answerOAuth(path: String, body: [String: Any]) -> Bool {
+        guard let oauth = DebugFakeOAuth.shared.answer(
+            method: request.httpMethod ?? "GET", path: path, body: body, headers: request.allHTTPHeaderFields ?? [:]
+        ) else { return false }
+        answerOrders(oauth.lost ? .offline : .answer(code: oauth.code, data: oauth.data, headers: oauth.headers,
+                                                     delay: 0.3))
+        return true
+    }
+
     override func startLoading() {
         let path = request.url?.path ?? ""
         let query = Self.query(request)
@@ -104,11 +114,7 @@ final class DebugFakeLoginServer: URLProtocol {
             return
         }
         // APP-05b：第三方登录与绑手机（DebugFakeOAuth）；「响应丢失」按传输失败结束（结果未知 → 待确认）。
-        if let oauth = DebugFakeOAuth.shared.answer(
-            method: request.httpMethod ?? "GET", path: path, body: body, headers: request.allHTTPHeaderFields ?? [:]
-        ) {
-            answerOrders(oauth.lost ? .offline : .answer(code: oauth.code, data: oauth.data, headers: oauth.headers,
-                                                         delay: 0.3))
+        if answerOAuth(path: path, body: body) {
             return
         }
         // APP-09：钱包场景（DebugFakeWallet）先于其他场景；offline 与「响应丢失」按传输失败结束。

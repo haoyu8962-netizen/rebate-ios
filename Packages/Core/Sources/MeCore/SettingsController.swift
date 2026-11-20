@@ -114,8 +114,6 @@ public final class SettingsController: ObservableObject, MeReader {
     public func onRow(_ row: SettingsRow, version: Int) {
         guard bound(version), !state.busy, model().groups.flatMap(\.rows).contains(row) else { return }
         switch row.id {
-        case SettingsItems.idPhone where phoneChangeOpen(row):
-            openPhoneChange()
         case SettingsItems.idNickname:
             guard row.clickable, identity.member, let backend = deps.nickname,
                   let current = deps.repo.me(of: identity)?.nickname
@@ -145,30 +143,7 @@ public final class SettingsController: ObservableObject, MeReader {
             dialogIds += 1
             state.dialog = MeDialog(kind: SettingsState.clearDialog, id: dialogIds)
         default:
-            guard let route = row.route, row.clickable else { return }
-            deps.env.open(route, params: [:], from: page)
-        }
-    }
-
-    /// 协议半屏的一个按钮（G32：半屏两个按钮 → Agreement {type}）：只认正显示的这一个半屏（编号），用过即作废。
-    public func openAgreement(_ choice: SettingsChoice, version: Int, sheet: Int) {
-        guard state.sheet == sheet else { return }
-        state.sheet = nil
-        guard bound(version) else { return }
-        deps.env.open(choice.route, params: ["type": choice.type], from: page)
-    }
-
-    /// 关闭半屏（同一编号才生效）。
-    public func closeSheet(_ sheet: Int) {
-        if state.sheet == sheet {
-            state.sheet = nil
-        }
-    }
-
-    /// 取消确认框（【取消】；同一编号才生效）。
-    public func closeDialog(_ dialog: MeDialog) {
-        if state.dialog == dialog {
-            state.dialog = nil
+            openRowRoute(row)
         }
     }
 
@@ -215,18 +190,6 @@ public final class SettingsController: ObservableObject, MeReader {
         state.sub = .none
         state.version += 1
         toast(MeNotice(Self.savedKey, id: nextId(), assertive: false))
-    }
-
-    /// 底部【去登录】（游客）。
-    public func openLogin(version: Int) {
-        guard bound(version), identity.level == MeLevel.guest else { return }
-        deps.env.open(Self.login, params: [:], from: page)
-    }
-
-    /// 底部【开启完整功能】（基本模式）。
-    public func enableFull(version: Int) {
-        guard bound(version), identity.level == MeLevel.basic else { return }
-        deps.env.requestFullFunction()
     }
 
     public func askLogout(version: Int) {

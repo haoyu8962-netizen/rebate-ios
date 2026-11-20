@@ -177,10 +177,10 @@ final class AppPhoneChangePorts: PhoneChangePorts, PhoneBindPort {
         _ owner: PhoneBindOwner, _ submission: PhoneChangeSubmission, stepUpToken: String?,
         completion: @escaping @MainActor (PhoneBindArrival) -> Void
     ) {
-        service.submitChange(
-            Self.theirs(owner), key: submission.key, body: submission.body, summary: submission.summary,
-            stepUpToken: stepUpToken
-        ) { completion(Self.arrival($0)) }
+        let request = BindChangeRequest(
+            key: submission.key, body: submission.body, summary: submission.summary, stepUpToken: stepUpToken
+        )
+        service.submitChange(Self.theirs(owner), request) { completion(Self.arrival($0)) }
     }
 
     func confirmChange(

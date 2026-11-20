@@ -49,13 +49,47 @@ struct App13a2Fixture {
         var installSecret: String? = "test-only.install.device-a"
     }
 
-    static func make(
-        suiteName: String, defaults: UserDefaults, account: String, scope: String,
-        pending: MemoryPendingKeyBackend, phoneChange: Bool?
-    ) -> App13a2Fixture {
+    /// 组合的输入（照 r1 的 6 个参数收成一个结构体）。
+    struct Options {
+        let suiteName: String
+        let defaults: UserDefaults
+        let account: String
+        let scope: String
+        let pending: MemoryPendingKeyBackend
+        let phoneChange: Bool?
+    }
+
+    /// 网络、路由、配置、登录这一层（AppMe / AppWallet 共用）。
+    private struct Core {
+        let tokens: MemorySessionTokens
+        let network: AppNetwork
+        let routing: AppRouting
+        let config: AppConfig
+        let login: AppLogin
+        let update: AppUpdate
+        let runner: WithdrawalCleanupRunner
+        let withdrawal: EnvironmentSwitchCleanerRegistry
+        let environmentSwitch: EnvironmentSwitchCleanerRegistry
+    }
+
+    static func make(_ options: Options) -> App13a2Fixture {
+        let core = makeCore(options)
+        let system = FakeMeSystem()
+        let mask = AmountMaskStore(defaults: options.defaults)
+        let me = makeMe(core, options, system: system, mask: mask)
+        let wallet = makeWallet(core, options, mask: mask)
+        wire(core, me: me, wallet: wallet, phoneChange: options.phoneChange)
+        return App13a2Fixture(
+            me: me, wallet: wallet, login: core.login, routing: core.routing, network: core.network,
+            tokens: core.tokens, pending: options.pending, system: system
+        )
+    }
+
+    private static func makeCore(_ options: Options) -> Core {
+        let account = options.account
         let tokens = MemorySessionTokens()
         try? tokens.save(
-            access: "at-\(account)", refresh: "rt-\(account)", scope: scope, account: account,
+            access: "at-\(account)", refresh: "rt-\(account)", scope: options.scope, account: account,
             loginEpoch: "fixture-login-\(account)"
         )
         let privacyStore = MemoryPrivacyStore()
@@ -65,18 +99,20 @@ struct App13a2Fixture {
         let environmentSwitch = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
         let runner = WithdrawalCleanupRunner(store: privacyStore, registry: withdrawal)
         let network = AppNetwork(
-            tokens: CountingSessionTokens(tokens), pendingBackend: pending, device: Device(),
+            tokens: CountingSessionTokens(tokens), pendingBackend: options.pending, device: Device(),
             withdrawalRegistry: withdrawal, environmentRegistry: environmentSwitch,
             credentialsReadable: { runner.credentialsReadable }, configuration: WalletStubProtocol.configuration()
         )
         let update = UpdateFixtures.makeUpdate(checker: StubUpdateChecker(.success(UpdateFixtures.ok)))
-        let environment = EnvironmentStore(defaultEnvironment: .test, defaults: defaults, registry: environmentSwitch)
+        let environment = EnvironmentStore(
+            defaultEnvironment: .test, defaults: options.defaults, registry: environmentSwitch
+        )
         let privacy = PrivacyController(
             store: privacyStore, clock: { 1 }, bundledPolicyVersion: "1", withdrawalRunner: runner
         )
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
         let config = AppConfig(
-            client: network.client, file: ClientFile(name: suiteName + ".config.json"),
+            client: network.client, file: ClientFile(name: options.suiteName + ".config.json"),
             environmentRegistry: environmentSwitch
         )
         let login = AppLogin(network: network, routing: routing, update: update)
@@ -84,37 +120,48 @@ struct App13a2Fixture {
         // 短信登录的账号（一定绑了手机号）：守卫与二次验证面板按已绑手机
         login.phone.record(true, generation: network.client.sessionGeneration)
         routing.shellAppeared()
+        return Core(
+            tokens: tokens, network: network, routing: routing, config: config, login: login, update: update,
+            runner: runner, withdrawal: withdrawal, environmentSwitch: environmentSwitch
+        )
+    }
+
+    private static func makeMe(_ core: Core, _ options: Options, system: FakeMeSystem, mask: AmountMaskStore)
+        -> AppMe {
         let localFile = FlakyMeFile(ClientFile(
-            name: MeLocalStore.fileName, baseDirectory: MeAppFixture.localDirectory(suiteName)
+            name: MeLocalStore.fileName, baseDirectory: MeAppFixture.localDirectory(options.suiteName)
         ))
         let local = MeLocalStore(file: localFile, pending: localFile.sibling(MeLocalStore.pendingFileName))
-        let system = FakeMeSystem()
-        let mask = AmountMaskStore(defaults: defaults)
-        let me = AppMe(
-            network: network, routing: routing, config: config, login: login, update: update, system: system,
-            mask: mask, local: local, pushSource: TestPushSource(token: nil),
-            credentialsReadable: { runner.credentialsReadable }, withdrawalRegistry: withdrawal,
-            environmentRegistry: environmentSwitch
+        let runner = core.runner
+        return AppMe(
+            network: core.network, routing: core.routing, config: core.config, login: core.login,
+            update: core.update, system: system, mask: mask, local: local, pushSource: TestPushSource(token: nil),
+            credentialsReadable: { runner.credentialsReadable }, withdrawalRegistry: core.withdrawal,
+            environmentRegistry: core.environmentSwitch
         )
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(suiteName + "/wallet")
+    }
+
+    private static func makeWallet(_ core: Core, _ options: Options, mask: AmountMaskStore) -> AppWallet {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(options.suiteName + "/wallet")
         let cleaner = WalletCacheCleaner(store: WalletCacheStore(root: root, flag: nil))
+        let runner = core.runner
         let wallet = AppWallet(
-            network: network, config: config, routing: routing, login: login, mask: mask, cleaner: cleaner,
-            credentialsReadable: { runner.credentialsReadable }
+            network: core.network, config: core.config, routing: core.routing, login: core.login, mask: mask,
+            cleaner: cleaner, credentialsReadable: { runner.credentialsReadable }
         )
         wallet.phoneProvider = { _ in "13800005678" }
-        // 照 CouliApp.makeAccount 接线
+        return wallet
+    }
+
+    /// 照 CouliApp.makeAccount 接线，再加本单的 `me.connect(wallet:)` 与 Debug 入口覆盖。
+    private static func wire(_ core: Core, me: AppMe, wallet: AppWallet, phoneChange: Bool?) {
         let open: @MainActor (String) -> Void = { [weak me] route in me?.cs.open(from: route) }
         wallet.customerService = open
         wallet.meReadGate = me.gates.read
-        login.phoneSync.readGate = me.gates.read
-        login.connect(wallet: wallet)
+        core.login.phoneSync.readGate = me.gates.read
+        core.login.connect(wallet: wallet)
         me.connect(wallet: wallet)
         me.phoneChangeOverride = phoneChange
-        return App13a2Fixture(
-            me: me, wallet: wallet, login: login, routing: routing, network: network, tokens: tokens,
-            pending: pending, system: system
-        )
     }
 }
 
@@ -142,10 +189,10 @@ class App13a2TestCase: MeTestCase {
     }
 
     func fixture(phoneChange: Bool? = true, scope: String = "full") -> App13a2Fixture {
-        App13a2Fixture.make(
+        App13a2Fixture.make(App13a2Fixture.Options(
             suiteName: suiteName, defaults: defaults, account: Self.account, scope: scope, pending: backend,
             phoneChange: phoneChange
-        )
+        ))
     }
 
     // MARK: - 假服务

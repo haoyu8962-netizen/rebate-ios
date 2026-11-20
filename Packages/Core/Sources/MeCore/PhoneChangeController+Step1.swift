@@ -50,9 +50,9 @@ extension PhoneChangeController {
             wallet.settlement.settleStepUpRetryAfter(
                 result, gate: wallet.gates.sms, owner: walletOwner, scopeStill: scopeStill
             )
+            let sent = StepUpSmsSent(slot: slot, ticket: ticket, result: result, arrived: wallet.env.nowMillis())
             let deadline = wallet.settlement.settleStepUpSms(
-                slot: slot, ticket: ticket, result: result, arrived: wallet.env.nowMillis(), owner: walletOwner,
-                sms: wallet.sms, gate: wallet.gates.sms
+                sent, owner: walletOwner, sms: wallet.sms, gate: wallet.gates.sms
             )
             self?.oldSent(result, deadline: deadline, probe: probe, gen: gen)
         }
