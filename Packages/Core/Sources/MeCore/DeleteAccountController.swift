@@ -109,14 +109,27 @@ public final class DeleteAccountController: ObservableObject, FlowHost, Identity
     var subscriptions: Set<AnyCancellable> = []
     var started = false
 
-    public init(deps: WalletDeps, identity: DeletionIdentity, page: UUID, ports: DeleteAccountPorts) {
+    /// `scopeNow`：此刻的会话作用域（`DeletionScope.normalized` 后的值；线程安全、任意线程可调，App 捕获 ApiClient 读
+    /// `isolatedSessionScope`）。给了就和固定身份的作用域比较，并进申请 / 确认 / 放弃的发送前闸门与 42901 结算
+    /// （FU-IOS-WALLETSETTLEMENT-SCOPE）；nil = 不核对。
+    public init(
+        deps: WalletDeps, identity: DeletionIdentity, page: UUID, ports: DeleteAccountPorts,
+        scopeNow: (@Sendable () -> String)? = nil
+    ) {
         self.deps = deps
         self.identity = identity
         self.page = page
         self.ports = ports
         let life = DeletionLife()
         self.life = life
-        flow = SensitiveFlow.accountDeletion(deps: deps, owner: identity.owner, alive: { life.alive })
+        let fixed = identity.scope
+        var scopeStill: (@Sendable () -> Bool)?
+        if let scopeNow {
+            scopeStill = { scopeNow() == fixed }
+        }
+        flow = SensitiveFlow.accountDeletion(
+            deps: deps, owner: identity.owner, alive: { life.alive }, scopeStill: scopeStill
+        )
         state.phoneBound = deps.env.stepUpPhoneBound(identity.owner)
         flow.attach(self)
     }

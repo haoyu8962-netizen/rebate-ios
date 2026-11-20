@@ -12,12 +12,16 @@ public extension SensitiveFlow {
     /// 未决记录的展示摘要（G24：不含手机号与请求体；待确认卡按固定两句 + 提交时间显示）。
     static let deletionSummary = "deletion"
 
-    /// 申请注销的流程（注销页执行器在构造时一次性给出固定身份；申请、确认、放弃共用 `WalletGates.deletion`）。
-    static func accountDeletion(deps: WalletDeps, owner: WalletOwner, alive: @escaping () -> Bool) -> SensitiveFlow {
+    /// 申请注销的流程（注销页执行器在构造时一次性给出固定身份；申请、确认、放弃共用 `WalletGates.deletion`）。`scopeStill`：构造时固定的
+    /// 会话作用域此刻仍未变（线程安全）：并进申请 / 确认 / 放弃的发送前闸门，42901 只在作用域未变时写 `gates.deletion`，本流程打开的
+    /// 二次验证面板的发码 / 验证 42901 同样只在未变时写 `gates.sms` / `gates.verify`（FU-IOS-WALLETSETTLEMENT-SCOPE）。nil = 不核对。
+    static func accountDeletion(
+        deps: WalletDeps, owner: WalletOwner, alive: @escaping () -> Bool, scopeStill: (@Sendable () -> Bool)? = nil
+    ) -> SensitiveFlow {
         SensitiveFlow(
             deps: deps, operationId: deletionOperation, action: deletionAction,
             outcomeOp: SensitiveOutcome.accountDeletion, gate: deps.gates.deletion, marksWalletDirty: false,
-            alive: alive, owner: owner
+            alive: alive, owner: owner, scopeStill: scopeStill
         )
     }
 

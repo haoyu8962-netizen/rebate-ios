@@ -159,8 +159,16 @@ extension SensitiveFlow {
     /// 点击时的目标（共性第 14、15 条）：记录账号与原键、固定的网络归属；共享禁用期是发送前闸门（首次发送与管线续发前都核对）。
     func target(_ intent: PendingIntent) -> PendingTarget {
         PendingTarget(
-            account: intent.account, key: intent.key, expected: intent.owner.request, sendAllowed: gate.sendAllowed
+            account: intent.account, key: intent.key, expected: intent.owner.request, sendAllowed: pendingSendAllowed
         )
+    }
+
+    /// 确认 / 放弃的发送前闸门：共享禁用期外，注销另要求固定的作用域此刻仍未变（被它拦下零写出、占用释放、记录仍待确认；
+    /// FU-IOS-WALLETSETTLEMENT-SCOPE）。提现 / 收款账号就是 `gate.sendAllowed`。
+    var pendingSendAllowed: @Sendable () -> Bool {
+        let allowed = gate.sendAllowed
+        guard let scopeStill else { return allowed }
+        return { allowed() && scopeStill() }
     }
 
     func runConfirm(_ intent: PendingIntent, token: String?) {

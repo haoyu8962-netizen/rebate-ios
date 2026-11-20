@@ -67,6 +67,9 @@ public final class StepUpController: ObservableObject {
     var onClosed: (() -> Void)?
     /// 本次面板要绑定进令牌的业务摘要（改收款；提现为 nil）。只在内存、只随本面板实例，不进界面状态与日志；收起面板即清。
     var summary: [String: String]?
+    /// 所属注销流程固定的会话作用域此刻仍未变（只有注销流程的面板有；发码 / 验证的 42901 作用域已变不写共享禁用期，
+    /// FU-IOS-WALLETSETTLEMENT-SCOPE）。提现 / 收款账号的面板为 nil（行为不变）。
+    var scopeStill: (@Sendable () -> Bool)?
     var ticker: Task<Void, Never>?
     var resendUntil: Int64 = 0
     let requests = WalletRequests()
@@ -134,10 +137,11 @@ public final class StepUpController: ObservableObject {
         let probe = deps.gates.verify.probe()
         let panel = instance
         let deps = deps
+        let scopeStill = scopeStill
         requests.send(deps.api, ApiCall(operationId: Self.verifyOperation, body: body), probe: probe,
                       expected: owner.request) { [weak self] result in
             // 42901 先按归属写入共享禁用期（会话级，不依赖面板存活），再看面板是否有效（共性第 27、40、66 条）
-            deps.settlement.settleRetryAfter(result, gate: deps.gates.verify, owner: owner)
+            deps.settlement.settleRetryAfter(result, gate: deps.gates.verify, owner: owner, scopeStill: scopeStill)
             self?.verifiedArrived(result, panel: panel, current: current, probe: probe, summary: summary)
         }
     }

@@ -10,6 +10,9 @@ struct WriteTicket {
     let gate: RetryAfterGate
     /// 提现：原操作成功时通知（按会话归属）仍存在的钱包页刷新（共性第 53、58、61 条）；收款账号不需要。
     let marksWalletDirty: Bool
+    /// 注销：发起时固定的会话作用域此刻仍未变（线程安全；FU-IOS-WALLETSETTLEMENT-SCOPE）。不为 nil 时 42901 只在作用域未变时写共享禁用期；
+    /// 提现 / 收款账号为 nil（行为不变）。
+    var scopeStill: (@Sendable () -> Bool)?
 }
 
 /// 写请求与发码的共享结算（APP-09 共性第 27、40、53、58、61、66、70 条；iOS R1-04、R1-05、R1-06）：会话级服务，随 `WalletDeps`（App 建一份、
@@ -46,7 +49,8 @@ public final class WalletSettlement {
             tokens.onSuccess(action: ticket.action)
         }
         guard let outcome else { return }
-        if let millis = outcome.disableMillis {
+        // 作用域核对只在要写禁用期时读一次（注销；token 核销与成功结算照旧，共性第 48 条）
+        if let millis = outcome.disableMillis, ticket.scopeStill?() ?? true {
             Self.start(ticket.gate, millis, elapsed: elapsed)
         }
         switch outcome.actionRaw {
@@ -67,12 +71,16 @@ public final class WalletSettlement {
         }
     }
 
-    /// 读 / 发码 / 验证请求的 42901：按发起时的身份写入对应的共享禁用期（面板、页面是否还在都写；共性第 27、40 条）。
-    func settleRetryAfter(_ result: ApiResult, gate: RetryAfterGate, owner: WalletOwner) {
+    /// 读 / 发码 / 验证请求的 42901：按发起时的身份写入对应的共享禁用期（面板、页面是否还在都写；共性第 27、40 条）。`scopeStill`：注销
+    /// 面板发起时固定的作用域此刻仍未变（不为 nil 时作用域已变不写；其余调用方为 nil，行为不变；FU-IOS-WALLETSETTLEMENT-SCOPE）。
+    func settleRetryAfter(
+        _ result: ApiResult, gate: RetryAfterGate, owner: WalletOwner, scopeStill: (@Sendable () -> Bool)? = nil
+    ) {
         let error = WalletErrors.of(result)
         guard error.kind == .retryAfter else { return }
         let millis = error.disableMillis > 0 ? error.disableMillis : SensitiveOutcome.defaultRetryMillis
         settle(owner, slot: "retryAfter", gate: gate) { elapsed in
+            guard scopeStill?() ?? true else { return }
             Self.start(gate, millis, elapsed: elapsed)
         }
     }

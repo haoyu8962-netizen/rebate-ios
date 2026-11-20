@@ -82,10 +82,14 @@ extension AppWallet: DeleteAccountPorts {
         let source = deletionSource(destination)
         let page = destination.id
         let deps: WalletDeps = deps
+        // 「此刻作用域」给注销流程的发送前闸门与 42901 结算（网络层任意线程调）：捕获 ApiClient 本身、在会话锁里读，不经主线程的
+        // AppWallet；只在注销流程的闸门 / 结算里调用，建页不读（FU-IOS-WALLETSETTLEMENT-SCOPE）
+        let client = client
+        let scopeNow: @Sendable () -> String = { DeletionScope.normalized(client.isolatedSessionScope) }
         let make: (WalletOwner) -> DeleteAccountController = { [unowned self] owner in
             DeleteAccountController(
                 deps: deps, identity: DeletionIdentity(owner: owner, scope: deletionScopeNow(), source: source),
-                page: page, ports: self
+                page: page, ports: self, scopeNow: scopeNow
             )
         }
         let host = MePageHost(make(currentOwner()))
@@ -146,6 +150,9 @@ extension AppWallet: DeleteAccountPorts {
             let scope = raw.map { DeletionScope.normalized($0) }
             if let last = lastDeletionScope, last != scope {
                 deps.tokens.onSessionChanged()
+                // 作用域换代：旧作用域的注销禁用期不带给按新作用域重建的注销页（与鸿蒙同口径）；共享的 sms / verify 不动
+                // （提现 / 收款账号也用，FU-IOS-WALLETSETTLEMENT-SCOPE）
+                gates.deletion.reset()
             }
             lastDeletionScope = scope
             let pageScope = DeletionScope.normalized(raw)

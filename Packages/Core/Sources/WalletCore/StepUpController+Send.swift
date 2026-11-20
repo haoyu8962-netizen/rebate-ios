@@ -74,6 +74,7 @@ extension StepUpController {
         let probe = deps.gates.sms.probe()
         let body = WalletJSON.text(["purpose": Self.purpose, "action": slot.action])
         let api = deps.api
+        let scopeStill = scopeStill
         let tasks = tasks
         tasks.begin()
         Task { @MainActor [weak self, deps] in
@@ -84,7 +85,8 @@ extension StepUpController {
                 expected: owner.request
             )
             // 失败限流与成功倒计时一样由任务持有的会话级依赖直接结算（共性第 27、40、66 条）：旧面板关闭、释放后迟到的 42901 也写入共享禁用期
-            deps.settlement.settleRetryAfter(result, gate: deps.gates.sms, owner: owner)
+            // 注销面板另核对所属流程的作用域（作用域已变不写，FU-IOS-WALLETSETTLEMENT-SCOPE）；其余面板 scopeStill 为 nil
+            deps.settlement.settleRetryAfter(result, gate: deps.gates.sms, owner: owner, scopeStill: scopeStill)
             let arrival = SmsArrival(slot: slot, ticket: ticket, result: result, arrived: deps.env.nowMillis())
             deps.settlement.settleSms(arrival, owner: owner, sms: deps.sms, gate: deps.gates.sms)
             self?.sentArrived(result, arrival: arrival, panel: panel, owner: owner, probe: probe)

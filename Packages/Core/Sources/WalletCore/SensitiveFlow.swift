@@ -132,6 +132,9 @@ public final class SensitiveFlow: ObservableObject {
     let gate: RetryAfterGate
     /// 原操作成功时通知钱包刷新（提现为 true；共享结算由 `WalletSettlement` 按任务持有的 `WriteTicket` 完成）。
     let marksWalletDirty: Bool
+    /// 注销：构造时固定的会话作用域此刻仍未变（线程安全，网络层任意线程调；FU-IOS-WALLETSETTLEMENT-SCOPE）。并进申请 / 确认 / 放弃的发送前
+    /// 闸门与 42901 的结算；提现 / 收款账号为 nil（行为不变）。
+    let scopeStill: (@Sendable () -> Bool)?
     weak var host: FlowHost?
     var alive: () -> Bool
     public let stepUp: StepUpController
@@ -162,7 +165,8 @@ public final class SensitiveFlow: ObservableObject {
 
     init(deps: WalletDeps, operationId: String, action: String, outcomeOp: String, gate: RetryAfterGate,
          marksWalletDirty: Bool, alive: @escaping () -> Bool, owner: WalletOwner,
-         stepUpSummary: @escaping (String?) -> [String: String]? = { _ in nil }) {
+         stepUpSummary: @escaping (String?) -> [String: String]? = { _ in nil },
+         scopeStill: (@Sendable () -> Bool)? = nil) {
         self.deps = deps
         self.operationId = operationId
         self.action = action
@@ -170,9 +174,11 @@ public final class SensitiveFlow: ObservableObject {
         self.stepUpSummary = stepUpSummary
         self.gate = gate
         self.marksWalletDirty = marksWalletDirty
+        self.scopeStill = scopeStill
         self.alive = alive
         state = FlowState(owner: owner)
         stepUp = StepUpController(deps: deps, alive: alive)
+        stepUp.scopeStill = scopeStill
         stepUp.alive = { [weak self] in self?.alive() ?? false }
         // 未决记录结算后（别的页面、已出栈页面的迟到响应、本页）按本机记录重新同步当前页（共性第 1 条）：只收本表单身份的账号
         unsubscribe = deps.pending.subscribe { [weak self] settled in
@@ -250,7 +256,8 @@ public final class SensitiveFlow: ObservableObject {
             self?.send(click: click, payload: payload, token: token, replayed: replayed)
         }, settle: { state.awaitingIdentity = true }), let account = click.account else { return }
         sentViewGen = visibility.generation
-        let probe = gate.probe()
+        // 注销另带作用域项（extra 不算限流：被它拦下是本地 send_blocked，不出 42901）；提现 / 收款账号 extra 为 nil
+        let probe = gate.probe(extra: scopeStill)
         // 没有请求体的操作（申请注销，APP-13a 共性第 1 条）不带 body：签名按空字节算，未决记录原体为空串
         let call = ApiCall(
             operationId: operationId, body: payload.body.isEmpty ? nil : payload.body, idempotencyKey: payload.key,
@@ -287,7 +294,9 @@ public final class SensitiveFlow: ObservableObject {
     /// 本次写请求的固定结算依据（点击时的身份、action、共享禁用期；共性第 66 条）。之后由页面按自己是否有效更新界面。10405 由网络层管线
     /// 进强更（已有分流）。
     func writeTicket(_ click: WalletOwner) -> WriteTicket {
-        WriteTicket(owner: click, action: action, gate: gate, marksWalletDirty: marksWalletDirty)
+        WriteTicket(
+            owner: click, action: action, gate: gate, marksWalletDirty: marksWalletDirty, scopeStill: scopeStill
+        )
     }
 
     /// 提交结果的身份核对：暂时未知 → 不采用、记下（提交中保持；身份确认后仍是点击时的会话才采用，不重放）；已换代 → 丢弃。
