@@ -111,6 +111,10 @@ public protocol MeEnv: AnyObject {
     func setClipboardAuto(_ on: Bool)
     /// 服务端校准后的时钟（显示用，BR-TEXT-11）。
     func displayNowMillis() -> Int64
+    /// 换号入口此刻可用（APP-13a-2，D10-2203 ⑤：Release 由 `PhoneChangeEntry.sinceIOS` 关）。缺省 false，见下方扩展。
+    func phoneChangeAvailable() -> Bool
+    /// 换号子页的外部依赖（App 接上钱包与绑手机服务之后才有）。缺省 nil。
+    func phoneChangePorts() -> PhoneChangePorts?
 }
 
 /// 修改昵称（G01）：契约缺 PATCH /v1/me，手写的待定 operation updateNickname 只由 Debug 假服务实现；Release 为 nil（昵称行不可点、不发
@@ -324,6 +328,15 @@ public extension MeEnv {
     }
 
     func setClipboardAuto(_: Bool) {}
+
+    /// 缺省：换号入口不可用（没接的环境：DetachedMeEnv、视觉替身等）。
+    func phoneChangeAvailable() -> Bool {
+        false
+    }
+
+    func phoneChangePorts() -> PhoneChangePorts? {
+        nil
+    }
 
     func check(_ identity: MeIdentity) -> IdentityCheck {
         isCurrent(identity) ? .current : .stale

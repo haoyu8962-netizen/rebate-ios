@@ -104,7 +104,9 @@ final class DebugFakeLoginServer: URLProtocol {
             return
         }
         // APP-05b：第三方登录与绑手机（DebugFakeOAuth）；「响应丢失」按传输失败结束（结果未知 → 待确认）。
-        if let oauth = DebugFakeOAuth.shared.answer(method: request.httpMethod ?? "GET", path: path, body: body) {
+        if let oauth = DebugFakeOAuth.shared.answer(
+            method: request.httpMethod ?? "GET", path: path, body: body, headers: request.allHTTPHeaderFields ?? [:]
+        ) {
             answerOrders(oauth.lost ? .offline : .answer(code: oauth.code, data: oauth.data, headers: oauth.headers,
                                                          delay: 0.3))
             return

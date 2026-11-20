@@ -3,10 +3,10 @@ import CouliNetwork
 import Foundation
 import WalletCore
 
-/// 设置页的页内状态：子页（修改昵称、通知设置）、半屏（一次性编号）、确认框（一次性编号，R1-02）、轻提示、缓存大小。
+/// 设置页的页内状态：子页（修改昵称、通知设置、换手机号）、半屏（一次性编号）、确认框（一次性编号，R1-02）、轻提示、缓存大小。
 public struct SettingsState: Equatable, Sendable {
     public enum Sub: Equatable, Sendable {
-        case none, nickname, notify
+        case none, nickname, notify, phoneChange
     }
 
     public static let clearDialog = "clear"
@@ -41,10 +41,12 @@ public final class SettingsController: ObservableObject, MeReader {
     public let identity: MeIdentity
     public let deps: MeDeps
     public let page: UUID?
-    @Published public private(set) var state = SettingsState()
+    @Published public internal(set) var state = SettingsState()
     /// 子页执行器（只在已登录身份下建；身份变了整页重建，旧子页随旧执行器作废）。
     @Published public private(set) var nickname: NicknameController?
     @Published public private(set) var notify: NotifySettingsController?
+    /// 换号子页执行器（APP-13a-2：已登录、phone_bound == true、入口可用时由点手机号行建；见 SettingsController+PhoneChange）。
+    @Published public internal(set) var phoneChange: PhoneChangeController?
     /// 共享读取闸门（getMe）与「重新显示下单须知」闸门的禁用状态（R1-06，共性第 32 条）：显式订阅两个 `RetryAfterGate.blocked`，禁用期开始与
     /// 结束都经本执行器发布、驱动页面重绘（【重试】与「重新显示下单须知」行置灰 / 恢复）；执行层照旧另行核对。离开时取消订阅。
     @Published public private(set) var readBlocked = false
@@ -75,11 +77,11 @@ public final class SettingsController: ObservableObject, MeReader {
     /// 渲染时的条目（只按本执行器固定的身份档）。
     public func model() -> SettingsModel {
         let me = deps.repo.me(of: identity)
-        return SettingsItems.model(
+        return phoneRowOverride(SettingsItems.model(
             level: identity.level, platform: MePlatform.ios, phoneBound: me?.phoneBound,
             nicknameEditable: deps.nickname != nil && me != nil, serviceSwitchAvailable: deps.notify != nil,
             deleteAccountAvailable: deps.env.availableRoutes().contains(Self.deleteAccount)
-        )
+        ), phoneBound: me?.phoneBound)
     }
 
     /// 进入、回到本页：已登录时取 Me（昵称、手机号行）；重算缓存大小。
@@ -104,7 +106,7 @@ public final class SettingsController: ObservableObject, MeReader {
         deps.repo.refresh(identity, page: self)
     }
 
-    private func bound(_ version: Int) -> Bool {
+    func bound(_ version: Int) -> Bool {
         alive && state.version == version && !deps.withdraw.busy
     }
 
@@ -112,6 +114,8 @@ public final class SettingsController: ObservableObject, MeReader {
     public func onRow(_ row: SettingsRow, version: Int) {
         guard bound(version), !state.busy, model().groups.flatMap(\.rows).contains(row) else { return }
         switch row.id {
+        case SettingsItems.idPhone where phoneChangeOpen(row):
+            openPhoneChange()
         case SettingsItems.idNickname:
             guard row.clickable, identity.member, let backend = deps.nickname,
                   let current = deps.repo.me(of: identity)?.nickname
@@ -177,6 +181,12 @@ public final class SettingsController: ObservableObject, MeReader {
 
     /// 关掉子页（只关发起的这一个，H13）；子页的输入与读请求随执行器作废。
     public func closeSub() {
+        // 换号子页先交给它的返回处理（第 2 步 → 第 1 步，子页不关；共性第 27 条：页面返回与系统返回同一处理）
+        if state.sub == .phoneChange, phoneChange?.handleBack() == true {
+            return
+        }
+        phoneChange?.leave()
+        phoneChange = nil
         nickname?.leave()
         notify?.leave()
         nickname = nil
@@ -313,6 +323,8 @@ public final class SettingsController: ObservableObject, MeReader {
         guard !left else { return }
         left = true
         cacheSeq += 1
+        phoneChange?.leave()
+        phoneChange = nil
         nickname?.leave()
         notify?.leave()
         nickname = nil
@@ -349,24 +361,6 @@ extension SettingsController {
         }
         guard snapshot.errorSource == ObjectIdentifier(self) else { return nil }
         return SettingsAccountNotice(notice: error, refreshFailed: true)
-    }
-}
-
-/// 设置页账号资料区域的读取提示：`refreshFailed` = 已有快照时的刷新失败（文案前加「没有刷新」一句）。
-public struct SettingsAccountNotice: Equatable, Sendable {
-    public static let refreshFailedKey = "settings.refresh_failed"
-
-    public let notice: MeNotice
-    public let refreshFailed: Bool
-
-    public init(notice: MeNotice, refreshFailed: Bool) {
-        self.notice = notice
-        self.refreshFailed = refreshFailed
-    }
-
-    /// 页面文案：统一错误消息（含 trace6）；刷新失败时前加「没有刷新」一句。
-    public func message(_ texts: MeTexts) -> String {
-        (refreshFailed ? texts.text(Self.refreshFailedKey) : "") + notice.message(texts)
     }
 }
 

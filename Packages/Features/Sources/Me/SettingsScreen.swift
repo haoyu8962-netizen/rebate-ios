@@ -93,6 +93,13 @@ struct SettingsBody: View {
                         .meNavigation(texts.text("notify.title"))
                         .meSubpageBack(texts.text("me.back"), action: actions.closeSub)
                 }
+            case .phoneChange:
+                // APP-13a-2：返回与系统返回都走 closeSub（先交子页：第 2 步 → 第 1 步）
+                if let phoneChange = controller.phoneChange {
+                    PhoneChangeView(controller: phoneChange)
+                        .meNavigation(texts.text("phone_change.title"))
+                        .meSubpageBack(texts.text("me.back"), action: actions.closeSub)
+                }
             case .none:
                 main(state, actions)
                     .meNavigation(texts.text("settings.title"))

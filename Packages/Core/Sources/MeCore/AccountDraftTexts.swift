@@ -46,6 +46,19 @@ public struct AccountDraftTexts: WalletTexts, MeTexts {
         "deletion.cooling.cancel_unknown": "暂时没有收到结果，请稍后再试",
         // 代拟：二次验证面板随 action 变的标题（error.10003 的句子写的是「资金安全」）
         "step_up.title.account_deletion": "为保障账号安全，请先完成短信验证",
+        // APP-13a-2 换手机号（brief §3 新草稿键，列入 w1 契约单）：面板标题与安卓 / 鸿蒙同句；第 1 步说明（G03，不显示号码）
+        "step_up.title.phone_change": "为保障账号安全，请先验证当前手机号",
+        "phone_change.current_hint": "验证码将发送至你绑定的手机号",
+        // 代拟：换号子页的标题与按钮（设计稿按钮字，契约未收录）
+        "phone_change.title": "更换手机号",
+        "phone_change.next": "下一步",
+        "phone_change.submit": "提交",
+        "phone_change.finish": "完成",
+        "phone_change.ok": "知道了",
+        "phone_change.contact_cs": "联系客服",
+        "phone_change.new_sent": "验证码已发送",
+        // 代拟：别的页面结算了同一次提交、原结果是业务错误（只知道键已结束，不知道具体码）
+        "phone_change.pending.ended": "上一次提交没有成功，可以重新提交",
     ]
 
     /// 冷静期处理时长（timeline.processing_desc、notice.3 的 {process_workdays}）：契约与接口都没有下发，取设计稿 / BR-ID-27 的 15 个工作日。

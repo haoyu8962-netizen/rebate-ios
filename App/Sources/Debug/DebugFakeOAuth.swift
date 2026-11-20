@@ -17,9 +17,11 @@ final class DebugFakeOAuth: @unchecked Sendable {
     static let launchArgument = "CouliFakeOAuth"
     static let shared = DebugFakeOAuth()
 
-    private let lock = NSLock()
+    let lock = NSLock()
     private var bound = true
     private var lostKeys: Set<String> = []
+    /// 换号「响应丢失」场景已丢过一次的键（APP-13a-2）。
+    var changeLost: Set<String> = []
 
     var options: [String: String] {
         var out: [String: String] = [:]
@@ -76,7 +78,11 @@ final class DebugFakeOAuth: @unchecked Sendable {
     }
 
     /// 回答第三方登录与绑手机路径；不是本服务的为 nil。
-    func answer(method: String, path: String, body: [String: Any]) -> Answer? {
+    func answer(method: String, path: String, body: [String: Any], headers: [String: String] = [:]) -> Answer? {
+        // APP-13a-2：换手机号的分支（带 X-Step-Up-Token 的绑手机、phone_change 的发码 / 验证 30414 场景），见 DebugFakeOAuth+PhoneChange
+        if let change = phoneChangeAnswer(method: method, path: path, body: body, headers: headers) {
+            return change
+        }
         switch (method, path) {
         case ("POST", "/v1/auth/oauth-attempts"):
             let data = "{\"attempt_id\":\"debug-attempt-0001\",\"nonce\":\"debug-nonce-not-secret-0001\","

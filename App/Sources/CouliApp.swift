@@ -165,6 +165,8 @@ struct CouliApp: App {
         // APP-05b：手机号绑定状态的 getMe 与「我的」、钱包实名查询、桥 auth.getUser 共用读取截止时间；绑定成功清全部 action 的 step-up token
         login.phoneSync.readGate = me.gates.read
         login.connect(wallet: wallet)
+        // APP-13a-2：换号子页的钱包二次验证依赖与绑手机端口
+        me.connect(wallet: wallet)
         web.meReadGate = me.gates.read
         shop.orders.customerService = open
         shop.search.trade?.customerService = open

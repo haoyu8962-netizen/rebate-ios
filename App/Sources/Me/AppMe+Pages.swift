@@ -53,7 +53,9 @@ extension AppMe {
         case "Settings":
             return hostEntry(route, make: { SettingsController(deps: deps, identity: $0, page: id) },
                              appeared: { $0.refresh() }, leave: { $0.leave() },
-                             screen: { AnyView(SettingsScreen(host: $0)) })
+                             screen: { [weak self] host in
+                                 AnyView(SettingsRouteContent(host: host, gates: self?.phoneChangeGates()))
+                             })
         case "PrivacyCenter":
             // 从强更页进入（打开时固定，03 §4.1）：只留清单、协议与【撤回同意】
             let forced = destination.fromForceUpdatePage || routing.mustShowForceUpdate

@@ -65,6 +65,12 @@ final class AppMe: ObservableObject {
     var recentTraceIds: () -> [String] = { [] }
     /// 本机时钟（测试注入）。
     var clock: () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+    /// 换号子页的外部依赖（APP-13a-2：`connect(wallet:)` 之后才有；见 AppMe+PhoneChange）。
+    var phoneChangeLink: AppPhoneChangePorts?
+    #if DEBUG
+    /// Debug / Staging 的换号入口覆盖（启动参数 `-CouliFakeMe phone_change=on`；测试直接赋值）。nil = 按 Release 判据（缺省关）。
+    var phoneChangeOverride: Bool?
+    #endif
 
     private(set) var currentIdentity: MeIdentity
     /// 因 10006 进入过 RiskNotice 的那个身份（G10；共性第 30 条：绑定触发时固定的身份，身份任一部分变化即清除）。

@@ -14,6 +14,10 @@ struct AppMeTexts: MeTexts {
         if let text = LoginDraftTexts.drafts[key] {
             return text
         }
+        // APP-13a-2：换号子页的草稿键（AccountDraftTexts，TODO(N-37)）
+        if let text = AccountDraftTexts.drafts[key] {
+            return text
+        }
         return wallet.has(key) ? wallet.text(key) : nil
     }
 

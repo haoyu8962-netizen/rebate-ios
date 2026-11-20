@@ -94,7 +94,7 @@ public final class BindPhoneService {
     private var listenerSerial = 0
     private var sms = BindSmsDeadlines()
     private var smsSending: Set<String> = []
-    private var writing: Set<String> = []
+    var writing: Set<String> = []
     /// phoneGate 是哪个固定归属的 42901 记下的（R1-09）：会话级限流只限制同一归属；归属变更时在同步出口清掉。
     var gateOwner: RequestOwnership?
 
@@ -342,7 +342,7 @@ public final class BindPhoneService {
     }
 
     /// 共享结算（APP-13a 共性第 9、25、66 条）：只按固定身份；会话已换的不动新会话。
-    private func settle(_ owner: BindPhoneOwner, result: ApiResult, kind: BindSettledKind) {
+    func settle(_ owner: BindPhoneOwner, result: ApiResult, kind: BindSettledKind) {
         guard isCurrent(owner) else { return }
         if case let .failure(code, _, _, _, effect, _) = result, code == 42901 {
             startGate(owner, millis: effect.disableMillis ?? ErrorActionMapper.defaultRetryAfterMillis)
