@@ -2,8 +2,10 @@
 import Foundation
 
 /// 换手机号（APP-13a-2）的本机假服务分支（只在 Debug / Staging 编译；入口另由 `-CouliFakeMe phone_change=on` 打开，Release 恒关）。
-/// 区分首次绑定与更换只看请求有没有 X-Step-Up-Token：没带的照旧走首次绑定那一支（行为不变）。第 1 步与 10003 面板的发码 / 验证仍由
-/// DebugFakeWallet 回答（验证码 123456 → token fake-step-up-phone_change-n），这里只按场景截 30414。
+/// 区分首次绑定与更换：带 X-Step-Up-Token 的一定是更换；不带的，只有换号假服务打开（`-CouliFakeMe phone_change=on` 或给了
+/// `-CouliFakeOAuth change=…`）且假账号已绑手机时才按「更换但没带 token」回 10003（真实服务端对已绑号同样回 10003，不能直接判成功，
+/// 评审 S2-2 / S3-6）；其余照旧走首次绑定那一支（行为不变）。第 1 步与 10003 面板的发码 / 验证仍由 DebugFakeWallet 回答
+/// （验证码 123456 → token fake-step-up-phone_change-n），这里只按场景截 30414。`abandon=` 也只在换号假服务打开时截。
 ///
 /// 开关（启动参数 `-CouliFakeOAuth change=…`）：ok（缺省）| 30411 | 30411_mergeable | 30414 | 30414_sms | 30414_verify |
 /// 44001 | 20903 |
@@ -13,15 +15,19 @@ import Foundation
 extension DebugFakeOAuth {
     func phoneChangeAnswer(method: String, path: String, body: [String: Any], headers: [String: String]) -> Answer? {
         let mode = options["change"] ?? "ok"
+        let changeOn = options["change"] != nil || DebugFakeMe.shared.options["phone_change"] == "on"
         switch (method, path) {
         case ("POST", "/v1/auth/sms-codes") where body["action"] as? String == "phone_change" && mode == "30414_sms":
             return Answer(code: 30414, data: "null")
         case ("POST", "/v1/auth/step-up") where body["action"] as? String == "phone_change" && mode == "30414_verify":
             return Answer(code: 30414, data: "null")
-        case ("POST", "/v1/idempotency-keys/abandon") where body["action"] as? String == "phone_change":
+        case ("POST", "/v1/idempotency-keys/abandon") where body["action"] as? String == "phone_change" && changeOn:
             return abandonChange()
         case ("POST", "/v1/me/phone") where DebugFakeWallet.header(headers, "X-Step-Up-Token") != nil:
             return change(body, headers: headers, mode: mode)
+        case ("POST", "/v1/me/phone") where changeOn && phoneBound:
+            // 已绑手机却没带 token 的更换：要先二次验证
+            return Answer(code: 10003, data: "null")
         default:
             return nil
         }

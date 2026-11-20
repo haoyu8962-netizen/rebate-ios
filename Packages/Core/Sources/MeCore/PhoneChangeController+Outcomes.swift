@@ -21,6 +21,8 @@ extension PhoneChangeController {
             return
         case let .transportFailure(_, _, _, unknown):
             if unknown {
+                // 待确认卡读出来之前【提交】保持置灰，不闪出可点的一拍（网络层另有 pendingKeyUnresolved 兜底）
+                state.submitting = true
                 refreshPending()
             } else if sameForm {
                 state.notice = notice(MeCodes.networkKey)
@@ -63,6 +65,8 @@ extension PhoneChangeController {
             return
         case 10003:
             if replayed {
+                // 面板刚给的 token 服务端也不认：作废，下次提交不再带它
+                token = nil
                 state.notice = notice(effect.textKey ?? "error.10003")
             } else {
                 openPanel(.submit(submission))

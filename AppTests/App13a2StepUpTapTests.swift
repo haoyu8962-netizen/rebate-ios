@@ -35,8 +35,8 @@ final class App13a2StepUpTapTests: App13a2TestCase {
     }
 
     private func mount(_ root: some View) {
-        let host = UIHostingController(rootView: AnyView(NavigationStack { root }
-            .environment(\.couliLayoutProbe, probes.probe)))
+        let content = NavigationStack { root }.environment(\.couliLayoutProbe, probes.probe)
+        let host = UIHostingController(rootView: AnyView(content))
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         let frame = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
         frame.frame = CGRect(x: 0, y: 0, width: 390, height: 844)

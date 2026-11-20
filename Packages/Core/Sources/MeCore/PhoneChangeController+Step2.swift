@@ -156,9 +156,13 @@ extension PhoneChangeController {
 
     // MARK: - 10003 面板
 
+    /// 面板 token 的保守有效期（毫秒）。
+    static let panelTokenMillis: Int64 = 300_000
+
     /// 提交 / 确认得到 10003：弹面板（action = phone_change，与第 1 步同一套共享发码 / 验证状态），拿到 token 后原键原体再发 1 次。
     func openPanel(_ intent: PhoneChangePanelIntent) {
         token = nil
+        panelEpoch = bind.tokenEpoch()
         wallet.tokens.on10003(action: Self.action)
         panel.openPhoneChange(owner: walletOwner, onToken: { [weak self] value in
             self?.panelVerified(value, intent)
@@ -168,7 +172,13 @@ extension PhoneChangeController {
     }
 
     private func panelVerified(_ value: String, _ intent: PhoneChangePanelIntent) {
-        guard alive else { return }
+        // 面板期间 token 已被作废（别处绑定成功）：迟到的面板 token 丢弃、不重放（与第 1 步对称，共性第 43 条）
+        guard alive, panelEpoch == bind.tokenEpoch() else { return }
+        // 面板 token 写回流程 token：重放回 20001 / 20002 / 20003 后用户改码再提交照样带上，不重新验证（brief §1「token 不丢」）。
+        // 面板响应里的 expire_at 只进了 StepUpTokenCache、不回给发起方，这里保守按 5 分钟；真过期以服务端 10003 为准（再弹面板）
+        token = PhoneChangeToken(
+            value: value, epoch: panelEpoch, expireAtMillis: wallet.env.nowMillis() + Self.panelTokenMillis
+        )
         switch intent {
         case let .submit(submission):
             guard state.step == .step2 else { return }

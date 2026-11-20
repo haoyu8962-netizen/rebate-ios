@@ -66,6 +66,8 @@ public final class PhoneChangeController: ObservableObject {
     var newTicker: Task<Void, Never>?
     var unsubscribers: [() -> Void] = []
     var watches: Set<AnyCancellable> = []
+    /// 打开 10003 面板那一刻的 token 失效世代：面板期间别处绑定成功（世代推进）时，迟到的面板 token 丢弃（共性第 43 条）。
+    var panelEpoch: UInt64 = 0
 
     init(deps: MeDeps, identity: MeIdentity, ports: PhoneChangePorts, host: PhoneChangeHost?, page: UUID?) {
         let bind = ports.bind
@@ -200,6 +202,13 @@ public final class PhoneChangeController: ObservableObject {
         panel.$state.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             MainActor.assumeIsolated { self?.objectWillChange.send() }
         }.store(in: &watches)
+        // 10003 面板自己的发码 / 验证遇 30414（换号开关关闭）：与第 1 步、提交、确认同一处理（D10-2203 补 (b)）。@Published 在赋值前
+        // 发出，这里不同步改面板，排到下一拍再核对一次
+        let unavailable = Self.unavailableKey
+        panel.$state.map { $0?.error?.key == unavailable }.removeDuplicates().filter { $0 }
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.panelUnavailable() }
+            }.store(in: &watches)
     }
 
     private func sessionChanged() {
@@ -292,7 +301,18 @@ public final class PhoneChangeController: ObservableObject {
         return "error.44001"
     }
 
+    nonisolated static let unavailableKey = "error.30414"
+
     func showUnavailable() {
         state.dialog = .unavailable(id: nextId())
+    }
+
+    /// 面板里出现 30414：收起面板（不重放、不再确认），弹同一个 `.unavailable`；【知道了】/【联系客服】之后回设置页。
+    func panelUnavailable() {
+        guard alive, panel.state?.error?.key == Self.unavailableKey else { return }
+        panel.detach()
+        state.submitting = false
+        state.pendingBusy = false
+        showUnavailable()
     }
 }

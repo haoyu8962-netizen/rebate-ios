@@ -94,6 +94,7 @@ public extension BindPhoneService {
             let gated = probe.gated(result)
             let (_, kind) = BindOutcomes.map(result, phase: phase, gated: gated)
             settle(owner, result: result, kind: kind)
+            // 不变量：先交页面、紧接着发通知，同一主线程任务内不插别的结算（换号页按 `notified` 跳过紧随的这一条自己的通知）
             completion(BindChangeArrival(result: result, kind: kind, gated: gated, notified: true))
             notifyPending(owner, account: account, kind)
         }

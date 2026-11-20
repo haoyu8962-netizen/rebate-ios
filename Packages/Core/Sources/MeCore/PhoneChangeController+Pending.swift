@@ -16,6 +16,9 @@ extension PhoneChangeController {
         Task { @MainActor [weak self] in
             let lookup = await bind.pendingStatus(owner)
             guard let self, alive, mine == pendingSerial else { return }
+            if state.step == .step2 {
+                state.submitting = false
+            }
             switch lookup {
             case let .record(record) where record.stateRaw == PendingKeyStore.unknown:
                 showPending(record)
@@ -186,6 +189,8 @@ extension PhoneChangeController {
 
     /// 共享未决通知：本页自己的写请求随后那条跳过；别处结算了待确认的那个键 → 按结局落地；别处留下未决 → 按记录进待确认。
     func settledElsewhere(_ event: PhoneBindSettled) {
+        // 不变量：BindPhoneService.runChange 在同一个主线程任务里先调本页的 completion、紧接着发共享通知，中间没有别的结算插进来；
+        // 所以 completion 里置的 ownSettling 只会被紧随的那一条通知消费（见 BindPhoneService+Change.swift 同名注释）
         if ownSettling {
             ownSettling = false
             return

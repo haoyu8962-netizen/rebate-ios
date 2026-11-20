@@ -332,13 +332,6 @@ public struct PhoneChangeNumberInput {
 }
 
 /// 新号输入框的构造（App 给；nil = 用子页自带的普通单行框）。
-public struct PhoneChangeNumberFieldKey: EnvironmentKey {
-    public static let defaultValue: (@MainActor @Sendable (PhoneChangeNumberInput) -> AnyView)? = nil
-}
-
 public extension EnvironmentValues {
-    var phoneChangeNumberField: (@MainActor @Sendable (PhoneChangeNumberInput) -> AnyView)? {
-        get { self[PhoneChangeNumberFieldKey.self] }
-        set { self[PhoneChangeNumberFieldKey.self] = newValue }
-    }
+    @Entry var phoneChangeNumberField: (@MainActor @Sendable (PhoneChangeNumberInput) -> AnyView)?
 }
