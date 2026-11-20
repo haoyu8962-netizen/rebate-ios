@@ -21,6 +21,7 @@ enum WithdrawVisualBaseline {
         "Packages/Core/Sources/WalletCore/SensitiveFlow.swift": "6959d4f34333e5104440a6428dc75184a82eaad8762b35e54c394005b9c6d3af",
         "Packages/Core/Sources/WalletCore/SensitiveOutcome.swift": "b38c8bd67f524d299707a392cf144b3463b289ca968a9a72b668ab0e98711c53",
         "Packages/Core/Sources/WalletCore/SensitiveOutcome+Deletion.swift": "a570433d6cad591bf2bd0f64b06abbf8ce88a95cac32b9801a0c97e682d503c6",
+        "Packages/Core/Sources/WalletCore/StepUpController+PhoneChange.swift": "2cb0ed7566e3ef933454294caed496f99f55a6b55a16bd5bde32745954b73d92",
         "Packages/Core/Sources/WalletCore/StepUpController+Send.swift": "f7abf88997830897adfe6359f582f26cccfc2742ee4b9f969ee6474289f30534",
         "Packages/Core/Sources/WalletCore/StepUpController.swift": "5ee4e7de1d0bf84ae5191a46643bd9f431b9f455fbc34ce5b26b4e7cc8968b3c",
         "Packages/Core/Sources/WalletCore/WalletController.swift": "ce4bd3fdeffe51d3fa01a3741036b5fcc257e39faf66a8b70b6d7f740e84601b",

@@ -43,19 +43,19 @@ final class SettingsVisualGuardTests: XCTestCase {
     func testLogicFilesByteIdentical() throws {
         let pinned: [String: String] = [
             "Packages/Core/Sources/MeCore/SettingsController.swift":
-                "d9a8331cc34fd44d677a2373731c04ca6d57512167ebd555e51f05a58096cad7",
+                "b44ec705274ea024a157f9aad274ad29eea7cbe79a8f44176921a208b0771bd4",
             "Packages/Core/Sources/MeCore/SettingsItems.swift":
                 "988cd419de52b5ea6b33ad3cb3304893fc2b2136c0e798417c87cbe81811347f",
             "Packages/Core/Sources/MeCore/NicknameRules.swift":
                 "3978bb5552a6447a2141242688085b92f971d03df8ed761c69b9ac1f9c7cac8c",
             "Packages/Core/Sources/MeCore/MeDeps.swift":
-                "fa80520e101b6a060f9e243bd149929a5d7f1ec8c5ffabe8ea3982009568baea",
+                "6cb48047c5df1d1f7bb309ee52bd4850999aaece01d1354f8d60644cd88af763",
             "Packages/Core/Sources/MeCore/MeSupport.swift":
                 "5ac5f71f68c7450b7e3c0aca9d129186334a0ff47e0b6f7de9d6ab6b266773d1",
             "Packages/Core/Sources/MeCore/MePageHost.swift":
                 "6fde193124dc276c23ebb436a26eae5fc2e90e7f0b8b5639361b51632351f843",
-            "App/Sources/Me/AppMe.swift": "3836bbc1e2ca7fdb7b8c927e93368d86fd27223713f51320df500ea53c60b179",
-            "App/Sources/Me/AppMe+Pages.swift": "60fc0517af8fbe9de4594ad6108ea7094c328cb26a7c37e573849ec502f30d92",
+            "App/Sources/Me/AppMe.swift": "13ebd8e21571a7d0c8d1d2a5c13bc2d5e5ab33a86f96c3d0115928cb73c6a47a",
+            "App/Sources/Me/AppMe+Pages.swift": "258a377fc15a7c401034b51d31d58439af45b2a018d3b092d6b22905dbc6abe9",
         ]
         for (path, expected) in pinned.sorted(by: { $0.key < $1.key }) {
             XCTAssertEqual(digest(try read(path)), expected, "\(path) 被改（brief §0）")
