@@ -7,6 +7,7 @@ import WalletCore
 
 /// 换号入口的发布闸（D10-2203 ⑤，与路由 since 同一道闸：since 为 nil = 本端未发布，Release 关）。
 /// TODO(B1-20b)：B1-20b 部署 staging 后开门小单把它改成版本号。
+/// 开门前置（D10-2281）：FU-IOS-PHONECHANGE-STEPUP-TITLE（面板按 action 换标题 / 说明行）必须先完成，不带此缺口对用户开放。
 public enum PhoneChangeEntry {
     public static let sinceIOS: String? = nil
 }

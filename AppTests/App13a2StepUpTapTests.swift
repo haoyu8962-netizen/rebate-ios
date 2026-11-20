@@ -136,7 +136,7 @@ final class App13a2StepUpTapTests: App13a2TestCase {
         await waitUntil("半屏没有呈现", timeout: 8) { self.window?.rootViewController?.presentedViewController != nil }
         await waitUntil("半屏标题没有上报", timeout: 8) { self.probes["stepUp.title"] != nil }
         let title = probes["stepUp.title"]?.text ?? ""
-        XCTExpectFailure("FU-IOS-PHONECHANGE-STEPUP-TITLE：面板按 action 换标题另开单") {
+        XCTExpectFailure("FU-IOS-PHONECHANGE-STEPUP-TITLE（D10-2281）：面板按 action 换标题另开单") {
             XCTAssertEqual(title, AccountDraftTexts().text("step_up.title.phone_change"), "标题是换号用的（brief §3 草稿键）")
             XCTAssertNotEqual(title, WalletDraftTexts().text("error.10003"), "不是提现 / 改收款的资金安全标题")
         }
