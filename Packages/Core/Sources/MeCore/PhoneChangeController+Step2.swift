@@ -164,11 +164,28 @@ extension PhoneChangeController {
         token = nil
         panelEpoch = bind.tokenEpoch()
         wallet.tokens.on10003(action: Self.action)
+        // 说明行的号在打开时固定（FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281）：先写再开面板，半屏第一帧就带号；收起时由 watch() 清空
+        state.panelMaskedPhone = Self.panelPhone(intent, pending: state.pending)
         panel.openPhoneChange(owner: walletOwner, onToken: { [weak self] value in
             self?.panelVerified(value, intent)
         }, onClosed: { [weak self] in
             self?.objectWillChange.send()
         })
+    }
+
+    /// 面板说明行的号：提交 = 提交摘要里的脱敏号；确认 = 此刻待确认卡的脱敏号；空串当 nil（不显示说明行）。
+    static func panelPhone(_ intent: PhoneChangePanelIntent, pending: PhoneChangePendingCard?) -> String? {
+        let masked = switch intent {
+        case let .submit(submission): submission.maskedPhone
+        case .confirm: pending?.maskedPhone
+        }
+        return masked.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// 面板收起（用户关闭 onClosed、验证成功交 token 前、detach：离页 / 换代 / 结局落定 / 30414）：清掉说明行的号。
+    func panelClosed() {
+        guard state.panelMaskedPhone != nil else { return }
+        state.panelMaskedPhone = nil
     }
 
     private func panelVerified(_ value: String, _ intent: PhoneChangePanelIntent) {

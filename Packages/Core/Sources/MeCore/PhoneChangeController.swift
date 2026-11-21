@@ -202,6 +202,11 @@ public final class PhoneChangeController: ObservableObject {
         panel.$state.map { $0 != nil }.removeDuplicates().sink { [weak self] _ in
             MainActor.assumeIsolated { self?.objectWillChange.send() }
         }.store(in: &watches)
+        // 面板收起的所有出口（onClosed、验证成功、detach）都把面板 state 置 nil：在这一处清说明行的号，不逐个出口补
+        // （FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281）。@Published 在赋值前发出，这里只改本页 state、不碰面板
+        panel.$state.filter { $0 == nil }.sink { [weak self] _ in
+            MainActor.assumeIsolated { self?.panelClosed() }
+        }.store(in: &watches)
         // 10003 面板自己的发码 / 验证遇 30414（换号开关关闭）：与第 1 步、提交、确认同一处理（D10-2203 补 (b)）。@Published 在赋值前
         // 发出，这里不同步改面板，排到下一拍再核对一次
         let unavailable = Self.unavailableKey

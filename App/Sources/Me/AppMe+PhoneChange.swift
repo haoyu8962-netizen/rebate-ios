@@ -235,20 +235,56 @@ private struct PhoneChangeStepUpLayer: View {
     let gates: WalletGates?
 
     var body: some View {
-        if let stepUp = settings.phoneChange?.stepUp, let gates {
-            PhoneChangeStepUpAnchor(stepUp: stepUp, smsGate: gates.sms, verifyGate: gates.verify)
+        if let phoneChange = settings.phoneChange, let stepUp = phoneChange.stepUp, let gates {
+            PhoneChangeStepUpAnchor(
+                phoneChange: phoneChange, stepUp: stepUp, smsGate: gates.sms, verifyGate: gates.verify
+            )
         }
     }
 }
 
+/// 设置页只在换子页时发变化；说明行的号在换号子页的 state 里，这里直接观察子页执行器，号一变半屏跟着重绘
+/// （FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281）。
 private struct PhoneChangeStepUpAnchor: View {
+    @ObservedObject var phoneChange: PhoneChangeController
     let stepUp: StepUpController
     @ObservedObject var smsGate: RetryAfterGate
     @ObservedObject var verifyGate: RetryAfterGate
-    private let texts = AccountDraftTexts()
+
+    private var texts: PhoneChangePanelTexts {
+        PhoneChangePanelTexts(maskedPhone: phoneChange.state.panelMaskedPhone)
+    }
 
     var body: some View {
         Color.clear
             .walletStepUpSheet(stepUp, texts: texts, smsBlocked: smsGate.blocked, verifyBlocked: verifyGate.blocked)
+    }
+}
+
+/// 换号 10003 面板的文案表（FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281）：其余键原样转给 AccountDraftTexts（标题
+/// step_up.title.phone_change 在那里）；说明行 step_up.summary.phone_change 填打开面板时固定的脱敏新号，没有号码时 has 为 false、
+/// 面板不显示说明行。
+struct PhoneChangePanelTexts: WalletTexts {
+    static let summaryKey = "step_up.summary.phone_change"
+
+    let maskedPhone: String?
+    private let base = AccountDraftTexts()
+
+    init(maskedPhone: String?) {
+        self.maskedPhone = maskedPhone.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    func text(_ key: String) -> String {
+        guard key == Self.summaryKey, let maskedPhone else { return base.text(key) }
+        return base.format(key, ["phone": maskedPhone])
+    }
+
+    func format(_ key: String, _ vars: [String: String]) -> String {
+        guard key == Self.summaryKey, let maskedPhone else { return base.format(key, vars) }
+        return base.format(key, vars.merging(["phone": maskedPhone]) { given, _ in given })
+    }
+
+    func has(_ key: String) -> Bool {
+        key == Self.summaryKey ? maskedPhone != nil && base.has(key) : base.has(key)
     }
 }

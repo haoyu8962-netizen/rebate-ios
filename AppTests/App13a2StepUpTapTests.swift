@@ -126,8 +126,8 @@ final class App13a2StepUpTapTests: App13a2TestCase {
         XCTAssertNil(stepUp.state, "拿到 token 后半屏收起")
     }
 
-    /// 换号半屏的标题是换号草稿键（brief §3 / §11 第 9 项），不是提现 / 改收款的资金安全标题。面板按 action 换标题要改 StepUpSheet、碰资金面板
-    /// 快照，本线定另开 FU-IOS-PHONECHANGE-STEPUP-TITLE，本单不做：先按预期失败登记（strict 缺省），FU 做完后变成意外通过、提醒删掉包装。
+    /// 换号半屏的标题是换号草稿键（brief §3 / §11 第 9 项），不是提现 / 改收款的资金安全标题。面板按 action 换标题已由
+    /// FU-IOS-PHONECHANGE-STEPUP-TITLE（D10-2281）补上（StepUpSheet.titleKey 加 phone_change 分支），原先的预期失败包装随之摘掉。
     func testPanelTitleIsPhoneChangeDraft() async throws {
         script.on(Self.bindWrite, Self.code(10003))
         let fixture = fixture()
@@ -136,10 +136,8 @@ final class App13a2StepUpTapTests: App13a2TestCase {
         await waitUntil("半屏没有呈现", timeout: 8) { self.window?.rootViewController?.presentedViewController != nil }
         await waitUntil("半屏标题没有上报", timeout: 8) { self.probes["stepUp.title"] != nil }
         let title = probes["stepUp.title"]?.text ?? ""
-        XCTExpectFailure("FU-IOS-PHONECHANGE-STEPUP-TITLE（D10-2281）：面板按 action 换标题另开单") {
-            XCTAssertEqual(title, AccountDraftTexts().text("step_up.title.phone_change"), "标题是换号用的（brief §3 草稿键）")
-            XCTAssertNotEqual(title, WalletDraftTexts().text("error.10003"), "不是提现 / 改收款的资金安全标题")
-        }
+        XCTAssertEqual(title, AccountDraftTexts().text("step_up.title.phone_change"), "标题是换号用的（brief §3 草稿键）")
+        XCTAssertNotEqual(title, WalletDraftTexts().text("error.10003"), "不是提现 / 改收款的资金安全标题")
     }
 
     /// 对照（零变化）：同一组合里提现页（生产路由视图 WalletRouteView）提交 10003 → 半屏 action=withdraw、资金安全标题（error.10003）、

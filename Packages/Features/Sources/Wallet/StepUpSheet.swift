@@ -190,8 +190,9 @@ struct StepUpSheetBody: View {
                                    style: .footnote, color: CouliColor.textSecondary, probe: "stepUp.sent")
                             .accessibilityIdentifier(state.phase == .noPhone ? "stepUp.noPhone" : "stepUp.sent")
                     }
-                    // 说明随 action 变（APP-13a 共性第 3 条）：申请注销多一行「申请注销账号」（step_up.summary.deletion）；提现、改收款不变
-                    if let summaryKey = Self.summaryKey(state.action) {
+                    // 说明随 action 变（APP-13a 共性第 3 条）：申请注销多一行「申请注销账号」（step_up.summary.deletion）；换手机号多一行
+                    // 新号摘要（FU-IOS-PHONECHANGE-STEPUP-TITLE）；提现、改收款不变
+                    if let summaryKey = Self.summaryKey(state.action, texts) {
                         RecordText(texts.text(summaryKey), style: .footnote, color: CouliColor.textSecondary,
                                    probe: "stepUp.summary")
                             .accessibilityIdentifier("stepUp.summary")
@@ -217,15 +218,27 @@ struct StepUpSheetBody: View {
         .padding(.bottom, CouliSpacing.s4)
     }
 
-    /// 面板标题随 action 变（APP-13a 共性第 3 条）：申请注销取 step_up.title.account_deletion（注销页的文案表有这个键时）；其余与提现、
+    /// 面板标题随 action 变（APP-13a 共性第 3 条）：申请注销取 step_up.title.account_deletion、换手机号取 step_up.title.phone_change
+    /// （FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281），都要调用方的文案表有这个键（草稿键只在 AccountDraftTexts）；其余与提现、
     /// 改收款相同（error.10003）。
     static func titleKey(_ action: String, _ texts: WalletTexts) -> String {
         let key = "step_up.title.\(action)"
-        return action == "account_deletion" && texts.has(key) ? key : "error.10003"
+        return ["account_deletion", "phone_change"].contains(action) && texts.has(key) ? key : "error.10003"
     }
 
-    static func summaryKey(_ action: String) -> String? {
-        action == "account_deletion" ? "step_up.summary.deletion" : nil
+    /// 说明行：申请注销照旧。换手机号取契约 step_up.summary.phone_change（{phone} 由调用方的文案表填固定摘要的脱敏新号，
+    /// D10-2281）：标题是换号键、且文案表有说明键才显示——换号页在没有号码时让 has 返回 false，不出现「{phone}」或半截句；
+    /// 不认识换号标题的文案表（WalletDraftTexts）照旧不显示。
+    static func summaryKey(_ action: String, _ texts: WalletTexts) -> String? {
+        switch action {
+        case "account_deletion":
+            return "step_up.summary.deletion"
+        case "phone_change":
+            let key = "step_up.summary.phone_change"
+            return titleKey(action, texts) == "step_up.title.phone_change" && texts.has(key) ? key : nil
+        default:
+            return nil
+        }
     }
 
     /// 6 格 + 格下一行。底部留白在滚动区内：【重新获取】44 命中区伸出视觉行，不留就被中段滚动裁掉（Android r1 S2-1）。

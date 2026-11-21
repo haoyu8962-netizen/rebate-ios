@@ -118,6 +118,9 @@ public struct PhoneChangeState: Equatable, Sendable {
     public var pendingNotice: MeNotice?
     public var pendingBusy = false
     public var dialog: PhoneChangeDialog?
+    /// 10003 面板说明行的脱敏新号（FU-IOS-PHONECHANGE-STEPUP-TITLE，D10-2281）：打开面板时按这次要放行的请求固定（提交 = 提交摘要的号，
+    /// 确认 = 打开时待确认卡的号；空串当 nil），之后改输入框、卡片刷新都不变（共性第 17 条）；面板一收起就清空。nil = 不显示说明行。
+    public var panelMaskedPhone: String?
     /// 读屏播报（每条一次）：assertive=true 打断式（20002 / 20003、待确认卡出现），false 礼貌（「已发送」）。
     public var announce: MeNotice?
     /// 页面数据版本（表单世代）：回调捕获渲染时的值，执行时核对。换步、重置、换代时加一；输入不加。
