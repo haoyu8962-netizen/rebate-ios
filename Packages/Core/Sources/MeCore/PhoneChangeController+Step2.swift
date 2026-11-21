@@ -174,6 +174,10 @@ extension PhoneChangeController {
     }
 
     /// 面板说明行的号：提交 = 提交摘要里的脱敏号；确认 = 此刻待确认卡的脱敏号；空串当 nil（不显示说明行）。
+    /// 空串归 nil 这一步现在是第三道（变异 mut-06 判等价，D10-2313）：上游已有两处——提交侧 `submit` 里
+    /// `MePhone.normalize(phone).map(MePhone.masked)` 规整失败即 nil、成功不会是空串；确认侧 `showPending`
+    /// （PhoneChangeController+Pending.swift）读记录摘要时已 `$0.isEmpty ? nil : $0`。删改那两处时这里要一起看，
+    /// App 侧 PhoneChangePanelTexts.init 另有一道过滤。
     static func panelPhone(_ intent: PhoneChangePanelIntent, pending: PhoneChangePendingCard?) -> String? {
         let masked = switch intent {
         case let .submit(submission): submission.maskedPhone
