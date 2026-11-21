@@ -20,9 +20,11 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
         "-CouliHideDebugInfo", "1",
     ]
     private static let minMargin: CGFloat = 12
-    /// 钉底栏按钮上方留白（绑手机 bottomBar 与登录验证码步 pinnedSubmitBar 都是 `.padding(.top, CouliSpacing.s3)`）：
-    /// 栏上沿 = 栏内按钮 minY − 12。
-    private static let barTopPadding: CGFloat = 12
+    /// 栏上沿 = 底栏里最上面那颗按钮的 minY − 16（r3 编排定的口径；实际栏上留白是 s3 = 12，多算 4pt 作余地）。
+    /// 键盘收起、按钮回到内容里时，这个值仍是「输入框必须在它之上」的下界（两页输入框都排在主按钮之上）。
+    private static let barTopAllowance: CGFloat = 16
+    /// 绑手机钉底栏里【获取验证码】与【绑定】之间至少留的间隙（r3，S2-3 新口径 (a)）。
+    private static let barButtonGap: CGFloat = 8
     /// 「位置不变」的容差（S2-1 / S2-4）。
     private static let sameTolerance: CGFloat = 1
     private static let phone = "13800005678"
@@ -44,10 +46,9 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
             let before = baseline(page, tier, button)
             type(field, Self.phone)
             if check(app, page, tier, button) {
-                checkFieldVisible(app, page, tier, field,
-                                  within: (loginTopBarBottom(app), button.frame.minY - Self.barTopPadding))
+                checkFieldVisible(app, page, tier, field, within: (loginTopBarBottom(app), barTop([button])))
             }
-            checkRestored(app, page, tier, button, before)
+            checkRestored(app, "\(page)/\(tier)", button, before, (field, [button]))
         }
     }
 
@@ -63,21 +64,21 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
             guard need(code, 5, "\(page)/\(tier)：缺验证码框 login.code") else { continue }
             let button = app.buttons["login.submit"]
             // 进验证码步时验证码框自动聚焦、键盘已弹起：先收起，记键盘收起时【登录】的原位
-            let before = dismissKeyboard(app, page, tier, "记原位前") ? baseline(page, tier, button) : nil
+            let dismissed = dismissKeyboard(app, "\(page)/\(tier)：记原位前", avoid: code, bar: [button])
+            let before = dismissed ? baseline(page, tier, button) : nil
             type(code, "482913")
             if check(app, page, tier, button) {
-                checkFieldVisible(app, page, tier, code,
-                                  within: (loginTopBarBottom(app), button.frame.minY - Self.barTopPadding))
+                checkFieldVisible(app, page, tier, code, within: (loginTopBarBottom(app), barTop([button])))
             }
-            if checkRestored(app, page, tier, button, before) {
+            if checkRestored(app, "\(page)/\(tier)", button, before, (code, [button])) {
                 checkSubmitBackInPlace(app, page, tier)
             }
         }
     }
 
     /// 绑手机手机号步：微信登录 →【去绑定】进绑手机页，聚焦 bindPhone.phone 输入手机号后，主按钮【获取验证码】bindPhone.getCode
-    /// 不滚动即在键盘以上、可点、余量 ≥ 12，且与钉底提交栏上沿留 ≥ 12；手机号框整块可见；默认档手机号框不动；键盘收起后
-    /// 【获取验证码】回到聚焦前的位置。
+    /// 不滚动即在键盘以上、可点、余量 ≥ 12，且与【绑定】不重叠、间隙 ≥ 8（r3：键盘弹起期间并进钉底栏、放在【绑定】上方）；
+    /// 手机号框整块在顶栏之下、栏上沿之上；默认档手机号框不动；键盘收起后【获取验证码】回到聚焦前的位置。
     func testBindPhonePhoneStepGetCodeAboveKeyboard() {
         for (tier, extra) in Self.tiers {
             let app = launch(extra)
@@ -92,14 +93,14 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
             let fieldBefore = field.frame
             type(field, Self.phone)
             if check(app, page, tier, button), need(submit, 5, "\(page)/\(tier)：缺钉底提交栏 bindPhone.submit") {
-                let barTop = submit.frame.minY - Self.barTopPadding
-                checkAboveBar(page, tier, button, barTop: barTop)
-                checkFieldVisible(app, page, tier, field, within: (bindPhoneTopBarBottom(app), barTop))
+                checkAboveSubmit(page, tier, button, submit)
+                checkFieldVisible(app, page, tier, field,
+                                  within: (bindPhoneTopBarBottom(app), barTop([button, submit])))
                 if tier == "normal" {
                     checkFieldUnmoved(page, tier, field, fieldBefore)
                 }
             }
-            checkRestored(app, page, tier, button, before)
+            checkRestored(app, "\(page)/\(tier)", button, before, (field, [button, submit]))
         }
     }
 }
@@ -199,19 +200,35 @@ private extension FuLoginKeyboardAvoidTests {
         field.typeText(text)
     }
 
-    /// 收起键盘：两页都没有收键盘的按钮（号码 / 验证码键盘无回车），ScrollView 拖动即收（scrollDismissesKeyboard 缺省）。
-    /// 从顶栏下 40pt 往下短拖 100pt（不点到输入框、不碰键盘与钉底栏；内容在顶时回弹、不改滚动位置），最多 3 次，再等键盘消失。
-    func dismissKeyboard(_ app: XCUIApplication, _ page: String, _ tier: String, _ when: String) -> Bool {
+    /// 收起键盘（r3）：两页 ScrollView 是 `.scrollDismissesKeyboard(.interactively)`，要从内容区一路拖进键盘、越过键盘顶才收。
+    /// 起点：栏上沿（`bar` 里最上面那颗按钮 minY − 16）与键盘顶取小，再往上 60pt，水平居中；落在输入框上时挪到输入框上方 20pt
+    /// （不低于顶栏下沿 + 10）。慢速拖到键盘顶下方 150pt（按 0.1 秒、`.slow`），最多 3 次，再等键盘消失（上限 3 秒）。
+    func dismissKeyboard(_ app: XCUIApplication, _ what: String, avoid field: XCUIElement, bar: [XCUIElement]) -> Bool {
         let keyboard = app.keyboards.firstMatch
-        let win = app.windows.firstMatch.frame
-        let top = max(loginTopBarBottom(app), bindPhoneTopBarBottom(app), win.minY)
         for _ in 0..<3 where keyboard.exists {
+            let win = app.windows.firstMatch.frame
+            let kbdTop = keyboard.frame.minY
+            let floor = max(loginTopBarBottom(app), bindPhoneTopBarBottom(app), win.minY) + 10
+            var startY = min(barTop(bar), kbdTop) - 60
+            if field.exists, field.frame.insetBy(dx: 0, dy: -8).minY <= startY,
+               startY <= field.frame.insetBy(dx: 0, dy: -8).maxY {
+                startY = max(field.frame.minY - 20, floor)
+            }
             let origin = app.coordinate(withNormalizedOffset: .zero)
-            origin.withOffset(CGVector(dx: win.midX, dy: top + 40))
-                .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: win.midX, dy: top + 140)))
+            origin.withOffset(CGVector(dx: win.midX, dy: startY)).press(
+                forDuration: 0.1, thenDragTo: origin.withOffset(CGVector(dx: win.midX, dy: kbdTop + 150)),
+                withVelocity: .slow, thenHoldForDuration: 0
+            )
             _ = UIWait.untilQuietly(seconds: 2) { !keyboard.exists }
         }
-        return UIWait.until("\(page)/\(tier)：\(when)收起键盘", ceiling: 3) { !keyboard.exists }
+        return UIWait.until("\(what)收起键盘", ceiling: 3) { !keyboard.exists }
+    }
+
+    /// 栏上沿口径：`bar` 里现存按钮的最小 minY − 16（没有可用按钮时不设限，调用方再与键盘顶取小）。
+    func barTop(_ bar: [XCUIElement]) -> CGFloat {
+        let tops = bar.filter(\.exists).map(\.frame.minY)
+        guard let top = tops.min() else { return .greatestFiniteMagnitude }
+        return top - Self.barTopAllowance
     }
 
     /// 登录页顶栏下沿：顶栏只有关闭 / 返回与【设置】两个 44pt 命中区，无上下留白，取二者 maxY 的较大者。
@@ -276,7 +293,7 @@ private extension FuLoginKeyboardAvoidTests {
     }
 
     /// S1-1：键盘弹起、不滚动时，正在输入的框整块在「窗口顶 / 顶栏下沿」之下、「键盘顶 / 钉底栏上沿」之上。
-    /// `bounds.bottom` 由调用方给：登录页取主按钮 minY − 12（输入框在主按钮之上；钉底时即栏上沿），绑手机取提交栏上沿；再与键盘顶取小。
+    /// `bounds.bottom` 由调用方给：栏上沿口径 `barTop`（登录页取主按钮，绑手机取【获取验证码】与【绑定】中靠上者）；再与键盘顶取小。
     func checkFieldVisible(
         _ app: XCUIApplication, _ page: String, _ tier: String, _ field: XCUIElement,
         within bounds: (top: CGFloat, bottom: CGFloat)
@@ -296,14 +313,15 @@ private extension FuLoginKeyboardAvoidTests {
         XCTAssertLessThanOrEqual(frame.maxY, lower, "\(page)/\(tier)：输入框下沿被键盘或钉底栏挡住；\(facts)")
     }
 
-    /// S2-3：绑手机【获取验证码】下沿 + 12 ≤ 钉底提交栏上沿（= bindPhone.submit.minY − 栏上留白 12）。
-    func checkAboveBar(_ page: String, _ tier: String, _ button: XCUIElement, barTop: CGFloat) {
+    /// S2-3（r3 新口径 (a)）：绑手机键盘弹起时【获取验证码】并进钉底栏、在【绑定】上方：两者不重叠，getCode.maxY ≤ submit.minY − 8。
+    func checkAboveSubmit(_ page: String, _ tier: String, _ button: XCUIElement, _ submit: XCUIElement) {
         let frame = button.frame
-        let gap = barTop - frame.maxY
+        let below = submit.frame
+        let gap = below.minY - frame.maxY
+        let facts = "获取验证码 frame=\(text(frame)) 绑定 frame=\(text(below)) 间隙=\(String(format: "%.1f", gap))"
+        XCTAssertFalse(frame.intersects(below), "\(page)/\(tier)：【获取验证码】与【绑定】重叠；\(facts)")
         XCTAssertGreaterThanOrEqual(
-            gap, Self.minMargin,
-            "\(page)/\(tier)：主按钮与钉底栏上沿余量不足 \(Int(Self.minMargin))pt；按钮 frame=\(text(frame)) "
-                + "栏上沿=\(String(format: "%.1f", barTop)) 余量=\(String(format: "%.1f", gap))"
+            gap, Self.barButtonGap, "\(page)/\(tier)：【获取验证码】与【绑定】间隙不足 \(Int(Self.barButtonGap))pt；\(facts)"
         )
     }
 
@@ -320,21 +338,22 @@ private extension FuLoginKeyboardAvoidTests {
     /// 返回是否走到了比较（键盘已收起且按钮停稳）。
     @discardableResult
     func checkRestored(
-        _ app: XCUIApplication, _ page: String, _ tier: String, _ button: XCUIElement, _ before: CGRect?
+        _ app: XCUIApplication, _ ctx: String, _ button: XCUIElement, _ before: CGRect?,
+        _ layout: (field: XCUIElement, bar: [XCUIElement])
     ) -> Bool {
         guard let before else {
-            XCTFail("\(page)/\(tier)：没有取到聚焦前主按钮原位，跳过收起后复位比较")
+            XCTFail("\(ctx)：没有取到聚焦前主按钮原位，跳过收起后复位比较")
             return false
         }
-        guard dismissKeyboard(app, page, tier, "断言完"),
-              need(button, 5, "\(page)/\(tier)：收起键盘后主按钮不存在"),
-              settle("\(page)/\(tier)：收起键盘后主按钮位置停稳", [button]) else { return false }
+        guard dismissKeyboard(app, "\(ctx)：断言完", avoid: layout.field, bar: layout.bar),
+              need(button, 5, "\(ctx)：收起键盘后主按钮不存在"),
+              settle("\(ctx)：收起键盘后主按钮位置停稳", [button]) else { return false }
         let after = button.frame
         let drift = [after.minX - before.minX, after.minY - before.minY, after.maxX - before.maxX,
                      after.maxY - before.maxY].map(abs).max() ?? 0
         XCTAssertLessThanOrEqual(
             drift, Self.sameTolerance,
-            "\(page)/\(tier)：键盘收起后主按钮没回原位；聚焦前 frame=\(text(before)) 收起后 frame=\(text(after)) "
+            "\(ctx)：键盘收起后主按钮没回原位；聚焦前 frame=\(text(before)) 收起后 frame=\(text(after)) "
                 + "最大偏差=\(String(format: "%.1f", drift))"
         )
         return true
