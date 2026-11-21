@@ -14,12 +14,31 @@ extension LoginView {
     /// 底栏：只在钉底时有内容；按当前步放唯一的那颗主按钮。
     @ViewBuilder var pinnedPrimaryBar: some View {
         if primaryPinned {
-            if model.step == .code {
-                submitButton.keyboardPinnedBar()
-            } else {
-                getCodeButton.keyboardPinnedBar()
+            Group {
+                if model.step == .code {
+                    submitButton.keyboardPinnedBar()
+                } else {
+                    getCodeButton.keyboardPinnedBar()
+                }
             }
+            .onPreferenceChange(KeyboardBarTopKey.self) { pinnedBarTop = $0 }
         }
+    }
+
+    // MARK: - 输入框按需滚动（r4）
+
+    static let topAnchor = "login.content.keyboardTop"
+    static let phoneAnchor = "login.phone.keyboardAnchor"
+    static let codeAnchor = "login.code.keyboardAnchor"
+
+    /// 当前步正在输入的框（手机号框 / 验证码格那一行）。
+    var inputAnchor: String {
+        model.step == .code ? Self.codeAnchor : Self.phoneAnchor
+    }
+
+    /// 只在钉底期间、且本步输入框聚焦时按需滚动（邀请码框聚焦时不动）。
+    var inputScrollActive: Bool {
+        primaryPinned && (model.step == .code ? codeFocused : phoneFocused)
     }
 
     /// 唯一的【获取验证码】：identifier、读屏焦点绑定、状态与动作都在这里。

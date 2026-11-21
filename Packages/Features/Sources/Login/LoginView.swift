@@ -17,6 +17,8 @@ public struct LoginView: View {
     /// 两者决定当前步主按钮是否钉到键盘上方（FU-LOGIN-KEYBOARD-AVOID-ios r3，见 LoginView+Keyboard.swift）。
     @State var keyboardShown = false
     @State var voiceOverRunning = false
+    /// 钉底栏实测上沿（全局坐标；r4 输入框按需滚到它以上）。
+    @State var pinnedBarTop: CGFloat?
 
     static let voiceOverChanged = UIAccessibility.voiceOverStatusDidChangeNotification
 
@@ -38,23 +40,31 @@ public struct LoginView: View {
     public var body: some View {
         VStack(spacing: 0) {
             topBar
-            ScrollView {
-                Group {
-                    if model.step == .code {
-                        codeStep
-                    } else {
-                        phoneStep
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Group {
+                        if model.step == .code {
+                            codeStep
+                        } else {
+                            phoneStep
+                        }
                     }
+                    .padding(.horizontal, CouliSpacing.s4)
+                    .padding(.bottom, CouliSpacing.s6)
+                    // 共性 17：大屏（宽度 ≥ 600pt）上内容限宽并水平居中（03 §10.4）。
+                    .frame(maxWidth: Self.maxContentWidth)
+                    .frame(maxWidth: .infinity)
+                    .keyboardContentTop(Self.topAnchor)
                 }
-                .padding(.horizontal, CouliSpacing.s4)
-                .padding(.bottom, CouliSpacing.s6)
-                // 共性 17：大屏（宽度 ≥ 600pt）上内容限宽并水平居中（03 §10.4）。
-                .frame(maxWidth: Self.maxContentWidth)
-                .frame(maxWidth: .infinity)
-            }
-            // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：键盘弹起期间当前步主按钮钉在键盘上方；不钉时底栏为空、不占高度
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                pinnedPrimaryBar
+                // 拖动内容即可收起键盘（照钱包各页先例，r4）
+                .scrollDismissesKeyboard(.interactively)
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：键盘弹起期间当前步主按钮钉在键盘上方；不钉时底栏为空、不占高度
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    pinnedPrimaryBar
+                }
+                // 钉底后正在输入的框被底栏挡住时滚到栏上沿以上（r4）；收起键盘滚回顶部
+                .keyboardPrimaryScroll(proxy, target: inputAnchor, top: Self.topAnchor, active: inputScrollActive,
+                                       barTop: pinnedBarTop)
             }
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
@@ -70,6 +80,7 @@ public struct LoginView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardShown = false
+            pinnedBarTop = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: Self.voiceOverChanged)) { _ in
             voiceOverRunning = UIAccessibility.isVoiceOverRunning

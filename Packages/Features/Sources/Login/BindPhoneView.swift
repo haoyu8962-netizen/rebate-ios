@@ -61,6 +61,8 @@ struct BindPhoneView: View {
     let texts: LoginTexts
     @FocusState var focus: Field?
     @AccessibilityFocusState var a11y: Field?
+    /// 钉底提交栏实测上沿（全局坐标；FU-LOGIN-KEYBOARD-AVOID-ios r4）。
+    @State var barTop: CGFloat?
 
     func text(_ key: String) -> String {
         texts.text(key)
@@ -69,6 +71,9 @@ struct BindPhoneView: View {
     /// 【获取验证码】所在行的键盘避让锚点（FU-LOGIN-KEYBOARD-AVOID-ios）。
     static let getCodeAnchor = "bindPhone.getCode.keyboardAnchor"
     static let topAnchor = "bindPhone.content.keyboardTop"
+    /// 锚点下伸量：余量 16 + 提交栏顶部留白 12 + 再留 16，覆盖可视区底边与栏上沿的实测差（r4 约 8pt）；
+    /// 内容不够滚时停在最底（实测此时离栏上沿约 24pt）。
+    static let getCodeExtends = KeyboardPrimary.margin + CouliSpacing.s3 + KeyboardPrimary.margin
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,9 +102,12 @@ struct BindPhoneView: View {
                     .frame(maxWidth: .infinity)
                     .keyboardContentTop(Self.topAnchor)
                 }
-                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458 r3）：聚焦手机号框、键盘弹起后【获取验证码】不在钉底栏上沿以上
+                // 拖动内容即可收起键盘（照钱包各页先例，r4）
+                .scrollDismissesKeyboard(.interactively)
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458 r4）：聚焦手机号框、键盘弹起后【获取验证码】不在钉底栏实测上沿以上
                 // 16pt 时才滚；键盘收起滚回顶部
-                .keyboardPrimaryScroll(proxy, target: Self.getCodeAnchor, top: Self.topAnchor, active: focus == .phone)
+                .keyboardPrimaryScroll(proxy, target: Self.getCodeAnchor, top: Self.topAnchor, active: focus == .phone,
+                                       barTop: barTop)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -197,6 +205,8 @@ struct BindPhoneView: View {
         .padding(.bottom, CouliSpacing.s3)
         .frame(maxWidth: LoginView.maxContentWidth)
         .frame(maxWidth: .infinity)
+        .keyboardBarTop()
+        .onPreferenceChange(KeyboardBarTopKey.self) { barTop = $0 }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }
 
