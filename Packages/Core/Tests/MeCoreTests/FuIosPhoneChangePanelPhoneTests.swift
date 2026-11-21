@@ -16,8 +16,18 @@ import XCTest
 final class FuIosPhoneChangePanelPhoneTests: XCTestCase {
     private var fixture: FuPanelPhoneFixture?
 
+    /// 收尾（r1 修崩）：面板打开即发码，同步用例结束时发码还在途；`leave()` 收起面板后已发出的发码照常结算共享倒计时，结算会读
+    /// `WalletDeps.env`（unowned，指向夹具持有的 App13a1ControllerEnv）。先离页、排空面板在途的请求与任务，再释放夹具。
     override func tearDown() async throws {
-        fixture?.controller.leave()
+        if let fixture {
+            let stepUp = fixture.controller.stepUp // 离页前取：leave() 之后可能已不再持有面板
+            fixture.controller.leave()
+            await stepUp?.whenIdle()
+            for _ in 0..<5 {
+                await Task.yield()
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
         fixture = nil
         try await super.tearDown()
     }
