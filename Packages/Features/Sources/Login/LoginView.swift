@@ -31,19 +31,23 @@ public struct LoginView: View {
     public var body: some View {
         VStack(spacing: 0) {
             topBar
-            ScrollView {
-                Group {
-                    if model.step == .code {
-                        codeStep
-                    } else {
-                        phoneStep
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Group {
+                        if model.step == .code {
+                            codeStep
+                        } else {
+                            phoneStep
+                        }
                     }
+                    .padding(.horizontal, CouliSpacing.s4)
+                    .padding(.bottom, CouliSpacing.s6)
+                    // 共性 17：大屏（宽度 ≥ 600pt）上内容限宽并水平居中（03 §10.4）。
+                    .frame(maxWidth: Self.maxContentWidth)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, CouliSpacing.s4)
-                .padding(.bottom, CouliSpacing.s6)
-                // 共性 17：大屏（宽度 ≥ 600pt）上内容限宽并水平居中（03 §10.4）。
-                .frame(maxWidth: Self.maxContentWidth)
-                .frame(maxWidth: .infinity)
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：聚焦手机号 / 验证码框、键盘弹起后把当前步主按钮滚进键盘以上
+                .keyboardPrimaryScroll(proxy, target: keyboardTarget, trigger: keyboardTrigger)
             }
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
@@ -66,6 +70,25 @@ public struct LoginView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("login.page")
+    }
+
+    // MARK: - 键盘避让（FU-LOGIN-KEYBOARD-AVOID-ios，D10-2458）
+
+    static let getCodeAnchor = "login.getCode.keyboardAnchor"
+    static let submitAnchor = "login.submit.keyboardAnchor"
+
+    /// 只在本步的输入框（手机号 / 验证码）聚焦时滚；邀请码框聚焦时不动（手机号步邀请码在主按钮下方，滚了反而盖住它）。
+    var keyboardTarget: String? {
+        if model.step == .code {
+            return codeFocused ? Self.submitAnchor : nil
+        }
+        return phoneFocused ? Self.getCodeAnchor : nil
+    }
+
+    /// 焦点或输入变化时重滚（输入途中系统把输入框滚回可视区后，主按钮仍回到键盘以上）。
+    var keyboardTrigger: [String] {
+        [model.step == .code ? "code" : "phone", String(phoneFocused), String(codeFocused), model.phoneText,
+         model.codeText]
     }
 
     // MARK: - 顶栏
@@ -128,6 +151,7 @@ public struct LoginView: View {
             )
             .accessibilityFocused($getCodeFocused)
             .accessibilityIdentifier("login.getCode")
+            .keyboardPrimaryAnchor(Self.getCodeAnchor)
             if model.canContinueCode {
                 // 共性 16：「继续输入验证码」独立入口，不以能否重发为条件。
                 textButton(LoginKeys.codeContinue, id: "login.continueCode", action: model.continueCode)

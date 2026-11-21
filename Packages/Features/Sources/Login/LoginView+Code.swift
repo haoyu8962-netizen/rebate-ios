@@ -71,6 +71,7 @@ extension LoginView {
             )
             .accessibilityFocused($submitFocused)
             .accessibilityIdentifier("login.submit")
+            .keyboardPrimaryAnchor(Self.submitAnchor)
             Spacer(minLength: CouliSpacing.s8)
             helpEntry
         }

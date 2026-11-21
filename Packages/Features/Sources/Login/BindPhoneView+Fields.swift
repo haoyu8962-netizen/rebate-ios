@@ -86,6 +86,8 @@ extension BindPhoneView {
                     sendButton(boxed: false)
                 }
             }
+            // 两种排法下这一块的下沿都是【获取验证码】的下沿；锚点挂在这里，不随 ViewThatFits 的候选重复出现
+            .keyboardPrimaryAnchor(Self.getCodeAnchor)
             if let error = controller.codeError {
                 Text(verbatim: error)
                     .couliFont(.footnote)

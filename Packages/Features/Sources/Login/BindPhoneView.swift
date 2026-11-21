@@ -66,30 +66,38 @@ struct BindPhoneView: View {
         texts.text(key)
     }
 
+    /// 【获取验证码】所在行的键盘避让锚点（FU-LOGIN-KEYBOARD-AVOID-ios）。
+    static let getCodeAnchor = "bindPhone.getCode.keyboardAnchor"
+
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            ScrollView {
-                VStack(spacing: CouliSpacing.s3) {
-                    infoBar
-                    if let card = controller.pending {
-                        BindPendingCardView(card: card, controller: controller, texts: texts)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: CouliSpacing.s3) {
+                        infoBar
+                        if let card = controller.pending {
+                            BindPendingCardView(card: card, controller: controller, texts: texts)
+                        }
+                        formCard
+                        if let notice = controller.notice {
+                            Text(verbatim: notice.text)
+                                .couliFont(.footnote)
+                                .foregroundColor(CouliColor.statusErrorText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("bindPhone.notice")
+                        }
                     }
-                    formCard
-                    if let notice = controller.notice {
-                        Text(verbatim: notice.text)
-                            .couliFont(.footnote)
-                            .foregroundColor(CouliColor.statusErrorText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("bindPhone.notice")
-                    }
+                    .padding(.horizontal, CouliSpacing.s4)
+                    .padding(.top, CouliSpacing.s2)
+                    .padding(.bottom, CouliSpacing.s4)
+                    .frame(maxWidth: LoginView.maxContentWidth)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, CouliSpacing.s4)
-                .padding(.top, CouliSpacing.s2)
-                .padding(.bottom, CouliSpacing.s4)
-                .frame(maxWidth: LoginView.maxContentWidth)
-                .frame(maxWidth: .infinity)
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：聚焦手机号框、键盘弹起后把【获取验证码】滚到钉底栏上沿以上
+                .keyboardPrimaryScroll(proxy, target: focus == .phone ? Self.getCodeAnchor : nil,
+                                       trigger: [String(focus == .phone), controller.phone])
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
