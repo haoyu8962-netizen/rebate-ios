@@ -61,19 +61,23 @@ struct BindPhoneView: View {
     let texts: LoginTexts
     @FocusState var focus: Field?
     @AccessibilityFocusState var a11y: Field?
-    /// 钉底提交栏实测上沿（全局坐标；FU-LOGIN-KEYBOARD-AVOID-ios r4）。
+    /// 键盘弹起且读屏未开启（`keyboardPinState` 维护，与登录页同一写法；FU-LOGIN-KEYBOARD-AVOID-ios r5）。
+    @State var primaryPinned = false
+    /// 钉底栏实测上沿（全局坐标）：手机号框被变高的底栏挡住时滚到它以上。
     @State var barTop: CGFloat?
 
     func text(_ key: String) -> String {
         texts.text(key)
     }
 
-    /// 【获取验证码】所在行的键盘避让锚点（FU-LOGIN-KEYBOARD-AVOID-ios）。
-    static let getCodeAnchor = "bindPhone.getCode.keyboardAnchor"
-    static let topAnchor = "bindPhone.content.keyboardTop"
-    /// 锚点下伸量：余量 16 + 提交栏顶部留白 12 + 再留 16，覆盖可视区底边与栏上沿的实测差（r4 约 8pt）；
-    /// 内容不够滚时停在最底（实测此时离栏上沿约 24pt）。
-    static let getCodeExtends = KeyboardPrimary.margin + CouliSpacing.s3 + KeyboardPrimary.margin
+    /// 手机号框的滚动锚点（FU-LOGIN-KEYBOARD-AVOID-ios r5）。
+    static let phoneAnchor = "bindPhone.phone.keyboardAnchor"
+
+    /// 手机号步（手机号框聚焦）钉底时【获取验证码】并进底栏；验证码框聚焦时它留在验证码框那一行（就在输入处旁边，
+    /// 不必钉底；也保持 BindPhoneLayoutUITests 在验证码框聚焦下量的原位排法）。
+    var getCodePinned: Bool {
+        primaryPinned && focus == .phone
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -100,14 +104,13 @@ struct BindPhoneView: View {
                     .padding(.bottom, CouliSpacing.s4)
                     .frame(maxWidth: LoginView.maxContentWidth)
                     .frame(maxWidth: .infinity)
-                    .keyboardContentTop(Self.topAnchor)
                 }
                 // 拖动内容即可收起键盘（照钱包各页先例，r4）
                 .scrollDismissesKeyboard(.interactively)
-                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458 r4）：聚焦手机号框、键盘弹起后【获取验证码】不在钉底栏实测上沿以上
-                // 16pt 时才滚；键盘收起滚回顶部
-                .keyboardPrimaryScroll(proxy, target: Self.getCodeAnchor, top: Self.topAnchor, active: focus == .phone,
-                                       barTop: barTop)
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458 r5）：钉底期间手机号框被变高的底栏挡住时滚到栏上沿以上；
+                // 主按钮不滚（已钉底），收起键盘不滚回
+                .keyboardInputScroll(proxy, target: Self.phoneAnchor, top: nil,
+                                     active: getCodePinned, barTop: barTop)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -118,6 +121,7 @@ struct BindPhoneView: View {
             dialog
         }
         .couliToast($controller.toast)
+        .keyboardPinState($primaryPinned)
         .onAppear {
             controller.appeared()
             Task { @MainActor in
@@ -188,18 +192,25 @@ struct BindPhoneView: View {
         .accessibilityIdentifier("bindPhone.info")
     }
 
+    /// 钉底栏：平时只有【绑定】；手机号框聚焦且键盘弹起期间（读屏未开启）【获取验证码】并进来放在【绑定】上方，间距 s2（8pt），
+    /// 验证码框那一行这时不渲染它，同一时刻只有一个实例（FU-LOGIN-KEYBOARD-AVOID-ios r5）。
     private var bottomBar: some View {
-        CouliButton(
-            text(BindPhoneKeys.submit),
-            isLoading: controller.submitting || controller.pendingBusy,
-            isEnabled: controller.canSubmit,
-            fillsWidth: true,
-            action: {
-                focus = nil
-                controller.submit()
+        VStack(spacing: CouliSpacing.s2) {
+            if getCodePinned {
+                sendButton(boxed: false)
             }
-        )
-        .accessibilityIdentifier("bindPhone.submit")
+            CouliButton(
+                text(BindPhoneKeys.submit),
+                isLoading: controller.submitting || controller.pendingBusy,
+                isEnabled: controller.canSubmit,
+                fillsWidth: true,
+                action: {
+                    focus = nil
+                    controller.submit()
+                }
+            )
+            .accessibilityIdentifier("bindPhone.submit")
+        }
         .padding(.horizontal, CouliSpacing.s4)
         .padding(.top, CouliSpacing.s3)
         .padding(.bottom, CouliSpacing.s3)

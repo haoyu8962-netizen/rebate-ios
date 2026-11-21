@@ -1,6 +1,5 @@
 import DesignSystem
 import SwiftUI
-import UIKit
 
 /// 短信登录页（Login / LoginAgreeConfirm / LoginCode / LoginCodeBlocked / LoginCodeInvite / LoginSessionExpired /
 /// LoginDeletionProcessing 画板）。读屏顺序按 A11yFocusLogin：关闭 → 设置 → 标题 → 手机号（含 +86）→ 清除 → 协议复选框
@@ -13,14 +12,11 @@ public struct LoginView: View {
     @AccessibilityFocusState var submitFocused: Bool
     @FocusState var codeFocused: Bool
     @FocusState var phoneFocused: Bool
-    /// 软键盘是否弹起（keyboardWillShow / keyboardWillHide 维护）；读屏是否开启（voiceOverStatusDidChange 实时更新）。
-    /// 两者决定当前步主按钮是否钉到键盘上方（FU-LOGIN-KEYBOARD-AVOID-ios r3，见 LoginView+Keyboard.swift）。
-    @State var keyboardShown = false
-    @State var voiceOverRunning = false
+    /// 当前步主按钮是否钉到键盘上方：键盘弹起且读屏未开启（`keyboardPinState` 维护，与绑手机页同一写法；
+    /// FU-LOGIN-KEYBOARD-AVOID-ios，见 LoginView+Keyboard.swift）。
+    @State var primaryPinned = false
     /// 钉底栏实测上沿（全局坐标；r4 输入框按需滚到它以上）。
     @State var pinnedBarTop: CGFloat?
-
-    static let voiceOverChanged = UIAccessibility.voiceOverStatusDidChangeNotification
 
     /// 内容列的最大宽度（大屏居中；手机宽度下不起作用）。
     static let maxContentWidth: CGFloat = 560
@@ -63,8 +59,8 @@ public struct LoginView: View {
                     pinnedPrimaryBar
                 }
                 // 钉底后正在输入的框被底栏挡住时滚到栏上沿以上（r4）；收起键盘滚回顶部
-                .keyboardPrimaryScroll(proxy, target: inputAnchor, top: Self.topAnchor, active: inputScrollActive,
-                                       barTop: pinnedBarTop)
+                .keyboardInputScroll(proxy, target: inputAnchor, top: Self.topAnchor, active: inputScrollActive,
+                                     barTop: pinnedBarTop)
             }
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
@@ -75,18 +71,13 @@ public struct LoginView: View {
             dialog
         }
         .couliToast($model.toast)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            keyboardShown = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardShown = false
-            pinnedBarTop = nil
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Self.voiceOverChanged)) { _ in
-            voiceOverRunning = UIAccessibility.isVoiceOverRunning
+        .keyboardPinState($primaryPinned)
+        .onChange(of: primaryPinned) { pinned in
+            if !pinned {
+                pinnedBarTop = nil
+            }
         }
         .onAppear {
-            voiceOverRunning = UIAccessibility.isVoiceOverRunning
             model.appeared()
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 400_000_000)
