@@ -75,7 +75,9 @@ final class FuIosPhoneChangeStepUpTitleTests: App13a2TestCase {
     /// 等半屏就绪、真的呈现、标题探针上报。
     private func waitSheet(_ stepUp: StepUpController, _ label: String) async {
         await waitUntil("\(label)半屏没有打开", timeout: 8) { stepUp.state?.phase == .ready }
-        await waitUntil("\(label)半屏没有呈现", timeout: 8) { self.window?.rootViewController?.presentedViewController != nil }
+        await waitUntil("\(label)半屏没有呈现", timeout: 8) {
+            self.window?.rootViewController?.presentedViewController != nil
+        }
         await waitUntil("\(label)半屏标题没有上报", timeout: 8) { self.probes["stepUp.title"] != nil }
     }
 
