@@ -54,8 +54,6 @@ extension BindPhoneView {
                 showsClear: focus == .phone && !controller.phone.isEmpty && !locked,
                 onClear: controller.clearPhone
             )
-            // 钉底期间被底栏挡住时滚到栏上沿以上 16pt（FU-LOGIN-KEYBOARD-AVOID-ios r5）；不占布局
-            .keyboardInputAnchor(Self.phoneAnchor)
             if let error = controller.phoneError {
                 Text(verbatim: error)
                     .couliFont(.footnote)
@@ -75,24 +73,21 @@ extension BindPhoneView {
                 .accessibilityHidden(true)
             // 窄屏、200% 字号放不下时「获取验证码 / N 秒后重新获取」换到输入下方（ViewThatFits），换成有描边的次按钮（D10-1223）；
             // 框内的按钮字按最长的倒计时文案占宽，发码前后不换排法
-            if getCodePinned {
-                // 手机号框聚焦且键盘弹起期间【获取验证码】在钉底栏里（FU-LOGIN-KEYBOARD-AVOID-ios r5），这里只留输入框
-                codeInput.background(fieldBox(error: controller.codeError != nil))
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: CouliSpacing.s2) {
-                        codeInput
-                        Rectangle().fill(CouliColor.borderSubtle).frame(width: 1, height: CouliSpacing.s6)
-                            .accessibilityHidden(true)
-                        sendButton(boxed: true).fixedSize()
-                    }
-                    .background(fieldBox(error: controller.codeError != nil))
-                    VStack(alignment: .leading, spacing: CouliSpacing.s2) {
-                        codeInput.background(fieldBox(error: controller.codeError != nil))
-                        sendButton(boxed: false)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: CouliSpacing.s2) {
+                    codeInput
+                    Rectangle().fill(CouliColor.borderSubtle).frame(width: 1, height: CouliSpacing.s6)
+                        .accessibilityHidden(true)
+                    sendButton(boxed: true).fixedSize()
+                }
+                .background(fieldBox(error: controller.codeError != nil))
+                VStack(alignment: .leading, spacing: CouliSpacing.s2) {
+                    codeInput.background(fieldBox(error: controller.codeError != nil))
+                    sendButton(boxed: false)
                 }
             }
+            // 两种排法下这一块的下沿都是【获取验证码】的下沿；锚点挂在这里，不随 ViewThatFits 的候选重复出现
+            .keyboardPrimaryAnchor(Self.getCodeAnchor, extends: Self.getCodeExtends)
             if let error = controller.codeError {
                 Text(verbatim: error)
                     .couliFont(.footnote)

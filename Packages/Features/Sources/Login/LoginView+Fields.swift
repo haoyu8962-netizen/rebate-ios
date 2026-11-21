@@ -24,7 +24,7 @@ extension LoginView {
                 onClear: model.clearPhone
             )
             // 钉底期间被底栏挡住时滚到栏上沿以上 16pt（FU-LOGIN-KEYBOARD-AVOID-ios r4）；不占布局
-            .keyboardInputAnchor(Self.phoneAnchor)
+            .keyboardPrimaryAnchor(Self.phoneAnchor, extends: KeyboardPrimary.margin)
             if !model.phoneError.isEmpty {
                 Text(verbatim: model.phoneError)
                     .couliFont(.footnote)

@@ -3,10 +3,14 @@ import SwiftUI
 
 /// 登录页键盘避让（FU-LOGIN-KEYBOARD-AVOID-ios r3，D10-2458；视觉验收 §2.4）：键盘弹起期间，当前步主按钮（手机号步
 /// 【获取验证码】、验证码步【登录】）从滚动内容移到 ScrollView 的 safeAreaInset 底栏，钉在键盘上方；键盘收起回原位。
-/// 不为主按钮滚动（AXXXL 下输入框到主按钮的距离超过键盘以上可视区，滚动会把输入框滚走，review-r1 S1-1）；只在
-/// 正在输入的框被底栏挡住时把它滚到栏上沿以上（r4）。读屏开启时不钉底，保持 A11yFocusLogin 读屏顺序（S2-2）。
-/// 原位（`if !primaryPinned`）与底栏（`if primaryPinned`）互斥，同一时刻只渲染一个实例。
+/// 页面不主动滚动，聚焦的输入框交给系统保持在收窄后的可视区内（AXXXL 下输入框到主按钮的距离超过键盘以上可视区，
+/// 滚动方案会把输入框滚走，见 review-r1 S1-1）。读屏开启时不钉底，保持 A11yFocusLogin 读屏顺序（S2-2）。
 extension LoginView {
+    /// 主按钮此刻是否钉底。原位（`if !primaryPinned`）与底栏（`if primaryPinned`）互斥，同一时刻只渲染一个实例。
+    var primaryPinned: Bool {
+        keyboardShown && !voiceOverRunning
+    }
+
     /// 底栏：只在钉底时有内容；按当前步放唯一的那颗主按钮。
     @ViewBuilder var pinnedPrimaryBar: some View {
         if primaryPinned {
