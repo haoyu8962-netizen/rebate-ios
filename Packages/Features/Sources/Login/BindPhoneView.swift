@@ -68,6 +68,7 @@ struct BindPhoneView: View {
 
     /// 【获取验证码】所在行的键盘避让锚点（FU-LOGIN-KEYBOARD-AVOID-ios）。
     static let getCodeAnchor = "bindPhone.getCode.keyboardAnchor"
+    static let topAnchor = "bindPhone.content.keyboardTop"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,10 +95,11 @@ struct BindPhoneView: View {
                     .padding(.bottom, CouliSpacing.s4)
                     .frame(maxWidth: LoginView.maxContentWidth)
                     .frame(maxWidth: .infinity)
+                    .keyboardContentTop(Self.topAnchor)
                 }
-                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：聚焦手机号框、键盘弹起后把【获取验证码】滚到钉底栏上沿以上
-                .keyboardPrimaryScroll(proxy, target: focus == .phone ? Self.getCodeAnchor : nil,
-                                       trigger: [String(focus == .phone), controller.phone])
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458 r3）：聚焦手机号框、键盘弹起后【获取验证码】不在钉底栏上沿以上
+                // 16pt 时才滚；键盘收起滚回顶部
+                .keyboardPrimaryScroll(proxy, target: Self.getCodeAnchor, top: Self.topAnchor, active: focus == .phone)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
