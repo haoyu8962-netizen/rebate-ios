@@ -62,22 +62,47 @@ extension LoginView {
                 inviteField
             }
             agreementRow
-            CouliButton(
-                text(LoginKeys.submit),
-                isLoading: model.submitting,
-                isEnabled: model.canSubmit,
-                fillsWidth: true,
-                action: model.submit
-            )
-            .accessibilityFocused($submitFocused)
-            .accessibilityIdentifier("login.submit")
-            .keyboardPrimaryAnchor(Self.submitAnchor)
+            // 键盘收起时【登录】在协议行之下（原位）；键盘弹起时移到底栏，这里不渲染，同一时刻只有一个实例
+            if !submitPinned {
+                submitButton
+            }
             Spacer(minLength: CouliSpacing.s8)
             helpEntry
         }
         .onAppear {
             codeFocused = true
         }
+    }
+
+    // MARK: - 【登录】钉底（FU-LOGIN-KEYBOARD-AVOID-ios r2，D10-2458）
+
+    /// 验证码步且键盘弹起：【登录】钉在键盘上方。
+    var submitPinned: Bool {
+        model.step == .code && keyboardShown
+    }
+
+    /// 唯一的【登录】按钮：identifier、读屏焦点绑定、状态与动作都在这里，原位与底栏只取其一渲染。
+    var submitButton: some View {
+        CouliButton(
+            text(LoginKeys.submit),
+            isLoading: model.submitting,
+            isEnabled: model.canSubmit,
+            fillsWidth: true,
+            action: model.submit
+        )
+        .accessibilityFocused($submitFocused)
+        .accessibilityIdentifier("login.submit")
+    }
+
+    /// 底栏：留白、限宽、底色照绑手机页 bottomBar（BindPhoneView.swift），按钮下沿与键盘顶留 s3（12pt）。
+    var pinnedSubmitBar: some View {
+        submitButton
+            .padding(.horizontal, CouliSpacing.s4)
+            .padding(.top, CouliSpacing.s3)
+            .padding(.bottom, CouliSpacing.s3)
+            .frame(maxWidth: Self.maxContentWidth)
+            .frame(maxWidth: .infinity)
+            .background(CouliColor.backgroundCanvas.ignoresSafeArea())
     }
 
     // MARK: - 弹窗

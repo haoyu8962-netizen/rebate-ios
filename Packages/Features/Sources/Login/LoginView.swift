@@ -1,5 +1,6 @@
 import DesignSystem
 import SwiftUI
+import UIKit
 
 /// 短信登录页（Login / LoginAgreeConfirm / LoginCode / LoginCodeBlocked / LoginCodeInvite / LoginSessionExpired /
 /// LoginDeletionProcessing 画板）。读屏顺序按 A11yFocusLogin：关闭 → 设置 → 标题 → 手机号（含 +86）→ 清除 → 协议复选框
@@ -12,6 +13,9 @@ public struct LoginView: View {
     @AccessibilityFocusState var submitFocused: Bool
     @FocusState var codeFocused: Bool
     @FocusState var phoneFocused: Bool
+    /// 软键盘是否弹起（keyboardWillShow / keyboardWillHide 维护）；验证码步据此把【登录】钉到键盘上方
+    /// （FU-LOGIN-KEYBOARD-AVOID-ios r2）。
+    @State var keyboardShown = false
 
     /// 内容列的最大宽度（大屏居中；手机宽度下不起作用）。
     static let maxContentWidth: CGFloat = 560
@@ -46,8 +50,14 @@ public struct LoginView: View {
                     .frame(maxWidth: Self.maxContentWidth)
                     .frame(maxWidth: .infinity)
                 }
-                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：聚焦手机号 / 验证码框、键盘弹起后把当前步主按钮滚进键盘以上
+                // FU-LOGIN-KEYBOARD-AVOID-ios（D10-2458）：手机号步聚焦手机号框、键盘弹起后把【获取验证码】滚进键盘以上
                 .keyboardPrimaryScroll(proxy, target: keyboardTarget, trigger: keyboardTrigger)
+                // 验证码步键盘弹起期间【登录】钉在键盘上方（照绑手机页底栏）；不钉时底栏为空、不占高度
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if submitPinned {
+                        pinnedSubmitBar
+                    }
+                }
             }
         }
         .background(CouliColor.backgroundCanvas.ignoresSafeArea())
@@ -58,6 +68,12 @@ public struct LoginView: View {
             dialog
         }
         .couliToast($model.toast)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardShown = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardShown = false
+        }
         .onAppear {
             model.appeared()
             Task { @MainActor in
@@ -75,20 +91,16 @@ public struct LoginView: View {
     // MARK: - 键盘避让（FU-LOGIN-KEYBOARD-AVOID-ios，D10-2458）
 
     static let getCodeAnchor = "login.getCode.keyboardAnchor"
-    static let submitAnchor = "login.submit.keyboardAnchor"
 
-    /// 只在本步的输入框（手机号 / 验证码）聚焦时滚；邀请码框聚焦时不动（手机号步邀请码在主按钮下方，滚了反而盖住它）。
+    /// 只在手机号步、手机号框聚焦时滚；邀请码框聚焦时不动（邀请码在主按钮下方，滚了反而盖住它）。验证码步不滚：
+    /// AXXXL 下验证码格到【登录】约 650–800pt，超过键盘以上可视区，改为钉底（r2）。
     var keyboardTarget: String? {
-        if model.step == .code {
-            return codeFocused ? Self.submitAnchor : nil
-        }
-        return phoneFocused ? Self.getCodeAnchor : nil
+        model.step == .phone && phoneFocused ? Self.getCodeAnchor : nil
     }
 
     /// 焦点或输入变化时重滚（输入途中系统把输入框滚回可视区后，主按钮仍回到键盘以上）。
     var keyboardTrigger: [String] {
-        [model.step == .code ? "code" : "phone", String(phoneFocused), String(codeFocused), model.phoneText,
-         model.codeText]
+        [model.step == .code ? "code" : "phone", String(phoneFocused), model.phoneText]
     }
 
     // MARK: - 顶栏
