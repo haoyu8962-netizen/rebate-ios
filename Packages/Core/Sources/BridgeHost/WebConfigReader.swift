@@ -6,15 +6,8 @@ public enum WebConfigReader {
     /// 展示类配置，与 Android 相同）。
     public static let h5ConfigKeys: Set<String> = ["features", "h5_release", "display", "claim", "help_links"]
 
-    /// 可信 H5 源（TrustedWebView 只加载它们、桥只认它们）：**只取** bridge_origins 里的完整 https origin（APP-04 三端共性第 3 条）。
-    /// h5_base_url 只是页面地址的前缀，不当白名单用。`configJson` 是 ConfigStore 的生效配置（当前版本 → 上一次成功拉取后写进
-    /// App 私有目录的 LKG → 包内版本；包内没有 bridge_origins，所以没有服务端配置时白名单为空，WebPage 不打开）。
-    /// TODO(N-22)：契约没有给 /v1/config 定义签名，无从「验签」；契约补上签名后，LKG 与当前版本验签失败时这里应得到空集。
-    /// bridge_origins 在 openapi 里是 FreeForm、示例为 {}，形状未定；这里只接受「完整 origin 字符串的数组」，其他形状一律为空。
-    public static func trustedOrigins(configJson: String) -> [String] {
-        let config = JSONKind.object(configJson) ?? [:]
-        return JSONKind.strings(config, "bridge_origins").compactMap(BridgeProtocol.normalizeOrigin)
-    }
+    // 可信 H5 源不在这里读（N-22，D10-2539）：旧的「只读 bridge_origins 字符串数组」读法没有验签，已删除。白名单改为
+    // ConfigStore 持有的验签通过的上次可用值（`ConfigStore.trustedOrigins`，验签见 `BridgeOriginsVerifier`）；h5_base_url 仍不当白名单。
 
     /// 自有分享域（share.open 的第 ② 步，整主机相等）。
     public static func shareDomains(configJson: String) -> [String] {

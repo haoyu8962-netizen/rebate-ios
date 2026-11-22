@@ -35,9 +35,7 @@ final class EnvironmentStore: ObservableObject {
     ) {
         self.defaults = defaults
         applier = EnvironmentApplier(defaults: defaults, registry: registry)
-        let selected = defaults.string(forKey: AppNamespace.environmentSelectionKey)
-            .flatMap { id in AppEnvironment.selectable.first { $0.id == id } }
-        let initial = selected ?? defaultEnvironment
+        let initial = Self.selectedEnvironment(defaults: defaults, fallback: defaultEnvironment)
         current = initial
         (launchOutcome, gate) = applier.settleAtLaunch(environmentID: initial.id)
     }
@@ -67,6 +65,12 @@ final class EnvironmentStore: ObservableObject {
     var debugCapabilities: DebugCapabilities {
         DebugCapabilities(environment: current)
     }
+
+    /// 显式选择（调试面板写入、且是可选环境之一）优先，否则 `fallback`（构建默认环境）。
+    nonisolated static func selectedEnvironment(defaults: UserDefaults, fallback: AppEnvironment) -> AppEnvironment {
+        defaults.string(forKey: AppNamespace.environmentSelectionKey)
+            .flatMap { id in AppEnvironment.selectable.first { $0.id == id } } ?? fallback
+    }
     #else
     init(defaults: UserDefaults = .standard, registry: EnvironmentSwitchCleanerRegistry = .shared) {
         applier = EnvironmentApplier(defaults: defaults, registry: registry)
@@ -74,6 +78,17 @@ final class EnvironmentStore: ObservableObject {
         (launchOutcome, gate) = applier.settleAtLaunch(environmentID: AppEnvironment.prod.id)
     }
     #endif
+
+    /// 当前运行环境 id 的非隔离读法（N-22：AppConfig 的 bridge_origins 验签每次现取；AppConfig 早于 EnvironmentStore 创建，
+    /// 拿不到实例）。与已提交的 `current.id` 同源：Debug / Staging 取显式选择（`switchTo` 写记录与改 current 在同一同步区），
+    /// 否则构建默认环境；Release 固定 prod。切换的清理与提交期间配置拉取被环境闸门挡住，不会在新旧之间验签。
+    nonisolated static func runtimeEnvironmentId(defaults: UserDefaults = .standard) -> String {
+        #if DEBUG
+        selectedEnvironment(defaults: defaults, fallback: BuildInfo.defaultEnvironment).id
+        #else
+        AppEnvironment.prod.id
+        #endif
+    }
 
     /// 阻断页的「重试」：再跑一次启动对账，成功才转为 settled（记录随之更新）；失败保持 blocked、记录不变。
     func retryLaunchCleanup() {

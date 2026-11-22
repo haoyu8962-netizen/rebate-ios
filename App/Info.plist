@@ -22,6 +22,8 @@
 	<string>$(COULI_BUNDLE_VERSION)</string>
 	<key>CouliBuildConfiguration</key>
 	<string>$(CONFIGURATION)</string>
+	<key>CouliConfigSignKeys</key>
+	<string>$(COULI_CONFIG_SIGN_KEYS)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

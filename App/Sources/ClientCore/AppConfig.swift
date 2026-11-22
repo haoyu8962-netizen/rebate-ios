@@ -1,3 +1,4 @@
+import BridgeHost
 import ClientCore
 import Combine
 import Config
@@ -12,9 +13,18 @@ import ProductSearch
 /// - 回前台带 ETag 拉取（304 不变）；拉取经 ApiClient（getConfig 在基本模式与隐私未决的白名单里）。
 /// - LKG 文件放 Application Support（「清除缓存」不清）；切换环境时清掉（`ConfigLKGCleaner` 登记在切换环境的注册表）。
 /// - 包内默认配置：`DefaultConfig.json`（gen.py 从 openapi 示例生成，TODO(N-21)：发布时改为生产配置）。
+/// - bridge_origins 验签（N-22）：随包公钥表 `signKeys`（构建配置 `CouliConfigSignKeys`）+ 本应用 appId（与 X-App-Id 同源）+
+///   每次现取的运行环境 id，经 BridgeHost 的 `BridgeOriginsVerifier` 验；ConfigStore 只拿到验过的 {version, origins}。
 @MainActor
 final class AppConfig: ObservableObject {
     static let fileName = "config-lkg.json"
+    /// Info.plist 里随包配置签名公钥表的键（= $(COULI_CONFIG_SIGN_KEYS)，见 App/Config/*.xcconfig）。
+    nonisolated static let signKeysInfoKey = "CouliConfigSignKeys"
+
+    /// 随包公钥表：Info.plist `CouliConfigSignKeys` 经 `ConfigSignKeys.parse`；缺键或为空时是空表（一律验不过、白名单为空）。
+    nonisolated static var bundledSignKeys: ConfigSignKeys {
+        ConfigSignKeys.parse(Bundle.main.object(forInfoDictionaryKey: signKeysInfoKey) as? String ?? "")
+    }
 
     @Published private(set) var snapshotJson: String
     @Published private(set) var source: String
@@ -29,14 +39,19 @@ final class AppConfig: ObservableObject {
         client: ApiClient,
         file: ClientFile = ClientFile(name: AppConfig.fileName),
         environmentRegistry: EnvironmentSwitchCleanerRegistry = .shared,
-        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+        clock: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
+        signKeys: ConfigSignKeys = AppConfig.bundledSignKeys,
+        environmentId: @escaping () -> String = { EnvironmentStore.runtimeEnvironmentId() }
     ) {
         let store = ConfigStore(
             readFile: file.read,
             writeFile: file.write,
             fetcher: ConfigFetcher.make(client: client),
             clock: clock,
-            bundled: DefaultConfig.json
+            bundled: DefaultConfig.json,
+            verifyBridgeOrigins: Self.bridgeOriginsVerifier(
+                appId: AppNetwork.identity.appId, signKeys: signKeys, environmentId: environmentId
+            )
         )
         self.store = store
         snapshotJson = store.snapshotJson
@@ -48,6 +63,22 @@ final class AppConfig: ObservableObject {
                 self?.snapshotJson = updated.snapshotJson
                 self?.source = updated.sourceRaw
             }
+        }
+    }
+
+    /// ConfigStore 的 bridge_origins 验签闭包：每次调用现取运行环境 id（切换环境后用新环境）；通过返回 {version, origins}。
+    /// TODO(N-22-ios 第 2 段)：验不过记一条系统日志（reason + kid + env，同一版文档只记一次）。
+    nonisolated static func bridgeOriginsVerifier(
+        appId: String, signKeys: ConfigSignKeys, environmentId: @escaping () -> String
+    ) -> ([String: Any], Int?) -> (version: Int, origins: [String])? {
+        { config, lastGoodVersion in
+            let verdict = BridgeOriginsVerifier.verify(
+                config: config, appId: appId, env: environmentId(), lastGoodVersion: lastGoodVersion, keys: signKeys
+            )
+            guard case let .accepted(whitelist) = verdict else {
+                return nil
+            }
+            return (whitelist.version, whitelist.origins)
         }
     }
 

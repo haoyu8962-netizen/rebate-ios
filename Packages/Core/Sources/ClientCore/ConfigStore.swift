@@ -45,6 +45,10 @@ public final class ConfigStore {
     private let fetcher: (String?, @escaping (ConfigReply) -> Void) -> Void
     private let clock: () -> Int64
     private let bundled: ConfigDocument?
+    /// bridge_origins 验签（N-22；App 注入 BridgeHost 的验签器，ClientCore 不依赖 BridgeHost）：入参是配置文档（data 对象）与
+    /// 上次可用白名单的 version，通过返回 {version, origins}，不通过返回 nil。运行环境 id 由闭包在每次调用时现取。
+    private let verifyBridgeOrigins: (_ config: [String: Any], _ lastGoodVersion: Int?)
+        -> (version: Int, origins: [String])?
 
     private var current: Layer?
     private var lkg: Layer?
@@ -76,13 +80,16 @@ public final class ConfigStore {
         writeFile: @escaping (String?) throws -> Void,
         fetcher: @escaping (String?, @escaping (ConfigReply) -> Void) -> Void,
         clock: @escaping () -> Int64,
-        bundled: String
+        bundled: String,
+        verifyBridgeOrigins: @escaping (_ config: [String: Any], _ lastGoodVersion: Int?)
+            -> (version: Int, origins: [String])? = { _, _ in nil }
     ) {
         self.readFile = readFile
         self.writeFile = writeFile
         self.fetcher = fetcher
         self.clock = clock
         self.bundled = ConfigDocument.parse(bundled)
+        self.verifyBridgeOrigins = verifyBridgeOrigins
     }
 
     // MARK: - 读
@@ -103,6 +110,17 @@ public final class ConfigStore {
     /// 生效的那一份文档（当前 → LKG → 包内，整份选择；`snapshotJson` 即它的文本）。
     private var effectiveDocument: ConfigDocument? {
         current?.document ?? lkg?.document ?? bundled
+    }
+
+    /// 可信 H5 源（N-22）：上次可用（验签通过）的 bridge_origins 白名单的 origins；没有为 `[]`。
+    /// TODO(N-22-ios 第 2 段)：接口桩，恒为 `[]`；第 2 段接上「上次可用白名单」状态（随 LKG 保存）。
+    public var trustedOrigins: [String] {
+        []
+    }
+
+    /// 上次可用白名单的 version；没有为 nil。TODO(N-22-ios 第 2 段)：接口桩，恒为 nil。
+    public var trustedOriginsVersion: Int? {
+        nil
     }
 
     public static let bridgeDisabledMethodsKey = "bridge_disabled_methods"

@@ -47,14 +47,18 @@ let coreTargets: [Target] = [
         name: "ClientCore",
         dependencies: ["CouliNetwork", "Config", "Privacy", "SecureStore", "Session", generated]
     ),
+    // N-22：测试另依赖 BridgeHost，ConfigStore 的 bridge_origins 用例可接真验签器（生产的 ClientCore 不依赖 BridgeHost，闭包注入）。
     .testTarget(
         name: "ClientCoreTests",
-        dependencies: ["ClientCore", "CouliNetwork", "Config", "Privacy", "SecureStore", "Session", generated]
+        dependencies: [
+            "ClientCore", "CouliNetwork", "Config", "Privacy", "SecureStore", "Session", "BridgeHost", generated,
+        ]
     ),
     // APP-04：桥协议（信封、级别、白名单、事件）、BridgeHost 分派与第三方页导航判定。纯逻辑，不依赖 WebKit；
     // 容器（WKWebView）在 Features/Web。
     .target(name: "BridgeHost", dependencies: [generated]),
-    .testTarget(name: "BridgeHostTests", dependencies: ["BridgeHost"]),
+    // N-22：三端共用的 bridge_origins 验签向量与公钥（原样拷自 couli-runs/NATIVE/N22-VECTORS，不改内容）。
+    .testTarget(name: "BridgeHostTests", dependencies: ["BridgeHost"], resources: [.copy("Resources/N22")]),
     // APP-06a：搜索与商品详情的纯逻辑（SearchQuery、SearchTabs、SearchPager、SearchResultState、SearchSession、
     // ProductDetailState）与执行器（SearchController、ProductDetailController）。Search 功能模块转出它，Product 功能
     // 模块直接用它（Feature 之间不互相依赖）。模块名不与任何系统框架同名。

@@ -106,11 +106,12 @@ final class AppWeb: ObservableObject {
 
     // MARK: - 可信容器
 
-    /// 生产的协议判定：可信源只取 bridge_origins（三端共性第 3 条），规则表与分享域取生效配置。不含任何回环源。
+    /// 生产的协议判定：可信源只取验签通过的 bridge_origins 上次可用白名单（三端共性第 3 条；N-22，ConfigStore 持有，
+    /// 验不过保留上次可用、没有为空），规则表与分享域取生效配置。不含任何回环源。
     func productionProtocol() -> BridgeProtocol {
         let current = configJson
         return BridgeProtocol(
-            trustedOrigins: WebConfigReader.trustedOrigins(configJson: current),
+            trustedOrigins: config.store.trustedOrigins,
             linkPatterns: linkPatternsJson.flatMap(Self.object) ?? [:],
             shareDomains: WebConfigReader.shareDomains(configJson: current)
         )
