@@ -9,3 +9,11 @@ condition = "AND"
 paths = ['''(^|/)contract\.lock$''']
 regexes = ['''^[0-9a-f]{64}$''']
 regexTarget = "secret"
+
+# N-22 三端共用 bridge_origins 验签向量（公开签名样本：staging 实测 jws 及其改坏变体 + 测试钥现签，无私钥）。
+# 负责人 2026-11-22 同意（D10-2600）：只限这一个文件、只放 jwt 一条规则，不放其他规则与路径。
+[[allowlists]]
+description = "N-22 bridge_origins 验签向量（公开 JWS 样本，D10-2600）"
+condition = "AND"
+targetRules = ["jwt"]
+paths = ['''^Packages/Core/Tests/BridgeHostTests/Resources/N22/n22-bridge-origins-vectors\.json$''']

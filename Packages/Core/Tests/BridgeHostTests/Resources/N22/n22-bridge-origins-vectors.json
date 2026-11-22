@@ -1,0 +1,516 @@
+{
+  "schema": "couli-n22-bridge-origins-vectors/1",
+  "decision": "D10-2539（三端 N-22 共用；native-android 出）",
+  "contract": "contracts/snapshot/contracts/openapi.json components.schemas.ConfigBridgeOrigins（description 即判定规则）",
+  "rules_order": [
+    "malformed: 三段 base64url、无填充",
+    "header: alg = ES256",
+    "key: 按 header.kid + 构建 env 取随包公钥，没有即拒",
+    "signature: 64 字节 R‖S（P1363）、ECDSA P-256 / SHA-256 over ASCII header.payload",
+    "header.typ = couli-bridge-origins+jws",
+    "payload: v = 1、app_id = 本应用、env = 本构建 env",
+    "payload: version 整数 >= 0 且 >= 上次可用版本（无上次则不比）",
+    "payload: origins 非空、每项规范化 https origin（小写主机、无路径 / 查询 / 片段 / 凭据 / 通配、443 省略）",
+    "任一失败：保留上次可用白名单（或包内），不把失败值写成上次可用（AC-S1-180 ②）"
+  ],
+  "reason_codes_note": "expect.reason 只供定位，客户端不必逐字复现；判定只看 accept 与 origins。规则顺序不同导致的 reason 不同可接受，accept 必须一致。",
+  "keys": [
+    {
+      "kid": "config-staging-2026-11b",
+      "env": "staging",
+      "alg": "ES256",
+      "spki_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErog/RkiIvs4qM8AVpC6JfgdnLDe0\nOiRPVWZ49ZVBfbzzWRKPHuQg6EG0sobQbkh4grfUoakqvV5+gdtXFUYq8A==\n-----END PUBLIC KEY-----\n",
+      "spki_der_sha256_16": "07ba14efc5908e5c",
+      "source": "couli-runs/OPS-lane/staging-new-1122/config-sign-pub/（ops 2026-11-22 12:24）"
+    },
+    {
+      "kid": "n22-vector-test-key-1",
+      "env": "test",
+      "alg": "ES256",
+      "spki_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIJs+wpYGB/fm+zUF2DeQxKC6CDXG\nxI6Kjvp2a+xgXOBlhxFUdxP6iVtU0PoIXpg9QKWlWvQzfBfPrdB1tWvp+Q==\n-----END PUBLIC KEY-----\n",
+      "spki_der_sha256_16": "f3494fc5043fc593",
+      "source": "本生成器临时生成、只给向量用；私钥已删，不得进任何构建"
+    }
+  ],
+  "live_source": "GET https://api-stg.couliapp.cn/v1/config（X-App-Id couli，X-Platform harmony / android / ios，X-App-Version 1.0.0）2026-11-22 三平台返回同一 jws",
+  "cases": [
+    {
+      "name": "stg_live_ok",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": true,
+        "origins": [
+          "https://h5-stg.couliapp.cn"
+        ],
+        "reason": "ok"
+      }
+    },
+    {
+      "name": "stg_live_ok_last_good_equal",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": 0
+      },
+      "expect": {
+        "accept": true,
+        "origins": [
+          "https://h5-stg.couliapp.cn"
+        ],
+        "reason": "ok"
+      },
+      "note": "version 0 >= last good 0：不算回退"
+    },
+    {
+      "name": "stg_live_rollback",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": 1
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "version_rollback"
+      }
+    },
+    {
+      "name": "stg_live_env_prod_client",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "prod",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "no_key_for_kid_env"
+      },
+      "note": "prod 构建不带 staging kid：按 kid + 构建 env 找不到公钥即拒（即使 payload.env 也不符）"
+    },
+    {
+      "name": "stg_live_app_id_mismatch",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli-other",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "app_id_mismatch"
+      }
+    },
+    {
+      "name": "stg_sig_bitflip",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4K286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_signature"
+      }
+    },
+    {
+      "name": "stg_payload_tampered",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vZXZpbC5leGFtcGxlIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_signature"
+      }
+    },
+    {
+      "name": "stg_sig_der_encoded",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.MEUCIQCHOoqMb1lxietPg7bzqErAB7H1IflKbWvdmxOUjRia2QIgEVToMFgByMynye4dMo3AzteSWwxLwVSrhg7tWLCLnkk",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_signature_format"
+      },
+      "note": "签名须是 64 字节 R‖S（P1363），DER 一律拒"
+    },
+    {
+      "name": "stg_unknown_kid",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLXVua25vd24iLCJ0eXAiOiJjb3VsaS1icmlkZ2Utb3JpZ2lucytqd3MifQ.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "no_key_for_kid_env"
+      }
+    },
+    {
+      "name": "stg_alg_none",
+      "jws": "eyJhbGciOiJub25lIiwia2lkIjoiY29uZmlnLXN0YWdpbmctMjAyNi0xMWIiLCJ0eXAiOiJjb3VsaS1icmlkZ2Utb3JpZ2lucytqd3MifQ.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_alg"
+      }
+    },
+    {
+      "name": "stg_alg_hs256",
+      "jws": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_alg"
+      }
+    },
+    {
+      "name": "stg_alg_es384",
+      "jws": "eyJhbGciOiJFUzM4NCIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_alg"
+      }
+    },
+    {
+      "name": "malformed_two_parts",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "malformed"
+      }
+    },
+    {
+      "name": "malformed_padding",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIueSQ==",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "malformed"
+      },
+      "note": "base64url 不得带 = 填充"
+    },
+    {
+      "name": "malformed_bad_chars",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbmZpZy1zdGFnaW5nLTIwMjYtMTFiIiwidHlwIjoiY291bGktYnJpZGdlLW9yaWdpbnMrandzIn0.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjowLCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtc3RnLmNvdWxpYXBwLmNuIl19.hzqKjG9ZcYnrT4O286hKwAex9SH5Sm1r3ZsTlI0YmtkRVOgwWAHIzKfJ7h0yjcDO15JbDEvBVKuGDu1YsIue+/",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "malformed"
+      }
+    },
+    {
+      "name": "malformed_empty",
+      "jws": "",
+      "client": {
+        "app_id": "couli",
+        "env": "staging",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "malformed"
+      }
+    },
+    {
+      "name": "t_ok",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.rC5vuNpDq9RmnH75_v7JH8xR5H7skiDiSusMv-BhreWjmFvR_cTeGt2UfHLOJYgp21qoLS6WlufM4VNUR5mzBA",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": 4
+      },
+      "expect": {
+        "accept": true,
+        "origins": [
+          "https://h5-test.couliapp.cn"
+        ],
+        "reason": "ok"
+      }
+    },
+    {
+      "name": "t_ok_two_origins_port",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiIsImh0dHBzOi8vYS5leGFtcGxlOjg0NDMiXX0.eK7lSZs2-ZoPdRB3yG6TxbeXnjD-LMaWMQETd3P22HJ3UU2rg-dcE-2LjhCoGm9U4vH1XgkklNvHPq5poefsxQ",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": true,
+        "origins": [
+          "https://h5-test.couliapp.cn",
+          "https://a.example:8443"
+        ],
+        "reason": "ok"
+      }
+    },
+    {
+      "name": "t_rollback",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.34oKlOuBQjjXmBXxPISpAlYojU0XSGLnd0wMbFuJLB0sVUHg886JUAcEI1KM_z6Ew5ksbH8-9lEZ_O-lC0pYXw",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": 6
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "version_rollback"
+      }
+    },
+    {
+      "name": "t_typ_wrong",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6IkpXVCJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.BZRRZTsKVPqZ6fnhsnMTXbaqDhVYbwwc-1WU_emMYrZ8pIWcmmsCkrUGLanQgnzjcqdEpNJIadexwxLAqJHutQ",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_typ"
+      }
+    },
+    {
+      "name": "t_typ_missing",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.AR6Ix8ipviU60Gd2L1YSxOp3q6Pex-OYynCHX4RSVeQBOBa8gVnnticEc2vS6tGmiLIb6LYfHt-6gLKhQzt0uw",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_typ"
+      }
+    },
+    {
+      "name": "t_v_2",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoyLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.07nhs77m1QUv6AZND_PKeTh0vhGkyi1Z4HyCHr53THSFIWHocj004DLKs0WSG4DZFv2rB21jQwlm_-RHmtsFuA",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_v"
+      }
+    },
+    {
+      "name": "t_env_mismatch",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InN0YWdpbmciLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.aDan3o-WmM7vq23oDtHGGPlL1PU2l-Sk2ndd2uZDf8eeZulrEi-9QFAZ-2XGNDjCoe2iy4A3IQiFVeML72JY-Q",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "env_mismatch"
+      }
+    },
+    {
+      "name": "t_app_id_mismatch",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJvdGhlciIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.Y8gdRXv9hYlJD7Qw0BShmL6odedhyaOWoyPp_NVEQTYVyXWeeesn5Cl0CblZ4g_ehI6sVCWbBhxXIyEuNYO9Jg",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "app_id_mismatch"
+      }
+    },
+    {
+      "name": "t_version_negative",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjotMSwib3JpZ2lucyI6WyJodHRwczovL2g1LXRlc3QuY291bGlhcHAuY24iXX0.1jXtsfni-NxERTDKTQ0lnj7ieuTUnt_9_CH3J0l0iwujApcL91AhO5DDPipfCiL6VPadl7r18ZkeQwSIQ32VgQ",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_payload"
+      }
+    },
+    {
+      "name": "t_origins_empty",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbXX0.f_wy7PBSISl-eqtpe7dg2zC7_1sCbCLrpsxy6q97Ng1VyoJhzNmEOj_KxXuFqq15e-VZFP2e28n-Th0lUreaqQ",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_payload"
+      }
+    },
+    {
+      "name": "t_origin_http",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHA6Ly9oNS10ZXN0LmNvdWxpYXBwLmNuIl19.l4cBM5_BB2Rdsroy116GqxGveaAUZ42DeI5g8jQfrMpHj5KxWlGI46x6Xd3HYR6BZFzUv1Dg2v4-xsbpnRITfw",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      },
+      "note": "每个 origin 须是规范化 https origin（契约 ConfigBridgeOrigins）；整份拒，不挑着用"
+    },
+    {
+      "name": "t_origin_path",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbi9hIl19.c9c-mGh2yR_j1LVo9ieB73kvQfj4bZtPj3YJKwn_nwfA8-Yx2emDojHjCHaA_Wy8HH3y6h0XIaD15vB00jPnfw",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      }
+    },
+    {
+      "name": "t_origin_upper",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vSDUtdGVzdC5jb3VsaWFwcC5jbiJdfQ.2xzkWA66M7armsF8-i1_lznN-MFZYjL6gz7wOrcqmoYNgArs_Xz66mR9lSrPdlCBTJOAnxXvjESOcWt8CX0W0Q",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      }
+    },
+    {
+      "name": "t_origin_port443",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vaDUtdGVzdC5jb3VsaWFwcC5jbjo0NDMiXX0.qanPBn8DjKi6ongFdAgeh2SoN6v3LZHx9XTV9USbQ7pvJ-GDiUKp61Xz5C6S9TYluHyktVu8986VIURfH--dng",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      },
+      "note": "443 必须省略"
+    },
+    {
+      "name": "t_origin_wildcard",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vKi5jb3VsaWFwcC5jbiJdfQ.3hATVe4Tm9HNWlFSeNox_T1tj_le2SYlmGhgb0lG1QjQjl1FKc_uMQrif1LtZDDUGP52epcLq4VOKphpyUrqag",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      }
+    },
+    {
+      "name": "t_origin_userinfo",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.eyJ2IjoxLCJhcHBfaWQiOiJjb3VsaSIsImVudiI6InRlc3QiLCJ2ZXJzaW9uIjo1LCJvcmlnaW5zIjpbImh0dHBzOi8vdUBoNS10ZXN0LmNvdWxpYXBwLmNuIl19.aPd8RQJKCzmyLIUCDSpnNS6dBo4cahTI9kcxKLR24BMRu2Jm44a8wUnbpS0JWMC-zItMDqjoz7PodIzP6b0SKw",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_origin"
+      }
+    },
+    {
+      "name": "t_payload_not_json",
+      "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im4yMi12ZWN0b3ItdGVzdC1rZXktMSIsInR5cCI6ImNvdWxpLWJyaWRnZS1vcmlnaW5zK2p3cyJ9.bm90IGpzb24.VFCZz-s0q9btZYI2TPfpve2LW9KnpQMl1syp5g-ewQNP7DTT1dzv0Vzd0tlpPLRVqZv9GfP-f_9V7ktsjb2l4w",
+      "client": {
+        "app_id": "couli",
+        "env": "test",
+        "last_good_version": null
+      },
+      "expect": {
+        "accept": false,
+        "origins": null,
+        "reason": "bad_signature"
+      },
+      "note": "载荷被换掉，签名必然不过；先验签后解析"
+    }
+  ]
+}
