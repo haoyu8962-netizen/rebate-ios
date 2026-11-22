@@ -117,6 +117,8 @@ extension AppWallet {
         #if DEBUG
         // APP-09v-a：钱包视觉 UI 测试的只读出口记录（交给 Router 之前记；只在注入生效时记录）
         DebugWalletLog.route(route, params: params)
+        // FU-IOS-WITHDRAW-ENTRY-SILENT 实跑定位（D10-2670）：控制器已放行、App 侧开始打开（只记路由名）
+        Logger(subsystem: "com.couli.app", category: "wallet.entry").notice("open route: \(route, privacy: .public)")
         #endif
         let owner = currentOwner()
         if Routes.all[route]?.auth == "realname", realnameState?.key != owner.key, owner.account != nil {
