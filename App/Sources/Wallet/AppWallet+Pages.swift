@@ -63,6 +63,7 @@ extension AppWallet {
             self?.pages.removeValue(forKey: id)?.leave()
             self?.visibleGen[id] = nil
             self?.lastVisible[id] = nil
+            self?.coveredGen[id] = nil
         }
         lastVisible[id] = isVisible(id)
         made.setVisible(isVisible(id))
@@ -212,12 +213,17 @@ extension AppWallet {
         sceneActive && router.path.last?.id == id
     }
 
-    /// Router 栈变了（@Published 在赋值前发出，`path` 是新值）：导航世代加一；每个页面按「新栈顶 + 场景在前台」更新可见性。
+    /// Router 栈变了（@Published 在赋值前发出，`path` 是新值）：导航世代加一；不在新栈顶的页面覆盖世代加一；每个页面按「新栈顶 + 场景在前台」
+    /// 更新可见性。
     /// 变得不可见在同步出口立即生效（覆盖、离开时作废导航许可，共性第 37 条）；变得可见放到下一轮主线程：`@Published` 在赋值前发出，此刻
     /// `router.path` 还是旧值，回到可见后要做的替换 / 出栈（提现成功进记录、实名 / 签署 / 保存成功出栈，共性第 41 条）按栈顶判断会落空。
     func pathChanged(_ path: [RouteDestination]) {
         navGeneration += 1
-        updateVisibility(top: path.last?.id, hideOnly: true)
+        let top = path.last?.id
+        for id in pages.keys where id != top {
+            coveredGen[id, default: 0] += 1
+        }
+        updateVisibility(top: top, hideOnly: true)
         Task { @MainActor [weak self] in
             guard let self else { return }
             updateVisibility(top: router.path.last?.id)

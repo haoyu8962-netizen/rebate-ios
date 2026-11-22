@@ -64,6 +64,8 @@ final class AppWallet: ObservableObject, WalletEnv {
     /// 本页可见性每变一次加一（实名查询后的导航许可，共性第 57 条）。
     var visibleGen: [UUID: Int] = [:]
     var lastVisible: [UUID: Bool] = [:]
+    /// 本页被覆盖（或离开）的次数：Router 栈每次发值时不在新栈顶就加一（同值赋值、场景切换不算；实名查询结果据此区分「被盖过」）。
+    var coveredGen: [UUID: Int] = [:]
     var navGeneration = 0
     var realnameState: (key: String, verified: Bool)?
     var realnameSerial = 0

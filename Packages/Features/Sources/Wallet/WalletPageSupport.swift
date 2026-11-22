@@ -19,6 +19,9 @@ public final class WalletPageContext: ObservableObject {
     @Published public var openError: Notice?
     public var retryOpen: () -> Void = {}
     public var dismissOpenError: () -> Void = {}
+    /// 本页点【提现】后实名前置查询（GET /v1/me）在途：App 在查询发出时置真、查询结束（任一出口）置假；【提现】显示进行中、不可连点
+    /// （FU-IOS-WITHDRAW-ENTRY-SILENT，不能看起来像没反应）。
+    @Published public var isOpeningWithdraw = false
     /// 共享读请求禁用期（App 给的同一份 `WalletGates.read`）：错误卡的【重试】直接观察它，到期自动恢复（APP-09 共性第 72 条，iOS R1-09）。
     public let readGate: RetryAfterGate
 

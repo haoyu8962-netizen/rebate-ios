@@ -7,7 +7,8 @@ extension WalletScreen {
     func hero(_ view: WalletSummaryDisplay, _ snapshot: WalletSnapshot, _ actions: WalletActions) -> some View {
         WalletHeroPanel(
             view: view, hidden: mask.hidden, withdrawEnabled: snapshot.withdrawEnabled,
-            disabledReason: disabledReason(view, snapshot), texts: texts, actions: actions,
+            opening: context.isOpeningWithdraw, disabledReason: disabledReason(view, snapshot), texts: texts,
+            actions: actions,
             onHelp: open(help:), frozenHelpFocus: $frozenHelpFocused
         )
     }

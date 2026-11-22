@@ -13,6 +13,8 @@ struct WalletHeroPanel: View {
     let view: WalletSummaryDisplay
     let hidden: Bool
     let withdrawEnabled: Bool
+    /// 点【提现】后实名前置查询在途（`WalletPageContext.isOpeningWithdraw`）：显示进行中、不可连点，读屏值「加载中」。
+    let opening: Bool
     /// 置灰时【提现】的读屏原因（字典文案；可点时 nil）。
     let disabledReason: String?
     let texts: WalletTexts
@@ -106,15 +108,15 @@ struct WalletHeroPanel: View {
 
     /// 【提现】（WalletDark 设计说明）：狸橙主卡在深色下不变，可点时卡内【提现】仍是白底 + #A83B1F 字，置灰为主按钮禁用样式
     /// （深色 #36312C 底 + #A39A90 字）。都由共用 `.inverse` 样式按令牌 button.inverse.* / button.primary.disabled.* 取值
-    /// （DS-02-iOS-1 计划 ③），本页不再局部强制外观（原 F-IOS-50 写法）。
+    /// （DS-02-iOS-1 计划 ③），本页不再局部强制外观（原 F-IOS-50 写法）。实名前置查询在途时带进行中（`isLoading`，同时不可点）。
     private var withdrawButton: some View {
         CouliButton(
-            texts.text("wallet.withdraw"), kind: .inverse, isEnabled: withdrawEnabled,
+            texts.text("wallet.withdraw"), kind: .inverse, isLoading: opening, isEnabled: withdrawEnabled,
             labelProbeID: "wallet.hero.withdraw.label", minWidth: CouliSpacing.s12 * 2, action: actions.withdraw
         )
         .fixedSize()
         .walletProbe("wallet.hero.withdraw", role: "button")
-        .accessibilityValue(Text(verbatim: disabledReason ?? ""))
+        .accessibilityValue(Text(verbatim: opening ? texts.text("wallet.loading") : disabledReason ?? ""))
     }
 
     /// 主卡底部两格：冻结中（带问号）/ 已提现；辅助字号档（≈ 200% 起）上下排。

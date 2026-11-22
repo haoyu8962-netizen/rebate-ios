@@ -4,14 +4,19 @@ import Generated
 import Router
 import Wallet
 import WalletCore
+#if DEBUG
+import os
+#endif
 
-/// 用户点的、要先查实名状态的一次打开（`origin` 发起页的导航实例，`nav` 点击时的导航世代，`visible` 点击时发起页的可见世代）。
+/// 用户点的、要先查实名状态的一次打开（`origin` 发起页的导航实例，`nav` 点击时的导航世代，`visible` 点击时发起页的可见世代，`covered`
+/// 点击时发起页的覆盖世代）。
 struct WalletOpenIntent {
     let route: String
     let params: [String: String]
     let origin: UUID?
     let nav: Int
     let visible: Int
+    let covered: Int
 }
 
 /// 会话换代、撤回 / 切环境、实名状态与带实名前置的打开。
@@ -84,6 +89,7 @@ extension AppWallet {
         realnameState = nil
         realnameFlag?.invalidate()
         realnameFlag = nil
+        openingEnded()
         let owner = owner(for: snapshot)
         if reconcile {
             reconcileCache(snapshot)
@@ -119,7 +125,7 @@ extension AppWallet {
             }
             let intent = WalletOpenIntent(
                 route: route, params: params, origin: page, nav: navGeneration,
-                visible: page.flatMap { visibleGen[$0] } ?? 0
+                visible: page.flatMap { visibleGen[$0] } ?? 0, covered: page.flatMap { coveredGen[$0] } ?? 0
             )
             refreshRealname(intent)
             return
@@ -128,19 +134,28 @@ extension AppWallet {
     }
 
     /// 取 GET /v1/me 的 realname_status（只认 verified）。共享请求世代（共性第 9 条）：只接收最新一次查询的结论，换代与新查询都作废旧请求。
+    /// 带点击的查询在途时发起页的【提现】显示进行中（`isOpeningWithdraw`），查询结束（任一出口）收起。
     func refreshRealname(_ intent: WalletOpenIntent?) {
         let owner = currentOwner()
-        guard owner.account != nil else { return }
+        guard owner.account != nil else {
+            if intent != nil {
+                silentExit("query skipped: no account")
+            }
+            return
+        }
         realnameSerial += 1
         let serial = realnameSerial
         realnameFlag?.invalidate()
         let flag = RequestFlag()
         realnameFlag = flag
+        // 新查询作废旧查询：旧查询的进行中一并收起（同一时刻只有最新一次查询可能在途）
+        openingEnded()
         // getMe 的读取截止时间三处共用（APP-12 共性第 32、33 条：「我的」、钱包实名查询、桥 auth.getUser）：任一处的 42901 都拦住这里
         if gates.read.active || meReadGate?.active == true {
             realnameFailed(WalletError(.gated, "error.42901"), intent)
             return
         }
+        openingStarted(intent)
         let probe = gates.read.probe(extra: meReadGate?.sendAllowed)
         let client = client
         Task { @MainActor [weak self] in
@@ -148,7 +163,24 @@ extension AppWallet {
                 ApiCall(operationId: "getMe"), isValid: { flag.isValid }, sendAllowed: probe.allowed,
                 expected: owner.request
             )
-            guard let self, flag.isValid, serial == realnameSerial, isCurrent(owner) else { return }
+            guard let self else { return }
+            // 只有最新一次查询收起进行中（新查询已接手时不动它的进行中）
+            if serial == realnameSerial {
+                openingEnded()
+            }
+            // 真作废（新查询接手、会话换代 / 撤回 / 切环境、身份变了）：静默
+            guard flag.isValid, serial == realnameSerial else {
+                if intent != nil {
+                    silentExit(serial == realnameSerial ? "query voided: session rebuilt" : "query voided: superseded")
+                }
+                return
+            }
+            guard isCurrent(owner) else {
+                if intent != nil {
+                    silentExit("query voided: identity changed")
+                }
+                return
+            }
             realnameArrived(result, owner: owner, probe: probe, intent: intent)
         }
     }
@@ -157,10 +189,8 @@ extension AppWallet {
         if case let .success(data, _, _) = result {
             let status = (WalletJSON.parse(data) as? [String: Any])?["realname_status"] as? String
             realnameState = (owner.key, status == "verified")
-            if let intent, mayNavigate(intent) {
-                router.open(RouteRequest(
-                    route: intent.route, values: intent.params.mapValues { .string($0) }, from: .inApp
-                ))
+            if let intent {
+                continueOpen(intent)
             }
             return
         }
@@ -169,36 +199,140 @@ extension AppWallet {
             gates.read.start(error.disableMillis)
             meReadGate?.start(error.disableMillis)
         }
-        realnameFailed(error, intent)
+        realnameFailed(error, intent, sessionEnded: Self.sessionEnded(result))
     }
 
-    /// 读取失败（共性第 3、21 条）：不当成未实名继续导航；5xxxx 带 trace6 显示在发起页并可【重试】；作废的静默。
-    private func realnameFailed(_ error: WalletError, _ intent: WalletOpenIntent?) {
-        guard let intent, let origin = intent.origin, error.kind != .cancelled, error.kind != .forceUpdate,
-              stillOnOrigin(intent), let entry = pages[origin]
-        else { return }
+    /// 查询成功后接着打开（共性第 31、57 条）：
+    /// - 许可仍在 → 经 Router 打开（守卫按刚查到的状态放行进 Withdraw，或去 RealName 并登记 pending_action）；
+    /// - 许可只因场景切换作废（点击之后 inactive / 后台过，发起页一直在栈顶、没被盖过）而此刻在前台 → 不替用户跳转，也不静默：发起页
+    ///   显示打开失败条 +【重试】（实名状态已查清，【重试】同步打开）；
+    /// - 发起页被盖过（含已退回）、已离开、此刻不在前台 → 静默。
+    private func continueOpen(_ intent: WalletOpenIntent) {
+        if mayNavigate(intent) {
+            router.open(RouteRequest(
+                route: intent.route, values: intent.params.mapValues { .string($0) }, from: .inApp
+            ))
+            return
+        }
+        guard sceneActive else {
+            silentExit("navigation voided: not in foreground")
+            return
+        }
+        guard let entry = originEntry(intent, "navigation voided") else { return }
         errorSerial += 1
-        entry.context.openError = error.kind == .gated ? Notice("error.42901", id: errorSerial)
-            : error.notice(id: errorSerial)
+        showOpenError(Notice(Self.openVoidedKey, id: errorSerial), intent, entry)
+    }
+
+    /// 读取失败（共性第 3、21 条）：不当成未实名继续导航；发起页一直在栈顶就显示在发起页（5xxxx 带 trace6）并可【重试】——本地取消类结果
+    /// （会话没换代、请求没作废）同样提示，不静默。静默的只有：没有点击（实名成功后的复查）、强更接管、会话已结束、发起页被盖过或已离开。
+    private func realnameFailed(_ error: WalletError, _ intent: WalletOpenIntent?, sessionEnded: Bool = false) {
+        guard let intent else { return }
+        guard error.kind != .forceUpdate else {
+            silentExit("query failed: force update takes over")
+            return
+        }
+        guard !sessionEnded else {
+            silentExit("query cancelled: session ended")
+            return
+        }
+        guard let entry = originEntry(intent, "query failed") else { return }
+        errorSerial += 1
+        let notice = switch error.kind {
+        case .gated: Notice("error.42901", id: errorSerial)
+        case .cancelled: Notice(Self.openVoidedKey, id: errorSerial)
+        default: error.notice(id: errorSerial)
+        }
+        showOpenError(notice, intent, entry)
+    }
+
+    /// 发起页一直在栈顶且页面还在时的那一页；否则（被盖过、已离开、没有发起页）记一条静默出口、返回 nil。
+    private func originEntry(_ intent: WalletOpenIntent, _ stage: String) -> WalletPageEntry? {
+        guard let origin = intent.origin else {
+            silentExit("\(stage): no origin page")
+            return nil
+        }
+        guard stillOnOrigin(intent) else {
+            silentExit("\(stage): origin covered (or was) or left")
+            return nil
+        }
+        guard let entry = pages[origin] else {
+            silentExit("\(stage): origin page gone")
+            return nil
+        }
+        return entry
+    }
+
+    /// 发起页的打开失败条 +【重试】【关闭】（【重试】只在发起页仍在栈顶、不在读禁用期时重新打开）。
+    private func showOpenError(_ notice: Notice, _ intent: WalletOpenIntent, _ entry: WalletPageEntry) {
+        guard let origin = intent.origin else { return }
+        entry.context.openError = notice
         entry.context.retryOpen = { [weak self] in
-            guard let self, !gates.read.active, router.path.last?.id == origin else { return }
+            guard let self else { return }
+            guard !gates.read.active, router.path.last?.id == origin else {
+                silentExit("retry refused: read gate active or origin not on top")
+                return
+            }
             entry.context.openError = nil
             open(intent.route, params: intent.params, from: origin)
         }
         entry.context.dismissOpenError = { [weak entry] in entry?.context.openError = nil }
     }
 
-    /// 发起页仍在栈顶、点击之后导航没有变过（读取失败的提示据此显示在发起页）。
+    /// 点击之后发起页一直在栈顶：此刻在栈顶、覆盖世代未变（栈每次发值时它都在栈顶；读取失败与许可作废的提示据此显示在发起页）。
+    /// 有发起页时不看导航世代：栈的任何一次发值（含同值赋值）都会推进它，而发起页其实一直在栈顶、用户什么也没看到。没有发起页时仍按导航世代。
     func stillOnOrigin(_ intent: WalletOpenIntent) -> Bool {
-        guard navGeneration == intent.nav else { return false }
-        guard let origin = intent.origin else { return true }
-        return router.path.last?.id == origin
+        guard let origin = intent.origin else { return navGeneration == intent.nav }
+        return router.path.last?.id == origin && (coveredGen[origin] ?? 0) == intent.covered
     }
 
-    /// 查询之后的导航许可（共性第 31、37、57 条）：同一发起实例、导航世代未变、点击之后可见世代未变（没被覆盖、没退到后台），且此刻在前台。
+    /// 查询之后的导航许可（共性第 31、37、57 条）：同一发起实例一直在栈顶、点击之后可见世代未变（没被覆盖、没退到后台），且此刻在前台。
     func mayNavigate(_ intent: WalletOpenIntent) -> Bool {
         guard stillOnOrigin(intent), sceneActive else { return false }
         guard let origin = intent.origin else { return true }
         return (visibleGen[origin] ?? 0) == intent.visible
     }
+
+    /// 许可作废、本地取消时发起页上的提示文案键（契约已有：「请求已失效，请重试」）。
+    static let openVoidedKey = "error.10401"
+
+    /// 网络层判为会话已换代 / 已清的本地结果（真换代：静默）。
+    private static func sessionEnded(_ result: ApiResult) -> Bool {
+        switch result {
+        case let .localReject(reason):
+            [LocalRejectReason.sessionChanged, LocalRejectReason.accountMismatch].contains(reason)
+        case .sessionCleared, .sessionNotSaved:
+            true
+        default:
+            false
+        }
+    }
+
+    /// 带点击的【提现】查询发出：发起页的【提现】显示进行中。
+    private func openingStarted(_ intent: WalletOpenIntent?) {
+        guard let intent, intent.route == WalletRoutes.withdraw, let origin = intent.origin else { return }
+        pages[origin]?.context.isOpeningWithdraw = true
+    }
+
+    /// 查询结束、被新查询接手或会话换代：收起进行中。
+    private func openingEnded() {
+        for entry in pages.values where entry.context.isOpeningWithdraw {
+            entry.context.isOpeningWithdraw = false
+        }
+    }
+
+    /// 实名前置打开保留的静默出口（FU-IOS-WITHDRAW-ENTRY-SILENT §1.3）：只在 Debug / Staging 记一条原因，不写金额、身份、号码。
+    private func silentExit(_ reason: String) {
+        #if DEBUG
+        WalletEntryLog.silent(reason)
+        #endif
+    }
 }
+
+#if DEBUG
+/// 钱包入口静默出口的日志（只在 Debug / Staging 编译；staging 实跑看命中哪个出口）。
+enum WalletEntryLog {
+    static func silent(_ reason: String) {
+        Logger(subsystem: "com.couli.app", category: "wallet.entry").notice("silent exit: \(reason, privacy: .public)")
+    }
+}
+#endif
