@@ -1,3 +1,4 @@
+import BridgeHost
 import ClientCore
 import Clipboard
 import Config
@@ -76,7 +77,9 @@ struct MeAppFixture {
     static func make(
         suiteName: String, defaults: UserDefaults, account: String? = "user-a", scope: String = "full",
         decision: String = "consented", pushToken: String? = nil, registered: Bool = true,
-        update checker: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)), phoneKnown: Bool = true
+        update checker: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok)), phoneKnown: Bool = true,
+        configSignKeys: ConfigSignKeys = AppConfig.bundledSignKeys,
+        configEnvironmentId: @escaping () -> String = { EnvironmentStore.runtimeEnvironmentId() }
     ) -> MeAppFixture {
         let (tokens, privacyStore) = session(account: account, scope: scope, decision: decision)
         let withdrawal = EnvironmentSwitchCleanerRegistry(cleaners: [SessionTokensCleaner(tokens: tokens)])
@@ -98,7 +101,7 @@ struct MeAppFixture {
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
         let config = AppConfig(
             client: network.client, file: ClientFile(name: suiteName + ".config.json"),
-            environmentRegistry: environmentSwitch
+            environmentRegistry: environmentSwitch, signKeys: configSignKeys, environmentId: configEnvironmentId
         )
         let login = AppLogin(network: network, routing: routing, update: update)
         network.attach(environment: environment, privacy: privacy, update: update)

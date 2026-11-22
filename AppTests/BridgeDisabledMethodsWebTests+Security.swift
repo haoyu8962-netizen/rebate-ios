@@ -46,10 +46,11 @@ extension BridgeDisabledMethodsWebTests {
         try await withSecurityPage { app, view in
             let before = try await methodsJSON(view)
             _ = try await view.evaluateJavaScript("window.fx24Marker = 'revoked-document'")
-            // 一个真实配置响应里同时撤销当前 bridge_origins、移出禁用名单。
+            // 一个真实配置响应里同时撤销当前 bridge_origins（签名白名单换成别的源）、移出禁用名单。
             try await setConfig(app, disabled: [], origins: ["https://other.example.test"])
-            XCTAssertEqual(AppWeb.object(app.config.snapshotJson)?["bridge_origins"] as? [String],
-                           ["https://other.example.test"])
+            XCTAssertEqual(app.config.store.trustedOrigins, ["https://other.example.test"])
+            let signed = AppWeb.object(app.config.snapshotJson)?["bridge_origins"] as? [String: Any]
+            XCTAssertNotNil(signed?["jws"] as? String, "生效配置的 bridge_origins 应是签名形状")
             try await expectMethodsRemain(view, equalTo: before)
             try await expectHas(view, method: "clipboard.read", expected: false)
             let marker = try await view.evaluateJavaScript("window.fx24Marker") as? String
@@ -115,7 +116,7 @@ extension BridgeDisabledMethodsWebTests {
     private func withSecurityPage(
         _ body: @MainActor (MeAppFixture, WKWebView) async throws -> Void
     ) async throws {
-        let app = make()
+        let app = makeSigned()
         try await setConfig(app, disabled: ["clipboard.read"])
         let web = makeWeb(app)
         let controller = web.makeTrustedController(url: nil, fromForceUpdatePage: false, onClose: {})

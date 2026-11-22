@@ -125,7 +125,7 @@ extension BridgeDisabledMethodsWebTests {
         try await server.start()
         defer { server.stop() }
         let origin = server.origin
-        let app = make()
+        let app = makeSigned()
         try await setConfig(app, disabled: [])
         let web = makeWeb(app)
         // 沿用既有 Debug 一致性页的注入入口，仅额外允许本测试独占的回环端口。

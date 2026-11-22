@@ -11,8 +11,12 @@ import XCTest
 /// 本仓库不包含 H5 SDK；这里读取 SDK 使用的 __REBATE_BRIDGE__.methods，不另造 Swift has()。
 @MainActor
 final class BridgeDisabledMethodsWebTests: MeTestCase {
+    /// N-22：可信源只认验签通过的 bridge_origins。本类的 AppConfig 装测试钥（env test），setConfig 每次现签、version 递增。
+    let originsSigner = N22OriginsSigner()
+    private(set) var originsVersion = 0
+
     func testB2B5B6CapabilityListUpdatesOnExistingPageAfterConfigRefresh() async throws {
-        let app = make()
+        let app = makeSigned()
         try await setConfig(app, disabled: ["clipboard.read"])
         let web = makeWeb(app)
         let controller = web.makeTrustedController(url: nil, fromForceUpdatePage: false, onClose: {})
@@ -46,7 +50,7 @@ final class BridgeDisabledMethodsWebTests: MeTestCase {
 
     /// 只改测试注入而漏掉 AppWeb 生产装配也会红；安全的 app.getEnv 经过实际 WK 消息通道与准入。
     func testProductionAppWebRejectsDisabledMethodThroughWebKitMessageChannel() async throws {
-        let app = make()
+        let app = makeSigned()
         try await setConfig(app, disabled: ["app.getEnv"])
         let web = makeWeb(app)
         let controller = web.makeTrustedController(url: nil, fromForceUpdatePage: false, onClose: {})
@@ -69,17 +73,29 @@ final class BridgeDisabledMethodsWebTests: MeTestCase {
         XCTAssertEqual((reply["data"] as? [String: Any])?["reason"] as? String, "method_disabled")
     }
 
+    /// 同 `make()`，但 AppConfig 装测试钥、运行环境固定 test（setConfig 现签的白名单才能验过）。
+    func makeSigned() -> MeAppFixture {
+        MeAppFixture.make(
+            suiteName: suiteName, defaults: defaults,
+            configSignKeys: originsSigner.keys, configEnvironmentId: { "test" }
+        )
+    }
+
+    /// 回一份新配置：bridge_origins 为测试钥现签的 {"jws"}（version 每次 +1），并确认它成为可信源。
     func setConfig(
         _ app: MeAppFixture, disabled: [String], origins: [String] = [DisabledMethodsFixture.origin]
     ) async throws {
         let marker = UUID().uuidString
+        originsVersion += 1
+        let jws = try originsSigner.jws(version: originsVersion, origins: origins)
         let data = try JSONSerialization.data(withJSONObject: [
-            "dict_version": marker, "bridge_origins": origins,
+            "dict_version": marker, "bridge_origins": ["jws": jws],
             "bridge_disabled_methods": disabled,
         ])
         script.ok("GET /v1/config", try XCTUnwrap(String(bytes: data, encoding: .utf8)))
         app.config.store.onForeground()
         await waitUntil("新配置没有成为生效配置") { app.config.snapshotJson.contains(marker) }
+        XCTAssertEqual(app.config.store.trustedOrigins, origins, "现签的 bridge_origins 没有成为可信源")
     }
 
     func makeWeb(_ app: MeAppFixture) -> AppWeb {
