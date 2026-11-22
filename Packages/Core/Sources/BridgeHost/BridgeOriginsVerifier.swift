@@ -44,9 +44,8 @@ public struct ConfigSignKeys: Sendable {
         return .empty
     }
 
-    // swiftlint:disable:next large_tuple
     /// 测试注入用（SPKI DER）。
-    public init(derKeys: [(env: String, kid: String, der: Data)]) {
+    public init(derKeys: [(env: String, kid: String, der: Data)]) { // swiftlint:disable:this large_tuple
         keys = derKeys.map { Key(env: $0.env, kid: $0.kid, der: $0.der) }
     }
 
