@@ -43,6 +43,10 @@ final class AppWallet: ObservableObject, WalletEnv {
     var phoneProvider: (String) -> String? = { _ in nil }
     /// 给定会话世代那一代会话的 Me.phone_bound（AppLogin 的 PhoneBindingStore：短信登录、getMe、绑定成功记下；未知为 nil；D10-1682 ②）。
     var phoneBound: @MainActor (UInt64) -> Bool? = { _ in nil }
+    /// 实名查询（GET /v1/me）发起前取一次绑定存储的查询依据（AppLogin 的 PhoneBindingStore.ticket，按固定那一代会话世代；没接为 nil）。
+    var phoneTicket: @MainActor (UInt64) -> PhoneBindingStore.Ticket? = { _ in nil }
+    /// 实名查询查清 phone_bound 时写回同一份绑定存储（PhoneBindingStore.apply：更新世代没变才写，绑定前发出的旧查询不覆盖绑定结果）。
+    var phoneApply: @MainActor (Bool, PhoneBindingStore.Ticket) -> Void = { _, _ in }
     /// 统一客服出口（APP-12 接上 AppMe.cs；接入前经 Router 打开 Help，同 APP-08 G09）。
     var customerService: (String) -> Void
     /// getMe 的共享读取截止时间（APP-12 MeGates.read；实名查询与「我的」、桥 auth.getUser 共用，双向生效）。nil = 没接。
@@ -112,6 +116,10 @@ final class AppWallet: ObservableObject, WalletEnv {
         )
         let binding = login.phone
         phoneBound = { generation in binding.bound(generation: generation) }
+        // FU-IOS-WITHDRAW-ENTRY-SILENT 第 2 段：绑定状态只在内存，冷启动后未知，守卫会把已绑用户送去 BindPhone；实名查询的 getMe 回包
+        // 带 Me.phone_bound，按 PhoneBindingSync 同口径记进同一份存储
+        phoneTicket = { generation in binding.ticket(generation: generation) }
+        phoneApply = { bound, ticket in _ = binding.apply(bound, ticket: ticket) }
         // 摘要与金额草稿按「账号 + 持久化登录世代」分区（FU-IOS-0712）：世代与会话可用性同口径，未知不读不写；世代只取执行器构造时
         // 固定的那一份（WalletOwner.loginEpoch，R1-01），存储不读当前世代
         cleaner.store.partitionedByLoginEpoch = true

@@ -1,7 +1,9 @@
 import CouliNetwork
 import Foundation
 import Generated
+import Login
 import Router
+import Session
 import Wallet
 import WalletCore
 #if DEBUG
@@ -170,6 +172,8 @@ extension AppWallet {
             return
         }
         openingStarted(intent)
+        // 发出前按固定那一代会话取绑定存储的查询依据（回包顺带记 phone_bound；PhoneBindingSync 同口径）
+        let phone = owner.request.flatMap { phoneTicket($0.generation) }
         let probe = gates.read.probe(extra: meReadGate?.sendAllowed)
         let client = client
         Task { @MainActor [weak self] in
@@ -195,14 +199,20 @@ extension AppWallet {
                 }
                 return
             }
-            realnameArrived(result, owner: owner, probe: probe, intent: intent)
+            realnameArrived(result, owner: owner, probe: probe, phone: phone, intent: intent)
         }
     }
 
-    private func realnameArrived(_ result: ApiResult, owner: WalletOwner, probe: SendProbe, intent: WalletOpenIntent?) {
+    private func realnameArrived(
+        _ result: ApiResult, owner: WalletOwner, probe: SendProbe, phone: PhoneBindingStore.Ticket?,
+        intent: WalletOpenIntent?
+    ) {
         if case let .success(data, _, _) = result {
-            let status = (WalletJSON.parse(data) as? [String: Any])?["realname_status"] as? String
+            let object = WalletJSON.parse(data) as? [String: Any]
+            let status = object?["realname_status"] as? String
             realnameState = (owner.key, status == "verified")
+            // 守卫判已绑手机读同一份绑定存储：先记下 phone_bound，再经 Router 打开
+            phoneBoundArrived(object, ticket: phone)
             if let intent {
                 continueOpen(intent)
             }
@@ -214,6 +224,16 @@ extension AppWallet {
             meReadGate?.start(error.disableMillis)
         }
         realnameFailed(error, intent, sessionEnded: Self.sessionEnded(result))
+    }
+
+    /// 实名查询回包里的 Me.phone_bound（PhoneBindingSync.settle 同口径）：会话世代仍是发起时那一代、作用域是 full、值是严格布尔（不认
+    /// 数字 1、字符串）才写回绑定存储；存储再按更新世代挡掉绑定前发出的旧查询。任一不满足不写（保持原状 / 未知）。
+    private func phoneBoundArrived(_ object: [String: Any]?, ticket: PhoneBindingStore.Ticket?) {
+        guard let ticket, client.sessionGeneration == ticket.generation,
+              client.isolatedSessionScope == Session.SessionScope.full,
+              let number = object?["phone_bound"] as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID()
+        else { return }
+        phoneApply(number.boolValue, ticket)
     }
 
     /// 查询成功后接着打开（共性第 31、57 条）：
