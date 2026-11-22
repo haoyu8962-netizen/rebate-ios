@@ -135,11 +135,13 @@ extension AppWallet {
         let decision = router.open(RouteRequest(route: route, values: params.mapValues { .string($0) }, from: .inApp))
         #if DEBUG
         // 实跑定位（D10-2670 后续）：没走实名前置查询时的原因与 Router 判定（只记布尔、判定种类与原因码）
+        let hasAccount = owner.account != nil
+        let realnameKnown = realnameState?.key == owner.key
         Logger(subsystem: "com.couli.app", category: "wallet.entry").notice(
             """
             router decision: \(decision.kindRaw, privacy: .public) reason=\(decision.reason, privacy: .public) \
-            route=\(decision.route ?? "-", privacy: .public) hasAccount=\(owner.account != nil, privacy: .public) \
-            realnameKnown=\(realnameState?.key == owner.key, privacy: .public)
+            route=\(decision.route ?? "-", privacy: .public) hasAccount=\(hasAccount, privacy: .public) \
+            realnameKnown=\(realnameKnown, privacy: .public)
             """
         )
         #endif
