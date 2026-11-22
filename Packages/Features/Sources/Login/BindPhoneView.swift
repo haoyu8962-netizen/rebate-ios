@@ -63,6 +63,9 @@ struct BindPhoneView: View {
     @AccessibilityFocusState var a11y: Field?
     /// 钉底提交栏实测上沿（全局坐标；FU-LOGIN-KEYBOARD-AVOID-ios r4）。
     @State var barTop: CGFloat?
+    /// 发码行宽度（D10-2492 判「320 宽」档用）。
+    @State var fieldRowWidth: CGFloat?
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
     func text(_ key: String) -> String {
         texts.text(key)
@@ -75,6 +78,17 @@ struct BindPhoneView: View {
     /// 320 + 最大无障碍字号下下伸量越大输入框越往上，r4 下伸 44 时输入框上沿进顶栏 33.7pt，口径只许 ≤ 16pt，
     /// 故下伸量须 ≤ 26。取 22：余量约 14pt，输入框上沿余地约 4pt。
     static let getCodeExtends: CGFloat = 22
+    /// D10-2492：仅「320 宽 + 最大无障碍字号」一档改取舍——输入框外框整块可见优先，【获取验证码】离栏上沿余量下限让到 8；
+    /// 下伸量 17 ≈ 余量 9 + 可视区底与栏上沿的实测差 8。
+    static let getCodeExtendsTight: CGFloat = 17
+    /// 内容宽不超过此值视为「320 宽」档（320 − 两侧留白 16 × 2 = 288，留余量取 320）。
+    static let narrowContentWidth: CGFloat = 320
+
+    /// 当前档的锚点下伸量（D10-2492）。
+    var getCodeExtendsForTier: CGFloat {
+        dynamicTypeSize >= .accessibility5 && (fieldRowWidth ?? .infinity) <= Self.narrowContentWidth
+            ? Self.getCodeExtendsTight : Self.getCodeExtends
+    }
 
     var body: some View {
         VStack(spacing: 0) {

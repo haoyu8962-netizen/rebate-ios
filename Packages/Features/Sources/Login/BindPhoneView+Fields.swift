@@ -87,7 +87,11 @@ extension BindPhoneView {
                 }
             }
             // 两种排法下这一块的下沿都是【获取验证码】的下沿；锚点挂在这里，不随 ViewThatFits 的候选重复出现
-            .keyboardPrimaryAnchor(Self.getCodeAnchor, extends: Self.getCodeExtends)
+            .background(GeometryReader { geometry in
+                Color.clear.preference(key: BindPhoneFieldRowWidthKey.self, value: geometry.size.width)
+            })
+            .onPreferenceChange(BindPhoneFieldRowWidthKey.self) { fieldRowWidth = $0 }
+            .keyboardPrimaryAnchor(Self.getCodeAnchor, extends: getCodeExtendsForTier)
             if let error = controller.codeError {
                 Text(verbatim: error)
                     .couliFont(.footnote)
@@ -152,5 +156,13 @@ extension BindPhoneView {
                         fillsWidth: true, action: controller.sendCode)
                 .accessibilityIdentifier("bindPhone.getCode")
         }
+    }
+}
+
+/// 发码行宽度（D10-2492：区分「320 宽」档）。
+struct BindPhoneFieldRowWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
     }
 }
