@@ -75,10 +75,10 @@ final class AppConfig: ObservableObject {
             let verdict = BridgeOriginsVerifier.verify(
                 config: config, appId: appId, env: environmentId(), lastGoodVersion: lastGoodVersion, keys: signKeys
             )
-            guard case let .accepted(whitelist) = verdict else {
+            guard case let .accepted(allowlist) = verdict else {
                 return nil
             }
-            return (whitelist.version, whitelist.origins)
+            return (allowlist.version, allowlist.origins)
         }
     }
 

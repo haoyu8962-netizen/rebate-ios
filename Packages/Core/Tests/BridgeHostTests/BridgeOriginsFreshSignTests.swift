@@ -12,10 +12,10 @@ final class BridgeOriginsFreshSignTests: XCTestCase {
 
     func testFreshSignedBaselineAccepts() throws {
         let verdict = verify(try signer.jws(payload: FreshSigner.payload()))
-        XCTAssertEqual(verdict, .accepted(BridgeOriginsWhitelist(version: 3, origins: ["https://h5-test.couliapp.cn"])))
+        XCTAssertEqual(verdict, .accepted(BridgeOriginsAllowlist(version: 3, origins: ["https://h5-test.couliapp.cn"])))
         let origins = ["https://h5-test.couliapp.cn", "https://a.example:8443"]
         let two = try signer.jws(payload: FreshSigner.payload(origins: json(origins)))
-        XCTAssertEqual(verify(two), .accepted(BridgeOriginsWhitelist(version: 3, origins: origins)), "多个源原样保留顺序")
+        XCTAssertEqual(verify(two), .accepted(BridgeOriginsAllowlist(version: 3, origins: origins)), "多个源原样保留顺序")
     }
 
     /// version ≥ 上次可用即通过（等于不算回退）；小于即拒；没有上次可用时不比。
@@ -33,10 +33,10 @@ final class BridgeOriginsFreshSignTests: XCTestCase {
     func testConfigDocumentUsesOnlySignedOrigins() throws {
         let jws = try signer.jws(payload: FreshSigner.payload())
         let plain = verifyConfig(["bridge_origins": ["jws": jws]])
-        XCTAssertEqual(plain, .accepted(BridgeOriginsWhitelist(version: 3, origins: ["https://h5-test.couliapp.cn"])))
+        XCTAssertEqual(plain, .accepted(BridgeOriginsAllowlist(version: 3, origins: ["https://h5-test.couliapp.cn"])))
         let extra = verifyConfig(["bridge_origins": ["jws": jws, "origins": ["https://evil.example.test"]]])
-        if case let .accepted(whitelist) = extra {
-            XCTAssertEqual(whitelist.origins, ["https://h5-test.couliapp.cn"], "明文 origins 混进了白名单")
+        if case let .accepted(allowlist) = extra {
+            XCTAssertEqual(allowlist.origins, ["https://h5-test.couliapp.cn"], "明文 origins 混进了白名单")
         }
     }
 
@@ -120,10 +120,10 @@ final class BridgeOriginsFreshSignTests: XCTestCase {
             ("开头空格", " " + good),
             ("alg 小写", try signer.jws(header: header(alg: "es256"), payload: FreshSigner.payload())),
             ("header 缺 kid", try signer.jws(header: #"{"alg":"ES256","typ":"couli-bridge-origins+jws"}"#,
-                                             payload: FreshSigner.payload())),
+                                            payload: FreshSigner.payload())),
             ("header 不是对象", try signer.jws(header: #"["ES256"]"#, payload: FreshSigner.payload())),
             ("typ 大小写不同", try signer.jws(header: header(typ: "Couli-Bridge-Origins+JWS"),
-                                             payload: FreshSigner.payload())),
+                                         payload: FreshSigner.payload())),
         ]
         for (label, jws) in cases {
             let verdict = verify(jws)

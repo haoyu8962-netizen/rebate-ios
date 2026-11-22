@@ -48,10 +48,10 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
             }
         }
         let release = stripComments(try String(contentsOf: root.appendingPathComponent("App/Config/Release.xcconfig"),
-                                                encoding: .utf8))
+                                               encoding: .utf8))
         XCTAssertEqual(settingValue("COULI_CONFIG_SIGN_KEYS", in: release), "$(COULI_CONFIG_SIGN_KEYS_PROD)")
         let base = stripComments(try String(contentsOf: root.appendingPathComponent("App/Config/Base.xcconfig"),
-                                             encoding: .utf8))
+                                            encoding: .utf8))
         let prod = try XCTUnwrap(settingValue("COULI_CONFIG_SIGN_KEYS_PROD", in: base), "Base 缺生产槽位")
         for item in prod.split(whereSeparator: { $0 == " " || $0 == "," || $0 == "\t" }) {
             XCTAssertTrue(item.hasPrefix("prod:"), "生产槽位里有非 prod 项：\(item)")

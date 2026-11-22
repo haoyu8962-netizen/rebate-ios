@@ -44,6 +44,7 @@ public struct ConfigSignKeys: Sendable {
         return .empty
     }
 
+    // swiftlint:disable:next large_tuple
     /// 测试注入用（SPKI DER）。
     public init(derKeys: [(env: String, kid: String, der: Data)]) {
         keys = derKeys.map { Key(env: $0.env, kid: $0.kid, der: $0.der) }
@@ -64,7 +65,7 @@ public struct ConfigSignKeys: Sendable {
 }
 
 /// 验签通过的可信 H5 源白名单（origins 每项本身就是规范化 https origin）。
-public struct BridgeOriginsWhitelist: Sendable, Equatable {
+public struct BridgeOriginsAllowlist: Sendable, Equatable {
     public let version: Int
     public let origins: [String]
 
@@ -76,7 +77,7 @@ public struct BridgeOriginsWhitelist: Sendable, Equatable {
 
 /// 验签结论。rejected 的 reason 只供日志定位，判定只看 accepted / rejected。
 public enum BridgeOriginsVerdict: Sendable, Equatable {
-    case accepted(BridgeOriginsWhitelist)
+    case accepted(BridgeOriginsAllowlist)
     case rejected(reason: String)
 }
 

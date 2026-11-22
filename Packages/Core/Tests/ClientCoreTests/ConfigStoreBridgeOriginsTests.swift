@@ -47,10 +47,10 @@ final class ConfigStoreBridgeOriginsTests: XCTestCase {
                 let verdict = BridgeOriginsVerifier.verify(
                     config: config, appId: "couli", env: env, lastGoodVersion: lastGood, keys: keys
                 )
-                guard case let .accepted(whitelist) = verdict else {
+                guard case let .accepted(allowlist) = verdict else {
                     return nil
                 }
-                return (whitelist.version, whitelist.origins)
+                return (allowlist.version, allowlist.origins)
             }
         )
         return Harness(store: store, fetcher: fetcher, file: file, log: log)
@@ -232,7 +232,6 @@ final class ConfigStoreBridgeOriginsTests: XCTestCase {
         try harness.respond(ConfigReply(kindRaw: ConfigReply.failure, bodyJson: nil, etag: nil))
         XCTAssertEqual(harness.store.trustedOrigins, [originA], "拉取失败改了白名单")
     }
-
 }
 
 // MARK: - 工具

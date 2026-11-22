@@ -121,7 +121,7 @@ final class BridgeOriginsVectorTests: XCTestCase {
         let verdict = BridgeOriginsVerifier.verify(
             jws: live.jws, appId: "couli", env: "staging", lastGoodVersion: nil, keys: keys
         )
-        XCTAssertEqual(verdict, .accepted(BridgeOriginsWhitelist(version: 0, origins: [Self.stagingOrigin])))
+        XCTAssertEqual(verdict, .accepted(BridgeOriginsAllowlist(version: 0, origins: [Self.stagingOrigin])))
     }
 
     /// 坏项（段数不对、非十六进制、奇数位、不是公钥、不是 P-256）一律跳过、不崩；空串 / 只有分隔符 = 空表。
@@ -160,7 +160,6 @@ final class BridgeOriginsVectorTests: XCTestCase {
         )
         XCTAssertEqual(parsed.entries, expected, "parse 的 entries")
     }
-
 }
 
 // MARK: - 工具
@@ -185,10 +184,10 @@ extension BridgeOriginsVectorTests {
     /// 返回是否通过；判定与向量不符时记失败（带向量名、入口与实得 reason）。
     private func assertVerdict(_ verdict: BridgeOriginsVerdict, matches vector: Vector, entry: String) throws -> Bool {
         switch verdict {
-        case let .accepted(whitelist):
-            XCTAssertTrue(vector.accept, "\(vector.name)（\(entry)）：应拒（向量 reason=\(vector.reason)），实得通过 \(whitelist)")
-            XCTAssertEqual(whitelist.origins, vector.origins, "\(vector.name)（\(entry)）：origins 不一致")
-            XCTAssertEqual(whitelist.version, try payloadVersion(vector.jws),
+        case let .accepted(allowlist):
+            XCTAssertTrue(vector.accept, "\(vector.name)（\(entry)）：应拒（向量 reason=\(vector.reason)），实得通过 \(allowlist)")
+            XCTAssertEqual(allowlist.origins, vector.origins, "\(vector.name)（\(entry)）：origins 不一致")
+            XCTAssertEqual(allowlist.version, try payloadVersion(vector.jws),
                            "\(vector.name)（\(entry)）：version 不是签名里的值")
             return true
         case let .rejected(reason):
