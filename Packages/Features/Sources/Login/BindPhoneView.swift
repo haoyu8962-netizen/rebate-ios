@@ -81,8 +81,9 @@ struct BindPhoneView: View {
     /// D10-2492 / D10-2495：仅「320 宽 + 最大无障碍字号」一档——【获取验证码】离栏上沿下限 8，输入框外框上沿可进顶栏 ≤ 18。
     /// r7 实测下伸 17 时余量 9.1、外框上沿 163.0（下限 163.7）；下伸量与外框位置 1:1，取 16：预计余量 8.1、外框上沿 164.0。
     static let getCodeExtendsTight: CGFloat = 16
-    /// 内容宽不超过此值视为「320 宽」档（320 − 两侧留白 16 × 2 = 288，留余量取 320）。
-    static let narrowContentWidth: CGFloat = 320
+    /// 发码行宽不超过此值视为「320 宽」档：320 − 两侧留白 = 288（实测），375 宽机型约 343；取 300，给 288 留 12pt
+    /// 余量，又不把 SE / mini 划进极端档（review-r2 S2-1）。
+    static let narrowContentWidth: CGFloat = 300
 
     /// 当前档的锚点下伸量（D10-2492）。
     var getCodeExtendsForTier: CGFloat {

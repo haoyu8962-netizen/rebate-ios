@@ -7,8 +7,10 @@ import SwiftUI
 /// 滚动方案会把输入框滚走，见 review-r1 S1-1）。读屏开启时不钉底，保持 A11yFocusLogin 读屏顺序（S2-2）。
 extension LoginView {
     /// 主按钮此刻是否钉底。原位（`if !primaryPinned`）与底栏（`if primaryPinned`）互斥，同一时刻只渲染一个实例。
+    /// 只在本步主输入框（手机号步 login.phone、验证码步 login.code）聚焦时钉；邀请码框等其他控件聚焦时不钉，
+    /// 按钮留在原位，由系统保持聚焦框可见（review-r2 S2-2：邀请码框不在按需滚动的保护里）。
     var primaryPinned: Bool {
-        keyboardShown && !voiceOverRunning
+        keyboardShown && !voiceOverRunning && (model.step == .code ? codeFocused : phoneFocused)
     }
 
     /// 底栏：只在钉底时有内容；按当前步放唯一的那颗主按钮。
@@ -36,9 +38,9 @@ extension LoginView {
         model.step == .code ? Self.codeAnchor : Self.phoneAnchor
     }
 
-    /// 只在钉底期间、且本步输入框聚焦时按需滚动（邀请码框聚焦时不动）。
+    /// 只在钉底期间按需滚动（钉底已要求本步主输入框聚焦；邀请码框聚焦时不钉也不滚）。
     var inputScrollActive: Bool {
-        primaryPinned && (model.step == .code ? codeFocused : phoneFocused)
+        primaryPinned
     }
 
     /// 唯一的【获取验证码】：identifier、读屏焦点绑定、状态与动作都在这里。
