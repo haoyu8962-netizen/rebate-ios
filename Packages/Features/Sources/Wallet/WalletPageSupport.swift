@@ -182,6 +182,13 @@ struct NoticeBar: View {
 
 /// 发起页底部的实名查询失败卡（共性第 21 条；代拟版式，iOS I09 同 Android A18）。
 /// 记录页、钱包页、提现页等所有会触发实名查询的入口都渲染它（共性第 72 条，iOS R1-08）。
+/// 打开功能页时「查询失败 / 被取消」的通用状态文案（BR-TEXT-14 表 C，DSX-01 三端共用；D10-2659）。
+public enum WalletOpenErrorKeys {
+    public static let loadFailedTitle = "state.load_failed.title"
+    public static let loadFailedDesc = "state.load_failed.desc"
+    public static let retry = "state.retry"
+}
+
 struct OpenErrorCard: View {
     @ObservedObject var context: WalletPageContext
     /// 直接观察共享读禁用期：到期时重绘，【重试】随之恢复（iOS R1-09）。
@@ -194,10 +201,18 @@ struct OpenErrorCard: View {
 
     var body: some View {
         if let model = OpenErrorModel.make(context) {
+            let generic = model.notice.key == WalletOpenErrorKeys.loadFailedDesc
             VStack(alignment: .leading, spacing: CouliSpacing.s3) {
+                if generic {
+                    Text(verbatim: context.texts.text(WalletOpenErrorKeys.loadFailedTitle))
+                        .couliFont(.body, weight: .couliSemibold)
+                        .foregroundStyle(CouliColor.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 NoticeBar(
                     text: model.notice.message(context.texts), noticeId: model.notice.id,
-                    retryTitle: context.texts.text("wallet.retry"), retryEnabled: model.retryEnabled,
+                    retryTitle: context.texts.text(generic ? WalletOpenErrorKeys.retry : "wallet.retry"),
+                    retryEnabled: model.retryEnabled,
                     retry: model.retry, identifier: "wallet.openError"
                 )
                 CouliButton(context.texts.text("wallet.close"), kind: .text, size: .compact) {

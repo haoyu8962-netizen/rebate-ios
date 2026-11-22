@@ -292,8 +292,9 @@ extension AppWallet {
         return (visibleGen[origin] ?? 0) == intent.visible
     }
 
-    /// 许可作废、本地取消时发起页上的提示文案键（契约已有：「请求已失效，请重试」）。
-    static let openVoidedKey = "error.10401"
+    /// 许可作废、本地取消时发起页上的提示文案键：BR-TEXT-14 表 C 通用状态键（DSX-01 登记、三端共用；D10-2659 不借 error.10401——
+    /// 那是签名 / 防重放失效且要上报 10401 埋点）。出错卡对它另显标题 state.load_failed.title、【重试】用 state.retry。
+    static let openVoidedKey = WalletOpenErrorKeys.loadFailedDesc
 
     /// 网络层判为会话已换代 / 已清的本地结果（真换代：静默）。
     private static func sessionEnded(_ result: ApiResult) -> Bool {
