@@ -38,7 +38,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
     func testReleaseConfigCarriesNoNonProdKey() throws {
         let root = try Self.repositoryRoot()
         let forbidden = [
-            "staging", "config-staging", "test:", "n22-vector-test-key", "ae883f464888bece", try testKeyHex(),
+            "staging", "config-staging", "test:", "n22-vector-test-key", "ae883f464888bece", try vectorTestKeyHex(),
         ]
         for name in ["Release", "Base"] {
             let code = stripComments(try String(contentsOf: root.appendingPathComponent("App/Config/\(name).xcconfig"),
@@ -61,7 +61,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
     /// 测试钥不得进任何构建配置；Info.plist 的键取 $(COULI_CONFIG_SIGN_KEYS)。
     func testTestKeyInNoBuildConfigAndPlistWired() throws {
         let root = try Self.repositoryRoot()
-        let testKeyHex = try testKeyHex()
+        let testKeyHex = try vectorTestKeyHex()
         for path in ["App/Config/Base.xcconfig", "App/Config/Debug.xcconfig", "App/Config/Staging.xcconfig",
                      "App/Config/Release.xcconfig", "App/Info.plist"] {
             let text = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
@@ -175,7 +175,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
 
 extension N22BridgeOriginsWiringTests {
     /// 测试钥（向量目录 n22-vector-test-key-1.pub.pem）SPKI DER 里公钥点 X 坐标的前 16 字节十六进制（现读 PEM 算，不抄常量）。
-    func testKeyHex() throws -> String {
+    func vectorTestKeyHex() throws -> String {
         let url = try Self.repositoryRoot()
             .appendingPathComponent("Packages/Core/Tests/BridgeHostTests/Resources/N22/n22-vector-test-key-1.pub.pem")
         let body = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
