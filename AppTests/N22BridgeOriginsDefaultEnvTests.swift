@@ -52,7 +52,7 @@ final class N22BridgeOriginsDefaultEnvTests: MeTestCase {
     private func load(_ config: AppConfig, marker: String, start: Bool) async throws {
         let data = try N22OriginsSigner.text([
             "dict_version": marker, "h5_base_url": N22BridgeOriginsWiringTests.stagingOrigin,
-            "bridge_origins": ["jws": N22BridgeOriginsWiringTests.stagingLiveJws],
+            "bridge_origins": ["jws": try N22BridgeOriginsWiringTests.stagingLiveJws()],
         ])
         script.ok("GET /v1/config", data)
         if start {

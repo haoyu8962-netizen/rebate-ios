@@ -36,7 +36,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
 
     /// Release（及它 include 的 Base）只放生产钥：去掉注释后不得出现 staging / test 的 kid 与公钥；Release 的值只引用生产槽位。
     func testReleaseConfigCarriesNoNonProdKey() throws {
-        let root = try repositoryRoot()
+        let root = try Self.repositoryRoot()
         let forbidden = [
             "staging", "config-staging", "test:", "n22-vector-test-key", "ae883f464888bece", try testKeyHex(),
         ]
@@ -60,7 +60,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
 
     /// 测试钥不得进任何构建配置；Info.plist 的键取 $(COULI_CONFIG_SIGN_KEYS)。
     func testTestKeyInNoBuildConfigAndPlistWired() throws {
-        let root = try repositoryRoot()
+        let root = try Self.repositoryRoot()
         let testKeyHex = try testKeyHex()
         for path in ["App/Config/Base.xcconfig", "App/Config/Debug.xcconfig", "App/Config/Staging.xcconfig",
                      "App/Config/Release.xcconfig", "App/Info.plist"] {
@@ -176,7 +176,7 @@ final class N22BridgeOriginsWiringTests: MeTestCase {
 extension N22BridgeOriginsWiringTests {
     /// 测试钥（向量目录 n22-vector-test-key-1.pub.pem）SPKI DER 里公钥点 X 坐标的前 16 字节十六进制（现读 PEM 算，不抄常量）。
     func testKeyHex() throws -> String {
-        let url = try repositoryRoot()
+        let url = try Self.repositoryRoot()
             .appendingPathComponent("Packages/Core/Tests/BridgeHostTests/Resources/N22/n22-vector-test-key-1.pub.pem")
         let body = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
             .filter { !$0.hasPrefix("-----") }.joined()
@@ -227,13 +227,13 @@ extension N22BridgeOriginsWiringTests {
     func stagingLiveText() throws -> String {
         try N22OriginsSigner.text([
             "dict_version": "stg-live", "h5_base_url": Self.stagingOrigin,
-            "bridge_origins": ["jws": try stagingLiveJws()],
+            "bridge_origins": ["jws": try Self.stagingLiveJws()],
         ])
     }
 
     /// 2026-11-22 staging 实测 /v1/config 的 bridge_origins.jws（向量 stg_live_ok，= N22-VECTORS/stg-live.jws）。
-    func stagingLiveJws() throws -> String {
-        let url = try repositoryRoot().appendingPathComponent(Self.vectorsPath)
+    static func stagingLiveJws() throws -> String {
+        let url = try Self.repositoryRoot().appendingPathComponent(Self.vectorsPath)
         let root = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any], "向量文件不是 JSON 对象"
         )
@@ -242,7 +242,7 @@ extension N22BridgeOriginsWiringTests {
         return try XCTUnwrap(live["jws"] as? String, "stg_live_ok 缺 jws")
     }
 
-    func repositoryRoot() throws -> URL {
+    static func repositoryRoot() throws -> URL {
         var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("contract.lock").path) {
             let parent = directory.deletingLastPathComponent()
