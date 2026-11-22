@@ -5,6 +5,7 @@ import Config
 import CouliNetwork
 import Foundation
 import Generated
+import os
 import ProductSearch
 
 /// App 的配置存储（03 §4.3；APP-03b）：持有 Core 的 `ConfigStore`，把快照发布给各 Feature。
@@ -67,18 +68,25 @@ final class AppConfig: ObservableObject {
     }
 
     /// ConfigStore 的 bridge_origins 验签闭包：每次调用现取运行环境 id（切换环境后用新环境）；通过返回 {version, origins}。
-    /// TODO(N-22-ios 第 2 段)：验不过记一条系统日志（reason + kid + env，同一版文档只记一次）。
+    /// 验不过记一条系统日志（reason + kid + env；不写 jws 全文与 origins）。ConfigStore 只在 200 新配置生效与旧 LKG 现验时
+    /// 调它，所以天然是一版文档一条。
     nonisolated static func bridgeOriginsVerifier(
         appId: String, signKeys: ConfigSignKeys, environmentId: @escaping () -> String
     ) -> ([String: Any], Int?) -> (version: Int, origins: [String])? {
         { config, lastGoodVersion in
+            let env = environmentId()
             let verdict = BridgeOriginsVerifier.verify(
-                config: config, appId: appId, env: environmentId(), lastGoodVersion: lastGoodVersion, keys: signKeys
+                config: config, appId: appId, env: env, lastGoodVersion: lastGoodVersion, keys: signKeys
             )
-            guard case let .accepted(allowlist) = verdict else {
+            switch verdict {
+            case let .accepted(allowlist):
+                return (allowlist.version, allowlist.origins)
+            case let .rejected(reason):
+                let jws = (config["bridge_origins"] as? [String: Any])?["jws"] as? String
+                let kid = jws.flatMap(BridgeOriginsVerifier.headerKid)
+                AppConfigLog.originsRejected(reason: reason, kid: kid, env: env)
                 return nil
             }
-            return (allowlist.version, allowlist.origins)
         }
     }
 
@@ -116,6 +124,18 @@ final class AppConfig: ObservableObject {
         }
         wasBackgrounded = false
         store.onForeground()
+    }
+}
+
+/// 配置的系统日志（与 ClientCore 的 ConfigLog 同一 subsystem / category）。
+enum AppConfigLog {
+    static let logger = Logger(subsystem: "com.couli.app", category: "config")
+
+    /// bridge_origins 验签不过（N-22）：只写 reason、kid（截到 64 个字符）与运行环境。
+    static func originsRejected(reason: String, kid: String?, env: String) {
+        let kidText = kid.map { String($0.prefix(64)) } ?? "-"
+        let detail = "reason=\(reason) kid=\(kidText) env=\(env)"
+        logger.warning("config: bridge_origins rejected \(detail, privacy: .public)")
     }
 }
 

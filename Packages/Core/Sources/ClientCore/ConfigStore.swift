@@ -28,6 +28,8 @@ public struct ConfigReply: Sendable, Equatable {
 /// - 成功响应：先写 LKG 文件，再成为当前配置（写文件失败时当前配置照常生效，只是下次启动读不到这份 LKG）。
 /// - 取值：`value(key:)`、`searchStatus(platform:)` 按「当前 → LKG → 包内」逐项回落；`linkPatterns` 按「当前 → 上一次成功的
 ///   完整版本 → 包内」。上一次成功的 link_patterns 随 LKG 文件保存（新响应没带链接表时不丢）。
+/// - 可信 H5 源（N-22）：`trustedOrigins` 只取验签通过的「上次可用白名单」（随 LKG 文件的 `bridge_origins_last_good` 保存）；
+///   新文档验不过保留上次可用，失败值不写成上次可用（AC-S1-180 ②）。见 ConfigStore+BridgeOrigins.swift。
 /// - 同一时刻只有一个拉取在途（在途时回前台不再发）。切换环境（`clearForEnvironmentSwitch`）删 LKG 文件、丢掉当前配置，
 ///   在途拉取的结果到达后丢弃。「清除缓存」不清 LKG（03 §4.3）：LKG 文件放在 Application Support，不在缓存目录。
 /// - 可观察：`observe` 登记的回调在快照或来源变化时调用。
@@ -54,6 +56,8 @@ public final class ConfigStore {
     private var lkg: Layer?
     /// 上一次成功的完整 link_patterns（随 LKG 文件保存）。
     private var lastGoodPatterns: [String: Any]?
+    /// 上次可用（验签通过）的 bridge_origins 白名单（随 LKG 文件保存）；没有为 nil。
+    private(set) var lastGoodOrigins: BridgeOriginsLastGood?
     /// 在途拉取的编号；没有为 nil。同一时刻只有一个在途拉取。
     private var inFlight: UInt64?
     /// 已发出的拉取的最大编号（单调递增，切换环境不归零）。
@@ -110,17 +114,6 @@ public final class ConfigStore {
     /// 生效的那一份文档（当前 → LKG → 包内，整份选择；`snapshotJson` 即它的文本）。
     private var effectiveDocument: ConfigDocument? {
         current?.document ?? lkg?.document ?? bundled
-    }
-
-    /// 可信 H5 源（N-22）：上次可用（验签通过）的 bridge_origins 白名单的 origins；没有为 `[]`。
-    /// TODO(N-22-ios 第 2 段)：接口桩，恒为 `[]`；第 2 段接上「上次可用白名单」状态（随 LKG 保存）。
-    public var trustedOrigins: [String] {
-        []
-    }
-
-    /// 上次可用白名单的 version；没有为 nil。TODO(N-22-ios 第 2 段)：接口桩，恒为 nil。
-    public var trustedOriginsVersion: Int? {
-        nil
     }
 
     public static let bridgeDisabledMethodsKey = "bridge_disabled_methods"
@@ -249,6 +242,7 @@ public final class ConfigStore {
         current = nil
         lkg = nil
         lastGoodPatterns = nil
+        lastGoodOrigins = nil
         notify()
         try writeFile(nil)
     }
@@ -268,11 +262,21 @@ public final class ConfigStore {
         guard let text = try? readFile(), let file = LKGFile.decode(text) else {
             lkg = nil
             lastGoodPatterns = nil
+            lastGoodOrigins = nil
             return
         }
         lkg = Layer(document: file.document, etag: file.etag)
         lastGoodPatterns = file.lastGoodPatterns ?? file.document.value(at: "link_patterns")
             .flatMap(ConfigResolver.completePatterns)
+        // 带完整 bridge_origins_last_good 的 LKG 是本 App 验过后才写的，直接用；没有（升级前的旧 LKG）或形状不完整时
+        // 用 LKG 文档现验一次（不带上次可用），通过才用，否则为空。
+        lastGoodOrigins = file.lastGoodOrigins ?? verifiedOrigins(file.document, lastGoodVersion: nil)
+    }
+
+    /// 用注入的验签闭包验一份文档的 bridge_origins；通过返回新的上次可用，不通过为 nil。
+    private func verifiedOrigins(_ document: ConfigDocument, lastGoodVersion: Int?) -> BridgeOriginsLastGood? {
+        verifyBridgeOrigins(document.object, lastGoodVersion)
+            .map { BridgeOriginsLastGood(version: $0.version, origins: $0.origins) }
     }
 
     private func fetch(ifNoneMatch: String?) {
@@ -313,12 +317,17 @@ public final class ConfigStore {
         }
         let patterns = document.value(at: "link_patterns").flatMap(ConfigResolver.completePatterns)
             ?? lastGoodPatterns
-        let file = LKGFile(document: document, etag: reply.etag, savedAt: clock(), lastGoodPatterns: patterns)
+        // 用当前上次可用的 version 验新文档：通过成为新的上次可用；不通过保留原上次可用（LKG 文件里照旧写原值，不写失败值）。
+        let origins = verifiedOrigins(document, lastGoodVersion: lastGoodOrigins?.version) ?? lastGoodOrigins
+        let file = LKGFile(
+            document: document, etag: reply.etag, savedAt: clock(), lastGoodPatterns: patterns, lastGoodOrigins: origins
+        )
         // 先写 LKG 文件（下次启动可读），再让新配置生效。写失败不影响本次使用。
         try? writeFile(file.encode())
         lkg = current ?? lkg
         current = Layer(document: document, etag: reply.etag)
         lastGoodPatterns = patterns
+        lastGoodOrigins = origins
         appliedId = id
         notify()
     }
@@ -367,41 +376,5 @@ public final class ConfigObservation {
 
     deinit {
         cancelAction?()
-    }
-}
-
-/// LKG 文件：最近一次成功的 data、它的 ETag、保存时刻与上一次成功的完整 link_patterns。不含任何凭据（CSB-05、CSB-06）。
-struct LKGFile {
-    static let version = 1
-
-    let document: ConfigDocument
-    let etag: String?
-    let savedAt: Int64
-    let lastGoodPatterns: [String: Any]?
-
-    func encode() -> String? {
-        var object: [String: Any] = ["v": Self.version, "data": document.object, "saved_at": savedAt]
-        if let etag {
-            object["etag"] = etag
-        }
-        if let lastGoodPatterns {
-            object["link_patterns_last_good"] = lastGoodPatterns
-        }
-        return ConfigDocument.encode(object)
-    }
-
-    static func decode(_ text: String?) -> LKGFile? {
-        guard let root = ConfigDocument.parse(text),
-              root.object["v"] as? Int == version,
-              let data = root.object["data"] as? [String: Any]
-        else {
-            return nil
-        }
-        return LKGFile(
-            document: ConfigDocument(object: data),
-            etag: root.object["etag"] as? String,
-            savedAt: (root.object["saved_at"] as? NSNumber)?.int64Value ?? 0,
-            lastGoodPatterns: root.object["link_patterns_last_good"].flatMap(ConfigResolver.completePatterns)
-        )
     }
 }
