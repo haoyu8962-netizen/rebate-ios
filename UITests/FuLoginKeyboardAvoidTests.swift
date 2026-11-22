@@ -6,7 +6,8 @@ import XCTest
 /// 与键盘顶余量 ≥ 12pt（余量 = 键盘 minY − 按钮 maxY）。某档导航前提不满足时记失败并继续下一档。不截图（带键盘截图不入库）。
 /// r2（review-r1）：输入框整块在顶栏之下、键盘顶与钉底栏上沿之上；绑手机默认档聚焦前后输入框不动（≤ 1pt）。
 /// r4（D10-2472）：栏上沿按实际留白 12 算；绑手机【获取验证码】离栏上沿 ≥ 12；收起后复位改结构判定（②）。
-/// D10-2492，只限「绑手机 · 320 + AXXXL」一档：外框上沿容差 2pt；getCode 离栏上沿、离键盘顶的下限由 12 让到 8；打 KBDGEOM 行。
+/// 只限「绑手机 · 320 + AXXXL」一档（D10-2472 起放宽、D10-2492 改 2pt + 余量 8、D10-2495 定稿）：外框上沿可进顶栏 ≤ 18、
+/// 中线 ≥ 顶栏下沿 + 8；getCode 离栏上沿、离键盘顶的下限 8；打 KBDGEOM 行。
 @MainActor
 final class FuLoginKeyboardAvoidTests: XCTestCase {
     private static let axxxl = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -24,9 +25,9 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
     /// login.submit（钉底时；不钉底时在内容里、排在输入框之下，仍是输入框下界），绑手机 bindPhone.submit。
     private static let barTopAllowance: CGFloat = 12
     private static let sameTolerance: CGFloat = 1 // 「位置不变」的容差（S2-1）
-    private static let narrowTopSlack: CGFloat = 2 // D10-2492，仅绑手机 · 320 + AXXXL：外框上沿可进顶栏 ≤ 2pt
+    private static let narrowTopSlack: CGFloat = 18 // D10-2495，仅绑手机 · 320 + AXXXL：外框上沿可进顶栏 ≤ 18pt
+    private static let narrowMidClearance: CGFloat = 8 // D10-2495，同档：框中线（文字行中线）≥ 顶栏下沿 + 8
     private static let narrowMargin: CGFloat = 8 // 同档：getCode 离栏上沿、离键盘顶的下限（其他档 12）
-    /// 仅绑手机 · 320 + AXXXL：失败信息追加的整套几何（输入框、getCode、顶栏下沿、栏上沿、键盘），读当时的 frame。
     private var geometry: (() -> String)?
     private static let phone = "13800005678"
 
@@ -117,8 +118,7 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
     }
 }
 
-/// 收起键盘与结构判定用到的页面信息：页面标识（找主 ScrollView）、正在输入的框（拖动起点要避开）、底栏按钮（算栏上沿）。
-private struct KeyboardScene {
+private struct KeyboardScene { // 页面标识（找主 ScrollView）、正在输入的框（拖动起点避开）、底栏按钮（算栏上沿）
     let page: String
     let field: XCUIElement
     let bar: [XCUIElement]
@@ -211,9 +211,8 @@ private extension FuLoginKeyboardAvoidTests {
         field.typeText(text)
     }
 
-    /// 收起键盘（r3）：两页 ScrollView 是 `.scrollDismissesKeyboard(.interactively)`，要从内容区一路拖进键盘、越过键盘顶才收。
-    /// 起点：栏上沿（`bar` 里最上面那颗按钮 minY − 12）与键盘顶取小，再往上 60pt，水平居中；落在输入框上时挪到输入框上方 20pt
-    /// （不低于顶栏下沿 + 10）。慢速拖到键盘顶下方 150pt（按 0.1 秒、`.slow`），最多 3 次，再等键盘消失（上限 3 秒）。
+    /// 收起键盘（r3，ScrollView 是 `.scrollDismissesKeyboard(.interactively)`）：起点 = min(栏上沿, 键盘顶) − 60、水平居中，落在
+    /// 输入框上时挪到框上方 20（不低于顶栏下沿 + 10）；按 0.1 秒慢拖到键盘顶下 150，最多 3 次，再等键盘消失（上限 3 秒）。
     func dismissKeyboard(_ app: XCUIApplication, _ what: String, avoid field: XCUIElement, bar: [XCUIElement]) -> Bool {
         let keyboard = app.keyboards.firstMatch
         for _ in 0..<3 where keyboard.exists {
@@ -273,8 +272,7 @@ private extension FuLoginKeyboardAvoidTests {
         }
     }
 
-    /// 等键盘弹起、键盘与主按钮位置停稳（frame 连续两次不变，上限 3 秒），不滚动，断言主按钮整块在窗口内、在键盘以上
-    /// 留 ≥ 12pt、可点。返回是否走到了断言（键盘与按钮都在且停稳）。
+    /// 等键盘与主按钮停稳，不滚动，断言主按钮可点、整块在窗口内、离键盘顶 ≥ 12（D10-2492 那一档 8）。返回是否走到了断言。
     @discardableResult
     func check(_ app: XCUIApplication, _ page: String, _ tier: String, _ button: XCUIElement) -> Bool {
         let keyboard = app.keyboards.firstMatch
@@ -296,25 +294,27 @@ private extension FuLoginKeyboardAvoidTests {
     }
 
     /// S1-1：键盘弹起、不滚动时，输入框整块在顶栏下沿之下、min(栏上沿 `bounds.bottom`, 键盘顶) 之上。
-    /// D10-2492，只限「绑手机 · 320 + AXXXL」一档：TextField 撑满外框（PhoneNumberField.swift:77、:113），`bindPhone.phone` 的
-    /// frame 当外框，整块可见、上沿只给 2pt 容差：minY ≥ 顶栏下沿 − 2，maxY ≤ 下界。其他档与登录两步不给容差。
+    /// D10-2495（沿 D10-2472 / D10-2492），只限「绑手机 · 320 + AXXXL」：TextField 撑满外框（PhoneNumberField.swift:77、:113），
+    /// frame 当外框：minY ≥ 顶栏下沿 − 18、midY ≥ 顶栏下沿 + 8、maxY ≤ 下界。其他档与登录两步不放宽。
     func checkFieldVisible(
         _ app: XCUIApplication, _ page: String, _ tier: String, _ field: XCUIElement,
         within bounds: (top: CGFloat, bottom: CGFloat)
     ) {
         let keyboard = app.keyboards.firstMatch
-        guard field.exists, keyboard.exists else {
-            XCTFail("\(page)/\(tier)：核输入框可见时输入框或键盘不在")
-            return
-        }
+        guard field.exists, keyboard.exists else { return XCTFail("\(page)/\(tier)：核输入框可见时输入框或键盘不在") }
         let win = app.windows.firstMatch.frame
         let frame = field.frame
         let upper = max(bounds.top, win.minY)
         let lower = min(bounds.bottom, keyboard.frame.minY)
         let facts = "输入框 frame=\(text(frame)) 上界=\(String(format: "%.1f", upper)) 下界=\(String(format: "%.1f", lower))"
             + " 键盘 frame=\(text(keyboard.frame))\(geometryNote)"
-        let slack = Self.narrowBind(page, tier) ? Self.narrowTopSlack : 0
+        let narrow = Self.narrowBind(page, tier)
+        let slack = narrow ? Self.narrowTopSlack : 0
         XCTAssertGreaterThanOrEqual(frame.minY, upper - slack, "\(page)/\(tier)：输入框上沿被顶栏挡住（容差 \(slack)）；\(facts)")
+        if narrow {
+            XCTAssertGreaterThanOrEqual(frame.midY, upper + Self.narrowMidClearance,
+                                        "\(page)/\(tier)：框中线离顶栏下沿不足 8pt（D10-2495）；\(facts)")
+        }
         XCTAssertLessThanOrEqual(frame.maxY, lower, "\(page)/\(tier)：输入框下沿被键盘或钉底栏挡住；\(facts)")
     }
 
