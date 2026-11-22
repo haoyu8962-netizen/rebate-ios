@@ -132,7 +132,17 @@ extension AppWallet {
             refreshRealname(intent)
             return
         }
-        router.open(RouteRequest(route: route, values: params.mapValues { .string($0) }, from: .inApp))
+        let decision = router.open(RouteRequest(route: route, values: params.mapValues { .string($0) }, from: .inApp))
+        #if DEBUG
+        // 实跑定位（D10-2670 后续）：没走实名前置查询时的原因与 Router 判定（只记布尔、判定种类与原因码）
+        Logger(subsystem: "com.couli.app", category: "wallet.entry").notice(
+            """
+            router decision: \(decision.kindRaw, privacy: .public) reason=\(decision.reason, privacy: .public) \
+            route=\(decision.route ?? "-", privacy: .public) hasAccount=\(owner.account != nil, privacy: .public) \
+            realnameKnown=\(realnameState?.key == owner.key, privacy: .public)
+            """
+        )
+        #endif
     }
 
     /// 取 GET /v1/me 的 realname_status（只认 verified）。共享请求世代（共性第 9 条）：只接收最新一次查询的结论，换代与新查询都作废旧请求。
