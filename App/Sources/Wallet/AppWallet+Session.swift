@@ -223,11 +223,29 @@ extension AppWallet {
     /// - 发起页被盖过（含已退回）、已离开、此刻不在前台 → 静默。
     private func continueOpen(_ intent: WalletOpenIntent) {
         if mayNavigate(intent) {
-            router.open(RouteRequest(
+            #if DEBUG
+            let depthBefore = router.path.count
+            #endif
+            let decision = router.open(RouteRequest(
                 route: intent.route, values: intent.params.mapValues { .string($0) }, from: .inApp
             ))
+            #if DEBUG
+            // 实跑定位（D10-2670 后续）：查询后打开的 Router 判定与路由栈深度变化（只记种类、原因码、路由名、深度）
+            let depthAfter = router.path.count
+            let top = router.path.last?.route ?? "-"
+            Logger(subsystem: "com.couli.app", category: "wallet.entry").notice(
+                """
+                continue decision: \(decision.kindRaw, privacy: .public) reason=\(decision.reason, privacy: .public) \
+                route=\(decision.route ?? "-", privacy: .public) \
+                depth=\(depthBefore, privacy: .public)->\(depthAfter, privacy: .public) top=\(top, privacy: .public)
+                """
+            )
+            #endif
             return
         }
+        #if DEBUG
+        Logger(subsystem: "com.couli.app", category: "wallet.entry").notice("continue: navigation not allowed")
+        #endif
         guard sceneActive else {
             silentExit("navigation voided: not in foreground")
             return
