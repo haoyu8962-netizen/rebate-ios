@@ -1,7 +1,6 @@
 import CouliNetwork
 import Foundation
 import MeCore
-import os
 import Router
 import SwiftUI
 import Wallet
@@ -75,13 +74,6 @@ extension AppWallet {
         let context = WalletPageContext(texts: deps.texts, readGate: gates.read)
         let router = router
         context.onBack = { router.close(destination) }
-        #if DEBUG
-        // FU-IOS-WITHDRAW-ENTRY-SILENT 实跑定位（D10-2670）：点击收到 / 页面出现（自检日志抓取是否通）；只记事件名
-        let log = Logger(subsystem: "com.couli.app", category: "wallet.entry")
-        let route = destination.route ?? "-"
-        context.onWithdrawTap = { log.notice("withdraw tap received") }
-        context.onShown = { log.notice("page shown: \(route, privacy: .public)") }
-        #endif
         return context
     }
 

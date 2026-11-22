@@ -56,11 +56,7 @@ public struct WalletScreen: View {
 
     public var body: some View {
         let snapshot = controller.state
-        let made = WalletActions.make(controller, snapshot)
-        let actions = WalletActions(
-            withdraw: { [context] in context.onWithdrawTap(); made.withdraw() }, records: made.records,
-            entry: made.entry, toggleMask: made.toggleMask, retry: made.retry
-        )
+        let actions = WalletActions.make(controller, snapshot)
         WalletPageScaffold(
             title: texts.text("wallet.title"), backLabel: texts.text("wallet.back"), onBack: context.onBack,
             identifier: "wallet.page"
@@ -73,10 +69,7 @@ public struct WalletScreen: View {
         .couliSheet(isPresented: help != nil, dismissOnScrim: { help = nil }, restoreFocusTo: helpFocus,
                     sheet: { helpSheet(help ?? "") })
         .couliToast($toast)
-        .task {
-            context.onShown()
-            controller.load()
-        }
+        .task { controller.load() }
     }
 
     @ViewBuilder func content(_ snapshot: WalletSnapshot, _ actions: WalletActions) -> some View {
