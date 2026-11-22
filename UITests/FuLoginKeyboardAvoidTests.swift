@@ -5,8 +5,8 @@ import XCTest
 /// terminate。聚焦输入框、输入合法值、等键盘弹起且键盘与主按钮位置停稳后，**不滚动**，断言主按钮存在、可点、整块在窗口内、
 /// 与键盘顶余量 ≥ 12pt（余量 = 键盘 minY − 按钮 maxY）。某档导航前提不满足时记失败并继续下一档。不截图（带键盘截图不入库）。
 /// r2（review-r1）：输入框整块在顶栏之下、键盘顶与钉底栏上沿之上；绑手机默认档聚焦前后输入框不动（≤ 1pt）。
-/// r4（D10-2472）：栏上沿按实际留白 12 算；绑手机【获取验证码】离栏上沿 ≥ 12；收起后复位改结构判定（②）；输入框可见仅
-/// 「绑手机 · 320 + AXXXL」一档放宽外框上沿 ≤ 16（①，见 checkFieldVisible）。
+/// r4（D10-2472）：栏上沿按实际留白 12 算；绑手机【获取验证码】离栏上沿 ≥ 12；收起后复位改结构判定（②）。
+/// D10-2492，只限「绑手机 · 320 + AXXXL」一档：外框上沿容差 2pt；getCode 离栏上沿、离键盘顶的下限由 12 让到 8；打 KBDGEOM 行。
 @MainActor
 final class FuLoginKeyboardAvoidTests: XCTestCase {
     private static let axxxl = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -20,13 +20,14 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
         "-CouliHideDebugInfo", "1",
     ]
     private static let minMargin: CGFloat = 12
-    /// 栏上沿 = 底栏里最上面那颗按钮的 minY − 12（D10-2472：两页底栏顶部留白实际都是 CouliSpacing.s3 = 12）。
-    /// 底栏按钮：登录页 login.getCode / login.submit（钉底时），绑手机 bindPhone.submit。登录页主按钮不钉底时在内容里、排在
-    /// 输入框之下，这个值仍是输入框的下界。
+    /// 栏上沿 = 底栏最上面按钮 minY − 12（D10-2472：两页底栏顶部留白都是 s3 = 12）。底栏按钮：登录页 login.getCode /
+    /// login.submit（钉底时；不钉底时在内容里、排在输入框之下，仍是输入框下界），绑手机 bindPhone.submit。
     private static let barTopAllowance: CGFloat = 12
     private static let sameTolerance: CGFloat = 1 // 「位置不变」的容差（S2-1）
-    private static let outerFrameAllowance: CGFloat = 16 // 仅绑手机 · 320 + AXXXL：外框上沿可进顶栏（D10-2472 ①）
-    private static let textMidClearance: CGFloat = 8 // 同档：外框中线须在顶栏下沿以下至少 8pt
+    private static let narrowTopSlack: CGFloat = 2 // D10-2492，仅绑手机 · 320 + AXXXL：外框上沿可进顶栏 ≤ 2pt
+    private static let narrowMargin: CGFloat = 8 // 同档：getCode 离栏上沿、离键盘顶的下限（其他档 12）
+    /// 仅绑手机 · 320 + AXXXL：失败信息追加的整套几何（输入框、getCode、顶栏下沿、栏上沿、键盘），读当时的 frame。
+    private var geometry: (() -> String)?
     private static let phone = "13800005678"
 
     override func setUp() async throws {
@@ -93,9 +94,16 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
             let ctx = "\(page)/\(tier)"
             _ = settle("\(ctx)：聚焦前手机号框位置停稳", [field])
             let fieldBefore = field.frame
+            geometry = Self.narrowBind(page, tier) ? { [unowned self] in
+                "field=\(text(field.frame))|getCode=\(text(button.frame))|topBar=\(bindPhoneTopBarBottom(app))|"
+                    + "barTop=\(barTop([submit]))|kbd=\(text(app.keyboards.firstMatch.frame))"
+            } : nil
             type(field, Self.phone)
             if check(app, page, tier, button), need(submit, 5, "\(ctx)：缺钉底提交栏 bindPhone.submit") {
-                checkAboveBar(ctx, button, barTop: barTop([submit]))
+                if let geometry {
+                    print("KBDGEOM|bind|w320-AXXXL|\(geometry())")
+                }
+                checkAboveBar(ctx, button, barTop: barTop([submit]), floor: Self.margin(page, tier))
                 checkFieldVisible(app, page, tier, field, within: (bindPhoneTopBarBottom(app), barTop([submit])))
                 if tier == "normal" {
                     checkFieldUnmoved(page, tier, field, fieldBefore)
@@ -165,11 +173,9 @@ private extension FuLoginKeyboardAvoidTests {
 
     /// 等元素出现，没出现记 XCTFail 并返回 false（不中止用例，继续下一档）。
     func need(_ target: XCUIElement, _ timeout: TimeInterval, _ why: String) -> Bool {
-        if target.waitForExistence(timeout: timeout) {
-            return true
-        }
-        XCTFail(why)
-        return false
+        let found = target.waitForExistence(timeout: timeout)
+        XCTAssertTrue(found, why)
+        return found
     }
 
     /// 滚到元素出现且可点（BindPhoneLayoutShotTests.reveal 同写法）。
@@ -181,9 +187,7 @@ private extension FuLoginKeyboardAvoidTests {
             app.swipeUp()
             found = target.waitForExistence(timeout: 2)
         }
-        if !found {
-            XCTFail("\(context)：没有 \(id)")
-        }
+        XCTAssertTrue(found, "\(context)：没有 \(id)")
         return found
     }
 
@@ -195,13 +199,9 @@ private extension FuLoginKeyboardAvoidTests {
             let bottom = keyboard.exists ? keyboard.frame.minY : win.maxY
             let startY = min(bottom - 40, 420)
             let endY = max(win.minY + 100, startY - 300)
-            if startY - endY > 40 {
-                let origin = app.coordinate(withNormalizedOffset: .zero)
-                origin.withOffset(CGVector(dx: win.midX, dy: startY))
-                    .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: win.midX, dy: endY)))
-            } else {
-                app.swipeUp()
-            }
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: win.midX, dy: startY))
+                .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: win.midX, dy: endY)))
             _ = UIWait.untilQuietly(seconds: 2) { target.exists && target.isHittable }
         }
     }
@@ -287,20 +287,17 @@ private extension FuLoginKeyboardAvoidTests {
         let kbd = keyboard.frame
         let margin = kbd.minY - frame.maxY
         let facts = "按钮 frame=\(text(frame)) 键盘 frame=\(text(kbd)) 窗口=\(text(win)) "
-            + "余量=\(String(format: "%.1f", margin))"
+            + "余量=\(String(format: "%.1f", margin))\(geometryNote)"
         XCTAssertTrue(button.isHittable, "\(page)/\(tier)：主按钮不可点；\(facts)")
         XCTAssertTrue(win.contains(frame), "\(page)/\(tier)：主按钮不完全在窗口内；\(facts)")
-        XCTAssertGreaterThanOrEqual(
-            margin, Self.minMargin, "\(page)/\(tier)：主按钮与键盘顶余量不足 \(Int(Self.minMargin))pt；\(facts)"
-        )
+        let floor = Self.margin(page, tier)
+        XCTAssertGreaterThanOrEqual(margin, floor, "\(page)/\(tier)：主按钮与键盘顶余量不足 \(Int(floor))pt；\(facts)")
         return true
     }
 
-    /// S1-1：键盘弹起、不滚动时，正在输入的框整块在「窗口顶 / 顶栏下沿」之下、「键盘顶 / 钉底栏上沿」之上。
-    /// `bounds.bottom` 由调用方给：栏上沿口径 `barTop`（登录页取主按钮，绑手机取【绑定】）；再与键盘顶取小。
-    /// 仅此一档，D10-2472 ①：「绑手机 · 320 + AXXXL」。TextField 撑满外框（PhoneNumberField.swift:77 maxHeight .infinity、:113
-    /// 整行 minHeight），`bindPhone.phone` 的 frame 当外框：外框 minY ≥ 顶栏下沿 − 16、maxY ≤ 下界（下沿不放宽），另近似核文字行：
-    /// 外框 midY ≥ 顶栏下沿 + 8。文字行完整可见由视觉验收该档的遮罩截图人工核。其他档与登录两步照旧整块可见。
+    /// S1-1：键盘弹起、不滚动时，输入框整块在顶栏下沿之下、min(栏上沿 `bounds.bottom`, 键盘顶) 之上。
+    /// D10-2492，只限「绑手机 · 320 + AXXXL」一档：TextField 撑满外框（PhoneNumberField.swift:77、:113），`bindPhone.phone` 的
+    /// frame 当外框，整块可见、上沿只给 2pt 容差：minY ≥ 顶栏下沿 − 2，maxY ≤ 下界。其他档与登录两步不给容差。
     func checkFieldVisible(
         _ app: XCUIApplication, _ page: String, _ tier: String, _ field: XCUIElement,
         within bounds: (top: CGFloat, bottom: CGFloat)
@@ -315,25 +312,33 @@ private extension FuLoginKeyboardAvoidTests {
         let upper = max(bounds.top, win.minY)
         let lower = min(bounds.bottom, keyboard.frame.minY)
         let facts = "输入框 frame=\(text(frame)) 上界=\(String(format: "%.1f", upper)) 下界=\(String(format: "%.1f", lower))"
-        let relaxed = page == "绑手机手机号步" && tier == "w320-AXXXL"
-        let slack = relaxed ? Self.outerFrameAllowance : 0
-        XCTAssertGreaterThanOrEqual(frame.minY, upper - slack, "\(page)/\(tier)：输入框上沿被顶栏挡住（放宽 \(slack)）；\(facts)")
-        if relaxed {
-            XCTAssertGreaterThanOrEqual(frame.midY, upper + Self.textMidClearance,
-                                        "\(page)/\(tier)：框中线离顶栏下沿 < 8；\(facts)")
-        }
+            + " 键盘 frame=\(text(keyboard.frame))\(geometryNote)"
+        let slack = Self.narrowBind(page, tier) ? Self.narrowTopSlack : 0
+        XCTAssertGreaterThanOrEqual(frame.minY, upper - slack, "\(page)/\(tier)：输入框上沿被顶栏挡住（容差 \(slack)）；\(facts)")
         XCTAssertLessThanOrEqual(frame.maxY, lower, "\(page)/\(tier)：输入框下沿被键盘或钉底栏挡住；\(facts)")
     }
 
-    /// S2-3（D10-2472 恢复 r3 前定义）：绑手机【获取验证码】下沿 + 12 ≤ 钉底提交栏上沿（= bindPhone.submit.minY − 12）。
-    func checkAboveBar(_ ctx: String, _ button: XCUIElement, barTop: CGFloat) {
+    /// S2-3（D10-2472）：绑手机 getCode.maxY + floor ≤ 栏上沿（submit.minY − 12）；floor 12，D10-2492 仅 320 + AXXXL 为 8。
+    func checkAboveBar(_ ctx: String, _ button: XCUIElement, barTop: CGFloat, floor: CGFloat) {
         let frame = button.frame
         let gap = barTop - frame.maxY
         XCTAssertGreaterThanOrEqual(
-            gap, Self.minMargin,
-            "\(ctx)：主按钮与钉底栏上沿余量不足 \(Int(Self.minMargin))pt；按钮 frame=\(text(frame)) "
-                + "栏上沿=\(String(format: "%.1f", barTop)) 余量=\(String(format: "%.1f", gap))"
+            gap, floor, "\(ctx)：主按钮与钉底栏上沿余量不足 \(Int(floor))pt；按钮 frame=\(text(frame)) "
+                + "栏上沿=\(String(format: "%.1f", barTop)) 余量=\(String(format: "%.1f", gap))\(geometryNote)"
         )
+    }
+
+    /// D10-2492 那一档（只限绑手机 · 320 + AXXXL）；主按钮离键盘顶 / 栏上沿的下限该档 8、其余 12。
+    static func narrowBind(_ page: String, _ tier: String) -> Bool {
+        page == "绑手机手机号步" && tier == "w320-AXXXL"
+    }
+
+    static func margin(_ page: String, _ tier: String) -> CGFloat {
+        narrowBind(page, tier) ? narrowMargin : minMargin
+    }
+
+    var geometryNote: String {
+        geometry.map { " 几何 \($0())" } ?? ""
     }
 
     /// S2-1：默认档聚焦、输入后输入框 minY 与聚焦前相差 ≤ 1pt（本来就看得见，不该滚）。
@@ -366,10 +371,7 @@ private extension FuLoginKeyboardAvoidTests {
 
     /// S2-4 (b)：键盘收起后主按钮在输入框之下（`lower.minY ≥ upper.maxY`）；`sameRowRight` 时同一行右侧也算（绑手机）。
     func checkOrderBelow(_ ctx: String, upper: XCUIElement, lower: XCUIElement, sameRowRight: Bool) {
-        guard upper.exists, lower.exists else {
-            XCTFail("\(ctx)：核先后顺序时输入框或主按钮不在")
-            return
-        }
+        guard upper.exists, lower.exists else { return XCTFail("\(ctx)：核先后顺序时输入框或主按钮不在") }
         let top = upper.frame
         let bottom = lower.frame
         let below = bottom.minY >= top.maxY
