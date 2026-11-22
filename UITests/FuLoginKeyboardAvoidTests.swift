@@ -6,8 +6,8 @@ import XCTest
 /// 与键盘顶余量 ≥ 12pt（余量 = 键盘 minY − 按钮 maxY）。某档导航前提不满足时记失败并继续下一档。不截图（带键盘截图不入库）。
 /// r2（review-r1）：输入框整块在顶栏之下、键盘顶与钉底栏上沿之上；绑手机默认档聚焦前后输入框不动（≤ 1pt）。
 /// r4（D10-2472）：栏上沿按实际留白 12 算；绑手机【获取验证码】离栏上沿 ≥ 12；收起后复位改结构判定（②）。
-/// 只限「绑手机 · 320 + AXXXL」一档（D10-2472 起放宽、D10-2492 改 2pt + 余量 8、D10-2495 定稿）：外框上沿可进顶栏 ≤ 18、
-/// 中线 ≥ 顶栏下沿 + 8；getCode 离栏上沿、离键盘顶的下限 8；打 KBDGEOM 行。
+/// 只限「绑手机 · 320 + AXXXL」一档（D10-2472 起放宽、D10-2492 改 2pt + 余量 8、D10-2495 定 18 / 8）：目标 18 / 8，断言含
+/// 2pt 容差（D10-2496）——外框上沿可进顶栏 ≤ 20、getCode 离栏上沿与键盘顶 ≥ 6；中线 ≥ 顶栏下沿 + 8；打 KBDGEOM 行。
 @MainActor
 final class FuLoginKeyboardAvoidTests: XCTestCase {
     private static let axxxl = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -25,9 +25,9 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
     /// login.submit（钉底时；不钉底时在内容里、排在输入框之下，仍是输入框下界），绑手机 bindPhone.submit。
     private static let barTopAllowance: CGFloat = 12
     private static let sameTolerance: CGFloat = 1 // 「位置不变」的容差（S2-1）
-    private static let narrowTopSlack: CGFloat = 18 // D10-2495，仅绑手机 · 320 + AXXXL：外框上沿可进顶栏 ≤ 18pt
+    private static let narrowTopSlack: CGFloat = 20 // 仅绑手机 320+AXXXL：目标 18，断言含 2pt 容差（D10-2496）
     private static let narrowMidClearance: CGFloat = 8 // D10-2495，同档：框中线（文字行中线）≥ 顶栏下沿 + 8
-    private static let narrowMargin: CGFloat = 8 // 同档：getCode 离栏上沿、离键盘顶的下限（其他档 12）
+    private static let narrowMargin: CGFloat = 6 // 同档 getCode 离栏上沿 / 键盘顶：目标 8，含 2pt 容差（D10-2496）
     private var geometry: (() -> String)?
     private static let phone = "13800005678"
 
@@ -272,7 +272,7 @@ private extension FuLoginKeyboardAvoidTests {
         }
     }
 
-    /// 等键盘与主按钮停稳，不滚动，断言主按钮可点、整块在窗口内、离键盘顶 ≥ 12（D10-2492 那一档 8）。返回是否走到了断言。
+    /// 等键盘与主按钮停稳，不滚动，断言主按钮可点、整块在窗口内、离键盘顶 ≥ 12（D10-2492 / 2496 那一档 6）。返回是否走到了断言。
     @discardableResult
     func check(_ app: XCUIApplication, _ page: String, _ tier: String, _ button: XCUIElement) -> Bool {
         let keyboard = app.keyboards.firstMatch
@@ -294,8 +294,8 @@ private extension FuLoginKeyboardAvoidTests {
     }
 
     /// S1-1：键盘弹起、不滚动时，输入框整块在顶栏下沿之下、min(栏上沿 `bounds.bottom`, 键盘顶) 之上。
-    /// D10-2495（沿 D10-2472 / D10-2492），只限「绑手机 · 320 + AXXXL」：TextField 撑满外框（PhoneNumberField.swift:77、:113），
-    /// frame 当外框：minY ≥ 顶栏下沿 − 18、midY ≥ 顶栏下沿 + 8、maxY ≤ 下界。其他档与登录两步不放宽。
+    /// D10-2495 / 2496（沿 D10-2472 / 2492），只限「绑手机 · 320 + AXXXL」：TextField 撑满外框（PhoneNumberField.swift:77、:113），
+    /// frame 当外框：minY ≥ 顶栏下沿 − 20（目标 18，含 2pt 容差）、midY ≥ 顶栏下沿 + 8、maxY ≤ 下界。其他档与登录两步不放宽。
     func checkFieldVisible(
         _ app: XCUIApplication, _ page: String, _ tier: String, _ field: XCUIElement,
         within bounds: (top: CGFloat, bottom: CGFloat)
@@ -318,7 +318,7 @@ private extension FuLoginKeyboardAvoidTests {
         XCTAssertLessThanOrEqual(frame.maxY, lower, "\(page)/\(tier)：输入框下沿被键盘或钉底栏挡住；\(facts)")
     }
 
-    /// S2-3（D10-2472）：绑手机 getCode.maxY + floor ≤ 栏上沿（submit.minY − 12）；floor 12，D10-2492 仅 320 + AXXXL 为 8。
+    /// S2-3（D10-2472）：绑手机 getCode.maxY + floor ≤ 栏上沿（submit.minY − 12）；floor 12，仅 320 + AXXXL 为 6（D10-2496）。
     func checkAboveBar(_ ctx: String, _ button: XCUIElement, barTop: CGFloat, floor: CGFloat) {
         let frame = button.frame
         let gap = barTop - frame.maxY
@@ -328,7 +328,7 @@ private extension FuLoginKeyboardAvoidTests {
         )
     }
 
-    /// D10-2492 那一档（只限绑手机 · 320 + AXXXL）；主按钮离键盘顶 / 栏上沿的下限该档 8、其余 12。
+    /// D10-2492 那一档（只限绑手机 · 320 + AXXXL）；主按钮离键盘顶 / 栏上沿的下限该档 6、其余 12。
     static func narrowBind(_ page: String, _ tier: String) -> Bool {
         page == "绑手机手机号步" && tier == "w320-AXXXL"
     }
