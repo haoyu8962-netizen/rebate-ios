@@ -28,7 +28,7 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
     private static let narrowTopSlack: CGFloat = 20 // 仅绑手机 320+AXXXL：目标 18，断言含 2pt 容差（D10-2496）
     private static let narrowMidClearance: CGFloat = 8 // D10-2495，同档：框中线（文字行中线）≥ 顶栏下沿 + 8
     private static let narrowMargin: CGFloat = 6 // 同档 getCode 离栏上沿 / 键盘顶：目标 8，含 2pt 容差（D10-2496）
-    private var geometry: (() -> String)?
+    var geometry: (() -> String)? // 当档失败信息追加的整套几何（+Extra 也用）
     private static let phone = "13800005678"
 
     override func setUp() async throws {
@@ -118,7 +118,7 @@ final class FuLoginKeyboardAvoidTests: XCTestCase {
     }
 }
 
-private struct KeyboardScene { // 页面标识（找主 ScrollView）、正在输入的框（拖动起点避开）、底栏按钮（算栏上沿）
+struct KeyboardScene { // 页面标识（找主 ScrollView）、正在输入的框（拖动起点避开）、底栏按钮（算栏上沿）
     let page: String
     let field: XCUIElement
     let bar: [XCUIElement]
@@ -126,7 +126,7 @@ private struct KeyboardScene { // 页面标识（找主 ScrollView）、正在�
 
 // MARK: - 导航（只在断言前用；断言阶段不滚动）
 
-private extension FuLoginKeyboardAvoidTests {
+extension FuLoginKeyboardAvoidTests {
     func launch(_ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += Self.base + extra
@@ -258,7 +258,7 @@ private extension FuLoginKeyboardAvoidTests {
 
 // MARK: - 断言
 
-private extension FuLoginKeyboardAvoidTests {
+extension FuLoginKeyboardAvoidTests {
     /// 等这些元素的 frame 连续两次不变（每 0.2 秒取一次，即 3 次读数相同；上限 3 秒，超时由 UIWait 记失败）。
     func settle(_ what: String, _ elements: [XCUIElement]) -> Bool {
         var last: [CGRect] = []
