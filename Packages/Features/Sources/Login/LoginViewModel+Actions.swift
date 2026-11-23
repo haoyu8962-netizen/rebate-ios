@@ -63,9 +63,18 @@ extension LoginViewModel {
         case SmsCountdown.stateRateLimited:
             // 共性 11：只禁用发码入口；登录按钮照常（仍有效的验证码可以提交）。禁用截止已由 LoginService 按号码记下（共性 21）。
             startTicking()
-            showToast(outcome.textKey, outcome.trace6)
             if step == .phone, outcome.hasReceivedCode, let phone = outcome.phone {
                 enterCodeStep(phone)
+            }
+            if step == .phone {
+                // D10-2773：留在手机号步时不弹轻提示，改由框下常驻说明（login.rateLimitNotice）承担；只在真正收到 42901 的
+                // 这一下播报一次常驻说明文字（关页重进、换回仍在限流的号码时不播），不移焦。
+                if sendRateLimited {
+                    announce(text(LoginKeys.rateLimited))
+                }
+            } else {
+                // 验证码步（含有效期内收到过码、从手机号步直接进来的）照旧轻提示。
+                showToast(outcome.textKey, outcome.trace6)
             }
         case LoginOutcome.stale, LoginOutcome.busy:
             break
