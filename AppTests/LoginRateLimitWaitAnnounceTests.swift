@@ -53,6 +53,65 @@ final class LoginRateLimitWaitAnnounceTests: MeTestCase {
         XCTAssertEqual(model.announcementCount, before + 1, "走完之后再算一拍也不重播")
     }
 
+    /// D10-2773：手机号步收到 42901 不弹轻提示，只对常驻说明播报一次（error.42901）；换回仍限流的号码、关页重进不再播；
+    /// 走完再播一次「可以重新获取验证码」。
+    func testReceiving42901AnnouncesNoticeOnceWithoutToast() async {
+        script.on("POST /v1/auth/sms-codes", rateLimitWaitReply(retryAfter: 600))
+        let rig = LoginRateLimitWaitRig(make(account: nil))
+        let model = LoginViewModel(config: rig.config())
+        model.setPhone(Self.phoneA)
+        model.toggleAgreement()
+        let start = model.announcementCount
+        model.requestCode()
+        await waitUntil("前提：A 号 42901 没有落定") { model.sendRateLimited && !model.sending }
+        XCTAssertEqual(model.step, .phone, "这个号码没收到过码：留在手机号步")
+        XCTAssertNil(model.toast, "手机号步 42901 不弹轻提示")
+        XCTAssertEqual(model.announcementCount, start + 1, "收到 42901 那一下播报一次")
+        XCTAssertEqual(model.announcement, rig.limitedText, "播常驻说明「操作太频繁，请稍后再试」")
+        await quietWindow(1.3)
+        XCTAssertEqual(model.announcementCount, start + 1, "限流期内不再播")
+
+        model.setPhone(Self.phoneB)
+        model.setPhone(Self.phoneA)
+        XCTAssertTrue(model.sendRateLimited, "前提：换回 A 号仍限流")
+        XCTAssertEqual(model.announcementCount, start + 1, "换回仍限流的号码：不再播")
+        XCTAssertNil(model.toast, "换回也不弹轻提示")
+
+        model.disappeared()
+        let reopened = LoginViewModel(config: rig.config())
+        reopened.appeared()
+        reopened.setPhone(Self.phoneA)
+        XCTAssertTrue(reopened.sendRateLimited, "前提：关页重进同一号码仍限流")
+        await quietWindow(1.3)
+        XCTAssertEqual(reopened.announcementCount, 0, "关页重进：不播收到时的说明")
+        XCTAssertNil(reopened.toast, "关页重进：不弹轻提示")
+        XCTAssertEqual(requests("POST", "/v1/auth/sms-codes").count, 1, "换号、重进都不发码")
+
+        rig.advance(600)
+        await waitUntil("限流走完要播报一次", timeout: 3) { reopened.announcementCount == 1 }
+        XCTAssertEqual(reopened.announcement, rig.canResendText, "走完播「可以重新获取验证码」")
+        XCTAssertEqual(model.announcementCount, start + 1, "已离开的旧页面不播")
+    }
+
+    /// D10-2773 不动的部分：验证码步重发收到 42901 照旧轻提示，不播收到时的常驻说明。
+    func testCodeStep42901KeepsToast() async {
+        script.on("POST /v1/auth/sms-codes", rateLimitWaitSentReply(), rateLimitWaitReply(retryAfter: 3600))
+        let rig = LoginRateLimitWaitRig(make(account: nil))
+        let model = LoginViewModel(config: rig.config())
+        model.setPhone(Self.phoneA)
+        model.toggleAgreement()
+        model.requestCode()
+        await waitUntil("前提：发码成功进验证码步") { model.step == .code && !model.sending }
+        rig.advance(61)
+        model.toast = nil
+        let before = model.announcementCount
+        model.requestCode()
+        await waitUntil("验证码步 42901 照旧轻提示") { model.toast != nil }
+        XCTAssertTrue(model.sendRateLimited)
+        XCTAssertEqual(model.step, .code)
+        XCTAssertEqual(model.announcementCount, before, "验证码步不播收到时的常驻说明")
+    }
+
     /// 换号：换到未限流号码立刻不在限流期；换走期间旧号走完、再换回来，都不播。
     func testSwitchingPhoneDoesNotAnnounce() async {
         script.on("POST /v1/auth/sms-codes", rateLimitWaitReply(retryAfter: 600))
