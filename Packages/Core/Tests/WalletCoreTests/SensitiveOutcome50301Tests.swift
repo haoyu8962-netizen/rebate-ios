@@ -170,6 +170,7 @@ final class SensitiveOutcome50301Tests: XCTestCase {
     // MARK: - 实名页（回归钉）
 
     /// 实名页 50301 本来就回落 error.50001 + trace6（D10-887 ②）；其他 5xxxx 照统一分类。本单不动实名页，现状即绿。
+    @MainActor
     func testRealNameNotice50301StillUnified() {
         let notice = RealNameController.notice(WalletErrors.of(failure(50301)), code: 50301, id: 7)
         XCTAssertEqual(notice.key, "error.50001", "实名页 50301 回落 error.50001")
