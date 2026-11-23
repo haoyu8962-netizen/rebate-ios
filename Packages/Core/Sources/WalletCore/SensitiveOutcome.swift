@@ -306,14 +306,20 @@ public enum SensitiveOutcome {
         op == withdraw ? WalletRoutes.withdrawRecords : nil
     }
 
-    /// 5xxxx：已收录且非空的用 error.<code>，未收录回落 error.50001（trace6 由统一错误消息函数另外追加）。
+    /// 50301（D10-2774）：钱包没有平台语境，契约裸键 error.50301「该平台维护中」不合 BR-TEXT-14 bank_vendor 行，钱包一律回落 error.50001
+    /// （trace6 照旧由调用方追加；同实名页 D10-887 ②）。只换文案键，结局、ends / newKey、按钮条件不变。
+    /// 契约 error.50301.bank_vendor 合并后（CT-26zr #642）改为有键就用：`serverKey`、`errorKey` 两处（上游 WalletErrors.failure、
+    /// submitEnded、deletionSubmit、businessKey、DeletionPresentation 经此跟随）；申请注销 `businessText` 的 error.<code> 另议。
+    static let walletMaintenanceCode = 50301
+
+    /// 5xxxx：已收录且非空的用 error.<code>，未收录回落 error.50001（trace6 由统一错误消息函数另外追加）；50301 回落 error.50001（D10-2774）。
     public static func serverKey(_ code: Int) -> String {
         let key = "error.\(code)"
-        return (DefaultTexts.text(key) ?? "").isEmpty ? "error.50001" : key
+        return code == walletMaintenanceCode || (DefaultTexts.text(key) ?? "").isEmpty ? "error.50001" : key
     }
 
     static func errorKey(_ code: Int) -> String {
-        DefaultTexts.text("error.\(code)") != nil ? "error.\(code)" : "error.50001"
+        code != walletMaintenanceCode && DefaultTexts.text("error.\(code)") != nil ? "error.\(code)" : "error.50001"
     }
 }
 
