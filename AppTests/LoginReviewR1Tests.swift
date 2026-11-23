@@ -100,7 +100,12 @@ final class LoginReviewR1Tests: XCTestCase {
     /// 登录页带会话失效提示（LoginSessionExpired）。
     func testSessionInvalid10404OpensLoginThroughRouter() async {
         let tokens = MemorySessionTokens(access: "at-1", refresh: "rt-1", scope: "full", account: "u1")
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——先让它按 0 包结算，再装 10404 桩
+        AppStubProtocol.install { _ in .json(status: 200, body: Self.envelope(0, data: "{\"phone_bound\":true}")) }
         let fixture = makeFixture(tokens: tokens, update: UpdateFixtures.makeUpdate())
+        let sync = fixture.login.phoneSync
+        await waitFor { sync.queries == 1 && !sync.querying(generation: fixture.network.client.sessionGeneration) }
+        XCTAssertEqual(sync.queries, 1, "前提：冷启动同步已结算")
         XCTAssertEqual(fixture.update.routerStatus, .finished(.ok))
         AppStubProtocol.install { _ in .json(status: 401, body: Self.envelope(10404)) }
 
@@ -186,8 +191,10 @@ final class LoginReviewR1Tests: XCTestCase {
         XCTAssertNotEqual(fixture.routing.router.tabRoot.route, "OrderList")
 
         await waitFor { fixture.routing.router.tabRoot.route == "OrderList" }
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——刷新成 full 后按设计同步一次，等它发出
+        await waitFor { AppStubProtocol.requests.count >= 2 }
 
-        XCTAssertEqual(AppStubProtocol.requests.map(\.path), ["/v1/auth/refresh"])
+        XCTAssertEqual(AppStubProtocol.requests.map(\.path), ["/v1/auth/refresh", "/v1/me"])
         XCTAssertEqual(tokens.scope, "full")
         XCTAssertEqual(fixture.routing.router.tabRoot.route, "OrderList", "经启动协调恢复原意图")
         XCTAssertNil(UserDefaultsPendingBackend().read(), "待办执行一次后删除")

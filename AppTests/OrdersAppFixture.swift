@@ -66,6 +66,9 @@ struct OrdersAppFixture {
             environmentRegistry: EnvironmentSwitchCleanerRegistry(cleaners: [])
         )
         let login = AppLogin(network: network, routing: routing, update: update)
+        // 已登录 user-a 是短信登录的账号：手机号状态记为已绑（同 MeAppFixture 默认），冷启动不发 phone_bound 同步
+        // （FU-IOS-PHONE-BINDING-COLDSTART，D10-2676；#24 待批）
+        login.phone.record(true, generation: network.client.sessionGeneration)
         network.attach(environment: environment, privacy: privacy, update: update)
         routing.shellAppeared()
         let cache = OrderCacheStore(
