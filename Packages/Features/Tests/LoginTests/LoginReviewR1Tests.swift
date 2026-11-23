@@ -83,7 +83,10 @@ final class LoginReviewR1Tests: XCTestCase {
         model.setPhone(phoneA)
         model.toggleAgreement()
         model.requestCode()
-        await waitUntil { model.toast != nil }
+        // D10-2773：手机号步 42901 不弹轻提示，改等落定（#24 待批）
+        await waitUntil { model.sendRateLimited && !model.sending }
+        XCTAssertNil(model.toast, "手机号步 42901 不弹轻提示")
+        XCTAssertEqual(model.announcement, "error.42901", "收到 42901 时播报常驻说明（KeyTexts 原样回键名）")
         XCTAssertTrue(model.sendRateLimited)
         XCTAssertEqual(model.resendCountdown, 120)
         XCTAssertEqual(LoginStubProtocol.requests(path: Paths.sms).count, 1)
