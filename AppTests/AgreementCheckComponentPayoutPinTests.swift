@@ -19,7 +19,7 @@ final class AgreementCheckComponentPayoutPinTests: PayoutVisualTestCase {
         try A11yTree.enable(self)
     }
 
-    private var writes: [String] {
+    private var pinWrites: [String] {
         WalletStubProtocol.requests.filter { $0.method != "GET" }.map(\.path)
     }
 
@@ -69,7 +69,7 @@ final class AgreementCheckComponentPayoutPinTests: PayoutVisualTestCase {
         let (host, _) = try await openRealName()
         _ = try await openConsent(host)
         let window = try XCTUnwrap(host.window)
-        let writesBefore = writes
+        let writesBefore = pinWrites
         let row = try await element("realname.consent.check", in: window)
         assertRow(row, label: "我已阅读并同意以上说明")
         XCTAssertEqual(host.realName?.state.consentChecked, false, "前提：默认不勾")
@@ -90,7 +90,7 @@ final class AgreementCheckComponentPayoutPinTests: PayoutVisualTestCase {
         XCTAssertTrue(off, "取消后读屏为未选中")
         let okOffAgain = await enabled("realname.consent.ok", false, in: window)
         XCTAssertTrue(okOffAgain, "取消后【同意并继续】不可用")
-        XCTAssertEqual(writes, writesBefore, "只勾选不发写请求")
+        XCTAssertEqual(pinWrites, writesBefore, "只勾选不发写请求")
         XCTAssertNotNil(host.realName?.state.consentId, "半屏仍开着（勾选不等于同意）")
     }
 
@@ -98,7 +98,7 @@ final class AgreementCheckComponentPayoutPinTests: PayoutVisualTestCase {
     func testLaborCheckAndSignConditionUnchanged() async throws {
         let (host, _) = try await openLabor()
         let window = try XCTUnwrap(host.window)
-        let writesBefore = writes
+        let writesBefore = pinWrites
         let row = try await element("labor.check", in: window)
         assertRow(row, label: "我已阅读并同意《劳务协议》，版本 v1")
         XCTAssertFalse(row.traits.contains(.notEnabled), "正文已读到（content）时勾选行可用")
@@ -121,6 +121,6 @@ final class AgreementCheckComponentPayoutPinTests: PayoutVisualTestCase {
         let signOffAgain = await enabled("labor.sign", false, in: window)
         XCTAssertTrue(signOffAgain, "取消后【签署】不可用")
         XCTAssertEqual(laborBackend?.signs.count, 0, "只勾选不调签署")
-        XCTAssertEqual(writes, writesBefore, "只勾选不发写请求")
+        XCTAssertEqual(pinWrites, writesBefore, "只勾选不发写请求")
     }
 }
