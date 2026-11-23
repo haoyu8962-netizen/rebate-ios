@@ -83,7 +83,7 @@ final class LoginReviewR1Tests: XCTestCase {
         model.setPhone(phoneA)
         model.toggleAgreement()
         model.requestCode()
-        // D10-2773：手机号步 42901 不弹轻提示，改等落定（#24 待批）
+        // D10-2773：手机号步 42901 不弹轻提示，改等落定（#24 已批 D10-2776）
         await waitUntil { model.sendRateLimited && !model.sending }
         XCTAssertNil(model.toast, "手机号步 42901 不弹轻提示")
         XCTAssertEqual(model.announcement, "error.42901", "收到 42901 时播报常驻说明（KeyTexts 原样回键名）")

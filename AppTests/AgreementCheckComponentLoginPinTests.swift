@@ -100,20 +100,23 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
         XCTAssertEqual(row.object.accessibilityHint, "未注册的手机号验证后自动创建账号")
         XCTAssertTrue(row.isButton, "读屏为按钮")
         XCTAssertFalse(row.traits.contains(.selected), "默认未选中")
-        // 量法同 UITests/LoginSmokeTests.swift checkHitTargetsAndOrder：读屏框含焦点环外扩 4pt，去掉外扩后核对；
-        // 流式布局里协议行与链接相邻，外扩部分本就相交，只要求去外扩的框（再内缩 0.5）互不相交。
+        // 量法与 UITests/LoginSmokeTests.swift checkHitTargetsAndOrder（:108-119）一致：焦点环在框外时读屏框每边比命中区大 4pt
+        // （DesignSystem Foundation.swift 焦点环说明），三个框都先 insetBy(4) 去掉外扩，再判宽、高 ≥ 43.5；
+        // 流式布局里三者相邻，外扩部分本就相交，只要求去外扩的框（再内缩 0.5）两两不相交。
         let ring: CGFloat = 4
         let agreement = try XCTUnwrap(A11yTree.node("login.link.agreement", in: canvas.root), "协议链接标识不变")
         let privacy = try XCTUnwrap(A11yTree.node("login.link.privacy", in: canvas.root), "隐私链接标识不变")
         for node in [row, agreement, privacy] {
             XCTAssertTrue(node.isElement, "\(node.id) 是独立读屏项")
-            XCTAssertGreaterThanOrEqual(node.frame.height, 43.5, "\(node.id) 命中区高 ≥ 44：\(node.frame)")
-            XCTAssertGreaterThanOrEqual(node.frame.width, 43.5, "\(node.id) 命中区宽 ≥ 44：\(node.frame)")
+            let hit = node.frame.insetBy(dx: ring, dy: ring)
+            XCTAssertGreaterThanOrEqual(hit.height, 43.5, "\(node.id) 去外扩后命中区高 ≥ 44：\(hit)")
+            XCTAssertGreaterThanOrEqual(hit.width, 43.5, "\(node.id) 去外扩后命中区宽 ≥ 44：\(hit)")
         }
         let box = row.frame.insetBy(dx: ring, dy: ring)
         let link = agreement.frame.insetBy(dx: ring, dy: ring)
         let other = privacy.frame.insetBy(dx: ring, dy: ring)
         XCTAssertFalse(box.intersects(link.insetBy(dx: 0.5, dy: 0.5)), "协议行不压《用户协议》：\(box) \(link)")
+        XCTAssertFalse(box.intersects(other.insetBy(dx: 0.5, dy: 0.5)), "协议行不压《隐私政策》：\(box) \(other)")
         XCTAssertFalse(link.intersects(other.insetBy(dx: 0.5, dy: 0.5)), "两个链接不重叠：\(link) \(other)")
     }
 

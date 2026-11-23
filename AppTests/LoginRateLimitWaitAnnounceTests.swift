@@ -112,6 +112,30 @@ final class LoginRateLimitWaitAnnounceTests: MeTestCase {
         XCTAssertEqual(model.announcementCount, before, "验证码步不播收到时的常驻说明")
     }
 
+    /// D10-2773 不动的部分（评审 r1 S3-4 ①）：号码在有效期内收到过码，回手机号步重新获取时收到 42901 → 直接进验证码步，
+    /// 保留轻提示，不做收到时的播报。
+    func testPhoneStep42901WithReceivedCodeEntersCodeStepWithToast() async {
+        script.on("POST /v1/auth/sms-codes", rateLimitWaitSentReply(), rateLimitWaitReply(retryAfter: 3600))
+        let rig = LoginRateLimitWaitRig(make(account: nil))
+        let model = LoginViewModel(config: rig.config())
+        model.setPhone(Self.phoneA)
+        model.toggleAgreement()
+        model.requestCode()
+        await waitUntil("前提：发码成功进验证码步") { model.step == .code && !model.sending }
+        rig.advance(61)
+        model.backToPhone()
+        XCTAssertEqual(model.step, .phone, "前提：回到手机号步")
+        XCTAssertTrue(model.service.hasReceivedCode(Self.phoneA), "前提：这个号码在有效期内收到过码")
+        model.toast = nil
+        let before = model.announcementCount
+        model.requestCode()
+        await waitUntil("前提：42901 没有落定") { model.sendRateLimited && !model.sending }
+        XCTAssertEqual(requests("POST", "/v1/auth/sms-codes").count, 2, "前提：手机号步重新获取发出")
+        XCTAssertEqual(model.step, .code, "收到过码：42901 时直接进验证码步")
+        XCTAssertNotNil(model.toast, "跳进验证码步的这种 42901 保留轻提示")
+        XCTAssertEqual(model.announcementCount, before, "不做收到时的常驻说明播报")
+    }
+
     /// 换号：换到未限流号码立刻不在限流期；换走期间旧号走完、再换回来，都不播。
     func testSwitchingPhoneDoesNotAnnounce() async {
         script.on("POST /v1/auth/sms-codes", rateLimitWaitReply(retryAfter: 600))

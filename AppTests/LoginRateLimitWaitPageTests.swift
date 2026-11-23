@@ -83,6 +83,46 @@ final class LoginRateLimitWaitPageTests: LoginRateLimitWaitPageCase {
         assertNoLongSeconds(in: canvas, "剩余 60 秒")
     }
 
+    // MARK: - 页面上的系统播报（评审 r1 S3-4 ②）
+
+    /// 页面接线：收到 42901 那一下系统播报一次常驻说明「操作太频繁，请稍后再试」，逐秒倒计时期间不播，走完系统播报一次
+    /// 「可以重新获取验证码」；两句都是排队播报（不打断当前朗读，同轻提示）。经 A11yPostTap 截获 UIAccessibility.post。
+    func testPageAnnouncesOnReceiveAndOnEndOnly() async throws {
+        script.on("POST /v1/auth/sms-codes", rateLimitWaitReply(retryAfter: 600))
+        A11yAudit.installTap(self, voiceOver: false)
+        let rig = LoginRateLimitWaitRig(make(account: nil))
+        let canvas = await mount(rig)
+        A11yPostTap.clear()
+        try await requestCode(Self.phoneA, in: canvas)
+
+        let received = await A11yAudit.waitAnnouncement(containing: rig.limitedText)
+        XCTAssertNotNil(received, "收到 42901 要系统播报常驻说明；实际：\(A11yPostTap.posts)")
+        XCTAssertEqual(received?.queued, true, "排队播报，不打断")
+        await quietWindow(1.3)
+        XCTAssertEqual(announced(rig.limitedText), 1, "收到时只播一次；实际：\(A11yPostTap.posts)")
+
+        rig.advance(540)
+        await expect("login.getCode", label: rig.countdownText(60), enabled: false, in: canvas, "前提：剩 60 秒")
+        rig.advance(1)
+        await expect("login.getCode", label: rig.countdownText(59), enabled: false, in: canvas, "前提：剩 59 秒")
+        XCTAssertEqual(announced(rig.canResendText), 0, "限流期内不播「可以重新获取」")
+        XCTAssertTrue(A11yPostTap.announcements.allSatisfy { ($0.text ?? "").contains("秒") == false },
+                      "逐秒倒计时不播报；实际：\(A11yPostTap.posts)")
+
+        rig.advance(59)
+        let ended = await A11yAudit.waitAnnouncement(containing: rig.canResendText)
+        XCTAssertNotNil(ended, "走完要系统播报「可以重新获取验证码」；实际：\(A11yPostTap.posts)")
+        XCTAssertEqual(ended?.queued, true, "排队播报，不打断")
+        await quietWindow(2.2)
+        XCTAssertEqual(announced(rig.canResendText), 1, "走完只播一次；实际：\(A11yPostTap.posts)")
+        XCTAssertEqual(announced(rig.limitedText), 1, "常驻说明没有再播")
+    }
+
+    /// 截获到的、文字恰为 `text` 的系统播报条数。
+    private func announced(_ text: String) -> Int {
+        A11yPostTap.announcements.filter { $0.text == text }.count
+    }
+
     // MARK: - 换号
 
     /// 换到未限流号码：常驻提示与等待文字立即消失、按钮恢复可用；换回限流号码又出现。
