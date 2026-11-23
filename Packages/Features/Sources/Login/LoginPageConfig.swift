@@ -56,6 +56,12 @@ public enum LoginKeys {
     public static let deletionOK = "login.deletion.ok"
     public static let sessionExpired = "error.10404"
     public static let generic = "error.50001"
+    /// 发码 42901 限流（D10-2767）：手机号框下的常驻提示、剩余超过 60 秒时等待处的文字（契约「操作太频繁，请稍后再试」）。
+    /// TODO(D10-2767) 契约补按分钟 / 小时的等待键后，超过 60 秒改用新键。
+    public static let rateLimited = "error.42901"
+    /// 发码限流走完、可以重新获取时的读屏播报（D10-2767）。登录页还没有自己的键（login.code.can_resend 待契约补），先借用绑手机页
+    /// 同一句草稿「可以重新获取验证码」。TODO(D10-2767) 契约补 login.code.can_resend 后换成它。
+    public static let canResend = "bind_phone.can_resend"
 }
 
 /// 文案来源（App 实现：DefaultTexts → 草稿表）。缺键返回空串。

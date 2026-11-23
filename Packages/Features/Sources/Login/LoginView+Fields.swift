@@ -35,6 +35,15 @@ extension LoginView {
                                             focusProbeID: "login.phoneError")
                     .accessibilityIdentifier("login.phoneError")
             }
+            if model.phoneError.isEmpty, model.sendRateLimited {
+                // 发码 42901 限流期内常驻（D10-2767 ②，Login-v2「输入框下『操作太频繁，请稍后再试』」）：限流走完自动消失，
+                // 换号按新号码重算。出现时不另播报、不移焦（收到 42901 的那一下有轻提示播报；关页重进不抢标题焦点）。
+                Text(verbatim: text(LoginKeys.rateLimited))
+                    .couliFont(.footnote)
+                    .foregroundColor(CouliColor.statusErrorText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("login.rateLimitNotice")
+            }
         }
     }
 

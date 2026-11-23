@@ -47,6 +47,9 @@ public final class LoginViewModel: ObservableObject {
     @Published public var toast: CouliToastMessage?
     /// 正在进行的第三方登录（provider；APP-05b）。
     @Published public internal(set) var oauthProvider: String?
+    /// 读屏播报（D10-2767：发码限流走完时播一次「可以重新获取」）。`announcementCount` 每播一次加一，页面据此发系统播报。
+    @Published public private(set) var announcement = ""
+    @Published public private(set) var announcementCount = 0
 
     public let config: LoginPageConfig
     var agreement: AgreementState
@@ -56,6 +59,9 @@ public final class LoginViewModel: ObservableObject {
     /// 确认框同意后要继续的动作。
     var afterConfirm: (() -> Void)?
     var ticker: Task<Void, Never>?
+    /// 上一拍时当前号码是否处于发码 42901 限流期（D10-2767：走完播报一次用）。换号、页面重现、计时启动时按当前状态重置，
+    /// 只有同一号码在计时中走完才播报。
+    var limitTracked = false
     /// 待绑定码变化（剪贴板确认、邀请链接、【移除】、带码登录）转成本页的变化通知，小字行跟着刷新（APP-17c）。
     private var pendingWatch: AnyCancellable?
 
@@ -104,6 +110,10 @@ public final class LoginViewModel: ObservableObject {
         service.sendRateLimited(phoneText, now: now)
     }
 
+    /// 发码等待按秒显示的上限（D10-2767）：剩余不超过这个秒数用「{n} 秒后可重新获取」；42901 限流剩余更长时显示
+    /// 「操作太频繁」既有文案（契约补按分钟 / 小时的键之前）。
+    public static let waitSecondsShown = 60
+
     public var loginRateLimited: Bool {
         limits.loginBlocked(now: now)
     }
@@ -114,18 +124,35 @@ public final class LoginViewModel: ObservableObject {
 
     func startTicking() {
         now = service.now
+        limitTracked = sendRateLimited
         guard ticker == nil else { return }
         ticker = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self else { return }
                 now = service.now
+                noteLimitEnd()
                 if !countdownActive {
                     ticker = nil
                     return
                 }
             }
         }
+    }
+
+    /// 计时每一拍：同一号码的发码 42901 限流期这一拍走完 → 播报一次「可以重新获取」（D10-2767；不逐秒播报）。
+    func noteLimitEnd() {
+        let limited = sendRateLimited
+        if limitTracked, !limited {
+            announce(text(LoginKeys.canResend))
+        }
+        limitTracked = limited
+    }
+
+    func announce(_ message: String) {
+        guard !message.isEmpty else { return }
+        announcement = message
+        announcementCount += 1
     }
 
     /// 还有没走完的倒计时（当前号码的发码截止或登录限流）。
@@ -150,6 +177,8 @@ public final class LoginViewModel: ObservableObject {
         service.invalidateAttempt()
         // 显示状态切到新号码的截止时间（共性 21）：按当前时钟重算，新号码还在倒计时 / 限流期就让计时走起来。
         now = service.now
+        // 换号先按新号码重置「限流中」记号（D10-2767）：换号不算走完，不播报。
+        limitTracked = sendRateLimited
         if countdownActive {
             startTicking()
         }
@@ -244,6 +273,8 @@ public final class LoginViewModel: ObservableObject {
     /// 页面出现（含从协议页等返回）：立即按当前时钟与截止时间重算倒计时与限流状态；还有没走完的就重启计时（共性 20）。
     public func appeared() {
         now = service.now
+        // 离开期间走完的限流不补播（D10-2767）。
+        limitTracked = sendRateLimited
         if countdownActive {
             startTicking()
         }

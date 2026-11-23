@@ -43,7 +43,8 @@ extension LoginView {
             HStack {
                 Spacer()
                 if model.resendCountdown > 0 {
-                    Text(verbatim: model.format(LoginKeys.codeCountdown, "n", String(model.resendCountdown)))
+                    // 成功发码的倒计时，或重发收到 42901 后服务端仍在限流（D10-2767 ③）：都显示还要等多久，不给可点的【重新获取】
+                    Text(verbatim: sendWaitText(model.resendCountdown))
                         .couliFont(.body, monospacedDigits: true)
                         .foregroundColor(CouliColor.textSecondary)
                         .accessibilityIdentifier("login.countdown")
@@ -74,6 +75,16 @@ extension LoginView {
         .onAppear {
             codeFocused = true
         }
+    }
+
+    /// 发码等待处的文字（D10-2767，手机号步【获取验证码】与验证码步重发处共用）：剩余 ≤ 60 秒（或成功发码的倒计时）为
+    /// `login.code.countdown`「{n} 秒后可重新获取」逐秒递减；42901 限流剩余 > 60 秒为 `error.42901`「操作太频繁，请稍后再试」。
+    /// TODO(D10-2767) 契约补按分钟 / 小时的等待键后，> 60 秒改用新键。
+    func sendWaitText(_ remaining: Int) -> String {
+        if model.sendRateLimited, remaining > LoginViewModel.waitSecondsShown {
+            return text(LoginKeys.rateLimited)
+        }
+        return model.format(LoginKeys.codeCountdown, "n", String(remaining))
     }
 
     // MARK: - 弹窗

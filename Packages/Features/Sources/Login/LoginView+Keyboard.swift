@@ -43,10 +43,11 @@ extension LoginView {
         primaryPinned
     }
 
-    /// 唯一的【获取验证码】：identifier、读屏焦点绑定、状态与动作都在这里。
+    /// 唯一的【获取验证码】：identifier、读屏焦点绑定、状态与动作都在这里。发码 42901 限流期内置灰，文字换成还要等多久
+    /// （D10-2767 ①，规则见 `sendWaitText`）；成功发码的倒计时不在这里显示（回到手机号步照常可点、进验证码步，共性 5）。
     var getCodeButton: some View {
         CouliButton(
-            text(LoginKeys.getCode),
+            model.sendRateLimited ? sendWaitText(model.resendCountdown) : text(LoginKeys.getCode),
             isLoading: model.sending,
             isEnabled: !model.sendRateLimited,
             fillsWidth: true,
