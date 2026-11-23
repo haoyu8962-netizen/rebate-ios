@@ -12,7 +12,6 @@ import XCTest
 @MainActor
 final class AgreementCheckComponentLoginPinTests: MeTestCase {
     private static let phone = "13800005678"
-    private static let confirmTitle = "请阅读并同意协议"
     private var canvas: A11yCanvas?
     /// 整条用例强持有夹具（AppLogin、页面配置的闭包对它是 unowned / weak 引用），tearDown 再放（同 A11yLoginTests 在用例里持 fixture）。
     private var fixture: MeAppFixture?
@@ -70,6 +69,14 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
         await canvas.pump(0.3)
     }
 
+    /// 协议确认框标题：取运行时文案（契约优先、草稿兜底，同页面取法），不写死中文。
+    private func confirmTitle(file: StaticString = #filePath, line: UInt = #line) throws -> String {
+        let title = try XCTUnwrap(fixture, "前提：已挂页面", file: file, line: line).login.texts
+            .text(LoginKeys.confirmTitle)
+        XCTAssertFalse(title.isEmpty, "前提：确认框标题文案非空", file: file, line: line)
+        return title
+    }
+
     private func checkbox(_ canvas: A11yCanvas, file: StaticString = #filePath, line: UInt = #line) throws -> A11yNode {
         try XCTUnwrap(A11yTree.node("login.agreeCheckbox", in: canvas.root), "协议行标识 login.agreeCheckbox 不变",
                       file: file, line: line)
@@ -110,13 +117,14 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
         XCTAssertFalse(link.intersects(other.insetBy(dx: 0.5, dy: 0.5)), "两个链接不重叠：\(link) \(other)")
     }
 
-    /// 未勾点【获取验证码】：仍弹「请阅读并同意协议」确认框，不发码。
+    /// 未勾点【获取验证码】：仍弹协议确认框（标题取运行时文案 login.agree_confirm.title），不发码。
     func testUncheckedGetCodeStillOpensAgreementConfirm() async throws {
         let canvas = await mount()
         try await typePhone(in: canvas)
         XCTAssertFalse(try checkbox(canvas).traits.contains(.selected), "前提：未勾")
         try await activate("login.getCode", in: canvas)
-        let opened = await canvas.wait(8) { $0.contains { $0.isElement && $0.label == Self.confirmTitle } }
+        let title = try confirmTitle()
+        let opened = await canvas.wait(8) { $0.contains { $0.isElement && $0.isHeader && $0.label == title } }
         XCTAssertTrue(opened, "未勾点获取验证码要弹协议确认框\n\(A11yTree.dump(A11yTree.elements(canvas.root)))")
         await quietWindow(0.6)
         XCTAssertEqual(requests("POST", "/v1/auth/sms-codes").count, 0, "确认框打开时不发码")
@@ -132,7 +140,8 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
         try await activate("login.getCode", in: canvas)
         let entered = await canvas.wait(8) { $0.contains { $0.id == "login.code" } }
         XCTAssertTrue(entered, "勾选后发码进验证码步")
-        XCTAssertNil(A11yTree.elements(canvas.root).first { $0.label == Self.confirmTitle }, "勾选后不弹协议确认框")
+        let title = try confirmTitle()
+        XCTAssertNil(A11yTree.elements(canvas.root).first { $0.label == title }, "勾选后不弹协议确认框")
         XCTAssertEqual(requests("POST", "/v1/auth/sms-codes").count, 1, "直接发码一次")
     }
 
