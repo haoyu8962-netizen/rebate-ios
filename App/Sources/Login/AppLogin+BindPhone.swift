@@ -243,6 +243,9 @@ extension AppLogin {
             guard let self, case .bound = outcome else { return }
             // 失败不重试、不写 phoneQueryFailed；换代回包是 .stale，不做事
             guard phonePendingWaiting else { return }
+            // 栈里有绑手机页时交给它自己出栈并只恢复（alreadyBound，与本查询合并到同一请求）：这里先协调会把原目标恢复到绑手机页上面，
+            // 绑手机页不在栈顶、退出落空留在栈里（FU-IOS-PHONE-BINDING-COLDSTART 评审前修 r1）
+            guard !routing.router.path.contains(where: { $0.route == RoutePolicy.bindPhone }) else { return }
             routing.launchConditionsChanged()
         }
     }
