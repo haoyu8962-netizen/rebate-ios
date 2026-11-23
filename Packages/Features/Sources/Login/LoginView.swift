@@ -96,9 +96,13 @@ public struct LoginView: View {
         .onDisappear {
             model.disappeared()
         }
-        // D10-2767：发码限流走完播报一次（不逐秒播报）
+        // D10-2767：收到 42901 / 发码限流走完各播报一次（不逐秒播报）；排队等当前朗读结束，不打断（同 ToastAnnouncement.post）
         .onChange(of: model.announcementCount) { _ in
-            UIAccessibility.post(notification: .announcement, argument: model.announcement)
+            let announcement = NSAttributedString(
+                string: model.announcement,
+                attributes: [.accessibilitySpeechQueueAnnouncement: true]
+            )
+            UIAccessibility.post(notification: .announcement, argument: announcement)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("login.page")

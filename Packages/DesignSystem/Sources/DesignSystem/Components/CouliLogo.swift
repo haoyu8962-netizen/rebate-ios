@@ -33,7 +33,8 @@ public enum CouliLogoVariant: String, CaseIterable, Sendable {
         }
     }
 
-    /// 按外观取图（测试与非 SwiftUI 场景用）：浅色是原色版，深色是反白版（同一图片集的 Dark 外观）。
+    /// 按外观取图（测试与非 SwiftUI 场景用）：`.mark` / `.horizontal` 浅色是原色版、深色是反白版（同一图片集的 Dark 外观）；
+    /// `.appIcon` 深浅同一张（D10-2762，画稿优先）。
     public func uiImage(dark: Bool) -> UIImage? {
         UIImage(
             named: assetName,
@@ -45,8 +46,9 @@ public enum CouliLogoVariant: String, CaseIterable, Sendable {
 
 /// 品牌 Logo（BRAND-01）：只是取用入口，不决定页面摆放（登录等页面的位置以定稿画板为准）。
 ///
-/// 资源是规划仓库 design/logo/source 的 SVG 原文件（保留矢量）。浅 / 深自动选图：图片集的 Any 外观是原色版，
-/// Dark 外观是反白版，跟随当前视图环境的配色（App 目前在 Info.plist 固定浅色，深色接入后自动换反白）。
+/// 资源是规划仓库 design/logo/source 的 SVG 原文件（保留矢量）。`.mark` / `.horizontal` 浅 / 深自动选图：图片集的 Any
+/// 外观是原色版，Dark 外观是反白版，跟随当前视图环境的配色（App 目前在 Info.plist 固定浅色，深色接入后自动换反白）；
+/// `.appIcon` 深浅同一张（D10-2762，画稿优先）。
 /// 等比缩放、不拉伸；四周留白由调用方按 Logo 规范排版。应用图标式（`.appIcon`）按版式比例裁连续圆角，尺寸由调用方定死
 /// （不随字号放大）。
 public struct CouliLogo: View {

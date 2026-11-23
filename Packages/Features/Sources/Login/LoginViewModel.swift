@@ -129,6 +129,8 @@ public final class LoginViewModel: ObservableObject {
         ticker = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                // 离页（disappeared 取消计时）后的这一拍不再刷新、不补播「可以重新获取」
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 now = service.now
                 noteLimitEnd()
