@@ -134,7 +134,9 @@ public struct LoginView: View {
     var phoneStep: some View {
         VStack(spacing: CouliSpacing.s5) {
             VStack(spacing: CouliSpacing.s4) {
-                BrandMark(text: text(LoginKeys.brand))
+                // D10-2730：用组件库正式 Logo（design/logo/source/logo-mark.svg），不再自画方块写字；72×72、读屏跳过同原样
+                CouliLogo(.mark)
+                    .frame(width: 72, height: 72)
                 Text(verbatim: text(LoginKeys.title))
                     .couliFont(.heading, weight: .couliBold)
                     .foregroundColor(CouliColor.textPrimary)
