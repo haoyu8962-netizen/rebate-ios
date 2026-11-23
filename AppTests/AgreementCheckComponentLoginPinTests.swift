@@ -14,6 +14,8 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
     private static let phone = "13800005678"
     private static let confirmTitle = "请阅读并同意协议"
     private var canvas: A11yCanvas?
+    /// 整条用例强持有夹具（AppLogin、页面配置的闭包对它是 unowned / weak 引用），tearDown 再放（同 A11yLoginTests 在用例里持 fixture）。
+    private var fixture: MeAppFixture?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -28,6 +30,7 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
     override func tearDown() {
         canvas?.close()
         canvas = nil
+        fixture = nil
         super.tearDown()
     }
 
@@ -35,6 +38,7 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
 
     private func mount() async -> A11yCanvas {
         let fixture = make(account: nil)
+        self.fixture = fixture
         let canvas = A11yCanvas(AnyView(LoginView(config: fixture.login.pageConfig(restricted: false))))
         self.canvas = canvas
         await canvas.pump(0.8)
@@ -89,13 +93,21 @@ final class AgreementCheckComponentLoginPinTests: MeTestCase {
         XCTAssertEqual(row.object.accessibilityHint, "未注册的手机号验证后自动创建账号")
         XCTAssertTrue(row.isButton, "读屏为按钮")
         XCTAssertFalse(row.traits.contains(.selected), "默认未选中")
-        XCTAssertGreaterThanOrEqual(row.frame.height, CouliHitTarget.minimum - 0.5, "命中区高 ≥ 44")
-        for id in ["login.link.agreement", "login.link.privacy"] {
-            let link = try XCTUnwrap(A11yTree.node(id, in: canvas.root), "协议链接 \(id) 不变")
-            XCTAssertTrue(link.isElement, "\(id) 是独立读屏项")
-            let overlap = row.frame.intersection(link.frame)
-            XCTAssertLessThan(overlap.isNull ? 0 : overlap.width * overlap.height, 1, "\(id) 与协议行命中区不重叠")
+        // 量法同 UITests/LoginSmokeTests.swift checkHitTargetsAndOrder：读屏框含焦点环外扩 4pt，去掉外扩后核对；
+        // 流式布局里协议行与链接相邻，外扩部分本就相交，只要求去外扩的框（再内缩 0.5）互不相交。
+        let ring: CGFloat = 4
+        let agreement = try XCTUnwrap(A11yTree.node("login.link.agreement", in: canvas.root), "协议链接标识不变")
+        let privacy = try XCTUnwrap(A11yTree.node("login.link.privacy", in: canvas.root), "隐私链接标识不变")
+        for node in [row, agreement, privacy] {
+            XCTAssertTrue(node.isElement, "\(node.id) 是独立读屏项")
+            XCTAssertGreaterThanOrEqual(node.frame.height, 43.5, "\(node.id) 命中区高 ≥ 44：\(node.frame)")
+            XCTAssertGreaterThanOrEqual(node.frame.width, 43.5, "\(node.id) 命中区宽 ≥ 44：\(node.frame)")
         }
+        let box = row.frame.insetBy(dx: ring, dy: ring)
+        let link = agreement.frame.insetBy(dx: ring, dy: ring)
+        let other = privacy.frame.insetBy(dx: ring, dy: ring)
+        XCTAssertFalse(box.intersects(link.insetBy(dx: 0.5, dy: 0.5)), "协议行不压《用户协议》：\(box) \(link)")
+        XCTAssertFalse(link.intersects(other.insetBy(dx: 0.5, dy: 0.5)), "两个链接不重叠：\(link) \(other)")
     }
 
     /// 未勾点【获取验证码】：仍弹「请阅读并同意协议」确认框，不发码。
