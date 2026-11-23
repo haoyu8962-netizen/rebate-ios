@@ -125,7 +125,12 @@ final class LoginReviewR1Tests: XCTestCase {
     /// 刷新失败（10002 → 刷新被拒）同样经生产回调跳登录，且只开一层登录页。
     func testRefreshFailureOpensLoginOnce() async {
         let tokens = MemorySessionTokens(access: "at-1", refresh: "rt-1", scope: "full", account: "u1")
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——先让它按 0 包结算，再装刷新失败桩
+        AppStubProtocol.install { _ in .json(status: 200, body: Self.envelope(0, data: "{\"phone_bound\":true}")) }
         let fixture = makeFixture(tokens: tokens, update: UpdateFixtures.makeUpdate())
+        let sync = fixture.login.phoneSync
+        await waitFor { sync.queries == 1 && !sync.querying(generation: fixture.network.client.sessionGeneration) }
+        XCTAssertEqual(sync.queries, 1, "前提：冷启动同步已结算")
         AppStubProtocol.install { request in
             request.path == "/v1/auth/refresh"
                 ? .json(status: 401, body: Self.envelope(10404))

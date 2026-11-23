@@ -230,7 +230,15 @@ final class OAuthBindPhoneWiringTests: MeTestCase {
 
     /// 第 1 轮 R1-02：绑定成功的共享结算启动新一轮 getMe（页面不可见 / 未出现也做），按绑定的固定归属更新共享 Me 资料；读取限流期内不发。
     func testBindSuccessRefreshesSharedMeWithFixedOwner() async {
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——先让它按「未绑」结算（与绑定前一致，
+        // 不预先记成已绑），再记 before，保证之后数到的是绑定后的那次刷新
+        script.ok("GET /v1/me", MeSamples.me(phoneBound: false))
         let fixture = make(phoneKnown: false)
+        let sync = fixture.login.phoneSync
+        await waitUntil("前提：冷启动同步没有结算") {
+            sync.queries == 1 && !sync.querying(generation: fixture.client.sessionGeneration)
+        }
+        XCTAssertEqual(fixture.login.phone.bound(generation: fixture.client.sessionGeneration), false, "前提：冷启动同步已结算")
         script.ok("GET /v1/me", MeSamples.me(phoneBound: true))
         let login = fixture.login
         let before = requests("GET", "/v1/me").count
@@ -269,7 +277,15 @@ final class OAuthBindPhoneWiringTests: MeTestCase {
     /// 登录（引导显示、待办暂缓）→ A 的 getMe 迟到返回：B 的暂缓、待办、引导、手机号状态与守卫都不变，不打开原目标，A 的资料不写进 B。
     /// iOS 的共享收尾（记已绑、解除暂缓、守卫重算）在绑定响应结算时按固定身份同步完成，getMe 只更新 Me 快照且按发起时的身份核对。
     func testLateBindRefreshOfOldAccountLeavesNewSessionHoldIntact() async throws {
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——先让它按「未绑」结算（与绑定前一致，
+        // 不预先记成已绑），再记 before，保证之后数到的是绑定后的那次刷新
+        script.ok("GET /v1/me", MeSamples.me(phoneBound: false))
         let fixture = make(phoneKnown: false)
+        let sync = fixture.login.phoneSync
+        await waitUntil("前提：冷启动同步没有结算") {
+            sync.queries == 1 && !sync.querying(generation: fixture.client.sessionGeneration)
+        }
+        XCTAssertEqual(fixture.login.phone.bound(generation: fixture.client.sessionGeneration), false, "前提：冷启动同步已结算")
         let login = fixture.login
         script.on("GET /v1/me", .hold)
         let controller = BindPhoneController(
