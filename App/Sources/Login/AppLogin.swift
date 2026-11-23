@@ -49,6 +49,8 @@ final class AppLogin: ObservableObject {
     var guideSerial = 0
     /// 手机号状态查询失败的会话世代：之后只在会话状态变化、进绑手机页时再查（不在每次启动协调里重试）。
     var phoneQueryFailed: UInt64?
+    /// 已发起过冷启动 phone_bound 同步的会话世代（FU-IOS-PHONE-BINDING-COLDSTART，D10-2676）：每世代最多一次，按世代比较、换代不用清。
+    var phoneSyncAttempted: UInt64?
     let network: AppNetwork
     var pathWatch: AnyCancellable?
     /// 真实登录成功（登录页拿到 logged_in，新会话已保存）：带此刻的会话世代通知（APP-12 推送上报只认这个信号，共性第 3 条）。
@@ -92,13 +94,7 @@ final class AppLogin: ObservableObject {
                 scope: client.isolatedSessionScope, phoneBound: phone.bound(generation: client.sessionGeneration)
             )
         }
-        routing.onSessionStateChanged = { [weak self] in
-            self?.sessionVersion &+= 1
-            self?.sessionStateSynced()
-        }
-        routing.beforeLaunchCoordination = { [weak self] in
-            self?.ensurePhoneBindingKnown()
-        }
+        wireSessionHooks()
         wireBindPhone()
         #if DEBUG
         // 本机假服务的「已登录假账号」（-CouliFakeTradeLoggedIn）是短信登录的账号：守卫按已绑手机（假 getMe 同样回 phone_bound=true）
@@ -109,6 +105,21 @@ final class AppLogin: ObservableObject {
         }
         network.source.onSessionRefreshed = { [weak self] generation, origin in
             self?.sessionRefreshed(generation, origin: origin)
+        }
+    }
+
+    /// 会话状态变化与启动协调前的钩子：刷新会话显示、同步会话状态；启动协调前按需查 phone_bound（共性第 8 条），并做冷启动同步
+    /// （FU-IOS-PHONE-BINDING-COLDSTART，D10-2676）。
+    private func wireSessionHooks() {
+        routing.onSessionStateChanged = { [weak self] in
+            self?.sessionVersion &+= 1
+            self?.sessionStateSynced()
+            // 受限 → full 的刷新不一定走启动协调，会话状态变化时也同步一次
+            self?.syncPhoneBindingIfUnknown()
+        }
+        routing.beforeLaunchCoordination = { [weak self] in
+            self?.ensurePhoneBindingKnown()
+            self?.syncPhoneBindingIfUnknown()
         }
     }
 

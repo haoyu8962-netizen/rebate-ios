@@ -196,14 +196,24 @@ extension AppLogin {
         }
     }
 
+    /// 查 phone_bound 的同步前提（共性第 2、8 条；FU-IOS-PHONE-BINDING-COLDSTART 拆出）：隐私已同意、full 会话、这一代状态未知、
+    /// 没有在查、OAuth 不忙。
+    private func phoneSyncAllowed(generation: UInt64) -> Bool {
+        routing.privacy.routerPrivacy == .consented && client.isolatedSessionScope == Session.SessionScope.full
+            && phone.bound(generation: generation) == nil && !phoneSync.querying(generation: generation) && !oauth.busy
+    }
+
+    /// 此刻有需要手机号（或实名）的待办。
+    private var phonePendingWaiting: Bool {
+        guard let route = routing.router.pendingRouteName, let auth = Routes.all[route]?.auth else { return false }
+        return auth == "phone" || auth == "realname"
+    }
+
     /// 恢复手机号级待办前先查当前会话的 phone_bound（共性第 2、8 条）：有 full 会话、状态未知、有需要手机号（或实名）的待办、没有在查、
     /// 本会话没有失败过时查一次；查清后经启动协调按 Router 守卫恢复（已绑 → 执行；未绑 → 保留，不自动拉起绑手机页）；失败保留待办。
     func ensurePhoneBindingKnown() {
         let generation = client.sessionGeneration
-        guard routing.privacy.routerPrivacy == .consented, client.isolatedSessionScope == Session.SessionScope.full,
-              phone.bound(generation: generation) == nil, !phoneSync.querying(generation: generation), !oauth.busy,
-              phoneQueryFailed != generation, let route = routing.router.pendingRouteName,
-              let auth = Routes.all[route]?.auth, auth == "phone" || auth == "realname"
+        guard phoneSyncAllowed(generation: generation), phoneQueryFailed != generation, phonePendingWaiting
         else { return }
         phoneSync.query { [weak self] outcome in
             guard let self else { return }
@@ -215,6 +225,25 @@ extension AppLogin {
             case .stale:
                 break
             }
+        }
+    }
+
+    /// 冷启动 / 会话恢复后无待办也同步一次 phone_bound（FU-IOS-PHONE-BINDING-COLDSTART，D10-2676 方案 B）：钱包以外的入口直接开
+    /// phone / realname 路由时守卫就不会因「未知」先推绑手机页。前提同 ensurePhoneBindingKnown、不要求待办；每个会话世代最多
+    /// 发起一次（发起时就记，成功失败都不再发；42901 读截止期内 PhoneBindingSync 不发、按失败算），失败不写 phoneQueryFailed
+    /// （之后有待办时 ensure 仍按原行为查一次）。查询期间 ensure 被「在查」挡住，所以回包已查清且此刻有手机号级待办时由这里经启动
+    /// 协调恢复。
+    /// 已知限制（D10-2676）：查询回来之前点资金入口仍会先推绑手机页再自弹。
+    func syncPhoneBindingIfUnknown() {
+        let generation = client.sessionGeneration
+        guard phoneSyncAttempted != generation, phoneSyncAllowed(generation: generation), phoneQueryFailed != generation
+        else { return }
+        phoneSyncAttempted = generation
+        phoneSync.query { [weak self] outcome in
+            guard let self, case .bound = outcome else { return }
+            // 失败不重试、不写 phoneQueryFailed；换代回包是 .stale，不做事
+            guard phonePendingWaiting else { return }
+            routing.launchConditionsChanged()
         }
     }
 
