@@ -40,11 +40,19 @@ class PhoneBindingColdStartSyncTestCase: MeTestCase {
 
     /// 冷启动：GET /v1/me 按 `reply` 回答（nil = MeTestCase 缺省的 phone_bound:true），存储未知，夹具内已跑过一次启动协调。
     func coldStart(_ reply: WalletStubProtocol.Reply? = nil, account: String? = "user-a", scope: String = "full",
-                   decision: String = "consented") -> MeAppFixture {
+                   decision: String = "consented",
+                   update: StubUpdateChecker = StubUpdateChecker(.success(UpdateFixtures.ok))) -> MeAppFixture {
         if let reply {
             script.on("GET /v1/me", reply)
         }
-        return make(account: account, scope: scope, decision: decision, phoneKnown: false)
+        return make(account: account, scope: scope, decision: decision, update: update, phoneKnown: false)
+    }
+
+    /// 受限会话屏障的刷新回 full（同 LoginReviewR1Tests.refreshFull）。强更检查有结论后 ApiClient 才发这次刷新，所以受限期的用例
+    /// 用 `StubUpdateChecker(nil)` 建夹具、核对完受限期再 `deliver`，刷新经 sessionRefreshed → sessionStateChanged 生产路径变 full。
+    func scriptBarrierRefreshToFull() {
+        let body = "{\"access_token\":\"at-2\",\"refresh_token\":\"rt-2\",\"session_scope\":\"full\"}"
+        script.ok("POST /v1/auth/refresh", body)
     }
 
     func phoneBound(_ fixture: MeAppFixture) -> Bool? {

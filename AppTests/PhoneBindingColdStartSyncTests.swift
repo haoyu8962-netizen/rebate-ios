@@ -117,29 +117,47 @@ final class PhoneBindingColdStartSyncTests: PhoneBindingColdStartSyncTestCase {
         XCTAssertEqual(queries(fixture), 1, "\(name) 查清后不再查。\(describe(fixture))")
     }
 
+    /// 冷启动的 deletion_only 会话在强更检查有结论后由 ApiClient 的受限会话屏障刷新成 full（夹具不能长期保持受限，LoginReviewR1Tests
+    /// R1-02 同一时序）。按实际时序断言：检查结论到达前（受限期）启动协调与会话同步都不发；屏障刷新成 full 之后恰好同步一次，且在刷新之后发。
     private func assertRestrictedThenFullSyncsOnce() async throws {
         let name = "[COLDSTART#4·deletion_only]"
-        let fixture = coldStart(Self.boundTrue, scope: SessionScope.deletionOnly)
+        // 前面游客那段发过 GET /v1/me：清空假服务记录，本段按自己的请求清单判
+        WalletStubProtocol.reset()
+        script.install()
+        let checker = StubUpdateChecker(nil)
+        scriptBarrierRefreshToFull()
+        let fixture = coldStart(Self.boundTrue, scope: SessionScope.deletionOnly, update: checker)
         fixture.routing.launchConditionsChanged()
         fixture.routing.sessionStateChanged(resumePending: false)
         await quietWindow(0.6)
-        XCTAssertEqual(queries(fixture), 0, "\(name) 受限会话不发起同步。\(describe(fixture))")
         XCTAssertEqual(fixture.client.isolatedSessionScope, SessionScope.deletionOnly, "\(name) 前提：仍是受限会话")
-        try fixture.tokens.save(access: "at-r", refresh: "rt-r", scope: SessionScope.full, account: "user-a")
-        fixture.routing.sessionStateChanged(resumePending: false)
-        await waitQueriesSettled(fixture, 1, "\(name) 刷新成 full 后会话同步没有恰好同步一次")
+        XCTAssertEqual(queries(fixture), 0, "\(name) 受限会话不发起同步。\(describe(fixture))")
+        XCTAssertEqual(meHttp, 0, "\(name) 受限期不发 GET /v1/me。\(describe(fixture))")
+        checker.deliver(.success(UpdateFixtures.ok))
+        await waitUntil("\(name) 屏障刷新没有变 full。\(describe(fixture))") {
+            fixture.client.isolatedSessionScope == SessionScope.full
+        }
+        await waitQueriesSettled(fixture, 1, "\(name) 刷新成 full 后没有恰好同步一次")
         XCTAssertEqual(phoneBound(fixture), true, "\(name) 写回已绑。\(describe(fixture))")
+        let refresh = try XCTUnwrap(requests("POST", "/v1/auth/refresh").first?.id, "\(name) 前提：发过屏障刷新")
+        let me = requests("GET", "/v1/me").map(\.id)
+        XCTAssertEqual(me.count, 1, "\(name) 恰好一次 GET /v1/me。\(describe(fixture))")
+        XCTAssertTrue(me.allSatisfy { $0 > refresh }, "\(name) GET /v1/me 在刷新成 full 之后。\(describe(fixture))")
     }
 
     private func assertReadGateBlocksSync() async throws {
         let name = "[COLDSTART#6·42901 读取截止期]"
         WalletStubProtocol.reset()
         script.install()
-        let fixture = coldStart(Self.boundTrue, scope: SessionScope.deletionOnly)
+        let checker = StubUpdateChecker(nil)
+        scriptBarrierRefreshToFull()
+        let fixture = coldStart(Self.boundTrue, scope: SessionScope.deletionOnly, update: checker)
         fixture.login.phoneSync.readGate = fixture.me.gates.read
         fixture.me.gates.read.start(60000)
-        try fixture.tokens.save(access: "at-g", refresh: "rt-g", scope: SessionScope.full, account: "user-a")
-        fixture.routing.sessionStateChanged(resumePending: false)
+        checker.deliver(.success(UpdateFixtures.ok))
+        await waitUntil("\(name) 前提：屏障刷新没有变 full。\(describe(fixture))") {
+            fixture.client.isolatedSessionScope == SessionScope.full
+        }
         fixture.routing.launchConditionsChanged()
         await quietWindow(0.6)
         XCTAssertEqual(meHttp, 0, "\(name) 截止期内不发 GET /v1/me。\(describe(fixture))")
