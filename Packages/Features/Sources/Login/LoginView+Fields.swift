@@ -46,7 +46,7 @@ extension LoginView {
             CouliFlowLayout(horizontalSpacing: 0, verticalSpacing: 0) {
                 Button(action: model.toggleAgreement) {
                     HStack(spacing: CouliSpacing.s3) {
-                        CheckBox(checked: model.agreed)
+                        CouliCheckGlyph(checked: model.agreed)
                         Text(verbatim: text(LoginKeys.agreePrefix))
                             .couliFont(.footnote)
                             .foregroundColor(CouliColor.textSecondary)
@@ -76,7 +76,7 @@ extension LoginView {
                 .couliFont(.footnote)
                 .foregroundColor(CouliColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, CheckBox.side + CouliSpacing.s3)
+                .padding(.leading, CouliCheckGlyph.baseSize + CouliSpacing.s3)
                 .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

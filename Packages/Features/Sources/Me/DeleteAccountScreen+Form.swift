@@ -100,9 +100,9 @@ extension DeleteAccountBody {
         let enabled = view.waiverEnabled
         return Button(action: actions.toggleWaiver) {
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
-                Image(systemName: on ? "checkmark.square.fill" : "square")
-                    .foregroundColor(on ? CouliColor.brandPrimary : CouliColor.borderControl)
-                    .accessibilityHidden(true)
+                // 组件库圆形勾选（与登录、收款同一件）；首行居中对齐靠上边距
+                CouliCheckGlyph(checked: on, enabled: enabled)
+                    .padding(.top, 1.5)
                 bodyText(texts.text("deletion.waiver"))
             }
             .frame(maxWidth: .infinity, minHeight: CouliHitTarget.minimum, alignment: .leading)

@@ -3,29 +3,6 @@ import SwiftUI
 
 // MARK: - 小件
 
-/// 复选框（20×20，随字号略放大）。
-struct CheckBox: View {
-    static let side: CGFloat = 20
-    let checked: Bool
-    @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = CheckBox.side
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous)
-                .fill(checked ? CouliColor.brandPrimary : CouliColor.backgroundSurface)
-            RoundedRectangle(cornerRadius: CouliRadius.small, style: .continuous)
-                .strokeBorder(checked ? Color.clear : CouliColor.borderControl, lineWidth: 1.5)
-            if checked {
-                Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.6, weight: .bold))
-                    .foregroundColor(CouliColor.textInverse)
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
 /// 协议链接（共性 6、8）：独立的 44pt 命中区（宽、高都不小于命中区下限），读屏为链接。
 struct AgreementLinkButton: View {
     let title: String

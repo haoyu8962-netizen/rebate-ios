@@ -198,7 +198,7 @@ struct CheckRow: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: CouliSpacing.s3) {
-                CheckMark(checked: checked)
+                CouliCheckGlyph(checked: checked)
                     .walletProbe(probe + ".mark", role: "check")
                     .padding(.top, 1.5)
                 RecordText(title, style: .footnote, color: CouliColor.textPrimary, probe: probe + ".text")
@@ -213,25 +213,5 @@ struct CheckRow: View {
         .accessibilityLabel(Text(verbatim: spoken ?? title))
         .accessibilityAddTraits(checked ? [.isSelected, .isButton] : .isButton)
         .accessibilityIdentifier(identifier)
-    }
-}
-
-/// 圆形勾选（设计稿 RealNameConsent-v2 / LaborAgreement-v2：未勾 1.5 控件边空心圆，勾选品牌色实心 + 白勾）。
-struct CheckMark: View {
-    let checked: Bool
-    @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 18
-
-    var body: some View {
-        ZStack {
-            Circle().fill(checked ? CouliColor.brandPrimary : CouliColor.backgroundSurface)
-            Circle().strokeBorder(checked ? CouliColor.brandPrimary : CouliColor.borderControl, lineWidth: 1.5)
-            if checked {
-                Image(systemName: "checkmark")
-                    .font(.system(size: size / 2, weight: .bold))
-                    .foregroundColor(CouliColor.backgroundSurface)
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
     }
 }
