@@ -71,6 +71,11 @@ final class LoginReviewR2Tests: XCTestCase {
         let routing = AppRouting(environment: environment, privacy: privacy, update: update)
         let login = AppLogin(network: network, routing: routing, update: update)
         network.attach(environment: environment, privacy: privacy, update: update)
+        // FU-IOS-PHONE-BINDING-COLDSTART：冷启动同步多一次 GET /v1/me（D10-2676），#24 待批——预置的已登录会话是短信登录账号
+        // （一定绑了手机号），照 MeAppFixture / OrdersAppFixture 先记已绑，冷启动不发同步；游客不记
+        if network.client.isolatedAccount != nil {
+            login.phone.record(true, generation: network.client.sessionGeneration)
+        }
         routing.shellAppeared()
         return Fixture(network: network, routing: routing, login: login)
     }
