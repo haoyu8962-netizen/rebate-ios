@@ -101,7 +101,7 @@ extension DeleteAccountBody {
         return Button(action: actions.toggleWaiver) {
             HStack(alignment: .top, spacing: CouliSpacing.s2) {
                 // 组件库圆形勾选（与登录、收款同一件）；首行居中对齐靠上边距
-                CouliCheckGlyph(checked: on, enabled: enabled)
+                CouliCheckGlyph(checked: on)
                     .padding(.top, 1.5)
                 bodyText(texts.text("deletion.waiver"))
             }
