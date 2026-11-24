@@ -234,26 +234,6 @@ final class LockIos6c97062SensitiveOperationTests: XCTestCase {
 
     // MARK: - ④ ⑤ 【确认上一笔】两个入口；带头仍按 stepUp
 
-    /// 首次发送：调用方都给了令牌——提现不带 X-Step-Up-Token（stepUp 为 nil），另外 3 项照常带。
-    func testFirstSendCarriesStepUpTokenOnlyForStepUpOperations() async throws {
-        for item in Self.sensitive {
-            let harness = makeHarness()
-            StubURLProtocol.install { _ in ok() }
-            let result = await harness.client.send(
-                ApiCall(operationId: item.operationId, body: item.body, stepUpToken: "step-up-1")
-            )
-            XCTAssertTrue(result.isSuccess, "\(item.operationId)：\(result)")
-            let sent = try XCTUnwrap(StubURLProtocol.requests(path: item.path).first, item.operationId)
-            XCTAssertNotNil(sent.header("Idempotency-Key"), item.operationId)
-            if item.stepUp == nil {
-                XCTAssertNil(sent.header("X-Step-Up-Token"), "\(item.operationId)：提现不带二次验证令牌")
-            } else {
-                XCTAssertEqual(sent.header("X-Step-Up-Token"), "step-up-1", "\(item.operationId)：回归，照常带")
-            }
-            XCTAssertFalse(sent.body.contains("step-up-1"), "\(item.operationId)：令牌不进请求体")
-        }
-    }
-
     /// 结果未知 → 两个确认入口都接受（不是本地 invalid_call），原键原体只发一次；提现不带令牌，另外 3 项带确认时给的令牌；成功后记录清除。
     func testConfirmPendingWorksOnBothEntries() async throws {
         for item in Self.sensitive {
@@ -294,6 +274,51 @@ final class LockIos6c97062SensitiveOperationTests: XCTestCase {
             XCTAssertEqual(effect.pendingKeyUnknown, true, item.operationId)
             XCTAssertEqual(harness.pending.state(key: key).stateRaw, PendingKeyStore.unknown, item.operationId)
         }
+    }
+
+    /// 安卓 review-r1 S3-1 对照：带头这道门（ApiClient+Prepare callHeaders）必须仍按 stepUp，不得改成 sensitiveOperation 或去掉条件。
+    /// 调用方**显式**传了 stepUpToken（非空）：提现的首发、【确认上一笔】两个入口都不带 X-Step-Up-Token，任何请求头里都没有这个值；
+    /// 改收款、换手机号、注销三项传了照常带（回归钉）。令牌缓存不参与（网络层直接收参数），头为空只能是这道门挡下的。
+    func testExplicitStepUpTokenIsSentOnlyForStepUpOperations() async throws {
+        let token = "explicit-step-up-token"
+        for item in Self.sensitive {
+            // 首发
+            let harness = makeHarness()
+            StubURLProtocol.install { _ in ok() }
+            let first = await harness.client.send(
+                ApiCall(operationId: item.operationId, body: item.body, stepUpToken: token)
+            )
+            XCTAssertTrue(first.isSuccess, "\(item.operationId) 首发：\(first)")
+            let sent = try XCTUnwrap(StubURLProtocol.requests(path: item.path).first, item.operationId)
+            XCTAssertNotNil(sent.header("Idempotency-Key"), item.operationId)
+            assertStepUpHeader(sent, item, token, "\(item.operationId) 首发")
+
+            // 【确认上一笔】两个入口
+            for entry in Entry.allCases {
+                let pending = makeHarness()
+                let key = try await makeUnknown(pending, item)
+                StubURLProtocol.install { _ in ok() }
+                let label = "\(item.operationId) 确认 / \(entry)"
+                let result = await confirm(pending, item, key: key, via: entry, stepUpToken: token)
+                XCTAssertTrue(result.isSuccess, "\(label)：\(result)")
+                let resent = try XCTUnwrap(StubURLProtocol.requests(path: item.path).first, label)
+                XCTAssertEqual(resent.header("Idempotency-Key"), key, "\(label)：原键")
+                assertStepUpHeader(resent, item, token, label)
+            }
+        }
+    }
+
+    private func assertStepUpHeader(
+        _ sent: StubURLProtocol.Recorded, _ item: Case, _ token: String, _ label: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        if item.stepUp == nil {
+            XCTAssertNil(sent.header("X-Step-Up-Token"), "\(label)：提现不带二次验证令牌", file: file, line: line)
+            XCTAssertFalse(sent.headers.values.contains(token), "\(label)：任何请求头里都没有这个令牌", file: file, line: line)
+        } else {
+            XCTAssertEqual(sent.header("X-Step-Up-Token"), token, "\(label)：回归，照常带", file: file, line: line)
+        }
+        XCTAssertFalse(sent.body.contains(token), "\(label)：令牌不进请求体", file: file, line: line)
     }
 
     // MARK: - 20903

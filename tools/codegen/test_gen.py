@@ -438,6 +438,32 @@ class SensitiveOperationProbe(unittest.TestCase):
                 self.shaped(change)
                 self.assert_gen_error(label)
 
+    @staticmethod
+    def builtin_abandon_tables() -> list[str]:
+        """gen.py 里内容等于「操作 → 放弃 action」表的模块级字典的名字（不绑实现取的常量名）。"""
+        return [name for name, value in vars(gen).items() if isinstance(value, dict) and value == SENSITIVE_ABANDON]
+
+    def test_abandon_table_swapped_values_fail(self):
+        # 安卓 review-r1 S3-2：键集合、值集合都不变的「两项对调」，集合层面的核对抓不到，生成器自己要 fail-closed
+        # （例如有 x-step-up 的操作要求它等于 abandonAction，或把 abandonIdempotencyKey 说明解析成 action → 方法 路径再核）。
+        names = self.builtin_abandon_tables()
+        self.assertEqual(len(names), 1, f"gen.py 里应恰有一张内置放弃表（模块级字典，内容等于 {SENSITIVE_ABANDON}），实际 {names}")
+        name = names[0]
+        original = getattr(gen, name)
+        for first, second in (("createWithdrawal", "savePayoutAccount"), ("bindPhone", "requestDeletion")):
+            with self.subTest(swap=(first, second)):
+                self.reset_snapshot()
+                self.shaped()
+                swapped = dict(original)
+                swapped[first], swapped[second] = original[second], original[first]
+                self.assertEqual(set(swapped), set(original), "前提：键集合不变")
+                self.assertEqual(set(swapped.values()), set(original.values()), "前提：值集合不变")
+                setattr(gen, name, swapped)
+                try:
+                    self.assert_gen_error(f"内置表 {first} ↔ {second} 对调")
+                finally:
+                    setattr(gen, name, original)
+
     def reset_snapshot(self):
         self.tearDown()
         self.setUp()
