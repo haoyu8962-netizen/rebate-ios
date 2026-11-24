@@ -18,7 +18,8 @@ import XCTest
 /// 半屏上发码 / 填码 / 验证）→ 假服务 10003 → 生产代码弹半屏。测试只控制网络答复，不伪造面板状态；不依赖 PhoneChangeScreen 的视图层级，
 /// 半屏只按读屏标识 / 探针 `stepUp.title` 与宿主的 presentedViewController 判定。进程内点不到 SwiftUI 按钮，同提现 / 注销真点用例的约定。
 ///
-/// 另一条对照：同一组合里的提现页半屏照旧（action=withdraw、资金安全标题、原键原体重放 1 次）。
+/// 另一条对照：同一组合里的收款账号页半屏照旧（action=payout_account_change、资金安全标题、原键原体重放 1 次）；提现页升锁 6c97062 起
+/// 不再要求二次验证（D10-2903 ① 甲），改钉「只发一次、不出半屏」。
 @MainActor
 final class App13a2StepUpTapTests: App13a2TestCase {
     private var window: UIWindow?
@@ -140,10 +141,10 @@ final class App13a2StepUpTapTests: App13a2TestCase {
         XCTAssertNotEqual(title, WalletDraftTexts().text("error.10003"), "不是提现 / 改收款的资金安全标题")
     }
 
-    /// 对照（零变化）：同一组合里提现页（生产路由视图 WalletRouteView）提交 10003 → 半屏 action=withdraw、资金安全标题（error.10003）、
-    /// 发码体照旧；验证后原键原体重放 1 次。
-    func testWithdrawSheetUnchanged() async throws {
-        script.on("POST /v1/withdrawals", Self.code(10003), Self.code(0, WalletSamples.withdrawal("W-tap")))
+    /// 对照（升锁 6c97062，D10-2903 ① 甲：提现不再要求二次验证）：同一组合里提现页（生产路由视图 WalletRouteView）提交 → 只发一次、首次那把键、
+    /// 不带 token，不发码、不验证，不出半屏，落地提现记录。原「半屏 action=withdraw、资金安全标题、发码体、原键原体重放带 token」挪到改收款：
+    /// testPayoutSheetUnchanged；「提现验证不带 summary」挪不过去（改收款必须带 summary，已另有用例钉住）。
+    func testWithdrawSubmitsOnceWithoutSheet() async throws {
         let fixture = fixture()
         fixture.wallet.realnameChanged()
         await waitUntil("实名状态没取到") { fixture.wallet.realnameVerified() }
@@ -160,26 +161,63 @@ final class App13a2StepUpTapTests: App13a2TestCase {
             }
             return controller.state.estimate == .hidden
         }
+        let stepUp = controller.flow.stepUp
+        closeOnTeardown(stepUp)
         WithdrawActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id).submit()
+
+        let posts = { WalletStubProtocol.requests("POST", "/v1/withdrawals") }
+        await waitUntil("提现没有落地", timeout: 8) {
+            fixture.router.path.last?.route == WalletRoutes.withdrawRecords
+        }
+        await quietWindow(0.6)
+        XCTAssertNil(window?.rootViewController?.presentedViewController, "不出半屏")
+        XCTAssertNil(stepUp.state, "不出面板")
+        XCTAssertTrue(sent(Self.smsSend).isEmpty, "不发码")
+        XCTAssertTrue(sent(Self.stepUpVerify).isEmpty, "不验证")
+        XCTAssertEqual(posts().count, 1, "只发一次")
+        XCTAssertNotNil(posts().first?.header("Idempotency-Key"))
+        XCTAssertNil(posts().first?.header("X-Step-Up-Token"))
+    }
+
+    /// 对照（零变化，由提现挪来）：同一组合里收款账号页（生产路由视图 WalletRouteView）保存 10003 → 半屏 action=payout_account_change、
+    /// 资金安全标题（error.10003）、发码体只有 action + purpose；验证后原键原体重放 1 次、带 token。
+    func testPayoutSheetUnchanged() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.on("PUT /v1/me/payout-account", Self.code(10003), Self.code(0, WalletSamples.alipay))
+        let fixture = fixture()
+        fixture.wallet.realnameChanged()
+        await waitUntil("实名状态没取到") { fixture.wallet.realnameVerified() }
+        fixture.router.open(RouteRequest(route: WalletRoutes.payoutAccount, from: .inApp))
+        let destination = try XCTUnwrap(
+            fixture.router.path.last { $0.route == WalletRoutes.payoutAccount }, "收款账号页没有打开"
+        )
+        mount(WalletRouteView(destination: destination).environmentObject(fixture.wallet))
+        let controller = try XCTUnwrap(fixture.wallet.entry(for: destination)?.controller as? PayoutAccountController)
+        controller.start()
+        await waitUntil("收款账号没有到位") { controller.state.phase != .loading }
+        let actions = { PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id) }
+        actions().logon("zhangsan@example.com")
+        actions().payee("测试三")
+        actions().save()
 
         let stepUp = controller.flow.stepUp
         closeOnTeardown(stepUp)
-        await waitUntil("提现半屏没有打开", timeout: 8) { stepUp.state?.phase == .ready }
-        XCTAssertEqual(stepUp.state?.action, "withdraw", "(零变化) action = withdraw")
+        await waitUntil("改收款半屏没有打开", timeout: 8) { stepUp.state?.phase == .ready }
+        XCTAssertEqual(stepUp.state?.action, "payout_account_change", "(零变化) action = payout_account_change")
         let sms = try XCTUnwrap(sent(Self.smsSend).last)
-        XCTAssertEqual(sms.body, "{\"action\":\"withdraw\",\"purpose\":\"step_up\"}", "(零变化) 发码体")
-        await waitUntil("提现半屏没有呈现", timeout: 8) { self.window?.rootViewController?.presentedViewController != nil }
-        await waitUntil("提现半屏标题没有上报", timeout: 8) { self.probes["stepUp.title"] != nil }
+        XCTAssertEqual(sms.body, "{\"action\":\"payout_account_change\",\"purpose\":\"step_up\"}", "(零变化) 发码体")
+        await waitUntil("改收款半屏没有呈现", timeout: 8) {
+            self.window?.rootViewController?.presentedViewController != nil
+        }
+        await waitUntil("改收款半屏标题没有上报", timeout: 8) { self.probes["stepUp.title"] != nil }
         XCTAssertEqual(probes["stepUp.title"]?.text, WalletDraftTexts().text("error.10003"), "(零变化) 资金安全标题")
 
         StepUpActions.make(stepUp, try XCTUnwrap(stepUp.state)).code("123456")
         StepUpActions.make(stepUp, try XCTUnwrap(stepUp.state)).verify()
-        let posts = { WalletStubProtocol.requests("POST", "/v1/withdrawals") }
-        await waitUntil("提现没有重放", timeout: 8) { posts().count == 2 }
-        XCTAssertEqual(posts()[1].header("Idempotency-Key"), posts()[0].header("Idempotency-Key"), "(零变化) 原键")
-        XCTAssertEqual(posts()[1].body, posts()[0].body, "(零变化) 原体")
-        XCTAssertNotNil(posts()[1].header("X-Step-Up-Token"), "(零变化) 带 token")
-        XCTAssertEqual(Set(try XCTUnwrap(sent(Self.stepUpVerify).last).json.keys), ["action", "code"],
-                       "(零变化) 提现验证不带 summary")
+        let saves = { WalletStubProtocol.requests("PUT", "/v1/me/payout-account") }
+        await waitUntil("改收款没有重放", timeout: 8) { saves().count == 2 }
+        XCTAssertEqual(saves()[1].header("Idempotency-Key"), saves()[0].header("Idempotency-Key"), "(零变化) 原键")
+        XCTAssertEqual(saves()[1].body, saves()[0].body, "(零变化) 原体")
+        XCTAssertNotNil(saves()[1].header("X-Step-Up-Token"), "(零变化) 带 token")
     }
 }

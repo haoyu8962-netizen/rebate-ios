@@ -47,22 +47,38 @@ final class StepUpVisualMoneyTests: StepUpVisualTestCase {
 
     // MARK: - 重放
 
-    /// 提现：显式验证恰一次 → 原键、原体重放恰一次，带 token；发码恰一次；只导航一次。
-    func testVerifyReplaysOriginalKeyOnceOnWithdraw() async throws {
-        let host = try await panelOnWithdraw()
-        host.server.script.on("POST /v1/auth/step-up", Self.stepOk())
-        try enterCode("123456")
-        try panelActions().verify()
+    /// 提现（升锁 6c97062，D10-2903 ① 甲：提现不再要求二次验证）：【提交】只写一次提现，不发码、不验证，不带 token，面板从没打开；落地一次。
+    /// 原「验证恰一次 → 原键原体重放恰一次带 token、写序列、面板收起」挪到改收款：testVerifyReplaysOriginalKeyOnceOnPayoutWriteSequence。
+    func testSubmitWritesOnceWithoutStepUpOnWithdraw() async throws {
+        let (host, _) = try await openWithdraw(amount: "10", estimate: "estimated", needProbes: false)
+        let flow = try XCTUnwrap(host.flow, "提现页执行器不在")
+        host.actions?.submit()
         await waitUntil("没有落地") { host.fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
         await settle()
-        XCTAssertEqual(writes, ["POST /v1/withdrawals", "POST /v1/auth/sms-codes", "POST /v1/auth/step-up",
-                                "POST /v1/withdrawals"], "写序列")
-        XCTAssertEqual(submits[0].header("Idempotency-Key"), submits[1].header("Idempotency-Key"), "原键")
-        XCTAssertNotNil(submits[0].header("Idempotency-Key"))
-        XCTAssertEqual(submits[0].json as NSDictionary, submits[1].json as NSDictionary, "原体")
-        XCTAssertNil(submits[0].header("X-Step-Up-Token"))
-        XCTAssertEqual(submits[1].header("X-Step-Up-Token"), "fixture-verified-token")
-        XCTAssertNil(host.flow?.stepUp.state, "面板收起")
+        XCTAssertEqual(writes, ["POST /v1/withdrawals"], "写序列：只有一次提现")
+        XCTAssertEqual(submits.count, 1)
+        XCTAssertNotNil(submits.first?.header("Idempotency-Key"))
+        XCTAssertNil(submits.first?.header("X-Step-Up-Token"))
+        XCTAssertNil(flow.stepUp.state, "面板从没打开")
+    }
+
+    /// 收款账号（由提现挪来，D10-2911）：显式验证恰一次 → 写序列为保存、发码、验证、原键重放；原键、原体重放恰一次，带 token；面板收起。
+    func testVerifyReplaysOriginalKeyOnceOnPayoutWriteSequence() async throws {
+        let host = try await panelOnPayout()
+        host.server.script.on("POST /v1/auth/step-up", Self.stepOk())
+        let flow = try XCTUnwrap(host.flow, "收款账号页执行器不在")
+        try enterCode("123456")
+        try panelActions().verify()
+        await waitUntil("没有重放") { self.saves.count == 2 }
+        await settle()
+        XCTAssertEqual(writes, ["PUT /v1/me/payout-account", "POST /v1/auth/sms-codes", "POST /v1/auth/step-up",
+                                "PUT /v1/me/payout-account"], "写序列")
+        XCTAssertEqual(saves[0].header("Idempotency-Key"), saves[1].header("Idempotency-Key"), "原键")
+        XCTAssertNotNil(saves[0].header("Idempotency-Key"))
+        XCTAssertEqual(saves[0].json as NSDictionary, saves[1].json as NSDictionary, "原体")
+        XCTAssertNil(saves[0].header("X-Step-Up-Token"))
+        XCTAssertEqual(saves[1].header("X-Step-Up-Token"), "fixture-verified-token")
+        XCTAssertNil(flow.stepUp.state, "面板收起")
     }
 
     /// 收款账号：同上。

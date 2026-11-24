@@ -34,32 +34,27 @@ final class WithdrawSubmitTests: WalletFlowTestCase {
         XCTAssertEqual(controller.state.announce?.key, "withdraw.submitted_spoken")
     }
 
-    /// 10003 → 二次验证面板：打开即发码（phone、purpose=step_up、action=withdraw）；验证成功后沿用原键重放 1 次并带 X-Step-Up-Token；
-    /// token 只在内存，重放成功后丢弃。
-    func testStepUpReplaysSameKeyWithToken() async throws {
-        script.on(
-            "POST /v1/withdrawals", .envelope(code: 10003, data: "null", headers: [:]),
-            .envelope(code: 0, data: WalletSamples.withdrawal("W-step"), headers: [:])
-        )
+    /// 升锁 6c97062（B1-02zzzc #385，D10-2903 ① 甲）：提现不再要求二次验证（契约 createWithdrawal 没有 x-step-up，x-error-codes 没有
+    /// 10003，服务端不再回 10003）。提交只发一次，键与请求体就是首次那份，不带 X-Step-Up-Token，不发码、不验证、不出面板。
+    /// 原「10003 → 面板 → 同键带令牌重放、成功后丢弃令牌」的资金断言原样挪到改收款账号：
+    /// LockIos6c97062PayoutStepUpReplayTests.testStepUpReplaysSameKeyWithToken。
+    func testSubmitSendsOnceWithoutStepUp() async throws {
         let fixture = make()
         let controller = try await withdraw(fixture)
         await typeAmount(controller, "10")
         actions(controller).submit()
-        try await passStepUp(controller.flow.stepUp)
         await waitUntil("没有进提现记录") { fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
-        let sms = try XCTUnwrap(WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").first?.json)
-        XCTAssertEqual(sms["purpose"] as? String, "step_up")
-        XCTAssertEqual(sms["action"] as? String, "withdraw")
-        XCTAssertNil(sms["phone"]) // modify_existing ruling D10-1682 ③（发码体不带 phone）
-        let verify = try XCTUnwrap(WalletStubProtocol.requests("POST", "/v1/auth/step-up").first?.json)
-        XCTAssertEqual(verify["action"] as? String, "withdraw")
-        XCTAssertEqual(posts.count, 2)
-        XCTAssertEqual(posts[0].header("Idempotency-Key"), posts[1].header("Idempotency-Key"), "沿用原键")
-        XCTAssertEqual(posts[0].body, posts[1].body, "沿用原请求体")
-        XCTAssertNil(posts[0].header("X-Step-Up-Token"))
-        XCTAssertEqual(posts[1].header("X-Step-Up-Token"), "fixture-step-up")
-        XCTAssertNil(posts[1].json["step_up_token"], "token 不进请求体")
-        XCTAssertNil(fixture.wallet.deps.tokens.take(action: "withdraw", account: "user-a", nowMs: 0), "成功后丢弃")
+        await settle()
+        XCTAssertTrue(WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").isEmpty, "不发码")
+        XCTAssertTrue(WalletStubProtocol.requests("POST", "/v1/auth/step-up").isEmpty, "不验证")
+        XCTAssertEqual(posts.count, 1, "只发一次")
+        let post = try XCTUnwrap(posts.first)
+        XCTAssertNotNil(post.header("Idempotency-Key"), "首次那把键")
+        XCTAssertEqual(post.json["amount_fen"] as? Int, 1000)
+        XCTAssertEqual(post.json.count, 1, "首次那份请求体：只有 amount_fen")
+        XCTAssertNil(post.header("X-Step-Up-Token"))
+        XCTAssertNil(post.json["step_up_token"], "token 不进请求体")
+        XCTAssertNil(controller.flow.stepUp.state, "不出面板")
     }
 
     /// 重放预算至多一次（共性第 16 条）：二次验证后仍 10003 → 不再弹面板，提示 error.10003，首次提交的键结束（下次新键）。

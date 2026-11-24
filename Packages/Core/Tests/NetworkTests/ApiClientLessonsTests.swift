@@ -9,6 +9,7 @@ import XCTest
 /// 全部对 URLProtocol 本地假服务；需要「请求在途时」插入动作的，在桩的处理函数里做（桩在后台线程同步执行）。
 final class ApiClientLessonsTests: XCTestCase {
     private let withdrawal = "{\"amount\":1000,\"payout_account_id\":\"pa-1\"}"
+    private let payout = "{\"payout_method\":\"alipay\", \"logon_id\":\"13800005678\",\"payee_name\":\"测试三\"}"
 
     private func withdraw(_ harness: Harness, stepUp: String? = "step-up-1") async -> ApiResult {
         await harness.client.send(ApiCall(operationId: "createWithdrawal", body: withdrawal, stepUpToken: stepUp))
@@ -45,28 +46,64 @@ final class ApiClientLessonsTests: XCTestCase {
         XCTAssertTrue(StubURLProtocol.requests.isEmpty)
     }
 
-    // MARK: - 10：结果未知后 10003，二次验证后同键同体继续
+    // MARK: - 10：结果未知期间不换键；提现确认只发一次、不带令牌；改收款结果未知后 10003，二次验证后同键同体继续
 
-    func testUnknownThen10003ContinuesWithSameKeyAndBodyAfterStepUp() async throws {
+    /// 提现（升锁 6c97062，D10-2903 ① 甲）：结果未知期间不得换键新提交（提现仍是敏感操作，挂 sensitiveOperation）；【确认上一笔】用原键、原体
+    /// 只发一次，调用方即使给了令牌也不带 X-Step-Up-Token（带头仍按 stepUp，提现为 nil）；成功后记录清除。提现不会再收到 10003，原
+    /// 「确认得到 10003 → 二次验证 → 带令牌同键继续」挪到改收款：testUnknownThen10003ContinuesWithSameKeyAndBodyAfterStepUpOnPayout。
+    func testUnknownThenConfirmResendsSameKeyAndBodyWithoutStepUp() async throws {
         let harness = makeHarness()
         let key = try await makeUnknown(harness)
         let blocked = await harness.client.send(ApiCall(operationId: "createWithdrawal", body: "{\"amount\":1}"))
         XCTAssertEqual(blocked.rejectReason, LocalRejectReason.pendingKeyUnresolved, "结果未知期间不得换键新提交")
 
+        StubURLProtocol.install { _ in ok("{\"withdrawal_id\":\"w-1\"}") }
+        let resumed = await harness.client.confirmPending(operationId: "createWithdrawal", stepUpToken: "step-up-2")
+        XCTAssertTrue(resumed.isSuccess)
+        XCTAssertEqual(StubURLProtocol.requests.count, 1, "只发一次")
+        let sent = StubURLProtocol.requests[0]
+        XCTAssertEqual(sent.header("Idempotency-Key"), key)
+        XCTAssertEqual(sent.body, withdrawal)
+        XCTAssertNil(sent.header("X-Step-Up-Token"), "调用方给了令牌也不带：带头仍按 stepUp")
+        XCTAssertNil(harness.backend.read(account: "account-A", key: key))
+    }
+
+    /// 改收款账号保存超时：键进入结果未知；返回键。
+    private func makeUnknownPayout(_ harness: Harness) async throws -> String {
+        StubURLProtocol.install { _ in .error(.timedOut) }
+        let first = await harness.client.send(
+            ApiCall(operationId: "savePayoutAccount", body: payout, stepUpToken: "step-up-1")
+        )
+        guard case let .transportFailure(_, _, key, unknown) = first else {
+            XCTFail("\(first)")
+            throw NSError(domain: "lessons", code: 2)
+        }
+        XCTAssertTrue(unknown)
+        return try XCTUnwrap(key)
+    }
+
+    /// 改收款（由提现挪来，D10-2911）：结果未知后确认得到 10003 → 只同键继续、不登记、键仍未知；二次验证后带令牌同键同体继续，记录清除。
+    func testUnknownThen10003ContinuesWithSameKeyAndBodyAfterStepUpOnPayout() async throws {
+        let harness = makeHarness()
+        let key = try await makeUnknownPayout(harness)
+        let other = "{\"payout_method\":\"alipay\",\"logon_id\":\"13900001234\",\"payee_name\":\"测试四\"}"
+        let blocked = await harness.client.send(ApiCall(operationId: "savePayoutAccount", body: other))
+        XCTAssertEqual(blocked.rejectReason, LocalRejectReason.pendingKeyUnresolved, "结果未知期间不得换键新提交")
+
         StubURLProtocol.install { _ in fail(10003, status: 403) }
-        let confirm = await harness.client.confirmPending(operationId: "createWithdrawal")
+        let confirm = await harness.client.confirmPending(operationId: "savePayoutAccount")
         XCTAssertEqual(confirm.effect?.kind, .stepUp)
         XCTAssertEqual(confirm.effect?.replay, .sameKey)
         XCTAssertEqual(confirm.effect?.registerPending, false)
         XCTAssertEqual(confirm.effect?.pendingKeyUnknown, true)
         XCTAssertEqual(harness.pending.state(key: key).stateRaw, "unknown")
 
-        StubURLProtocol.install { _ in ok("{\"withdrawal_id\":\"w-1\"}") }
-        let resumed = await harness.client.confirmPending(operationId: "createWithdrawal", stepUpToken: "step-up-2")
+        StubURLProtocol.install { _ in ok() }
+        let resumed = await harness.client.confirmPending(operationId: "savePayoutAccount", stepUpToken: "step-up-2")
         XCTAssertTrue(resumed.isSuccess)
         let sent = StubURLProtocol.requests[0]
         XCTAssertEqual(sent.header("Idempotency-Key"), key)
-        XCTAssertEqual(sent.body, withdrawal)
+        XCTAssertEqual(sent.body, payout)
         XCTAssertEqual(sent.header("X-Step-Up-Token"), "step-up-2")
         XCTAssertNil(harness.backend.read(account: "account-A", key: key))
     }

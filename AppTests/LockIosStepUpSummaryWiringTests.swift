@@ -11,7 +11,8 @@ import XCTest
 ///   不带收款人姓名、开户行；10003 后沿用原幂等键只重放一次，带上令牌；
 /// - 确认上一笔（同进程 / 冷启动）：摘要由本机未决记录的原请求体推出；
 /// - 提现 stepUp 不带 summary；
-/// - 令牌缓存：改收款摘要相同才复用（不同、不带摘要的旧令牌都不带）；提现按同 action 复用。
+/// - 令牌缓存：改收款摘要相同才复用（不同、不带摘要的旧令牌都不带）；提现不带令牌（升锁 6c97062、D10-2903 ① 甲：带头仍按 stepUp，
+///   提现 stepUp 为 nil，缓存里残留旧提现令牌也不带）。
 final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
     static let need = WalletStubProtocol.Reply.envelope(code: 10003, data: "null", headers: [:])
     static let saved = WalletStubProtocol.Reply.envelope(code: 0, data: WalletSamples.alipay, headers: [:])
@@ -205,8 +206,9 @@ final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
         try await assertNotReused(token: "t-legacy", key: nil)
     }
 
-    /// 提现：缓存里同 action 的令牌（不带摘要）直接带上，不弹面板。
-    func testWithdrawCachedTokenIsReusedBySameAction() async throws {
+    /// 提现（升锁 6c97062，D10-2903 ① 甲）：缓存里残留同 action 的旧提现令牌（不带摘要）也不带——带 X-Step-Up-Token 仍按 stepUp，
+    /// 提现 stepUp 为 nil；只发一次，不验证、不弹面板。随 FU-IOS-WITHDRAW-STEPUP-PANEL-CLEANUP（提现不再取缓存令牌）改成「提现不取令牌」。
+    func testWithdrawCachedTokenIsNotSent() async throws {
         let fixture = make()
         script.on("POST /v1/withdrawals", .envelope(code: 0, data: WalletSamples.withdrawal("W-tok"), headers: [:]))
         let controller = try await withdraw(fixture)
@@ -214,7 +216,10 @@ final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
         await typeAmount(controller, "10")
         actions(controller).submit()
         await waitUntil("没有进提现记录") { fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
-        XCTAssertEqual(posts.first?.header("X-Step-Up-Token"), "t-w", "提现按同 action 复用")
+        await idle(controller.flow)
+        XCTAssertEqual(posts.count, 1, "只发一次")
+        XCTAssertNil(posts.first?.header("X-Step-Up-Token"), "缓存里有旧提现令牌也不带（带头仍按 stepUp）")
         XCTAssertTrue(verifies.isEmpty)
+        XCTAssertNil(controller.flow.stepUp.state, "不弹面板")
     }
 }

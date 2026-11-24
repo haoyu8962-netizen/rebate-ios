@@ -6,6 +6,8 @@
   R1-06 类型名与模板直接使用的 Swift 类型 / 协议（Decoder 等）冲突时加 Contract 前缀，模板写限定名；
   R1-07 case 名与生成器自带成员（allCases、rawValue、init、unknown…）冲突时改名，rawValue 保持原值。
   R2-02 j_s_o_n_decoder / any_object / int32 等标准库与 Foundation 名字加前缀，模板写模块限定名。
+  FU-IOS-CONTRACT-LOCK-6c97062 x-sensitive-operation 产出 sensitiveOperation / abandonAction；取值、一致性断言、
+  「操作 → 放弃 action」内置表缺项 / 多项都必须生成失败（SensitiveOperationProbe）。
 每个会生成代码的用例都对**全部**生成文件（含 DefaultTexts 与 SwiftPM 资源访问器）按 iOS 模拟器做类型检查；
 没有 swiftc 时失败，不跳过。
 """
@@ -259,6 +261,186 @@ class ProbeSnapshot(unittest.TestCase):
         self.assertNotRegex(files["DefaultConfig.swift"], r"https?://|example\\.test")
         self.typecheck(files)
 
+
+
+# ---- FU-IOS-CONTRACT-LOCK-6c97062：x-sensitive-operation 与「操作 → 放弃 action」内置表（D10-2892，gap.md 3.3 / 第四节）----
+
+SENSITIVE_ABANDON = {
+    "createWithdrawal": "withdraw",
+    "savePayoutAccount": "payout_account_change",
+    "bindPhone": "phone_change",
+    "requestDeletion": "account_deletion",
+}
+STEP_UP_SENSITIVE = ("savePayoutAccount", "bindPhone", "requestDeletion")
+
+
+def api_entry(body: str, op_id: str) -> str:
+    """ApiOperations.swift 里一个条目的正文（从 `"<id>": ApiOperation(` 到它的 `),`）；没有返回空串。"""
+    match = re.search(r'^        "' + re.escape(op_id) + r'": ApiOperation\(\n(.*?)\n        \),$', body, re.S | re.M)
+    return match.group(1) if match else ""
+
+
+class SensitiveOperationProbe(unittest.TestCase):
+    """真实快照复制到临时目录，openapi.json 按 6c97062 的形状摆好（4 个操作 x-sensitive-operation: true；提现去掉 x-step-up 与 10003；
+    components.schemas.IdempotencyAbandonAction 4 个值）后再造缺陷。已同步到 6c97062 的快照本来就是这个形状，摆一次不改内容。
+    负例都要求 GenError，且不是「不认识的扩展字段」（白名单认了 x-sensitive-operation 之后，是一致性断言或内置表核对拦下的）。"""
+
+    setUp = ProbeSnapshot.setUp
+    tearDown = ProbeSnapshot.tearDown
+    typecheck = ProbeSnapshot.typecheck
+
+    def openapi_path(self):
+        return os.path.join(self.snapshot, "contracts", "openapi.json")
+
+    def edit_openapi(self, change):
+        with open(self.openapi_path(), encoding="utf-8") as f:
+            doc = json.load(f)
+        change(doc)
+        with open(self.openapi_path(), "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False)
+
+    @staticmethod
+    def operation(doc: dict, op_id: str) -> dict:
+        for item in doc["paths"].values():
+            for method in gen.HTTP_METHODS:
+                op = item.get(method) if isinstance(item, dict) else None
+                if isinstance(op, dict) and op.get("operationId") == op_id:
+                    return op
+        raise AssertionError(f"快照里没有 {op_id}")
+
+    def shape_6c97062(self, doc: dict):
+        for op_id in SENSITIVE_ABANDON:
+            op = self.operation(doc, op_id)
+            op["x-sensitive-operation"] = True
+            op["x-idempotent"] = True
+            codes = op.setdefault("x-error-codes", [])
+            if 20903 not in codes:
+                codes.append(20903)
+        withdraw = self.operation(doc, "createWithdrawal")
+        withdraw.pop("x-step-up", None)
+        withdraw["x-error-codes"] = [c for c in withdraw["x-error-codes"] if c != 10003]
+        for op_id in STEP_UP_SENSITIVE:
+            op = self.operation(doc, op_id)
+            self.assertIsInstance(op.get("x-step-up"), str, op_id)
+            self.assertIn(10003, op["x-error-codes"], op_id)
+        doc.setdefault("components", {}).setdefault("schemas", {})["IdempotencyAbandonAction"] = {
+            "type": "string", "enum": list(SENSITIVE_ABANDON.values()),
+        }
+
+    def shaped(self, extra=None):
+        def change(doc):
+            self.shape_6c97062(doc)
+            if extra:
+                extra(doc)
+        self.edit_openapi(change)
+
+    def assert_gen_error(self, label: str):
+        with self.assertRaises(gen.GenError, msg=label) as ctx:
+            gen.generate()
+        self.assertNotIn("不认识的扩展字段", str(ctx.exception), f"{label}：白名单应已认识 x-sensitive-operation")
+
+    # ---- 正例 ----
+
+    def test_sensitive_operation_emits_flag_and_abandon_action(self):
+        self.shaped()
+        files = gen.generate()
+        body = files["ApiOperations.swift"]
+        self.assertIn("    public let sensitiveOperation: Swift.Bool\n", body)
+        self.assertIn("    public let abandonAction: Swift.String?\n", body)
+        for op_id, action in SENSITIVE_ABANDON.items():
+            entry = api_entry(body, op_id)
+            self.assertTrue(entry, f"缺条目 {op_id}")
+            self.assertIn("sensitiveOperation: true", entry, op_id)
+            self.assertIn(f'abandonAction: "{action}"', entry, op_id)
+        withdraw = api_entry(body, "createWithdrawal")
+        self.assertIn("stepUp: nil,", withdraw)
+        self.assertNotRegex(withdraw, r"errorCodes: \[[^\]]*\b10003\b", "提现错误码不含 10003")
+        for op_id in STEP_UP_SENSITIVE:
+            self.assertIn(f'stepUp: "{SENSITIVE_ABANDON[op_id]}",', api_entry(body, op_id), op_id)
+        # 缺省为 false / nil：非敏感操作（含写操作）
+        for op_id in ("getMe", "bindInviter"):
+            entry = api_entry(body, op_id)
+            self.assertTrue(entry, f"缺条目 {op_id}")
+            self.assertIn("sensitiveOperation: false", entry, op_id)
+            self.assertRegex(entry, r"abandonAction: nil\b", op_id)
+        self.assertEqual(body.count("sensitiveOperation: true"), 4, "恰 4 个敏感操作")
+        self.assertEqual(len(re.findall(r'abandonAction: "', body)), 4, "abandonAction 只在 4 个敏感操作上有值")
+        self.typecheck(files)
+
+    def test_locked_snapshot_marks_four_sensitive_operations(self):
+        # 不摆形状：sync.sh 同步到 6c97062 的快照自己就要产出这 4 个（锁还在 d47f660 时本条红）。
+        body = gen.generate()["ApiOperations.swift"]
+        self.assertEqual(body.count("sensitiveOperation: true"), 4)
+        for op_id, action in SENSITIVE_ABANDON.items():
+            self.assertIn(f'abandonAction: "{action}"', api_entry(body, op_id), op_id)
+        self.assertIn("stepUp: nil,", api_entry(body, "createWithdrawal"))
+
+    # ---- x-sensitive-operation 取值 ----
+
+    def test_sensitive_operation_must_be_boolean_true(self):
+        for bad in (False, "true", 1, [True]):
+            with self.subTest(bad=bad):
+                self.reset_snapshot()
+                self.shaped(lambda doc, bad=bad: self.operation(doc, "createWithdrawal").update(
+                    {"x-sensitive-operation": bad}))
+                self.assert_gen_error(f"x-sensitive-operation = {bad!r}")
+
+    # ---- 生成期一致性断言 ----
+
+    def test_sensitive_requires_idempotent(self):
+        self.shaped(lambda doc: self.operation(doc, "createWithdrawal").update({"x-idempotent": False}))
+        self.assert_gen_error("敏感操作必须 x-idempotent: true")
+
+    def test_sensitive_requires_20903(self):
+        def change(doc):
+            op = self.operation(doc, "createWithdrawal")
+            op["x-error-codes"] = [c for c in op["x-error-codes"] if c != 20903]
+        self.shaped(change)
+        self.assert_gen_error("敏感操作的 x-error-codes 必须含 20903")
+
+    def test_step_up_operation_must_be_sensitive(self):
+        self.shaped(lambda doc: self.operation(doc, "savePayoutAccount").pop("x-sensitive-operation"))
+        self.assert_gen_error("有 x-step-up 的操作必须是敏感操作")
+
+    def test_step_up_operation_requires_10003(self):
+        def change(doc):
+            op = self.operation(doc, "bindPhone")
+            op["x-error-codes"] = [c for c in op["x-error-codes"] if c != 10003]
+        self.shaped(change)
+        self.assert_gen_error("有 x-step-up 的操作 x-error-codes 必须含 10003")
+
+    # ---- 「操作 → 放弃 action」内置表：缺项 / 多项即生成失败 ----
+
+    def test_abandon_table_missing_entry_fails(self):
+        # 契约多出一个敏感操作，内置表里没有它（表缺项）。
+        def change(doc):
+            op = self.operation(doc, "bindInviter")
+            op["x-sensitive-operation"] = True
+            op["x-idempotent"] = True
+            op.setdefault("x-error-codes", []).append(20903)
+        self.shaped(change)
+        self.assert_gen_error("内置表缺 bindInviter")
+
+    def test_abandon_table_extra_entry_fails(self):
+        # 提现在契约里不再标敏感（且没有 x-step-up），内置表却有它（表多项）。
+        self.shaped(lambda doc: self.operation(doc, "createWithdrawal").pop("x-sensitive-operation"))
+        self.assert_gen_error("内置表多出 createWithdrawal")
+
+    def test_abandon_table_values_must_equal_contract_enum(self):
+        cases = {
+            "枚举多一个值": lambda doc: doc["components"]["schemas"]["IdempotencyAbandonAction"]["enum"].append("probe_extra"),
+            "枚举少一个值": lambda doc: doc["components"]["schemas"]["IdempotencyAbandonAction"]["enum"].remove("withdraw"),
+            "枚举缺失": lambda doc: doc["components"]["schemas"].pop("IdempotencyAbandonAction"),
+        }
+        for label, change in cases.items():
+            with self.subTest(label=label):
+                self.reset_snapshot()
+                self.shaped(change)
+                self.assert_gen_error(label)
+
+    def reset_snapshot(self):
+        self.tearDown()
+        self.setUp()
 
 
 # ---- DS-02-iOS-1：令牌段（colorsDark / componentNumber / shadowsDark、8 位色）brief §2.2-6 ----
