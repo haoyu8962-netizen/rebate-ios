@@ -1,4 +1,5 @@
 import Generated
+import MeCore
 
 extension AppRouting {
     /// 契约已登记为已发布、本端还没有页面的路由（P1 取 B，编排 11-04 11:24；D10-613 只钉这两条）。
@@ -9,12 +10,41 @@ extension AppRouting {
     static func markWithoutPage(_ table: inout [String: RouteSpec]) {
         for name in withoutPage {
             guard let spec = table[name] else { continue }
-            table[name] = RouteSpec(
-                name: spec.name, kind: spec.kind, auth: spec.auth, sinceIOS: nil, entries: spec.entries,
-                h5Path: spec.h5Path, debugOnly: spec.debugOnly, agentGuide: spec.agentGuide,
-                agentGuideAccount: spec.agentGuideAccount, params: spec.params,
-                requiredParams: spec.requiredParams, additionalParams: spec.additionalParams
-            )
+            table[name] = spec.withSinceIOS(nil)
         }
+    }
+
+    /// 本端发布闸（D10-2903 ②(b)）：契约 since.ios 已填、本端开门另归别的单的路由，按闸给出本端的 since.ios
+    /// （闸为 nil = 本端未发布；契约本身为 nil 时仍是 nil）。DeleteAccount：契约 6c97062 起 1.0.0，开门归 APP-13a-3。
+    /// 设置页判据 `AppMe.availableRoutes` 与路由表 `routeTable` 共用这一处。
+    static func gatedSinceIOS(_ name: String, _ spec: RouteSpec) -> String? {
+        guard name == DeleteAccountController.route else { return spec.sinceIOS }
+        return spec.sinceIOS == nil ? nil : DeleteAccountEntry.sinceIOS
+    }
+
+    /// routeTable 用：没有页面的（markWithoutPage）与本地发布闸关着的（markLocalGates）都按未发布。
+    static func markUnreleased(_ table: inout [String: RouteSpec]) {
+        markWithoutPage(&table)
+        markLocalGates(&table)
+    }
+
+    static func markLocalGates(_ table: inout [String: RouteSpec]) {
+        for (name, spec) in table {
+            let since = gatedSinceIOS(name, spec)
+            if since != spec.sinceIOS {
+                table[name] = spec.withSinceIOS(since)
+            }
+        }
+    }
+}
+
+private extension RouteSpec {
+    func withSinceIOS(_ since: String?) -> RouteSpec {
+        RouteSpec(
+            name: name, kind: kind, auth: auth, sinceIOS: since, entries: entries,
+            h5Path: h5Path, debugOnly: debugOnly, agentGuide: agentGuide,
+            agentGuideAccount: agentGuideAccount, params: params,
+            requiredParams: requiredParams, additionalParams: additionalParams
+        )
     }
 }

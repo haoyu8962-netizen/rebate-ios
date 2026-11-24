@@ -79,9 +79,10 @@ final class UpdateSmokeTests: XCTestCase {
         save(app, "ForceUpdateUnavailable-force")
     }
 
-    /// 已登录时强更页【注销账号】（D10-1562 过渡）：DeleteAccount 的 since.ios 仍为 null（未发布，N-14 / rule-gaps G02），
+    /// 已登录时强更页【注销账号】（D10-1562 过渡）：契约 6c97062 起 DeleteAccount 的 since.ios = 1.0.0（CT-17k），但 iOS 本地闸
+    /// （MeCore.DeleteAccountEntry.sinceIOS = nil，AppRouting.routeTable 闸成 nil，D10-2903 ②(b)）仍按未发布处理，
     /// 在强更页上面推入内置升级提示页，强更页留在下面，返回回到强更页（不再点了静默无效）。
-    /// TODO(N-14): iOS DeleteAccount 上线后改成断言「进 DeleteAccount」，去掉升级提示过渡。
+    /// TODO(APP-13a-3): 注销开门后改成断言「进 DeleteAccount」，去掉升级提示过渡。
     func testForceUpdateDeleteAccountWhenLoggedInShowsUpgradePrompt() {
         // 收尾（无论成败）：冷启动一次只开假服务，清掉 `-CouliFakeTradeLoggedIn` 写入的假登录，不留给之后按游客走的用例。
         addTeardownBlock { @MainActor in

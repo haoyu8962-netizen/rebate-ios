@@ -13,26 +13,27 @@ import XCTest
 /// 升锁前（锁 a7c9f1f）本文件多数用例红属预期，由实现者的提交 1（升锁）转绿。
 @MainActor
 final class HomePageApiLockTests: XCTestCase {
-    static let lockedCommit = "d47f660e5d42729899ade06298ddf5457791ff3d"
+    static let lockedCommit = "6c97062570dadce304821b905e5a31a5c40acbe2"
     /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交。
     static let designLockCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
 
-    /// 鸿蒙 main contract.lock（ee878ac3…cd03，与安卓 84b4dde 整文件相同）里与 iOS 同名的 23 项。
+    /// 与 iOS 同名的 23 项。FU-IOS-CONTRACT-LOCK-6c97062（#24）：换成 sync 到 6c97062 后实算的 sha256（改 7 项），与安卓升锁分支
+    /// task/FU-AND-CONTRACT-LOCK-6c97062（3fd6a5c）contract.lock 的同名项逐项相同、与安卓 CtaKeyVectorTest.SAME_NAME_SHA256 对上。
     static let sameNameHashes: [String: String] = [
         "contracts/agent-stream.schema.json":
             "c7c6960cd0d606ef3b07757f44aad653681788d5ed1338d9ec4ea4d728c7a38d",
         "contracts/apps.json":
-            "755f083b1ab1c58eeb7e80b1d1db8158e6118b0ecfbc8f1d07557a0b46105dc8",
+            "921470f2784b2eb41496e3ee890a51a454ddc27ae7e869587062a9e063a0e167",
         "contracts/bridge.schema.json":
             "65605d08e15edda6a49036413b534a77f89202cedae7398d145e47b81833a874",
         "contracts/enums/admin.json":
-            "b2f84f6c3749f43793c11fbbaf58b3035752f2e8eab200d2857e6f745b1e0db2",
+            "0c77839beff58843dde1d2b73e152a9daa041ec97d521d9ba550d1ab35cf0bd9",
         "contracts/enums/fund.json":
             "fbdfbe6f4698b6e55d4ce613774a6d7dd1477b042fe33b30988f05b0549439ac",
         "contracts/enums/identity.json":
-            "1fc21235dbe4c642da2bb698ca03a100828dba5366184fd5ec2e1bf92da45a19",
+            "299bfc28454fb752059aede6c648decfdb8dc83b36b7cc85625f04ef7bb363ce",
         "contracts/enums/ops.json":
-            "e999d6072cd5d22dfec81526a65f72e01ab52d7cea1cfdb1e71d207c073b0b23",
+            "de06744044d913f62403fbaf4cbfa9ebc26630740fe46c645bfa03a0c8ea02ac",
         "contracts/enums/order.json":
             "10cb34f7028892b0c4a2a30a7523e1d203017a3bdb1c6abe0ded1d6cda78a9e0",
         "contracts/enums/pay.json":
@@ -44,11 +45,11 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/error-codes.json":
             "a312384e185aefcc1db7f0538ac98b63082b064a3c9fe77f19a0a889b6a398db",
         "contracts/openapi.json":
-            "4815635c38d6c2d90af40304a8e87cfff65834e78a8fdf7f7590b4e2163e1295",
+            "7be6e8303ebd7531fbe70138d9f1f6768321f9e42115a46f24a99e3aefc11863",
         "contracts/routes.json":
-            "0afda43347552bb3f875fe2b76c6ab9e30d37ec22dedc77fd5a1fe88c376522b",
+            "4e578baef05df6ae9da7eb4576a2c00ef5b9b7e34f802f33ec6eabfbd5c7e2d8",
         "contracts/texts.default.json":
-            "9892db319fa5d29da786d5feaf1ffd1fd1e61f97ff2ecbfa3d72bcf33d322a2e",
+            "78530d1abc70e17b771e4bde9a627f01d5032856c7ed3ad8eee9f94daadb269b",
         "design/design-tokens.json":
             "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c",
         "specs/app-stores.json":

@@ -90,7 +90,7 @@ enum WithdrawVisualBaseline {
         "AppTests/WithdrawEstimateTests.swift": "5151d23604c34b822575cd6e6df5697354a5cb92f37559c2797e54dd580d5dbe",
         "AppTests/WithdrawGuideTests.swift": "ed9b727fc64eca8d4e04bcc519ebac1d30f5204adace951e6beeac6bcd9553ef",
         "AppTests/WithdrawPendingTests.swift": "3457ee9cf84eca1b56ca391e49f8d83dccc44af748ccee77df9ca7887cb5d357",
-        "AppTests/WithdrawSubmitTests.swift": "f7069610832ee3049fbfd7e05f8388ef0b27cef2723dfddcdc94adbe40997610",
+        "AppTests/WithdrawSubmitTests.swift": "28ffab4dba8a50e43fc5f920dc74c57495d465214795c253f0fa500e19192635",
     ]
 
     /// `WithdrawActions`（结构 + make）折叠空白后的 SHA-256。

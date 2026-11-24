@@ -3,7 +3,7 @@ import Generated
 
 /// 未决键的状态与存储（BR-ID-10 细则「敏感操作的幂等键」；03 §4.2「未决键」）。只做存储与状态，页面在 APP-09。
 ///
-/// - `beforeSend`：四个 step-up 操作首次发送前写入 in_flight 记录（写不进去返回 false，不得发送）；当前账号同一操作
+/// - `beforeSend`：四个敏感操作首次发送前写入 in_flight 记录（写不进去返回 false，不得发送）；当前账号同一操作
 ///   已有在途或结果未知的键时拒绝新的提交（不得换新键）。其他操作不建记录，直接放行。
 /// - `onResponse`：没有统一外壳（超时、断连、网关错误页、进程被杀）→ unknown；拿到业务结果（成功、3xxxx，含作废接口
 ///   带回的原结果）或已作废（abandoned、20903）→ 结束并删除记录；其余（10001/10003/10004/10005、20903 以外的 2xxxx、
@@ -53,9 +53,9 @@ public final class PendingKeyStore: @unchecked Sendable {
         self.clock = clock
     }
 
-    /// 四个需要二次验证的操作（operation 的 x-step-up）。
+    /// 四个敏感操作（operation 的 x-sensitive-operation；提现不需要二次验证，仍是敏感操作）。
     public static func isSensitive(_ operationId: String) -> Bool {
-        ApiOperations.byId(operationId)?.stepUp != nil
+        ApiOperations.byId(operationId)?.sensitiveOperation == true
     }
 
     /// 响应 → kind：有外壳时 envelope_success / envelope_<code>。

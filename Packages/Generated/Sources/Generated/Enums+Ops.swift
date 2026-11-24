@@ -17,6 +17,7 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
     case appealResult = "APPEAL_RESULT"
     case deletionProgress = "DELETION_PROGRESS"
     case balanceAdjusted = "BALANCE_ADJUSTED"
+    case balanceCorrected = "BALANCE_CORRECTED"
     case smsCode = "SMS_CODE"
     case unionAuthExpiring = "UNION_AUTH_EXPIRING"
     case unionAuthExpired = "UNION_AUTH_EXPIRED"
@@ -39,6 +40,7 @@ public enum NotifyTemplateCode: Swift.String, Swift.Sendable, Swift.CaseIterable
         .appealResult,
         .deletionProgress,
         .balanceAdjusted,
+        .balanceCorrected,
         .smsCode,
         .unionAuthExpiring,
         .unionAuthExpired,

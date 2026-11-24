@@ -282,12 +282,16 @@ public enum ExportResource: Swift.String, Swift.Sendable, Swift.CaseIterable, Sw
     case users
     case auditLogs = "audit_logs"
     case taxWithdrawals = "tax_withdrawals"
+    case ledger
+    case orders
     case unknown = "__unknown__"
 
     public static let allCases: [ExportResource] = [
         .users,
         .auditLogs,
         .taxWithdrawals,
+        .ledger,
+        .orders,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {
@@ -319,6 +323,7 @@ public enum AuditSystemActor: Swift.String, Swift.Sendable, Swift.CaseIterable, 
     case systemPayout = "system:payout"
     case systemLedger = "system:ledger"
     case systemSettlement = "system:settlement"
+    case systemSelfService = "system:self_service"
     case unknown = "__unknown__"
 
     public static let allCases: [AuditSystemActor] = [
@@ -326,6 +331,7 @@ public enum AuditSystemActor: Swift.String, Swift.Sendable, Swift.CaseIterable, 
         .systemPayout,
         .systemLedger,
         .systemSettlement,
+        .systemSelfService,
     ]
 
     public init(from decoder: any Swift.Decoder) throws {

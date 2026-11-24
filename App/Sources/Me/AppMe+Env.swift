@@ -68,10 +68,11 @@ extension AppMe: MeEnv, CustomerServicePorts, PushReportState {
     }
 
     /// 本端路由表里有、since.ios 不晚于本端版本的路由（G31：路由表没有的、since 不满足的格不显示）。
+    /// since.ios 先过本地发布闸（AppRouting.gatedSinceIOS：DeleteAccount 关着时设置页没有【注销账号】，D10-2903 ②(b)）。
     func availableRoutes() -> Set<String> {
         let version = AppRouting.appVersion.split(separator: "-", maxSplits: 1).first.map(String.init) ?? ""
         return Set(Routes.all.compactMap { name, spec in
-            spec.sinceIOS.map { Self.versionAtLeast(version, $0) } == true ? name : nil
+            AppRouting.gatedSinceIOS(name, spec).map { Self.versionAtLeast(version, $0) } == true ? name : nil
         })
     }
 

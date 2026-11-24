@@ -120,7 +120,7 @@ extension ApiClient {
         }
     }
 
-    /// 组头签名 → 会话世代与账号核对 → 四个 step-up 操作登记未决记录（落盘成功才发；写操作只发一次，只登记一次）。
+    /// 组头签名 → 会话世代与账号核对 → 四个敏感操作登记未决记录（落盘成功才发；写操作只发一次，只登记一次）。
     func admit(
         _ call: ApiCall,
         _ operation: ApiOperation,
@@ -151,7 +151,7 @@ extension ApiClient {
         if let account = options.boundAccount, let current = ready.account, current != account {
             return .rejected(LocalRejectReason.accountMismatch)
         }
-        guard operation.stepUp != nil, !admitted else {
+        guard operation.sensitiveOperation, !admitted else {
             return .ready(ready)
         }
         if let reason = registerPending(call, operation, ready, &options) {
@@ -161,7 +161,7 @@ extension ApiClient {
         return .ready(ready)
     }
 
-    /// 四个 step-up 操作：账号只取自会话；未决记录落盘成功才发。返回拒绝原因，nil = 已登记（或沿用本进程已占用的键）。
+    /// 四个敏感操作（x-sensitive-operation）：账号只取自会话；未决记录落盘成功才发。返回拒绝原因，nil = 已登记（或沿用本进程已占用的键）。
     private func registerPending(
         _ call: ApiCall,
         _ operation: ApiOperation,
@@ -192,7 +192,7 @@ extension ApiClient {
         }
     }
 
-    /// 没有统一外壳（超时、断连、取消、网关错误页、3xx）：四个 step-up 操作的键进入结果未知。
+    /// 没有统一外壳（超时、断连、取消、网关错误页、3xx）：四个敏感操作的键进入结果未知。
     func transportFailure(_ outcome: TransportOutcome, _ ready: Ready, _ held: PendingHold?) -> ApiResult {
         let kind: String
         let status: Int?

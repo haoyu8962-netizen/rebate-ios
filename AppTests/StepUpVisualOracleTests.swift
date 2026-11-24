@@ -161,8 +161,22 @@ final class StepUpVisualOracleTests: StepUpVisualTestCase {
     }
 
     /// 四个 action 与契约一致（换手机号、注销的半屏回归用的就是这两个值）。
+    /// FU-IOS-CONTRACT-LOCK-6c97062（#24，gap.md I2）：契约 6c97062 起提现不需要二次验证（stepUp = nil），仍是敏感操作；
+    /// stepUp 只剩 3 个，sensitiveOperation 4 个，abandonAction 4 个值（提现 = withdraw）。
     func testActionsMatchContract() {
-        XCTAssertEqual(ApiOperations.all["createWithdrawal"]?.stepUp, "withdraw")
+        XCTAssertNil(ApiOperations.all["createWithdrawal"]?.stepUp, "提现不需要二次验证")
+        XCTAssertEqual(
+            Set(ApiOperations.all.values.compactMap { $0.stepUp == nil ? nil : $0.operationId }),
+            ["savePayoutAccount", "bindPhone", "requestDeletion"]
+        )
+        XCTAssertEqual(
+            Set(ApiOperations.all.values.filter(\.sensitiveOperation).map(\.operationId)),
+            ["createWithdrawal", "savePayoutAccount", "bindPhone", "requestDeletion"]
+        )
+        XCTAssertEqual(ApiOperations.all["createWithdrawal"]?.abandonAction, "withdraw")
+        XCTAssertEqual(ApiOperations.all["savePayoutAccount"]?.abandonAction, "payout_account_change")
+        XCTAssertEqual(ApiOperations.all["bindPhone"]?.abandonAction, "phone_change")
+        XCTAssertEqual(ApiOperations.all["requestDeletion"]?.abandonAction, "account_deletion")
         XCTAssertEqual(ApiOperations.all["savePayoutAccount"]?.stepUp, "payout_account_change")
         XCTAssertEqual(ApiOperations.all["bindPhone"]?.stepUp, "phone_change")
         XCTAssertEqual(ApiOperations.all["requestDeletion"]?.stepUp, "account_deletion")

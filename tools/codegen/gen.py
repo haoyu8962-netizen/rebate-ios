@@ -8,7 +8,8 @@
 本任务生成：枚举、错误码表、路由表、桥方法表与桥错误码、包内默认文案（资源）、设计令牌原始常量、
 商店对照表 AppStores（specs/app-stores.yaml，APP-02c）、GET /v1/app-versions/check 响应示例（App target，#if DEBUG，
 调试面板的版本检查假数据，APP-02c）、openapi 操作登记表 ApiOperations（APP-03a：每个 operationId 的方法、路径与
-x-auth / x-signed / x-idempotent / x-step-up / x-error-codes / x-session-scopes / x-min-version-gate / x-implementation）。
+x-auth / x-signed / x-idempotent / x-step-up / x-error-codes / x-session-scopes / x-min-version-gate / x-implementation /
+x-sensitive-operation，及内置表给出的放弃 action abandonAction）。
 APP-03b 加：埋点事件构造函数 TrackerEvents（specs/events.yaml；字段名命中禁用规则即报错退出 2，构建失败）、
 无效设备哈希种子 DeviceHashSeeds（specs/device-hash.vectors.json）、包内默认配置 DefaultConfig（GET /v1/config 响应示例）。
 APP-04 加：桥契约全文 BridgeSchema（contracts/bridge.schema.json）与外跳目标 BridgeAppTargets（contracts/apps.json 的 trade_only）。
@@ -1146,8 +1147,74 @@ HTTP_METHODS = ["get", "post", "put", "patch", "delete"]
 MIN_VERSION_GATES = {"true": "gated", "false": "exempt", "conditional": "conditional", "none": "unspecified"}
 OPERATION_EXTENSIONS = {
     "x-auth", "x-signed", "x-idempotent", "x-step-up", "x-error-codes", "x-session-scopes",
-    "x-min-version-gate", "x-implementation",
+    "x-min-version-gate", "x-implementation", "x-sensitive-operation",
 }
+# FU-IOS-CONTRACT-LOCK-6c97062（D10-2892）：x-sensitive-operation 操作 → 【放弃上一笔】的 action（IdempotencyAbandonAction）。
+# 契约还没有机器可读的对照（只写在 abandonIdempotencyKey 的说明里），先内置；生成时与契约逐项核对（check_sensitive_abandon_actions），
+# 缺项、多项、值对调都生成失败。FU-CT-SENSITIVE-ABANDON-ACTION 把对照做进契约字段后改读契约、删本表（三端同步）。
+SENSITIVE_ABANDON_ACTIONS = {
+    "createWithdrawal": "withdraw",
+    "savePayoutAccount": "payout_account_change",
+    "bindPhone": "phone_change",
+    "requestDeletion": "account_deletion",
+}
+ABANDON_OPERATION_ID = "abandonIdempotencyKey"
+ABANDON_ACTION_SCHEMA = "IdempotencyAbandonAction"
+# abandonIdempotencyKey 说明里的「action → 方法 路径」（如 `withdraw → POST /v1/withdrawals`）。
+ABANDON_MAPPING_RE = re.compile(r"([a-z][a-z_]*)\s*→\s*(GET|POST|PUT|PATCH|DELETE)\s+(/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_}])")
+STEP_UP_ERROR = 10003
+ABANDONED_ERROR = 20903
+
+
+def check_sensitive_abandon_actions(doc: dict, sensitive: dict[str, tuple[str, str, str | None]]):
+    """sensitive：客户端 operationId → (方法, 路径, x-step-up)。内置表与契约逐项核对，任一不符就 GenError（D10-2892、安卓 review-r1 S3-2）：
+    表的键 = 标了 x-sensitive-operation 的客户端操作（缺项 / 多项都失败）；表的值 = IdempotencyAbandonAction 枚举且互不重复；
+    每一项的 action 在 abandonIdempotencyKey 说明里映射到的「方法 路径」= 该操作自己的方法与路径（两项对调也失败）；
+    有 x-step-up 的操作，x-step-up = abandonAction。"""
+    table = SENSITIVE_ABANDON_ACTIONS
+    missing = sorted(set(sensitive) - set(table))
+    extra = sorted(set(table) - set(sensitive))
+    if missing:
+        raise GenError(f"内置「操作 → 放弃 action」表缺项（契约标了 x-sensitive-operation）：{missing}")
+    if extra:
+        raise GenError(f"内置「操作 → 放弃 action」表多项（契约没标 x-sensitive-operation，或不是客户端操作）：{extra}")
+    values = list(table.values())
+    if len(set(values)) != len(values):
+        raise GenError(f"内置「操作 → 放弃 action」表的 action 重复：{values}")
+    schema = doc.get("components", {}).get("schemas", {}).get(ABANDON_ACTION_SCHEMA)
+    enum = schema.get("enum") if isinstance(schema, dict) else None
+    if not isinstance(enum, list) or not all(isinstance(v, str) for v in enum):
+        raise GenError(f"openapi.json 缺 components.schemas.{ABANDON_ACTION_SCHEMA}.enum（字符串列表）")
+    if len(set(enum)) != len(enum) or set(enum) != set(values):
+        raise GenError(
+            f"内置「操作 → 放弃 action」表的值 {sorted(values)} 与 {ABANDON_ACTION_SCHEMA} 枚举 {sorted(enum)} 不一致"
+        )
+    description = None
+    for item in doc.get("paths", {}).values():
+        for method in HTTP_METHODS:
+            op = item.get(method) if isinstance(item, dict) else None
+            if isinstance(op, dict) and op.get("operationId") == ABANDON_OPERATION_ID:
+                description = op.get("description")
+    if not isinstance(description, str):
+        raise GenError(f"openapi.json 找不到 {ABANDON_OPERATION_ID} 的说明（放弃 action ↔ 操作的对照）")
+    mapping: dict[str, tuple[str, str]] = {}
+    for action, method, path in ABANDON_MAPPING_RE.findall(" ".join(description.split())):
+        if action in mapping and mapping[action] != (method, path):
+            raise GenError(f"{ABANDON_OPERATION_ID} 说明里 {action} 对照了两个操作")
+        mapping[action] = (method, path)
+    if set(mapping) != set(enum):
+        raise GenError(
+            f"{ABANDON_OPERATION_ID} 说明里解析出的 action {sorted(mapping)} 与 {ABANDON_ACTION_SCHEMA} 枚举 {sorted(enum)} 不一致"
+        )
+    for op_id in sorted(table):
+        action = table[op_id]
+        method, path, step_up = sensitive[op_id]
+        if mapping[action] != (method, path):
+            raise GenError(
+                f"内置表 {op_id} → {action}，但契约里 {action} 对应 {' '.join(mapping[action])}，不是 {method} {path}"
+            )
+        if step_up is not None and step_up != action:
+            raise GenError(f"内置表 {op_id} → {action} 与它的 x-step-up {step_up!r} 不一致")
 # CT-LOCK-01：后台接口（/admin/v1/*，x-auth admin / super）不给 App 生成，登记表只收客户端路径（与鸿蒙 / Android 同口径）。
 EXCLUDED_PATH_PREFIXES = ("/admin/",)
 
@@ -1159,6 +1226,7 @@ def gen_api_operations(out: dict[str, str]):
         raise GenError("openapi.json 没有 paths")
     entries: list[str] = []
     seen: set[str] = set()
+    sensitive: dict[str, tuple[str, str, str | None]] = {}
     for path, item in paths.items():
         if not isinstance(item, dict):
             raise GenError(f"openapi.json paths[{path!r}] 应为对象")
@@ -1209,6 +1277,22 @@ def gen_api_operations(out: dict[str, str]):
             implementation = op.get("x-implementation")
             if implementation not in (None, "planned"):
                 raise GenError(f"{where} 的 x-implementation 不认识：{implementation!r}")
+            # x-sensitive-operation：缺省 false；出现时只能是布尔 true（openapi info.description 敏感操作一节）。
+            is_sensitive = "x-sensitive-operation" in op
+            if is_sensitive and op["x-sensitive-operation"] is not True:
+                raise GenError(f"{where} 的 x-sensitive-operation 只能写 true：{op['x-sensitive-operation']!r}")
+            if is_sensitive:
+                if not flags["x-idempotent"]:
+                    raise GenError(f"{where} 是敏感操作，必须 x-idempotent: true")
+                if ABANDONED_ERROR not in codes:
+                    raise GenError(f"{where} 是敏感操作，x-error-codes 必须含 {ABANDONED_ERROR}")
+                sensitive[op_id] = (method.upper(), path, step_up)
+            if step_up is not None:
+                if not is_sensitive:
+                    raise GenError(f"{where} 有 x-step-up，必须也标 x-sensitive-operation: true")
+                if STEP_UP_ERROR not in codes:
+                    raise GenError(f"{where} 有 x-step-up，x-error-codes 必须含 {STEP_UP_ERROR}")
+            abandon_action = SENSITIVE_ABANDON_ACTIONS.get(op_id) if is_sensitive else None
             entries += [
                 f"        {swift_string(op_id)}: ApiOperation(",
                 f"            operationId: {swift_string(op_id)},",
@@ -1218,12 +1302,15 @@ def gen_api_operations(out: dict[str, str]):
                 f"            signed: {'true' if flags['x-signed'] else 'false'},",
                 f"            idempotent: {'true' if flags['x-idempotent'] else 'false'},",
                 f"            stepUp: {swift_optional_string(step_up)},",
+                f"            sensitiveOperation: {'true' if is_sensitive else 'false'},",
+                f"            abandonAction: {swift_optional_string(abandon_action)},",
                 "            errorCodes: [" + ", ".join(str(c) for c in codes) + "],",
                 "            sessionScopes: [" + ", ".join(swift_string(v) for v in scopes) + "],",
                 f"            minVersionGate: .{MIN_VERSION_GATES[gate_key]},",
                 f"            planned: {'true' if implementation == 'planned' else 'false'}",
                 "        ),",
             ]
+    check_sensitive_abandon_actions(doc, sensitive)
     lines = [
         HEADER.rstrip("\n"),
         "// 快照：contracts/openapi.yaml（只登记方法、路径与扩展字段，不含请求 / 响应模型）",
@@ -1241,7 +1328,9 @@ def gen_api_operations(out: dict[str, str]):
         "}",
         "",
         "/// openapi 的一个 operation。sessionScopes 未标注时为 [\"full\"]（BR-ID-01 细则「受限会话」）；",
-        "/// planned = x-implementation: planned；stepUp = x-step-up 的 action（不需要二次验证为 nil）。",
+        "/// planned = x-implementation: planned；stepUp = x-step-up 的 action（不需要二次验证为 nil，如提现）；",
+        "/// sensitiveOperation = x-sensitive-operation（幂等、20903、结果未知的键不换、补完前置后不自动重放都按它判断）；",
+        "/// abandonAction = 【放弃上一笔】的 action（IdempotencyAbandonAction，只在敏感操作上有值；生成器内置表，与契约逐项核对）。",
         "public struct ApiOperation: Swift.Sendable, Swift.Equatable {",
         "    public let operationId: Swift.String",
         "    /// 大写 HTTP 方法。",
@@ -1252,6 +1341,8 @@ def gen_api_operations(out: dict[str, str]):
         "    public let signed: Swift.Bool",
         "    public let idempotent: Swift.Bool",
         "    public let stepUp: Swift.String?",
+        "    public let sensitiveOperation: Swift.Bool",
+        "    public let abandonAction: Swift.String?",
         "    public let errorCodes: [Swift.Int]",
         "    public let sessionScopes: [Swift.String]",
         "    public let minVersionGate: ApiMinVersionGate",

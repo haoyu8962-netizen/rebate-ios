@@ -28,7 +28,7 @@ public extension ApiClient {
     /// 【确认上一笔】（带点击时固定的目标）：记录账号、原键都与 `target` 一致且仍是 unknown 才占用；之后的发送带固定归属与发送前闸门。
     /// 已有的 `confirmPending(operationId:stepUpToken:)` 行为不变（其余调用方未改）。
     func confirmPending(operationId: String, stepUpToken: String?, target: PendingTarget) async -> ApiResult {
-        guard let operation = ApiOperations.byId(operationId), operation.stepUp != nil else {
+        guard let operation = ApiOperations.byId(operationId), operation.sensitiveOperation else {
             return .localReject(reason: LocalRejectReason.invalidCall)
         }
         let record: PendingKeyRecord
@@ -61,7 +61,7 @@ public extension ApiClient {
         case let .success(found):
             record = found
         }
-        guard let original = ApiOperations.byId(operationId), let action = original.stepUp,
+        guard let original = ApiOperations.byId(operationId), let action = original.abandonAction,
               let abandon = ApiOperations.byId(Self.abandonOperation)
         else {
             return .localReject(reason: LocalRejectReason.pendingKeyUnresolved)

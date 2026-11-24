@@ -211,7 +211,7 @@ public enum Routes {
         )
         table["DeleteAccount"] = RouteSpec(
             name: "DeleteAccount", kind: .native, auth: "login",
-            sinceIOS: nil,
+            sinceIOS: "1.0.0",
             entries: [.inApp, .push],
             h5Path: nil, debugOnly: false,
             agentGuide: false,

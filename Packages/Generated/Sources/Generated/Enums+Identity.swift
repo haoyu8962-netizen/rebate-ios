@@ -159,14 +159,12 @@ public enum SmsPurpose: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.
 
 /// 契约枚举 `step_up_action`。未知取值解码为 `.unknown`（不在 `allCases` 里）。
 public enum StepUpAction: Swift.String, Swift.Sendable, Swift.CaseIterable, Swift.Codable {
-    case withdraw
     case payoutAccountChange = "payout_account_change"
     case phoneChange = "phone_change"
     case accountDeletion = "account_deletion"
     case unknown = "__unknown__"
 
     public static let allCases: [StepUpAction] = [
-        .withdraw,
         .payoutAccountChange,
         .phoneChange,
         .accountDeletion,

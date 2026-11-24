@@ -10,6 +10,11 @@ import XCTest
 ///
 /// 过渡口径（D10-1562）：N-14 上线（iOS DeleteAccount 发布、since.ios 有值）后，本文件里 DeleteAccount 的用例要改成
 /// 放行进 DeleteAccount（受限会话 / 已登录 open、reason force_update_exception；游客 requireLogin），升级提示过渡去掉。
+///
+/// FU-IOS-CONTRACT-LOCK-6c97062（#24，D10-2903 ②(b)）：契约 6c97062 起 DeleteAccount 的 since.ios = "1.0.0"（CT-17k），
+/// iOS 开门仍归 APP-13a-3，由 App 层本地闸（MeCore.DeleteAccountEntry.sinceIOS = nil，AppRouting.routeTable 把 since 闸成 nil）关着。
+/// Router 包看不到 App 层的闸，本文件改用「契约路由表 + DeleteAccount 按本地闸为 nil」的表（`gatedRoutes`，与 routeTable 同口径），
+/// 断言意思不变；App 层的闸本身由 AppTests/LockIos6c97062DeleteAccountGateTests 钉。开门时本文件随 APP-13a-3 改成放行。
 @MainActor
 final class RouterForceUpdateDeleteEntryTests: XCTestCase {
     private var guardState = GuardState(
@@ -22,9 +27,23 @@ final class RouterForceUpdateDeleteEntryTests: XCTestCase {
     )
     private var now: Int64 = 1_000_000
 
+    /// 契约路由表，DeleteAccount 按 App 层本地闸关着处理（since.ios = nil，同 AppRouting.markLocalGates）。
+    private static var gatedRoutes: [String: RouteSpec] {
+        var table = Routes.all
+        if let spec = table["DeleteAccount"] {
+            table["DeleteAccount"] = RouteSpec(
+                name: spec.name, kind: spec.kind, auth: spec.auth, sinceIOS: nil, entries: spec.entries,
+                h5Path: spec.h5Path, debugOnly: spec.debugOnly, agentGuide: spec.agentGuide,
+                agentGuideAccount: spec.agentGuideAccount, params: spec.params,
+                requiredParams: spec.requiredParams, additionalParams: spec.additionalParams
+            )
+        }
+        return table
+    }
+
     private func makeRouter(backend: MemoryPendingBackend = MemoryPendingBackend()) -> (Router, PendingActionStore) {
         let store = PendingActionStore(backend: backend, clock: { [unowned self] in now })
-        let router = Router(pendingStore: store, state: { [unowned self] in guardState })
+        let router = Router(routes: Self.gatedRoutes, pendingStore: store, state: { [unowned self] in guardState })
         return (router, store)
     }
 
@@ -36,13 +55,17 @@ final class RouterForceUpdateDeleteEntryTests: XCTestCase {
         var state = guardState
         state.session = session
         state.fromForceUpdatePage = fromForceUpdatePage
-        return EntryGuard.decide(request: RouteRequest(route: route, from: .inApp), state: state, routes: Routes.all)
+        return EntryGuard.decide(
+            request: RouteRequest(route: route, from: .inApp), state: state, routes: Self.gatedRoutes
+        )
     }
 
-    /// 前提护栏：DeleteAccount 仍是未发布的次要入口。N-14 上线后这条会红，提醒把本文件的 DeleteAccount 用例改成放行（D10-1562）。
+    /// 前提护栏：契约已给 DeleteAccount since.ios = 1.0.0（6c97062），本文件用的表按本地闸仍未发布，且仍是次要入口。
+    /// 开门（APP-13a-3）时把本文件的 DeleteAccount 用例改成放行（D10-1562）。
     func testPreconditionDeleteAccountStillUnreleasedSecondaryEntry() throws {
-        let spec = try XCTUnwrap(Routes.all["DeleteAccount"])
-        XCTAssertNil(spec.sinceIOS, "N-14 上线后：DeleteAccount 用例改为放行进 DeleteAccount、去掉升级提示过渡（D10-1562）")
+        XCTAssertEqual(Routes.all["DeleteAccount"]?.sinceIOS, "1.0.0", "契约 6c97062（CT-17k）")
+        let spec = try XCTUnwrap(Self.gatedRoutes["DeleteAccount"])
+        XCTAssertNil(spec.sinceIOS, "本地闸关着；开门时 DeleteAccount 用例改为放行进 DeleteAccount、去掉升级提示过渡（D10-1562）")
         XCTAssertTrue(RoutePolicy.forceUpdateSecondaryRoutes.contains("DeleteAccount"))
     }
 
@@ -172,7 +195,7 @@ final class RouterForceUpdateDeleteEntryTests: XCTestCase {
         let decision = EntryGuard.decide(
             request: RouteRequest(route: "DeleteAccount", from: .push),
             state: state,
-            routes: Routes.all
+            routes: Self.gatedRoutes
         )
         XCTAssertEqual(decision.kind, .forceUpdate)
         XCTAssertEqual(decision.reason, GuardReason.forceUpdateRequired)

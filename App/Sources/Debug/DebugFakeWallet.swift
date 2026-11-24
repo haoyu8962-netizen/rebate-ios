@@ -26,8 +26,8 @@ import WalletCore
 /// abandon=busy；step_up=always；outcome=<3xxxx>（提交 / 保存的业务结局，配合 unknown_created：确认回该错误、作废回 completed 原结果为该错误）；
 /// confirm=20903（unknown_lost 丢在路上的键再次发送时回 20903）。`*_after_submit` / `*_after_save`：收到第一次提交 / 保存之后读取才失败
 /// （先进入待确认、再让读取持续失败，iOS R2-02）。
-/// 结果未知分两种（iOS R1-02）：unknown_lost =「请求未到达」——带有效 token 的提交在服务端任何处理之前丢在路上，不建单、不记幂等结果、
-/// 不核销 token；unknown_created =「响应丢失」——建单与幂等结果在同一把锁里一起保存，之后才丢响应（确认返回原结果、作废返回 completed）。
+/// 结果未知分两种（iOS R1-02）：unknown_lost =「请求未到达」——提交在服务端任何处理之前丢在路上，不建单、不记幂等结果
+/// （提现不需要二次验证，契约 6c97062）；unknown_created =「响应丢失」——建单与幂等结果在同一把锁里一起保存，之后才丢响应（确认返回原结果、作废返回 completed）。
 final class DebugFakeWallet: @unchecked Sendable {
     static let marker = "COULI_FAKE_WALLET_SERVER_APP09_IOS_8d3c52"
     static let launchArgument = "CouliFakeWallet"

@@ -91,12 +91,12 @@ extension DebugFakeWallet {
         if state["confirm"] == "20903", lostKeys.contains(key) {
             return fail(20903)
         }
-        // 请求未到达（unknown_lost）：带有效 token 的提交在任何业务修改之前按传输失败结束——不建单、不记幂等结果、不核销 token
-        if state["submit"] == "unknown_lost", tokenValid(headers, action: "withdraw") {
+        // 请求未到达（unknown_lost）：提交在任何业务修改之前按传输失败结束——不建单、不记幂等结果。
+        // 提现不需要二次验证（契约 6c97062，B1-02zzzc）：不校验 X-Step-Up-Token、不回 10003。
+        if state["submit"] == "unknown_lost" {
             lostKeys.insert(key)
             return .offline
         }
-        guard stepUpPassed(headers, action: "withdraw", state) else { return fail(10003) }
         guard let amount = WalletJSON.int64(body["amount_fen"]) else { return fail(20001) }
         if state["submit"] == "busy" {
             return fail(42901, headers: ["Retry-After": "10"])

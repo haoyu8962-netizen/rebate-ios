@@ -5,7 +5,7 @@ import Session
 /// 错误码 → Effect（03 §4.2「ErrorActionMapper 实现要点」；动作以 error-codes.yaml、BR-TEXT-14 为准）。
 ///
 /// - 1xxxx 前置（登录、同意、绑手机）完成后沿用原键并登记 pending_action；3xxxx 前置（平台授权）用新键；
-///   四个 step-up 操作（x-step-up）被 10001、10004（任何 consent_type）、10005 或 3xxxx 前置码拦下时只引导，
+///   四个敏感操作（x-sensitive-operation）被 10001、10004（任何 consent_type）、10005 或 3xxxx 前置码拦下时只引导，
 ///   不重放、不登记；10003 沿用原键；10002、10402 自动沿用原键重放 1 次（再失败走通用错误态）。
 /// - 30304 / 30305 / 30307 / 30308 对所有操作都只引导补办、不重放（三端一致）。
 /// - 有明确界面动作的码不降成 Toast：30144 refetch_product（LinkLanding 为空态 pageAction），40901 keep_loading，
@@ -76,7 +76,7 @@ public enum ErrorActionMapper {
     /// LinkLanding 上 30144 的文案键。
     static let linkLandingInvalidKey = "link_landing.invalid"
 
-    /// 1xxxx 的「补办前置」码：四个 step-up 操作与作废请求遇到时只引导。
+    /// 1xxxx 的「补办前置」码：四个敏感操作与作废请求遇到时只引导。
     static let prerequisiteCodes: Set<Int> = [10001, 10004, 10005]
 
     public static func map(
@@ -205,7 +205,7 @@ public enum ErrorActionMapper {
         return context.effect(.disableWithToast, key: .some(key))
     }
 
-    /// 30101 / 30102 / 30111：平台授权（新键）；step-up 操作只引导；auth_unavailable 只提示。
+    /// 30101 / 30102 / 30111：平台授权（新键）；敏感操作只引导；auth_unavailable 只提示。
     /// 生成表按 data.reason 给的重试类别不是 after_action（如 sharer_auth_invalid=never，CT-LOCK-01）→ 只提示，
     /// 不弹授权、不登记待办、不重放（契约数据驱动，与鸿蒙 / Android 同口径；link_landing.invalid 专门展示归 APP-13b）。
     private static func authorizeEffect(_ context: MappingContext) -> ErrorEffect? {
@@ -215,7 +215,7 @@ public enum ErrorActionMapper {
         if context.reason == "auth_unavailable" || promptOnlyReason(code: context.code, reason: context.reason) {
             return context.effect(.toast)
         }
-        return context.stepUpOperation
+        return context.sensitiveOperation
             ? context.effect(.guideOnly, route: authSheetRoute)
             : context.effect(.authorize, replay: .newKey, pending: true, route: authSheetRoute)
     }
@@ -304,8 +304,9 @@ struct MappingContext {
         input.code
     }
 
-    var stepUpOperation: Bool {
-        input.operation.stepUp != nil
+    /// 四个敏感操作（x-sensitive-operation，含不需要二次验证的提现）。
+    var sensitiveOperation: Bool {
+        input.operation.sensitiveOperation
     }
 
     var isServerError: Bool {
@@ -336,9 +337,9 @@ struct MappingContext {
         return result
     }
 
-    /// 1xxxx 前置：完成后沿用原键并登记 pending_action；四个 step-up 操作只引导。
+    /// 1xxxx 前置：完成后沿用原键并登记 pending_action；四个敏感操作只引导。
     func prerequisite(_ kind: ErrorEffectKind, _ route: String?) -> ErrorEffect {
-        stepUpOperation
+        sensitiveOperation
             ? effect(.guideOnly, route: route)
             : effect(kind, replay: .sameKey, pending: true, route: route)
     }

@@ -14,7 +14,7 @@ public extension ApiClient {
         pendingKeys.coldStart(account: account)
     }
 
-    /// 当前会话账号某个 step-up 操作的未决记录（发起页据此进入待确认）。记录账号与当前会话账号不一致时不返回；
+    /// 当前会话账号某个敏感操作的未决记录（发起页据此进入待确认）。记录账号与当前会话账号不一致时不返回；
     /// 读不出来时也是 nil，要区分请用 `pendingStatus(operationId:)`。
     func pendingFor(operationId: String) async -> PendingKeyRecord? {
         if case let .record(record) = await pendingStatus(operationId: operationId) {
@@ -23,7 +23,7 @@ public extension ApiClient {
         return nil
     }
 
-    /// 当前会话账号某个 step-up 操作的未决状态（没有 / 有记录 / 读不出来）。读不出来时发起页不得放行新的提交
+    /// 当前会话账号某个敏感操作的未决状态（没有 / 有记录 / 读不出来）。读不出来时发起页不得放行新的提交
     /// （管线也会以 pending_store_failed 本地拒绝）。
     func pendingStatus(operationId: String) async -> PendingLookup {
         let state = await readContext()
@@ -44,7 +44,7 @@ public extension ApiClient {
     /// 用户点【确认】：用原键、原请求体重发（只在结果未知时接受）。结果未知后收到 10003 的，二次验证完成后带上
     /// stepUpToken 再调本入口，仍沿用原键与原请求体。账号先核对一次，发送前（管线里）再核对一次。
     func confirmPending(operationId: String, stepUpToken: String? = nil) async -> ApiResult {
-        guard let operation = ApiOperations.byId(operationId), operation.stepUp != nil else {
+        guard let operation = ApiOperations.byId(operationId), operation.sensitiveOperation else {
             return .localReject(reason: LocalRejectReason.invalidCall)
         }
         let state = await readContext()
@@ -91,7 +91,7 @@ public extension ApiClient {
         }
         guard case let .record(record) = lookup, record.account == account,
               record.stateRaw == PendingKeyStore.unknown,
-              let original = ApiOperations.byId(operationId), let action = original.stepUp,
+              let original = ApiOperations.byId(operationId), let action = original.abandonAction,
               let abandon = ApiOperations.byId(Self.abandonOperation)
         else {
             return .localReject(reason: LocalRejectReason.pendingKeyUnresolved)
