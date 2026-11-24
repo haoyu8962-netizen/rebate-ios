@@ -73,6 +73,8 @@ final class SnapshotStateTextPinTests: PayoutVisualTestCase {
     // MARK: - 实名 50301（testRealName.state-realname-50301-light）
 
     /// 错误条 `realname.error.text` = error.50001 + 夹具 trace6（D10-887 ②）；不是旧图上的 error.50301 回落句。
+    /// 注：实名页 50301 有两层兜底（SensitiveOutcome.serverKey 与 RealNameController.notice 的 50301 分支），两处都改回旧键这里才红；
+    /// 只改一处时页面字不变、图也不会过时（独立评审 r1 S3-1）。
     func testRealName50301ErrorBarText() async throws {
         await resetShot()
         let error = try PayoutVisualData.realnameError("server")
