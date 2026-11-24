@@ -19,7 +19,7 @@ enum WithdrawVisualBaseline {
         "Packages/Core/Sources/WalletCore/SensitiveFlow+Deletion.swift": "f74e246666a602cddd2289d172118af215a46d3a0257b223ab9c26a751eab151",
         "Packages/Core/Sources/WalletCore/SensitiveFlow+Pending.swift": "65d732f53e0a00d7aa74c9e506ca03297ccb4ef2c6a8e75224171b1ef1845991",
         "Packages/Core/Sources/WalletCore/SensitiveFlow.swift": "6959d4f34333e5104440a6428dc75184a82eaad8762b35e54c394005b9c6d3af",
-        "Packages/Core/Sources/WalletCore/SensitiveOutcome.swift": "b38c8bd67f524d299707a392cf144b3463b289ca968a9a72b668ab0e98711c53",
+        "Packages/Core/Sources/WalletCore/SensitiveOutcome.swift": "099af7353e9b491c31bec263fed24446fb1fb1a5fa78a2e549009d3eda0cc68b",
         "Packages/Core/Sources/WalletCore/SensitiveOutcome+Deletion.swift": "a570433d6cad591bf2bd0f64b06abbf8ce88a95cac32b9801a0c97e682d503c6",
         "Packages/Core/Sources/WalletCore/StepUpController+PhoneChange.swift": "2cb0ed7566e3ef933454294caed496f99f55a6b55a16bd5bde32745954b73d92",
         "Packages/Core/Sources/WalletCore/StepUpController+Send.swift": "f7abf88997830897adfe6359f582f26cccfc2742ee4b9f969ee6474289f30534",
