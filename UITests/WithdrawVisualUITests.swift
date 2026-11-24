@@ -16,7 +16,8 @@ final class WithdrawVisualUITests: XCTestCase, WithdrawVisualUITest {
         XCUIDevice.shared.appearance = .light
     }
 
-    /// 【提交】真点恰一次：首发（得到 10003）→ 二次验证 → 原键重放一次；成功后唯一一次替换到 WithdrawRecords {withdrawal_id}。
+    /// 【提交】真点恰一次：只发一次、不弹二次验证（D10-2903 提现免二次验证）；成功后唯一一次替换到 WithdrawRecords {withdrawal_id}。
+    /// 原「首发 10003 → 二次验证 → 原键重放，共两次」换宿主到改收款账号：PayoutVisualUITests.testSaveRealTapOnce（共 2 次 PUT）。
     func testSubmitRealTapExactlyOnce() throws {
         let app = try launchWithdraw()
         type(app, "10")
@@ -24,12 +25,11 @@ final class WithdrawVisualUITests: XCTestCase, WithdrawVisualUITest {
         let submit = node(app, "withdraw.submit")
         XCTAssertTrue(submit.isEnabled, "合法金额可提交")
         submit.tap()
-        XCTAssertTrue(node(app, "stepUp.code").waitForExistence(timeout: 10))
-        XCTAssertEqual(writes(entries(app, after: before)), [post], "点一次发一次")
-        passStepUp(app)
-        waitLog(app, beyond: before + 2)
+        waitLog(app, beyond: before + 1)
+        XCTAssertFalse(node(app, "stepUp.code").exists, "提现不弹二次验证")
         let after = entries(app, after: before)
-        XCTAssertEqual(after.filter { $0 == post }.count, 2, "首发 + 二次验证后重放，共两次")
+        XCTAssertEqual(writes(after), [post], "点一次发一次")
+        XCTAssertEqual(after.filter { $0 == post }.count, 1, "只发一次，不重放")
         let routes = after.filter { $0.hasPrefix("route:") }
         XCTAssertEqual(routes.count, 1, "唯一一次导航：\(routes)")
         XCTAssertTrue(routes.first?.hasPrefix("route:WithdrawRecords?withdrawal_id=") == true, "\(routes)")
@@ -89,7 +89,6 @@ final class WithdrawVisualUITests: XCTestCase, WithdrawVisualUITest {
         let app = try launchWithdraw("submit=44001")
         type(app, "10")
         node(app, "withdraw.submit").tap()
-        passStepUp(app)
         let ok = app.buttons["知道了"].firstMatch
         XCTAssertTrue(ok.waitForExistence(timeout: 15), "44001 弹窗")
         XCTAssertTrue(app.buttons["联系客服申诉"].firstMatch.exists)

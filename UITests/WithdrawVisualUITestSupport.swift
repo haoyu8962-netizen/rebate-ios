@@ -83,6 +83,7 @@ extension WithdrawVisualUITest {
         }
     }
 
+    /// 二次验证面板：输码并点【验证并提交】。提现不再弹面板（D10-2903），只有改收款账号用。
     func passStepUp(_ app: XCUIApplication) {
         let code = node(app, "stepUp.code")
         XCTAssertTrue(code.waitForExistence(timeout: 10), "没有弹二次验证")
@@ -95,11 +96,11 @@ extension WithdrawVisualUITest {
         submit.tap()
     }
 
-    /// 输入 → 【提交】 → 二次验证 → 结果未知 → 待确认卡（`fake` 取 submit=unknown_lost / unknown_created）。
+    /// 输入 → 【提交】 → 结果未知 → 待确认卡（`fake` 取 submit=unknown_lost / unknown_created）。
+    /// D10-2903：提现免二次验证，提交后不再先过面板（假服务提现不回 10003、unknown_lost 不再要求带提现令牌）。
     func enterPending(_ app: XCUIApplication) {
         type(app, "10")
         node(app, "withdraw.submit").tap()
-        passStepUp(app)
         XCTAssertTrue(node(app, "pending.card").waitForExistence(timeout: 20), "没有进入待确认")
         Thread.sleep(forTimeInterval: 1.0)
     }

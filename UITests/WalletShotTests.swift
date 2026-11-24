@@ -15,18 +15,27 @@ final class WalletShotTests: XCTestCase, WalletUITest {
 
     // MARK: - 冒烟（verify 每次都跑）
 
-    /// 钱包 → 提现 → 输入金额看到估算 → 提交弹二次验证 → 验证通过进提现记录，这一单在最前。
+    /// 钱包 → 提现 → 输入金额看到估算 → 提交直接进提现记录，这一单在最前。
+    /// FU-IOS-CONTRACT-LOCK-6c97062（D10-2903 / D10-2911）：提现免二次验证，提交不再弹面板；面板冒烟换到改收款账号（下一条）。
     func testWalletWithdrawSmoke() {
         let app = openWithdraw()
         typeAmount(app, "10")
         XCTAssertTrue(element(app, "withdraw.estimate").waitForExistence(timeout: 10), "没有估算")
         element(app, "withdraw.submit").tap()
+        XCTAssertTrue(element(app, "records.list").waitForExistence(timeout: 15), "提交成功没有进提现记录")
+        XCTAssertFalse(element(app, "stepUp.code").exists, "提现不弹二次验证")
+    }
+
+    /// 原 testWalletWithdrawSmoke 的二次验证那一段（D10-2911 换宿主）：提现页 → 改收款账号【保存】→ 弹二次验证 → 验证通过回到提现页。
+    func testWalletPayoutStepUpSmoke() {
+        let app = openWithdraw()
+        openPayoutStepUp(app)
         let code = element(app, "stepUp.code")
-        XCTAssertTrue(code.waitForExistence(timeout: 10), "没有弹二次验证")
         code.tap()
         code.typeText("123456")
         tapId(app, "stepUp.submit")
-        XCTAssertTrue(element(app, "records.list").waitForExistence(timeout: 15), "提交成功没有进提现记录")
+        XCTAssertTrue(element(app, "withdraw.balance").waitForExistence(timeout: 15), "保存成功没有回到提现页")
+        XCTAssertFalse(element(app, "stepUp.code").exists, "验证通过后面板收起")
     }
 
     // MARK: - 截图（设计稿比对）
@@ -94,7 +103,7 @@ final class WalletShotTests: XCTestCase, WalletUITest {
         tapId(app, "wallet.help.ok")
         pause()
         tapId(app, "withdraw.submit")
-        passStepUp(app, shots: true)
+        // D10-2903：提现免二次验证，提交直接进提现记录
         XCTAssertTrue(element(app, "records.list").waitForExistence(timeout: 15), "提交成功没有进提现记录")
         pause(1.2)
         save(app, "WithdrawSubmitted-records")
@@ -103,7 +112,6 @@ final class WalletShotTests: XCTestCase, WalletUITest {
         app = openWithdraw("submit=44001")
         typeAmount(app, "10")
         tapId(app, "withdraw.submit")
-        passStepUp(app)
         XCTAssertTrue(element(app, "risk.dialog").waitForExistence(timeout: 15), "没有风控弹窗")
         pause()
         save(app, "WithdrawBlocked")
@@ -111,14 +119,21 @@ final class WalletShotTests: XCTestCase, WalletUITest {
 
         app = openWithdraw("rules=negative")
         save(app, "WithdrawBlockedNegative")
+        app.terminate()
+
+        // 设计稿 WithdrawStepUp 的两张（原在提现提交后拍）换宿主到改收款账号面板（D10-2911）：同一个半屏组件
+        app = openWithdraw()
+        openPayoutStepUp(app)
+        passStepUp(app, shots: "WithdrawStepUp-host-payout")
+        XCTAssertTrue(element(app, "withdraw.balance").waitForExistence(timeout: 15), "保存成功没有回到提现页")
     }
 
+    /// D10-2903：提现免二次验证，三段都是提交后直接进入待确认（不再先过面板）。
     func testShotsWithdrawPending() throws {
         try requireShots()
         var app = openWithdraw("submit=unknown_lost")
         typeAmount(app, "10")
         tapId(app, "withdraw.submit")
-        passStepUp(app)
         XCTAssertTrue(element(app, "pending.card").waitForExistence(timeout: 20), "没有进入待确认")
         pause(1.2)
         save(app, "WithdrawPendingConfirm")
@@ -133,7 +148,6 @@ final class WalletShotTests: XCTestCase, WalletUITest {
         app = openWithdraw("submit=unknown_lost,abandon=busy")
         typeAmount(app, "10")
         tapId(app, "withdraw.submit")
-        passStepUp(app)
         XCTAssertTrue(element(app, "pending.card").waitForExistence(timeout: 20))
         tapId(app, "pending.abandon")
         app.buttons["确定放弃"].firstMatch.tap()
@@ -145,7 +159,6 @@ final class WalletShotTests: XCTestCase, WalletUITest {
         app = openWithdraw("submit=unknown_created")
         typeAmount(app, "10")
         tapId(app, "withdraw.submit")
-        passStepUp(app)
         XCTAssertTrue(element(app, "pending.card").waitForExistence(timeout: 20))
         tapId(app, "pending.abandon")
         app.buttons["确定放弃"].firstMatch.tap()

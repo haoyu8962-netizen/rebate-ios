@@ -23,7 +23,7 @@ final class WalletReviewR1UITests: XCTestCase, WalletUITest {
         var app = openWithdraw("submit=unknown_lost")
         typeAmount(app, "10")
         tapId(app, "withdraw.submit")
-        passStepUp(app)
+        // D10-2903：提现免二次验证，提交后直接结果未知
         XCTAssertTrue(element(app, "pending.card").waitForExistence(timeout: 20), "没有进入待确认")
         app.terminate()
 

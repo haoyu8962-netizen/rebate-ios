@@ -190,14 +190,14 @@ final class WalletFlowShotTests: XCTestCase, WalletUITest {
             pause()
             save(app, suffix + "-Withdraw")
             if suffix == "AdaptLargeText200" {
-                tapId(app, "withdraw.submit")
+                // 设计稿 AdaptShortStepUp（200%）原在提现提交后拍；D10-2903 提现免二次验证，换宿主到改收款账号面板（D10-2911）
+                openPayoutStepUp(app)
                 let code = element(app, "stepUp.code")
-                XCTAssertTrue(code.waitForExistence(timeout: 10))
                 pause(1.2)
-                save(app, "AdaptShortStepUp-200")
+                save(app, "AdaptShortStepUp-200-host-payout")
                 code.tap()
                 pause(1)
-                save(app, "AdaptShortStepUp-200-keyboard")
+                save(app, "AdaptShortStepUp-200-host-payout-keyboard")
             }
             app.terminate()
         }

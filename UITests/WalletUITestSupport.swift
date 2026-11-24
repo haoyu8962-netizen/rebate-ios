@@ -76,19 +76,34 @@ extension WalletUITest {
         pause()
     }
 
-    func passStepUp(_ app: XCUIApplication, shots: Bool = false) {
+    /// 二次验证面板：等面板、输 123456、点【验证并提交】。`shots` 给定时在输码前后各存一张（`<shots>`、`<shots>-filled`）。
+    /// FU-IOS-CONTRACT-LOCK-6c97062（D10-2903 / D10-2911）：提现不再弹面板，只有改收款账号（以及换号、注销）还会走到这里。
+    func passStepUp(_ app: XCUIApplication, shots: String? = nil) {
         let code = element(app, "stepUp.code")
         XCTAssertTrue(code.waitForExistence(timeout: 10), "没有弹二次验证")
         pause(1.2)
-        if shots {
-            save(app, "WithdrawStepUp")
+        if let shots {
+            save(app, shots)
         }
         code.tap()
         code.typeText("123456")
         pause(0.5)
-        if shots {
-            save(app, "WithdrawStepUp-filled")
+        if let shots {
+            save(app, shots + "-filled")
         }
         tapId(app, "stepUp.submit")
+    }
+
+    /// 提现页 → 账号行 →【更换】→ 填支付宝登录号与收款人 →【保存】→ 假服务回 10003（没带改收款令牌，DebugFakeWallet+Account
+    /// `save`）→ 等二次验证面板。D10-2911：提现不再出面板，面板相关的冒烟与截图换到这里。
+    func openPayoutStepUp(_ app: XCUIApplication) {
+        tapId(app, "withdraw.payout")
+        tapId(app, "payout.change")
+        tapId(app, "payout.field.alipay_logon_id")
+        element(app, "payout.field.alipay_logon_id").typeText("test@example.com")
+        tapId(app, "payout.field.payee_name")
+        element(app, "payout.field.payee_name").typeText("测试")
+        tapId(app, "payout.save")
+        XCTAssertTrue(element(app, "stepUp.code").waitForExistence(timeout: 10), "改收款【保存】没有弹二次验证")
     }
 }
