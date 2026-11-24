@@ -66,7 +66,7 @@ final class MeVisualFundsGuardTests: XCTestCase {
                 "37f6c4469139b9ba850fdc6550b442c85eb111eceb4de74c06dfe4cb6005534b",
             "Packages/Core/Sources/MeCore/MeDraftTexts.swift":
                 "d10dff3d0ceae9ca36fb8ba704ca9f21a6df1329522ffa775d0e1ccd9550e751",
-            "App/Sources/Me/AppMe+Env.swift": "6ddb7e4d50fead4ac0c54378ff2e2d431a144c426745f006b3b1a02f267abaae",
+            "App/Sources/Me/AppMe+Env.swift": "6f7304030d4697b01419b533f0ff36d3cb6011f76adf501828b33544157760ac",
             "App/Sources/Me/AppMe+Flows.swift": "5fb08371a46e880a1e7eb20b0471bbb76f85eb192e3a9ba0074c3ede352f0af6",
             "App/Sources/Me/AppMeTexts.swift": "8d696683f1cf48dbe271770c368659581d54db44aac39f8c12cb10150792db01",
             "App/Sources/Me/MeRouteViews.swift": "3a32258056218f8c4b0f97f86ed93f02c1302a14740bd5de27d3990b11da9a72",
