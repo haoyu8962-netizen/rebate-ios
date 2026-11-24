@@ -154,9 +154,7 @@ final class LockIos6c97062SensitiveOperationTests: XCTestCase {
             StubURLProtocol.install { _ in ok() }
             let blocked = await harness.client.send(ApiCall(operationId: item.operationId, body: item.otherBody))
             XCTAssertEqual(
-                blocked.rejectReason,
-                LocalRejectReason.pendingKeyUnresolved,
-                "\(item.operationId)：结果未知期间不得换键"
+                blocked.rejectReason, LocalRejectReason.pendingKeyUnresolved, "\(item.operationId)：结果未知期间不得换键"
             )
             XCTAssertTrue(StubURLProtocol.requests.isEmpty, "\(item.operationId)：零发送")
             let found = await harness.client.pendingFor(operationId: item.operationId)
@@ -356,10 +354,8 @@ final class LockIos6c97062SensitiveOperationTests: XCTestCase {
         XCTAssertEqual(harness.pending.state(key: key).stateRaw, PendingKeyStore.unknown)
     }
 
-    /// 契约依据：abandonIdempotencyKey 的 x-error-codes 只有 [20001, 40901, 10405]，作废接口不返回 20903（「已作废」是成功返回
-    /// outcome=abandoned，见 testAbandonPendingUsesAbandonActionOnBothEntries；20903 只在之后带原键重新提交时出现，见
-    /// testConfirm20903EndsKeyForEverySensitiveOperation）。提现结果未知后，两个放弃入口调作废接口得到 40901（原请求仍在处理）
-    /// 或 20001：作废请求发出 1 次，键保持待确认（记录还在、state 仍是 unknown），结果不是 .abandoned。
+    /// 契约：abandonIdempotencyKey 的 x-error-codes 只有 [20001, 40901, 10405]，无 20903（已作废走 outcome=abandoned）。
+    /// 提现结果未知后两个放弃入口得到 40901（原请求仍在处理）或 20001：作废发 1 次，键保持待确认，结果不是 .abandoned。
     func testAbandon40901KeepsPendingOnWithdrawal() async throws {
         for (code, status) in [(40901, 409), (20001, 400)] {
             for entry in Entry.allCases {
@@ -373,9 +369,7 @@ final class LockIos6c97062SensitiveOperationTests: XCTestCase {
                 )
                 XCTAssertNotEqual(result, .abandoned(idempotencyKey: key), "\(label)：不是已作废：\(result)")
                 XCTAssertNotNil(harness.backend.read(account: "account-A", key: key), "\(label)：记录还在")
-                XCTAssertEqual(
-                    harness.pending.state(key: key).stateRaw, PendingKeyStore.unknown, "\(label)：保持待确认"
-                )
+                XCTAssertEqual(harness.pending.state(key: key).stateRaw, PendingKeyStore.unknown, "\(label)：保持待确认")
             }
         }
     }
