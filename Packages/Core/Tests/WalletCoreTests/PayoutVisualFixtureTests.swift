@@ -25,7 +25,8 @@ final class PayoutVisualFixtureTests: XCTestCase {
         let marker = try XCTUnwrap(data.range(of: Data("\"visualPayout\"".utf8)))
         let digest = SHA256.hash(data: data[..<marker.lowerBound]).map { String(format: "%02x", $0) }.joined()
         // #24 守卫换值（FU-X-HOME-PAGE-API-ios）：旧组里只有第 243、261 行按编排 11-04 11:24 认可的原文改取新子键，其余一字未动
-        XCTAssertEqual(digest, "250e4ed71c459da59c1f3dbd9550763558e7f2b20c6672bcb9703113dfb64836")
+        // #24 换值（D10-2789）：outcome 组新增 payout_submit_50301 一行（三端共用向量，+1 / −0），其余一字未动
+        XCTAssertEqual(digest, "f58d2261483153075320f1338c7009409ad0e464f52e80a89d0c7a27c74b1fdd")
     }
 
     func testPayoutParsesStrictly() throws {

@@ -26,7 +26,8 @@ final class WithdrawVisualFixtureTests: XCTestCase {
         let marker = try XCTUnwrap(data.range(of: Data("\"visualWithdraw\"".utf8)))
         let digest = SHA256.hash(data: data[..<marker.lowerBound]).map { String(format: "%02x", $0) }.joined()
         // #24 守卫换值（FU-X-HOME-PAGE-API-ios）：旧组里只有第 243、261 行按编排 11-04 11:24 认可的原文改取新子键，其余一字未动
-        XCTAssertEqual(digest, "975927e4802755abf38fce9c7008cdcc37266a1e7547c6b06bee65ec94bea796")
+        // #24 换值（D10-2789）：outcome 组新增 payout_submit_50301 一行（三端共用向量，+1 / −0），其余一字未动
+        XCTAssertEqual(digest, "6670f5756715d1c167a9b5a55088a248fd2053e04722e47a182488b3f5a11bfd")
     }
 
     func testRulesAndPayoutParseStrictly() throws {
