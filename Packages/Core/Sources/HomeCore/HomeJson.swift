@@ -155,14 +155,16 @@ public enum HomeJson {
     static func item(_ raw: Any, type: String) -> HomeItem? {
         guard let json = raw as? [String: Any], let action = RouteTargetCheck.target(json["action"]) else { return nil }
         let title = HomeValue.text(json["title"])
-        let image = HomeValue.image(json[type == "icon_grid" ? "icon" : "image"])
+        let image = type == "icon_grid" ? HomeEntryValue.picture(json) : HomeValue.image(json["image"])
         switch type {
         case "banner": guard HomeValue.https(image) != nil else { return nil }
         case "icon_grid": guard title != nil, image != nil else { return nil }
         default: guard title != nil || image != nil else { return nil }
         }
+        // 徽标只在金刚区条目上（BR-TEXT-29）；不合法只丢徽标、保留条目（D10-2998 (a)）
+        let badge = type == "icon_grid" ? HomeEntryValue.badge(json["badge"]) : nil
         return HomeItem(title: title, subtitle: json["subtitle"] as? String, image: image, alt: json["alt"] as? String,
-                        badge: json["badge"] as? String, adLabel: json["ad_label"] as? String, action: action)
+                        badge: badge, adLabel: json["ad_label"] as? String, action: action)
     }
 
     static func notice(_ raw: Any) -> HomeNotice? {

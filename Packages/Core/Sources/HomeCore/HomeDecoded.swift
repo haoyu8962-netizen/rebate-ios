@@ -34,7 +34,8 @@ struct HomeItem: Sendable {
     var subtitle: String?
     var image: String?
     var alt: String?
-    var badge: String?
+    /// 只有金刚区条目有徽标（契约 static_item 的 badge: false，BR-TEXT-29）；其余卡型恒为 nil。
+    var badge: HomeBadge?
     var adLabel: String?
     var action: RouteTarget?
     var product: HomeProductUi?

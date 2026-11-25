@@ -29,8 +29,8 @@ enum DebugFakeHomePages {
     "nav_style": "dark" } } } ] } } ] }, "icon_grid": { "page_key": "home", "version": 3, "sections": [
     { "id": "icons", "type": "icon_grid", "version": 1, "props": { "columns": 4, "rows": 1 },
     "data_source": { "kind": "static", "items": [ {
-    "icon": "https://img.example.invalid/p/home-icon-a.png", "title": "测试入口甲", "badge": "测试",
-    "action": { "route": "Search", "params": { "q": "测试入口甲" } } }, {
+    "icon": "https://img.example.invalid/p/home-icon-a.png", "title": "测试入口甲",
+    "badge": { "kind": "text", "text": "测试" }, "action": { "route": "Search", "params": { "q": "测试入口甲" } } }, {
     "icon": "https://img.example.invalid/p/home-icon-b.png", "title": "新人指南", "action": {
     "route": "Help" } } ] } } ] }, "product_scroll": { "page_key": "home", "version": 4, "sections": [ {
     "id": "scroll", "type": "product_scroll", "version": 1, "props": { "title": "今日精选", "more_action": {

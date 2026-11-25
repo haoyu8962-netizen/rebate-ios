@@ -83,7 +83,11 @@ extension HomeController {
                 }
             } else {
                 let items = section.source == "static" ? section.items : sectionItems[section.id, default: []]
-                output.items = items.enumerated().map { itemUi($0.element, section: section, slot: $0.offset + 1) }
+                // 文字徽标到期（expire_at）与公告起止同一个 now、同一个计时：到点重建，只隐藏徽标、保留条目
+                transitions += items.compactMap { $0.badge?.pendingExpiry(after: now) }
+                output.items = items.enumerated().map {
+                    itemUi($0.element, section: section, slot: $0.offset + 1, now: now)
+                }
             }
             output.feed = feeds[section.id]
             if !output.items.isEmpty || output.feed?.failure != nil || output.feed?
@@ -107,14 +111,14 @@ extension HomeController {
         HomeTap(render: state.render, sectionId: section, slot: slot, target: target)
     }
 
-    func itemUi(_ item: HomeItem, section: HomeSection, slot: Int) -> HomeItemUi {
+    func itemUi(_ item: HomeItem, section: HomeSection, slot: Int, now: Int64) -> HomeItemUi {
         let imageTicket = item.image
             .map { _ in HomeImageTicket(render: state.render, sectionId: section.id, slot: slot) }
         let failed = imageTicket.map { failedImages.contains($0) } ?? false
         var output = HomeItemUi(id: String(slot), title: item.title, subtitle: item.subtitle, image: item.image,
                                 spokenName: item.alt ?? item.title ?? deps.text("home.image.entry", [:]))
         output.adLabel = HomeAdLabel.of(sectionLabel: section.adLabel, itemLabel: item.adLabel)
-        output.badge = item.badge
+        output.badge = item.badge?.shownText(at: now)
         output.product = item.product
         output.imageTicket = imageTicket
         output
