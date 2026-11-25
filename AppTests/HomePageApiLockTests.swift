@@ -94,6 +94,8 @@ final class HomePageApiLockTests: XCTestCase {
 
     /// 三端同组向量：network-vectors 整文件与鸿蒙 / 安卓逐字节相同（第 125 行 30901 / pay_disabled，编排 11-04 05:35 认可）；
     /// home-sdui-vectors 三端本来逐字节相同、本单不改；wallet-vectors 第 243、261 行取新子键（11:24 认可）。
+    /// FU-IOS-HOME-ENTRY-OBJECT-FIELDS（#24，D10-3094）：home-sdui-vectors 第 1061 行徽标换对象形态，
+    /// 整份与安卓 1f87039 逐字节相同，sha256 70cab00a… → 53f478fb…。
     func testSharedVectorsMatchTheOtherPlatforms() throws {
         let root = try SourceScan.root().appendingPathComponent("specs")
         let digest: (String) throws -> String = { name in
@@ -103,7 +105,7 @@ final class HomePageApiLockTests: XCTestCase {
         XCTAssertEqual(try digest("network-vectors.json"),
                        "ac5220c17cc31ee0660eeed80e90cedec87d091261cd35116bb958ff1bf4f160")
         XCTAssertEqual(try digest("home-sdui-vectors.json"),
-                       "70cab00a88a26ce45bcd078bd10178a3f383fa3f07ef6cc14bced87a1d9f100e")
+                       "53f478fb6473d2d5d985df703c4820ab2d72b5735b2ea5d5a552bb6762efce74")
         let wallet = try String(contentsOf: root.appendingPathComponent("wallet-vectors.json"), encoding: .utf8)
             .components(separatedBy: "\n")
         XCTAssertTrue(wallet[242].hasPrefix(#"    {"name":"G03_G07_payee_daily_count","blockCode":30303,"#))

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "fixtureSHA256": "70cab00a88a26ce45bcd078bd10178a3f383fa3f07ef6cc14bced87a1d9f100e",
+  "fixtureSHA256": "53f478fb6473d2d5d985df703c4820ab2d72b5735b2ea5d5a552bb6762efce74",
   "cases": [
     {
       "name": "Main-v3-light",
