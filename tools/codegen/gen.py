@@ -974,12 +974,21 @@ def swift_shadow_table(name: str, doc_line: str, shadows: list[tuple[str, list[d
     return lines
 
 
+# tokens 下的顶层分组必须登记在下面两张表之一，表外分组报错（D10-3147 / D10-3148）。
+TOKEN_GROUPS_GENERATED = frozenset({"color", "space", "radius", "font", "interaction", "focus", "component", "shadow"})
+# 已知、原生不生成：motion（动效时长 / 缓动，原生用平台默认，00 D37 / D10-837 / D10-3147）。
+TOKEN_GROUPS_NOT_GENERATED = frozenset({"motion"})
+
+
 def gen_tokens(out: dict[str, str]):
     doc = load("design/design-tokens.json")
     version = as_str((doc.get("metadata") or {}).get("version"), "design.metadata.version")
     tokens = doc.get("tokens")
     if not isinstance(tokens, dict):
         raise GenError("design.tokens 缺失")
+    unknown = sorted(set(tokens) - TOKEN_GROUPS_GENERATED - TOKEN_GROUPS_NOT_GENERATED)
+    if unknown:
+        raise GenError(f"design.tokens 含未登记的顶层分组：{', '.join(unknown)}")
     try:
         colors = color_leaves(tokens["color"], "tokens.color")
         component_ints, component_numbers = component_leaves(tokens["component"], "tokens.component")
