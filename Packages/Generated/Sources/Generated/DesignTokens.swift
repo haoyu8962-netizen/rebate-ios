@@ -3,19 +3,19 @@
 
 /// 设计令牌原始常量；SwiftUI 映射在 DesignSystem。
 public enum DesignTokens {
-    public static let version: Swift.String = "0.5.1"
+    public static let version: Swift.String = "0.5.3"
 
     /// 颜色（浅色，tokens.color.*.value）：去掉 tokens.color. 前缀的点分路径 → "#RRGGBB" 或 "#RRGGBBAA"（CSS 顺序，末两位透明度；保留源字符串）。
     public static let colors: [Swift.String: Swift.String] = [
         "background.admin-canvas": "#F6F3ED",
-        "background.canvas": "#F2EEE6",
-        "background.muted": "#EFEAE2",
-        "background.placeholder": "#E9E2D9",
+        "background.canvas": "#F6F5F3",
+        "background.muted": "#F2F1EF",
+        "background.placeholder": "#EBEAE7",
         "background.surface": "#FFFFFF",
         "badge.background": "#C44820",
         "border.active": "#28251F",
         "border.control": "#8A8177",
-        "border.subtle": "#E4DED5",
+        "border.subtle": "#E6E5E3",
         "brand.emphasis": "#A83B1F",
         "brand.primary": "#C44820",
         "brand.secondary": "#26735B",
@@ -24,7 +24,7 @@ public enum DesignTokens {
         "button.inverse.text": "#A83B1F",
         "button.primary.default.background": "#C44820",
         "button.primary.default.text": "#FFFFFF",
-        "button.primary.disabled.background": "#E9E2D9",
+        "button.primary.disabled.background": "#EBEAE7",
         "button.primary.disabled.text": "#655E57",
         "button.primary.pressed.background": "#A83B1F",
         "button.primary.pressed.text": "#FFFFFF",
@@ -42,11 +42,11 @@ public enum DesignTokens {
         "rebate.solid.text": "#FFFFFF",
         "rebate.text": "#A83B1F",
         "source.background": "#FFFFFF",
-        "source.border": "#E4DED5",
+        "source.border": "#E6E5E3",
         "source.text": "#655E57",
         "status.error.background": "#FDECF0",
         "status.error.text": "#B42345",
-        "status.pending.background": "#EFEAE2",
+        "status.pending.background": "#F2F1EF",
         "status.pending.text": "#655E57",
         "status.success.background": "#EAF4EE",
         "status.success.text": "#26735B",
