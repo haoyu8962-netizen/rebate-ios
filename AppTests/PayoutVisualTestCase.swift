@@ -168,7 +168,7 @@ class PayoutVisualTestCase: WithdrawVisualTestCase {
                        file: file, line: line)
         let icon = try rect("\(id).icon", file: file, line: line)
         assertNear(icon.width, 20, 1, "\(message)：图标 20", file: file, line: line)
-        // 浅色 muted #EFEAE2 与画布 #F2EEE6 只差 3、4、4，上面容差 6 分不开（变异 M23 存活）；取图标左侧的内边距带，容差 1
+        // 浅色 muted #F2F1EF 与画布 #F6F5F3 只差 4、4、4（v0.5.3），上面容差 6 分不开（变异 M23 存活）；取图标左侧的内边距带，容差 1
         let strip = try rect(id, file: file, line: line)
         let band = CGRect(x: strip.minX + 3, y: strip.minY + 14, width: 7, height: max(strip.height - 28, 4))
         let fill = share(image, in: band, near: pixel(CouliColor.backgroundMuted, dark: dark), tolerance: 1)

@@ -525,7 +525,7 @@ class TokenSegments(unittest.TestCase):
         with open(self.tokens_path(), encoding="utf-8") as f:
             doc = json.load(f)
         body = self.tokens_swift()
-        self.assertIn('public static let version: Swift.String = "0.5.1"', body)
+        self.assertIn('public static let version: Swift.String = "0.5.3"', body)
         colors, dark = swift_table(body, "colors"), swift_table(body, "colorsDark")
         self.assertIsNotNone(dark, "缺 colorsDark 段")
         self.assertEqual(set(colors), set(dark))

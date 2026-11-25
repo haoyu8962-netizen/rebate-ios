@@ -77,7 +77,7 @@ final class PrivacyVisualPaletteTests: PrivacyVisualTestCase {
     }
 
     private func assertScrim(dark: Bool, file: StaticString = #filePath, line: UInt = #line) async throws {
-        let ground = Judge.hex(dark ? "#171513" : "#F2EEE6")
+        let ground = Judge.hex(dark ? "#171513" : "#F6F5F3")
         let expected = dark ? Judge.blend(Judge.hex("#000000"), opacity: 0x8C / 255, over: ground)
             : Judge.blend(Judge.hex("#28251F"), opacity: 0.4, over: ground)
         try await openPrivacy(Scene(canvas: Canvas(height: 1200, dark: dark)), file: file, line: line)

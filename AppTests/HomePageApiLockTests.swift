@@ -51,7 +51,7 @@ final class HomePageApiLockTests: XCTestCase {
         "contracts/texts.default.json":
             "78530d1abc70e17b771e4bde9a627f01d5032856c7ed3ad8eee9f94daadb269b",
         "design/design-tokens.json":
-            "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c",
+            "58b5e1ff8a0481381cf428b284d38b2a96b5128641912acf37d54e7e6cf63c93",
         "specs/app-stores.json":
             "19ad122d9cf7b92044819edd30c615f4f111668a0388eea28814394e130822cf",
         "specs/client-public-ids.json":

@@ -5,7 +5,7 @@ import XCTest
 
 /// DS-02-iOS-1（brief §3.1–§3.2）：生成物与锁定令牌源逐值比对，补上 ContractConformanceTests 不比的段
 /// （深色、组件整数 / 非整数、阴影浅深、行高、字重、焦点、命中区）。既有 ContractConformanceTests 不动（brief §4-2）。
-/// 钉 0.5.1 与 couli f088f04 的断言：DSX-120 升 v0.6.0 时按 #24 换值（只换值，判据不放宽）。
+/// 钉 0.5.3 与 couli c404003 的断言（#24，D10-3148；原 0.5.1 / f088f04）：DSX-120 升 v0.6.0 时按 #24 换值（只换值，判据不放宽）。
 final class DesignTokensFullConformanceTests: XCTestCase {
     private typealias JSONObject = [String: Any]
 
@@ -20,10 +20,10 @@ final class DesignTokensFullConformanceTests: XCTestCase {
     }
 
     /// D10-665 ①：iOS 令牌锁直接升到 v0.5.1（couli #276）。
-    private static let lockedCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
-    /// `git -C couli show f088f04:design/tokens/design-tokens.json | shasum -a 256`（测试作者实测，交回 §2 附原始输出）。
-    private static let lockedBlobSHA256 = "97d2bf83ada062959987f348bc695c63fabc4adb3647f03e5c0895e2548e491c"
-    private static let lockedVersion = "0.5.1"
+    private static let lockedCommit = "c404003bbecdff2c67f3e744d81a5ee92e5043ce"
+    /// `git -C couli show c404003:design/tokens/design-tokens.json | shasum -a 256`（测试作者实测，交回 §2 附原始输出）。
+    private static let lockedBlobSHA256 = "58b5e1ff8a0481381cf428b284d38b2a96b5128641912acf37d54e7e6cf63c93"
+    private static let lockedVersion = "0.5.3"
 
     // 先去掉文件名，再从 GeneratedTests 向上四级到仓库根。
     private var repoRoot: URL {
@@ -44,13 +44,13 @@ final class DesignTokensFullConformanceTests: XCTestCase {
     func testVersionIsLockedReleaseAndMatchesMetadata() throws {
         let metadata = try object(try root()["metadata"], "design.metadata")
         XCTAssertEqual(DesignTokens.version, try string(metadata["version"], "metadata.version"))
-        XCTAssertEqual(DesignTokens.version, Self.lockedVersion, "令牌锁应在 v0.5.1（D10-665 ①）")
+        XCTAssertEqual(DesignTokens.version, Self.lockedVersion, "令牌锁应在 v0.5.3（D10-3148）")
         let parts = DesignTokens.version.split(separator: ".").compactMap { Int($0) }
         XCTAssertEqual(parts.count, 3, "版本号应是三段数字：\(DesignTokens.version)")
         XCTAssertFalse(parts.lexicographicallyPrecedes([0, 5, 1]), "DesignTokens.version 应 ≥ 0.5.1")
     }
 
-    /// brief §3.2：contract.lock 的 design_tokens 指向 f088f04；快照与 lock files 哈希都等于该提交里 blob 的 sha256。
+    /// brief §3.2：contract.lock 的 design_tokens 指向 c404003；快照与 lock files 哈希都等于该提交里 blob 的 sha256。
     func testLockPinsReleaseCommitAndSnapshotBlob() throws {
         let lockData = try Data(contentsOf: repoRoot.appendingPathComponent("contract.lock"))
         let lock = try XCTUnwrap(try JSONSerialization.jsonObject(with: lockData) as? JSONObject)

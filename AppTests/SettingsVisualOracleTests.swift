@@ -33,9 +33,9 @@ final class SettingsVisualOracleTests: SettingsVisualTestCase {
 
     /// 遮罩混合：令牌遮罩判过，系统 dim（黑 20%）判不过。
     func testScrimBlendJudge() {
-        let ground = Judge.hex("#F2EEE6")
+        let ground = Judge.hex("#F6F5F3")
         let token = Judge.blend(Judge.hex("#28251F"), opacity: 0.4, over: ground)
-        XCTAssertTrue(pixelNear(token, Judge.hex("#A19E96"), 3), "rgba(40,37,31,.4) 盖在页底 ≈ #A19E96")
+        XCTAssertTrue(pixelNear(token, Judge.hex("#A4A29E"), 3), "rgba(40,37,31,.4) 盖在页底 ≈ #A4A29E")
         let system = Judge.blend(Judge.hex("#000000"), opacity: 0.2, over: ground)
         XCTAssertFalse(pixelNear(system, token, 4), "系统 dim 判不过")
     }
