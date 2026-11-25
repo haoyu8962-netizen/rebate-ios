@@ -621,6 +621,22 @@ class TokenSegments(unittest.TestCase):
         self.assertIn("public static let shadowsDark: [Swift.String: [ShadowLayer]]", body)
         self.typecheck(files)
 
+    def test_top_level_motion_is_known_but_not_generated(self):
+        """FU-IOS-TOKENS-V053（D10-3147）：顶层 motion 是「已知、原生不生成」（00 D37 / D10-837）。"""
+        with open(self.tokens_path(), encoding="utf-8") as f:
+            self.assertIn("motion", json.load(f)["tokens"], "前提：锁定快照含顶层 tokens.motion")
+        body = self.tokens_swift()
+        self.assertNotRegex(body, r"(?i)motion|duration|easing|skeleton|shimmer|toast",
+                            "DesignTokens.swift 不得生成 motion 相关内容")
+
+    def test_unknown_top_level_group_fails_naming_it(self):
+        """FU-IOS-TOKENS-V053（D10-3147）：除已知分组外的陌生顶层分组必须报错并点出分组名，不能静默忽略。"""
+        def change(tokens):
+            tokens["foo"] = {"bar": {"type": "dimension", "value": 1, "unit": "logical"}}
+        self.edit_tokens(change)
+        with self.assertRaisesRegex(gen.GenError, r"foo"):
+            gen.generate()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
