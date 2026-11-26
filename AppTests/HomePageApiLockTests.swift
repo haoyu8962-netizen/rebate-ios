@@ -14,8 +14,9 @@ import XCTest
 @MainActor
 final class HomePageApiLockTests: XCTestCase {
     static let lockedCommit = "6c97062570dadce304821b905e5a31a5c40acbe2"
-    /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交。
-    static let designLockCommit = "f088f0473230d1e70232b8a246b92ef53d723929"
+    /// DS-02-iOS-1 按 #24 换值：令牌锁升到 couli f088f04（v0.5.1，D10-665 ①）；安卓、鸿蒙 TOKENS-PIPE 升到同一提交；
+    /// FU-IOS-TOKENS-V053（#24，D10-3258）再升到 couli c404003（v0.5.3）。
+    static let designLockCommit = "c404003bbecdff2c67f3e744d81a5ee92e5043ce"
 
     /// 与 iOS 同名的 23 项。FU-IOS-CONTRACT-LOCK-6c97062（#24）：换成 sync 到 6c97062 后实算的 sha256（改 7 项），与安卓升锁分支
     /// task/FU-AND-CONTRACT-LOCK-6c97062（3fd6a5c）contract.lock 的同名项逐项相同、与安卓 CtaKeyVectorTest.SAME_NAME_SHA256 对上。
@@ -77,7 +78,7 @@ final class HomePageApiLockTests: XCTestCase {
         let lock = try lock()
         XCTAssertEqual((lock["rebate_platform"] as? [String: Any])?["commit"] as? String, Self.lockedCommit)
         XCTAssertEqual((lock["design_tokens"] as? [String: Any])?["commit"] as? String, Self.designLockCommit,
-                       "design_tokens 锁在 f088f04（DS-02-iOS-1）")
+                       "design_tokens 锁在 c404003（D10-3148）")
     }
 
     /// 23 个同名快照：lock 的 files 与两端逐项相同，快照文件实算的 sha256 也相同（三端逐字节一致的 iOS 口径）。
