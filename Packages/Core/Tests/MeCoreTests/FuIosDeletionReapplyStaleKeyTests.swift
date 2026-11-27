@@ -24,7 +24,7 @@ final class FuIosDeletionReapplyStaleKeyTests: App13a1ControllerTestCase {
     ///
     /// 防御回归：直接调控制器撤回，绕过 DeletionPresentation 待确认卡优先的显示规则（D10-3452）。本夹具 pendingStatus 固定 .none，
     /// 待确认卡随即消失、只剩内存键；生产里待确认卡在时没有【撤回注销】（真实保证见 FuIosDeletionPendingCardTests）。
-    func testUnknownApplyThenCancelSucceededNextApplyUsesNewKey() async {
+    func testDefenceBypassesPendingCardRuleCancelSucceededAfterUnknownApplyNextApplyUsesNewKey() async {
         let fixture = await unknownApplyThenCooling(App13a1Replies.transport)
         fixture.api.on("cancelDeletion", App13a1Replies.ok(App13a1Replies.cancelled))
 
@@ -41,7 +41,7 @@ final class FuIosDeletionReapplyStaleKeyTests: App13a1ControllerTestCase {
     /// 申请断连（结果未知）→ 撤回也断连（结果未知）→ 核对读取读到用户撤回 cancelled → 同一撤回成功结算 → 无待确认卡、再申请带新键。
     ///
     /// 防御回归：直接调控制器撤回，绕过 DeletionPresentation 待确认卡优先的显示规则（D10-3452）。夹具口径同上一条。
-    func testUnknownApplyThenCancelReconciledNextApplyUsesNewKey() async {
+    func testDefenceBypassesPendingCardRuleCancelReconciledAfterUnknownApplyNextApplyUsesNewKey() async {
         let disconnect = ApiResult.transportFailure(
             kind: "disconnect", httpStatus: nil, idempotencyKey: nil, pendingKeyUnknown: false
         )
