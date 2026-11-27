@@ -16,7 +16,7 @@ enum WithdrawVisualBaseline {
         "Packages/Core/Sources/WalletCore/RealNameController+Idempotency.swift": "591e730e4db30877a323b2724334adbb58d152ce035b54a26857c08b04fdaba6",
         "Packages/Core/Sources/WalletCore/RealNameController.swift": "f456ac9322afd29f863df0eaf21f825342980d8343508cfc986a543b4a02a96e",
         "Packages/Core/Sources/WalletCore/SensitiveFlow+Apply.swift": "e73b548c62428e225b6083a38289a9384d2dd257717d8f0c5404d3b9270fdc37",
-        "Packages/Core/Sources/WalletCore/SensitiveFlow+Deletion.swift": "f74e246666a602cddd2289d172118af215a46d3a0257b223ab9c26a751eab151",
+        "Packages/Core/Sources/WalletCore/SensitiveFlow+Deletion.swift": "b3d649dfcf35513c0deb654d8220c8287763d34d27eb681863351f0b4d44d440",
         "Packages/Core/Sources/WalletCore/SensitiveFlow+Pending.swift": "65d732f53e0a00d7aa74c9e506ca03297ccb4ef2c6a8e75224171b1ef1845991",
         "Packages/Core/Sources/WalletCore/SensitiveFlow.swift": "6959d4f34333e5104440a6428dc75184a82eaad8762b35e54c394005b9c6d3af",
         "Packages/Core/Sources/WalletCore/SensitiveOutcome.swift": "099af7353e9b491c31bec263fed24446fb1fb1a5fa78a2e549009d3eda0cc68b",
