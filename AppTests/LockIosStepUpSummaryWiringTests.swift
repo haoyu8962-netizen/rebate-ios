@@ -145,8 +145,9 @@ final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
 
     // MARK: - 提现
 
-    /// 提现 stepUp 请求体只有 action 与 code，不带 summary。
-    func testWithdrawVerifyHasNoSummary() async throws {
+    // D10-3641 / D10-3646：原 testWithdrawVerifyHasNoSummary 改断新行为（提现不走二次验证）
+    /// 提现收到 10003（D10-3639 C）：不开面板、不发任何验证请求，回编辑态并提示 error.10003。
+    func testWithdraw10003SendsNoVerify() async throws {
         let fixture = make()
         script.on("POST /v1/withdrawals", Self.need, .envelope(
             code: 0, data: WalletSamples.withdrawal("W-sum"), headers: [:]
@@ -154,11 +155,13 @@ final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
         let controller = try await withdraw(fixture)
         await typeAmount(controller, "10")
         actions(controller).submit()
-        try await passStepUp(controller.flow.stepUp)
-        await waitUntil("没有进提现记录") { fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
-        let verify = try XCTUnwrap(verifies.first?.json)
-        XCTAssertEqual(Set(verify.keys), ["action", "code"], "提现不带 summary")
-        XCTAssertEqual(verify["action"] as? String, "withdraw")
+        await waitUntil("提交没有发出") { self.posts.count == 1 }
+        await idle(controller.flow)
+        await quietWindow(0.3)
+        XCTAssertNil(controller.flow.stepUp.state, "提现 10003 不开面板")
+        XCTAssertTrue(verifies.isEmpty, "提现不发任何验证请求")
+        XCTAssertEqual(controller.flow.state.phase, .editing, "回编辑态")
+        XCTAssertEqual(controller.flow.state.error?.key, "error.10003", "提示 error.10003")
     }
 
     // MARK: - 令牌缓存
