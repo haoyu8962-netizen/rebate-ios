@@ -46,8 +46,6 @@ public struct WithdrawScreen: View {
     @ObservedObject var flow: SensitiveFlow
     @ObservedObject var readGate: RetryAfterGate
     @ObservedObject var gate: RetryAfterGate
-    @ObservedObject var smsGate: RetryAfterGate
-    @ObservedObject var verifyGate: RetryAfterGate
     @ObservedObject var context: WalletPageContext
     @State var toast: CouliToastMessage?
     @State var feeHelp = false
@@ -66,8 +64,6 @@ public struct WithdrawScreen: View {
         flow = controller.flow
         readGate = gates.read
         gate = gates.withdraw
-        smsGate = gates.sms
-        verifyGate = gates.verify
         self.context = context
     }
 
