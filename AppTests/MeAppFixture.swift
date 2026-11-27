@@ -67,7 +67,7 @@ struct MeAppFixture {
         privacyStore.decisionRaw = decision
         if decision == "consented" {
             privacyStore.consentedVersion = "1"
-        } else {
+        } else if decision == "basic_mode" {
             privacyStore.basicMode = true
         }
         return (tokens, privacyStore)
