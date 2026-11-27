@@ -40,6 +40,21 @@ public extension SensitiveFlow {
         refreshPending()
     }
 
+    /// 撤回注销成功后结束仍持有的申请键（FU-IOS-DELETION-REAPPLY-STALE-KEY，D10-2914 修法 2）：服务端对 code 0 的申请应答按键存 30 天
+    /// 原样回放，撤回后再沿用旧键会拿到旧的「已进冷静期」。下次申请用新键、收起页面上的待确认，再按本机未决记录重建待确认。
+    /// 只对申请注销流程生效（提现 / 收款账号流程调用时什么都不做）；本流程有写请求在途、确认 / 放弃在途或结果待身份确认时不动（由那次结果收尾）。
+    func endDeletionKey() {
+        guard operationId == Self.deletionOperation, alive(), state.phase != .submitting, !localBusy,
+              !state.awaitingIdentity
+        else { return }
+        reuseKey = nil
+        endPending()
+        if state.phase == .pending {
+            state.phase = .editing
+        }
+        refreshPending()
+    }
+
     /// 打开引导的手动入口（自动引导被拦下时）。
     func openGuideManually(owner: WalletOwner) {
         openGuide(owner: owner)

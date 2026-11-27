@@ -97,6 +97,8 @@ extension DeleteAccountController {
         state.waiver = false
         state.blocked30416 = false
         state.amount30416 = nil
+        // 撤回成功即结束仍持有的申请键：再申请用新键，不拿旧键的「冷静期」回放（D10-2914 修法 2）
+        flow.endDeletionKey()
         if let deletion {
             setRead(.record(deletion))
         } else {
