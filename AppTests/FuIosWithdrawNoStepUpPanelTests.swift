@@ -125,6 +125,43 @@ final class FuIosWithdrawNoStepUpPanelTests: WalletFlowTestCase {
         XCTAssertEqual(posts[1].header("Idempotency-Key"), posts[0].header("Idempotency-Key"), "确认沿用原键")
     }
 
+    /// D10-3645 ①：提现流程任何时刻都不持有 step-up 令牌。每一步发出前都重新预置提现 action 的缓存令牌（10003 的共享结算会按 action
+    /// 清掉它），依次走：首次提交得 10003 → 再提交断连进待确认 → 确认得 10003 → 再确认断连；交给钱包入口的令牌每一次都是 nil。
+    func testWithdrawFlowNeverHoldsStepUpTokenEvenAfter10003() async {
+        let fixture = make()
+        await verifyRealname(fixture)
+        let spied = await spiedWithdraw(fixture)
+        let controller = spied.controller
+        await typeAmount(controller, "10")
+        let steps: [(reply: WalletStubProtocol.Reply, confirm: Bool)] = [
+            (Self.need, false), (.disconnect, false), (Self.need, true), (.disconnect, true),
+        ]
+        for (index, step) in steps.enumerated() {
+            spied.deps.tokens.put(
+                action: WithdrawController.action, account: Self.account, token: "t-cached-\(index)", expireAtMs: .max
+            )
+            script.on("POST /v1/withdrawals", step.reply)
+            if step.confirm {
+                await waitUntil("第 \(index) 步：待确认卡不可确认") { controller.flow.state.pendingActionsEnabled }
+                flowActions(controller.flow).confirm()
+            } else {
+                actions(controller).submit()
+            }
+            await waitUntil("第 \(index) 步没有发出") { self.posts.count == index + 1 }
+            await idle(controller.flow)
+        }
+        XCTAssertEqual(spied.spy.sendTokens(WithdrawController.operation), [nil, nil], "两次提交（含 10003 之后）都不带令牌")
+        XCTAssertEqual(spied.spy.confirmTokens(WithdrawController.operation), [nil, nil], "两次确认（含 10003 之后）都不带令牌")
+        XCTAssertTrue(spied.spy.allTokens.allSatisfy { $0 == nil }, "钱包入口的任何一次调用都不带令牌")
+        XCTAssertEqual(cachedWithdrawToken(spied.deps), "t-cached-3", "最后预置的缓存令牌原样留着（没被取用）")
+        assertNoPanel(fixture, controller.flow)
+        XCTAssertEqual(posts.count, 4, "提交 2 + 确认 2，不重放")
+        XCTAssertTrue(posts.allSatisfy { $0.header("X-Step-Up-Token") == nil }, "旁证：请求头都不带")
+        XCTAssertNotEqual(posts[1].header("Idempotency-Key"), posts[0].header("Idempotency-Key"), "10003 后再提交换新键")
+        XCTAssertEqual(Set(posts[1...].map { $0.header("Idempotency-Key") }).count, 1, "两次确认沿用第二次提交的原键")
+        XCTAssertEqual(controller.flow.state.phase, .pending, "最后一次确认断连：保持待确认")
+    }
+
     // MARK: - 对照：改收款、注销照旧（今天绿、改后仍须绿）
 
     /// 改收款【保存】收到 10003：照常打开面板（action=payout_account_change）并发码 1 次；保存带上了摘要相同的缓存令牌（取用令牌）。
@@ -284,6 +321,11 @@ private final class TokenSpyWalletApi: WalletApi, @unchecked Sendable {
     /// 某个 operationId 经 `confirmPending` 交来的令牌（按调用顺序）。
     func confirmTokens(_ operationId: String) -> [String?] {
         lock.withLock { confirmed.filter { $0.operationId == operationId }.map(\.token) }
+    }
+
+    /// 经 `send` 与 `confirmPending` 交来的全部令牌（不分 operationId）。
+    var allTokens: [String?] {
+        lock.withLock { (sent + confirmed).map(\.token) }
     }
 
     private func record(send operationId: String, _ token: String?) {
