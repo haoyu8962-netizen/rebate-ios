@@ -52,9 +52,9 @@ public enum LocalRejectReason {
     public static let basicModeDenied = "basic_mode_denied"
     public static let sessionScopeDenied = "session_scope_denied"
     public static let deviceNotReady = "device_not_ready"
-    /// 四个 step-up 操作的键结果未知或在途时，新的提交被挡（BR-ID-10「敏感操作的幂等键」）。
+    /// 四个敏感操作（x-sensitive-operation；step-up 只剩三个）的键结果未知或在途时，新的提交被挡（BR-ID-10「敏感操作的幂等键」）。
     public static let pendingKeyUnresolved = "pending_key_unresolved"
-    /// 四个 step-up 操作取不到可信会话里的账号（BR-ID-10：未决记录按账号隔离），不发出。
+    /// 四个敏感操作（x-sensitive-operation；step-up 只剩三个）取不到可信会话里的账号（BR-ID-10：未决记录按账号隔离），不发出。
     public static let accountUnknown = "account_unknown"
     /// 未决记录没能持久化（安全存储写入失败）：记录落盘是发送的前置条件，不发出。
     public static let pendingStoreFailed = "pending_store_failed"
@@ -340,7 +340,7 @@ public enum ApiResult: Sendable, Equatable {
     /// 不是登录成功：调用方停在登录页提示失败，当前会话保持原样。
     case sessionNotSaved(reason: String, traceId: String?)
     /// 没有带统一外壳的响应：timeout / disconnect / no_envelope（网关错误页等）。
-    /// pendingKeyUnknown = 四个 step-up 操作的键因此进入结果未知（发起页进入待确认）。
+    /// pendingKeyUnknown = 四个敏感操作（x-sensitive-operation；step-up 只剩三个）的键因此进入结果未知（发起页进入待确认）。
     case transportFailure(kind: String, httpStatus: Int?, idempotencyKey: String?, pendingKeyUnknown: Bool)
 }
 

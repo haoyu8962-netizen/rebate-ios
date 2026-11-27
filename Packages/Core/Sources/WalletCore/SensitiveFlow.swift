@@ -135,6 +135,9 @@ public final class SensitiveFlow: ObservableObject {
     /// 注销：构造时固定的会话作用域此刻仍未变（线程安全，网络层任意线程调；FU-IOS-WALLETSETTLEMENT-SCOPE）。并进申请 / 确认 / 放弃的发送前
     /// 闸门与 42901 的结算；提现 / 收款账号为 nil（行为不变）。
     let scopeStill: (@Sendable () -> Bool)?
+    /// 本操作走不走二次验证（D10-3639 B）：只有提现传 false——10003 不开面板、不重放，按 `stepUpExhausted` 的终态结算；发送与确认都
+    /// 不取缓存令牌。改收款、注销用缺省 true（行为不变，D10-2124）。
+    let stepUpEnabled: Bool
     weak var host: FlowHost?
     var alive: () -> Bool
     public let stepUp: StepUpController
@@ -166,7 +169,7 @@ public final class SensitiveFlow: ObservableObject {
     init(deps: WalletDeps, operationId: String, action: String, outcomeOp: String, gate: RetryAfterGate,
          marksWalletDirty: Bool, alive: @escaping () -> Bool, owner: WalletOwner,
          stepUpSummary: @escaping (String?) -> [String: String]? = { _ in nil },
-         scopeStill: (@Sendable () -> Bool)? = nil) {
+         scopeStill: (@Sendable () -> Bool)? = nil, stepUpEnabled: Bool = true) {
         self.deps = deps
         self.operationId = operationId
         self.action = action
@@ -175,6 +178,7 @@ public final class SensitiveFlow: ObservableObject {
         self.gate = gate
         self.marksWalletDirty = marksWalletDirty
         self.scopeStill = scopeStill
+        self.stepUpEnabled = stepUpEnabled
         self.alive = alive
         state = FlowState(owner: owner)
         stepUp = StepUpController(deps: deps, alive: alive)
@@ -237,11 +241,12 @@ public final class SensitiveFlow: ObservableObject {
         state.fieldErrors = []
         state.fieldErrorKey = nil
         state.guideRoute = nil
-        // 缓存的令牌只在业务摘要与本次请求体相同时带上（改收款；提现摘要为 nil，照旧按同 action，D10-1667）
-        let token = deps.tokens.take(
+        // 缓存的令牌只在业务摘要与本次请求体相同时带上（改收款；注销摘要为 nil，按同 action，D10-1667）；
+        // 提现不走二次验证，不取（D10-3639 B）
+        let token = stepUpEnabled ? deps.tokens.take(
             action: action, account: account, nowMs: deps.env.nowMillis(),
             summary: StepUpSummary.key(stepUpSummary(body))
-        )
+        ) : nil
         send(click: owner, payload: Submission(key: key, body: body, summary: summary), token: token, replayed: false)
     }
 

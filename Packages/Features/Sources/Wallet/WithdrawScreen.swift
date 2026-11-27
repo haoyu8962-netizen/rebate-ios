@@ -44,7 +44,6 @@ public struct WithdrawActions {
 public struct WithdrawScreen: View {
     @ObservedObject var controller: WithdrawController
     @ObservedObject var flow: SensitiveFlow
-    @ObservedObject var stepUp: StepUpController
     @ObservedObject var readGate: RetryAfterGate
     @ObservedObject var gate: RetryAfterGate
     @ObservedObject var smsGate: RetryAfterGate
@@ -65,7 +64,6 @@ public struct WithdrawScreen: View {
     public init(controller: WithdrawController, gates: WalletGates, context: WalletPageContext) {
         self.controller = controller
         flow = controller.flow
-        stepUp = controller.flow.stepUp
         readGate = gates.read
         gate = gates.withdraw
         smsGate = gates.sms
@@ -106,8 +104,6 @@ public struct WithdrawScreen: View {
         }
         .couliSheet(isPresented: feeHelp, dismissOnScrim: { feeHelp = false }, restoreFocusTo: $feeHelpFocused,
                     sheet: { feeSheet })
-        .walletStepUpSheet(stepUp, texts: texts, smsBlocked: smsGate.blocked, verifyBlocked: verifyGate.blocked,
-                           restoreFocus: $submitFocused)
         .couliToast($toast)
         .onChange(of: flowState.toast) { value in
             guard let value else { return }

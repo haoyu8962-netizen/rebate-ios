@@ -45,7 +45,8 @@ public enum SessionLoginEpoch {
 }
 
 /// 会话令牌（03 §4.2「Token 刷新」）：access_token、refresh_token、session_scope、登录返回的 user_id（account）与持久化登录世代。
-/// 登录流程在 APP-05。account 是四个 step-up 敏感操作未决记录的账号来源（可信会话上下文），不由调用方传入。
+/// 登录流程在 APP-05。account 是四个敏感操作（x-sensitive-operation；step-up 只剩三个）未决记录的账号来源
+/// （可信会话上下文），不由调用方传入。
 ///
 /// 读取前调用方必须先确认凭据可读（撤回同意的清理已完成，`WithdrawalCleanupRunner.credentialsReadable`）；
 /// 本类型自己不判断隐私状态。

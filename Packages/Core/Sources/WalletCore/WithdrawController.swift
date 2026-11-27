@@ -92,9 +92,10 @@ public final class WithdrawController: ObservableObject, IdentityResumable {
     public init(deps: WalletDeps, owner: WalletOwner, restored: String = "") {
         self.deps = deps
         state = WithdrawSnapshot(amountText: WithdrawAmountInput.accept(current: "", next: restored))
+        // 提现不走二次验证（契约 6c97062，D10-3639）：10003 不开面板、不重放，发送与确认都不取缓存令牌
         flow = SensitiveFlow(
             deps: deps, operationId: Self.operation, action: Self.action, outcomeOp: SensitiveOutcome.withdraw,
-            gate: deps.gates.withdraw, marksWalletDirty: true, alive: { true }, owner: owner
+            gate: deps.gates.withdraw, marksWalletDirty: true, alive: { true }, owner: owner, stepUpEnabled: false
         )
         flow.alive = { [weak self] in self.map { !$0.left } ?? false }
         flow.host = self

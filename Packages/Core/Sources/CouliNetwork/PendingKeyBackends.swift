@@ -1,7 +1,7 @@
 import Foundation
 import SecureStore
 
-/// 一条未决记录（BR-ID-10 细则「敏感操作的幂等键」）：四个 step-up 操作首次发送前写入，按账号隔离。
+/// 一条未决记录（BR-ID-10 细则「敏感操作的幂等键」）：四个敏感操作（x-sensitive-operation；step-up 只剩三个）首次发送前写入，按账号隔离。
 /// body 为原请求体的原始文本（含账号或手机号，生产后端放 Keychain）；summary 为发起页展示的摘要。
 /// stateRaw：in_flight（在途）或 unknown（结果未知）；everUnknown = 这个键出现过结果未知。
 public struct PendingKeyRecord: Sendable, Equatable, Codable {

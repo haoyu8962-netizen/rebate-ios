@@ -70,6 +70,11 @@ extension SensitiveFlow {
     }
 
     func applyStepUp(phase: String, replayed: Bool, intent: PendingIntent?, message: Notice?) {
+        // 不走二次验证的操作（提现，D10-3639 C）：首次、重放、页面被覆盖都按重放已用尽的终态结算，不开面板、不重放
+        guard stepUpEnabled else {
+            stepUpExhausted(phase, message)
+            return
+        }
         if replayed {
             stepUpExhausted(phase, message)
         } else if !onScreen {

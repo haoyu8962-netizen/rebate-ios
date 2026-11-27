@@ -60,8 +60,8 @@ extension ApiClient {
     }
 
     /// 会话级副作用：跳登录与其他前置引导（会登记待办或要求在当前会话里补办）、刷新、清会话。旧世代的响应不得交付。
-    /// guide_only（step-up 操作上的 10001 / 10004 / 10005 / 授权码，以及 30304 等补办引导）都要求当前账号补身份、同意、
-    /// 授权或实名、收款信息，同样按会话世代校验（R3-02）。
+    /// guide_only（四个敏感操作（x-sensitive-operation；step-up 只剩三个）上的 10001 / 10004 / 10005 / 授权码，以及 30304
+    /// 等补办引导）都要求当前账号补身份、同意、授权或实名、收款信息，同样按会话世代校验（R3-02）。
     static func isSessionScoped(_ effect: ErrorEffect) -> Bool {
         let kinds: Set<ErrorEffectKind> = [
             .login, .bindPhone, .consent, .stepUp, .authorize, .guideOnly, .refreshReplay, .refreshOnly,

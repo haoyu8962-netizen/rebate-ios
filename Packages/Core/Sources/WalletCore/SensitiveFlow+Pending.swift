@@ -28,7 +28,12 @@ public extension SensitiveFlow {
             state.pendingNotice = notice(SensitiveOutcome.retryLaterKey)
             return
         }
-        // 缓存的令牌只在业务摘要与未决记录原体相同时带上（改收款；提现摘要为 nil，照旧按同 action，D10-1667）
+        // 提现不走二次验证：不取缓存令牌（D10-3639 B）
+        guard stepUpEnabled else {
+            runConfirm(intent, token: nil)
+            return
+        }
+        // 缓存的令牌只在业务摘要与未决记录原体相同时带上（改收款；注销摘要为 nil，按同 action，D10-1667）
         let summary = StepUpSummary.key(stepUpSummary(intent.body))
         runConfirm(
             intent,

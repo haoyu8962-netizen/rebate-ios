@@ -127,7 +127,7 @@ public struct ErrorActionInput {
 /// - textKey：文案键（BR-TEXT-14：error.<code>.<reason> 回落 error.<code>）；nil = 不提示或用服务端 msg / 通用兜底。
 /// - disableMillis：按钮禁用时长；nil = 不限时（页面按状态恢复）。
 /// - includeTrace6：通用错误态附 trace_id 后 6 位。
-/// - pendingKeyUnknown：四个 step-up 操作的键已结果未知：发起页进入待确认，不换新键（BR-ID-10）。
+/// - pendingKeyUnknown：四个敏感操作（x-sensitive-operation；step-up 只剩三个）的键已结果未知：发起页进入待确认，不换新键（BR-ID-10）。
 public struct ErrorEffect: Sendable, Equatable {
     public var code: Int
     public var kind: ErrorEffectKind

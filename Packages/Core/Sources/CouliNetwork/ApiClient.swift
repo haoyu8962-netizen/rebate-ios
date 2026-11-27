@@ -35,9 +35,9 @@ import Session
 /// - 作废未决键：completed 解包 original 按原操作给结果与 Effect；abandoned 返回 `.abandoned`。
 /// - 10401：响应头 Date 与本机时钟相差超过 300 秒时校正偏移，用新的 X-Timestamp、X-Nonce 重签再发 1 次（BR-ID-09）。
 ///   业务请求与内部刷新都适用；校时重签的次数与前置动作重放的次数分开计。
-/// - 四个 step-up 操作：账号取自会话（登录时保存的 user_id，取不到本地拒绝）；发送前未决记录必须落盘成功；没有统一外壳
-///   即结果未知；之后同一操作的新提交本地拒绝、Effect 不再换新键（10003 仍可在二次验证后同键继续：
-///   `confirmPending(stepUpToken:)`）。查询、确认、放弃都先核对记录账号与当前会话账号，发送前再核对一次，结算按原账号。
+/// - 四个敏感操作（x-sensitive-operation；step-up 只剩三个）：账号取自会话（登录时保存的 user_id，取不到本地拒绝）；
+///   发送前未决记录必须落盘成功；没有统一外壳即结果未知；之后同一操作的新提交本地拒绝、Effect 不再换新键（10003 仍可在
+///   二次验证后同键继续：`confirmPending(stepUpToken:)`）。查询、确认、放弃都先核对记录账号与当前会话账号，发送前再核对一次，结算按原账号。
 public final class ApiClient: @unchecked Sendable {
     static let refreshOperation = "refreshToken"
     static let abandonOperation = "abandonIdempotencyKey"
@@ -270,7 +270,7 @@ public final class ApiClient: @unchecked Sendable {
 
     // MARK: - 管线
 
-    /// 本次调用占用的未决键（四个 step-up 操作）：键、它所属的账号与这次调用的占用标识。结算一律按这个账号与标识。
+    /// 本次调用占用的未决键（四个敏感操作，x-sensitive-operation；step-up 只剩三个）：键、它所属的账号与这次调用的占用标识。结算一律按这个账号与标识。
     struct PendingHold: Equatable {
         let key: String
         let account: String
