@@ -138,24 +138,24 @@ final class WalletLessonsTests: WalletFlowTestCase {
         XCTAssertTrue(controller.state.phase == .error || controller.state.loadError != nil)
     }
 
+    // D10-3641：原 testConfirmStepUpPanelClosesWhenKeySettledElsewhere 前置由提现挪到改收款
     /// 共性第 49 条：确认流程打开的二次验证面板，所属的未决键在别处结算（这里由另一次作废结束）后同步收起，不再续发。
-    func testConfirmStepUpPanelClosesWhenKeySettledElsewhere() async throws {
+    func testConfirmStepUpPanelClosesWhenKeySettledElsewhereOnPayout() async throws {
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        try await enterPending(controller)
-        script.fail("POST /v1/withdrawals", 10003)
+        let controller = try await enterPayoutPending(fixture)
+        script.fail("PUT /v1/me/payout-account", 10003)
         flowActions(controller.flow).confirm()
         await waitUntil("确认没有弹二次验证") { controller.flow.stepUp.state != nil }
-        // 别处（同账号新开的另一个提现页实例）放弃了这个键
-        let other = try await withdraw(fixture)
+        // 别处（同账号新开的另一个收款账号页实例）放弃了这个键
+        let other = try await payout(fixture)
         await waitUntil("另一个页面没有恢复待确认") { other.flow.state.pending != nil }
         flowActions(other.flow).askAbandon()
         flowActions(other.flow).abandon()
         await waitUntil("另一个页面没有放弃成功") { other.flow.state.pending == nil }
         await waitUntil("键结束后面板没有收起") { controller.flow.stepUp.state == nil }
-        let before = posts.count
+        let before = saves.count
         await settle()
-        XCTAssertEqual(posts.count, before, "不再续发")
+        XCTAssertEqual(saves.count, before, "不再续发")
     }
 
     /// 进程回收后恢复已输入金额（iOS I06，共性第 59、65 条）：草稿按账号落盘；正常出栈删除草稿；进程被回收（页面没有出栈）后同一账号新建的
@@ -230,5 +230,20 @@ final class WalletLessonsTests: WalletFlowTestCase {
         XCTAssertEqual(line.netFen, 900, "旧序号的响应不覆盖")
         XCTAssertEqual(amount, 1000)
         _ = fixture
+    }
+
+    // MARK: - 改收款辅助（D10-3641）
+
+    /// 打开收款账号页（未绑定直接是表单），填支付宝并【保存】；PUT 断连进待确认。
+    private func enterPayoutPending(_ fixture: WalletAppFixture) async throws -> PayoutAccountController {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.on("PUT /v1/me/payout-account", .disconnect)
+        let controller = try await payout(fixture)
+        let render = { PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id) }
+        render().logon("zhangsan@example.com")
+        render().payee("测试三")
+        render().save()
+        await waitUntil("没有进入待确认") { controller.flow.state.pending != nil && controller.flow.state.phase == .pending }
+        return controller
     }
 }

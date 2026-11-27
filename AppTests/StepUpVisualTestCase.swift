@@ -9,8 +9,9 @@ import Wallet
 @testable import WalletCore
 import XCTest
 
-/// APP-09v-d 二次验证半屏用例的公共底座（四页共用件，资金相关）。到达方式只走生产链路：真实提现页 / 收款账号页 → 真实提交 → 假服务 10003 →
+/// APP-09v-d 二次验证半屏用例的公共底座（四页共用件，资金相关）。到达方式只走生产链路：真实收款账号页 → 真实【保存】→ 假服务 10003 →
 /// 生产代码开半屏并发码；测试只控制网络答复、时钟与画布，不伪造面板状态。
+/// D10-3641（D10-3639 A 甲）：提现 10003 不再开面板，原以提现页为宿主的到达（`panelOnWithdraw`）整体挪到改收款（`panelOnPayout`）。
 ///
 /// 四个 iOS 事实（2026-10-31 探针实测，iOS 26 模拟器）：
 /// - `.sheet` 进程内真的画进宿主窗口，`drawHierarchy` 截得到；
@@ -58,61 +59,64 @@ class StepUpVisualTestCase: WithdrawVisualTestCase {
         state.phase == .noPhone || (state.phase == .ready && (state.resendLeftSec > 0 || state.error != nil))
     }
 
-    /// 打开提现页并点【提交】→ 10003 → 面板就绪（不要求任何新测量：资金守卫不能把「测量桥未接」混进来）。
-    /// `phoneBound`：给定时把 App 的 Me.phone_bound 接线（`AppWallet.phoneBound`，面板经 `stepUpPhoneBound` 读）固定为它；nil 保持夹具缺省。
+    /// 打开收款账号页（未绑定）、填表单、点【保存】（第一次回 10003、之后回保存成功），不等面板（发码挂起等场景自己等）。
+    /// `large`：窗口特征放大（真 200%）；`sms`：发码答复（nil = 成功、倒计时 48）；`phone` = false：取不到号码；
+    /// `phoneBound`：给定时把 App 的 Me.phone_bound 接线（`AppWallet.phoneBound`，面板经 `stepUpPhoneBound` 读）固定为它，nil 保持夹具缺省
+    /// （false 时改收款面板进 noPhone、不发码，D10-1682 ②）。
+    /// D10-3641：由 `panelOnWithdraw`（提现页【提交】）挪来，large / sms / phone / phoneBound 参数含义不变。
     @discardableResult
-    func panelOnWithdraw(canvas: WithdrawVisualHost.Canvas = .init(), large: UIContentSizeCategory? = nil,
-                         sms: WalletStubProtocol.Reply? = nil, phone: Bool = true, phoneBound: Bool? = nil,
-                         file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
-        let (host, _) = try await openWithdraw(amount: "10", estimate: "estimated", canvas: canvas,
-                                               needProbes: false, file: file, line: line)
-        host.wallet.clock = { Self.frozenMillis }
+    func saveOnPayout(canvas: WithdrawVisualHost.Canvas = .init(), large: UIContentSizeCategory? = nil,
+                      sms: WalletStubProtocol.Reply? = nil, phone: Bool = true, phoneBound: Bool? = nil,
+                      file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
+        let host = try await freshPage(payout: "empty")
         if !phone {
             host.wallet.phoneProvider = { _ in nil }
         }
         if let phoneBound {
             host.wallet.phoneBound = { _ in phoneBound } // modify_existing ruling D10-1720 ④
         }
-        host.server.script.on("POST /v1/withdrawals", Self.need, .envelope(
-            code: 0, data: WalletSamples.withdrawal("W-step"), headers: [:]
-        ))
-        host.server.script.on("POST /v1/auth/sms-codes", sms ?? Self.smsOk())
-        enlarge(host, large)
-        host.actions?.submit()
-        await waitUntil("二次验证面板没有打开", timeout: 8, file: file, line: line) {
-            guard let state = host.flow?.stepUp.state else { return false }
-            return Self.landed(state)
-        }
-        return host
-    }
-
-    /// 打开收款账号页（未绑定）、填表单、点【保存】→ 10003 → 面板就绪。`phoneBound`：同 `panelOnWithdraw`（false 时改收款面板进 noPhone、
-    /// 不发码，D10-1682 ②）。
-    @discardableResult
-    func panelOnPayout(canvas: WithdrawVisualHost.Canvas = .init(), phoneBound: Bool? = nil,
-                       file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
-        let host = try await freshPage(payout: "empty")
-        if let phoneBound {
-            host.wallet.phoneBound = { _ in phoneBound } // modify_existing ruling D10-1720 ④
-        }
         host.server.script.on("PUT /v1/me/payout-account", Self.need, .envelope(
             code: 0, data: WalletSamples.alipay, headers: [:]
         ))
-        host.server.script.on("POST /v1/auth/sms-codes", Self.smsOk())
+        host.server.script.on("POST /v1/auth/sms-codes", sms ?? Self.smsOk())
         try await host.show(WalletRoutes.payoutAccount, canvas)
         _ = await host.stable(file: file, line: line) { $0.payout.map { $0.state.phase != .loading } ?? false }
         host.wallet.clock = { Self.frozenMillis }
+        enlarge(host, large)
+        try payoutActions(file: file, line: line).logon("13800135678")
+        try payoutActions(file: file, line: line).payee("测试三")
+        try savePayout(file: file, line: line)
+        return host
+    }
+
+    /// 打开收款账号页（未绑定）、填表单、点【保存】→ 10003 → 面板就绪。参数同 `saveOnPayout`。
+    @discardableResult
+    func panelOnPayout(canvas: WithdrawVisualHost.Canvas = .init(), large: UIContentSizeCategory? = nil,
+                       sms: WalletStubProtocol.Reply? = nil, phone: Bool = true, phoneBound: Bool? = nil,
+                       file: StaticString = #filePath, line: UInt = #line) async throws -> WithdrawVisualHost {
+        let host = try await saveOnPayout(canvas: canvas, large: large, sms: sms, phone: phone, phoneBound: phoneBound,
+                                          file: file, line: line)
         let controller = try XCTUnwrap(host.payout, file: file, line: line)
-        func actions() -> PayoutActions {
-            PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
-        }
-        actions().logon("13800135678")
-        actions().payee("测试三")
-        actions().save()
         await waitUntil("收款账号页没有打开面板", timeout: 8, file: file, line: line) {
             controller.flow.stepUp.state.map(Self.landed) ?? false
         }
         return host
+    }
+
+    /// 收款账号页的渲染时回调（与页面同一份 `PayoutActions.make`）。
+    func payoutActions(file: StaticString = #filePath, line: UInt = #line) throws -> PayoutActions {
+        let controller = try XCTUnwrap(page?.payout, "收款账号页执行器不在", file: file, line: line)
+        return PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
+    }
+
+    /// 收款账号页再点【保存】（表单沿用已填内容；对应提现页的 `host.actions?.submit()`）。
+    func savePayout(file: StaticString = #filePath, line: UInt = #line) throws {
+        try payoutActions(file: file, line: line).save()
+    }
+
+    /// 改收款「落地」：保存成功、页面换成服务端返回的已绑定账号（未绑定进页），面板收起（对应提现那边的「进 withdrawRecords」）。
+    func payoutLanded(_ host: WithdrawVisualHost) -> Bool {
+        host.payout?.state.account?.bound == true && host.flow?.stepUp.state == nil
     }
 
     /// 面板就绪后等稳定（要求新测量：`stepUp.title` 已上报）。
@@ -123,13 +127,13 @@ class StepUpVisualTestCase: WithdrawVisualTestCase {
         return try XCTUnwrap(image, "半屏没有稳定画面", file: file, line: line)
     }
 
-    /// 提现页到面板 + 输入 `code` + 等稳定。
+    /// 收款账号页到面板 + 输入 `code` + 等稳定（D10-3641：宿主由提现页挪到收款账号页）。
     @discardableResult
     func openSheet(code: String = "", canvas: WithdrawVisualHost.Canvas = .init(),
                    large: UIContentSizeCategory? = nil, sms: WalletStubProtocol.Reply? = nil,
                    waitFor: String = "stepUp.title", file: StaticString = #filePath,
                    line: UInt = #line) async throws -> (WithdrawVisualHost, UIImage) {
-        let host = try await panelOnWithdraw(canvas: canvas, large: large, sms: sms, file: file, line: line)
+        let host = try await panelOnPayout(canvas: canvas, large: large, sms: sms, file: file, line: line)
         if !code.isEmpty {
             try enterCode(code, file: file, line: line)
         }

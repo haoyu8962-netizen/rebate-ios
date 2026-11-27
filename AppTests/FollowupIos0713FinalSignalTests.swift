@@ -10,17 +10,15 @@ import XCTest
 extension FollowupIos0713FinalTests {
     // MARK: - 完成信号承重（whenIdle 之后直接正向断言）
 
+    // D10-3641：原 test_fuios0713_final_stepUpWhenIdleCoversSendTaskAndVerifyRequest 前置由提现挪到改收款
     /// M44a：发码任务。发码响应放行后 `stepUp.whenIdle()` 返回时，倒计时已经按结果开始。
     /// M43a：WalletRequests 包装（验证请求）。验证响应放行后 `stepUp.whenIdle()` 返回时，token 已交出、面板已收起。
-    func test_fuios0713_final_stepUpWhenIdleCoversSendTaskAndVerifyRequest() async throws {
+    func test_fuios0713_final_stepUpWhenIdleCoversSendTaskAndVerifyRequestOnPayout() async throws {
         let fixture = fresh("面板完成信号")
-        script.on("POST /v1/withdrawals", .hold)
         script.on("POST /v1/auth/sms-codes", .hold, Self.smsOk)
         script.on("POST /v1/auth/step-up", .hold, Self.stepOk)
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
-        await waitUntil("提交没有挂住") { WalletStubProtocol.heldIds.count == 1 }
+        let controller = try await savePayout(fixture, .hold)
+        await waitUntil("保存没有挂住") { WalletStubProtocol.heldIds.count == 1 }
         WalletStubProtocol.release(try XCTUnwrap(WalletStubProtocol.heldIds.first), with: Self.need)
         let stepUp = controller.flow.stepUp
         await waitUntil("发码没有挂住") { stepUp.state != nil && WalletStubProtocol.heldIds.count == 1 }
@@ -34,9 +32,9 @@ extension FollowupIos0713FinalTests {
         await stepUp.whenIdle()
         XCTAssertNil(stepUp.state, "whenIdle 返回时验证结果已结算（token 交出、面板收起）")
         await waitUntil("原键重放没有挂住") { WalletStubProtocol.heldIds.count == 1 }
-        WalletStubProtocol.release(try XCTUnwrap(WalletStubProtocol.heldIds.first), with: Self.landed)
+        WalletStubProtocol.release(try XCTUnwrap(WalletStubProtocol.heldIds.first), with: Self.saved)
         await controller.flow.whenIdle()
-        XCTAssertTrue(onTop(fixture, WalletRoutes.withdrawRecords), "whenIdle 返回时重放结果已采用")
+        XCTAssertTrue(payoutLanded(controller), "whenIdle 返回时重放结果已采用")
     }
 
     /// M44b：SensitiveFlow 提交任务。提交成功响应放行后 `flow.whenIdle()` 返回时已进提现记录。

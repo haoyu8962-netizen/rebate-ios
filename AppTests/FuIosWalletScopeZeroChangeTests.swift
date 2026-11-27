@@ -53,21 +53,26 @@ final class FuIosWalletScopeZeroChangeTests: FuIosWalletSettlementScopeTestCase 
         await waitUntil("(零变化) 改收款 42901 没有写入 gates.payout") { fixture.gates.payout.active }
     }
 
-    /// (零变化 / b3 变体) 提现打开的二次验证面板发码在途，同世代作用域变化后拿到 42901 → 照写 gates.sms（提现面板不带作用域核对）。
-    func testWithdrawPanelSms42901AfterScopeChangeStillWritesSmsGate() async throws {
+    // D10-3641：原 testWithdrawPanelSms42901AfterScopeChangeStillWritesSmsGate 前置由提现挪到改收款
+    /// (零变化 / b3 变体) 改收款打开的二次验证面板发码在途，同世代作用域变化后拿到 42901 → 照写 gates.sms（改收款面板同样不带作用域核对）。
+    func testPayoutPanelSms42901AfterScopeChangeStillWritesSmsGate() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
         let fixture = make()
-        script.on("POST /v1/withdrawals", .envelope(code: 10003, data: "null", headers: [:]))
+        script.on("PUT /v1/me/payout-account", .envelope(code: 10003, data: "null", headers: [:]))
         script.on(Self.smsSend, .hold)
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+        let controller = try await payout(fixture)
+        payoutActions(controller).logon("zhangsan@example.com")
+        payoutActions(controller).payee("测试三")
+        payoutActions(controller).save()
         await waitUntil("发码没有到达假服务") { self.heldId(Self.smsSend) != nil }
-        XCTAssertEqual(controller.flow.stepUp.state?.action, "withdraw", "前提：提现的二次验证面板")
+        XCTAssertEqual(
+            controller.flow.stepUp.state?.action, PayoutAccountController.action, "前提：改收款的二次验证面板"
+        )
 
         try switchScope(fixture, to: SessionScope.deletionOnly)
         let held = try XCTUnwrap(heldId(Self.smsSend))
         WalletStubProtocol.release(held, with: Self.retryAfter(120))
-        await waitUntil("(零变化) 提现面板发码 42901 没有写入 gates.sms") { fixture.gates.sms.active }
+        await waitUntil("(零变化) 改收款面板发码 42901 没有写入 gates.sms") { fixture.gates.sms.active }
     }
 
     /// (零变化 / a1 变体) 提现待确认卡【确认上一笔】：确认先拿 10002 → 网络层刷新（full → full）→ 原键原体重放 1 次 → 成功。

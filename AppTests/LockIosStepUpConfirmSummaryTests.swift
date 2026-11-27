@@ -11,7 +11,7 @@ import XCTest
 /// - D10-1722 (c)：确认上一笔按未决记录原体推出的摘要取缓存令牌（`SensitiveFlow+Pending.swift` confirm 里 `tokens.take(… summary:)`）——
 ///   同摘要复用并带上、不弹面板；不同摘要 / 不带摘要的旧令牌不复用（确认不带令牌 → 10003 → 面板）；
 /// - D10-1720 ⑥：改收款推不出摘要（未决记录原体缺了账号字段）时确认得到 10003 → 不开面板、不发 stepUp、不发码，待确认卡 pendingNotice 为稍后再试，
-///   待确认卡保留；提现不受影响（摘要本就为 nil，确认得到 10003 照常开面板发码）。
+///   待确认卡保留；提现确认得到 10003 不开面板、不发码，保持待确认并提示 error.10003（D10-3639 C、D10-3641）。
 final class LockIosStepUpConfirmSummaryTests: WalletFlowTestCase {
     static let need = WalletStubProtocol.Reply.envelope(code: 10003, data: "null", headers: [:])
     static let saved = WalletStubProtocol.Reply.envelope(code: 0, data: WalletSamples.alipay, headers: [:])
@@ -148,21 +148,28 @@ final class LockIosStepUpConfirmSummaryTests: WalletFlowTestCase {
         XCTAssertEqual(controller.flow.state.phase, .pending, "保持待确认")
     }
 
-    /// 提现不受影响：确认上一笔得到 10003 照常打开面板（摘要本就为 nil）、发码 1 次、不提示稍后再试。
-    func testWithdrawConfirmStillOpensPanel() async throws {
+    // D10-3641：原 testWithdrawConfirmStillOpensPanel 改断新行为（确认计数原样保留）
+    /// 提现确认上一笔得到 10003（D10-3639 C）：确认只发 1 次（断连 1 + 确认 1）；不开面板、不发码；保持待确认、原键在卡上，待确认卡提示
+    /// error.10003（不是稍后再试）。
+    func testWithdrawConfirm10003NoPanelKeepsPending() async throws {
         let fixture = make()
         let controller = try await withdraw(fixture)
         try await enterPending(controller)
         await idle(controller.flow)
+        let key = try XCTUnwrap(controller.flow.state.pending?.key, "前提：待确认卡带原键")
         script.on("POST /v1/withdrawals", Self.need)
         flowActions(controller.flow).confirm()
-        await waitUntil("提现确认后面板没有打开") { controller.flow.stepUp.state != nil }
+        await waitUntil("提现确认没有发出") { self.posts.count == 2 }
         await idle(controller.flow)
-        await waitUntil("面板没有落定") { controller.flow.stepUp.state?.phase == .ready }
+        await quietWindow(0.3)
         XCTAssertEqual(posts.count, 2, "断连 1 + 确认 1")
-        XCTAssertEqual(smsSent.count, 1, "提现确认照常发码")
-        XCTAssertEqual(smsSent.first?.json["action"] as? String, "withdraw")
+        XCTAssertNil(controller.flow.stepUp.state, "提现确认不开面板")
+        XCTAssertTrue(smsSent.isEmpty, "提现确认不发码")
+        XCTAssertEqual(fixture.api.calls(StepUpController.sendOperation), 0, "不调用发码入口")
+        XCTAssertEqual(controller.flow.state.pendingNotice?.key, "error.10003", "待确认卡提示 error.10003")
         XCTAssertNotEqual(controller.flow.state.pendingNotice?.key, SensitiveOutcome.retryLaterKey, "提现不提示稍后再试")
-        XCTAssertNil(controller.flow.stepUp.summary, "提现面板不带摘要")
+        XCTAssertEqual(controller.flow.state.phase, .pending, "保持待确认")
+        XCTAssertEqual(controller.flow.state.pending?.key, key, "原键在卡上")
+        XCTAssertEqual(posts[1].header("Idempotency-Key"), posts[0].header("Idempotency-Key"), "确认沿用原键")
     }
 }

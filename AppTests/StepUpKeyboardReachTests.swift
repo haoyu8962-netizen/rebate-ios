@@ -8,6 +8,7 @@ import XCTest
 
 /// FU-IOS-ADAPT-CHECK ②（QA-11 iOS #5：`WithdrawStepUp-font200-w320-light` / `-short-light`「验证并提交」被截掉下半、按钮下方大片留白）。
 /// 截图那一镜：提现页 → 10003 → 二次验证半屏（窗口特征 AX3）→ 输入「38」，生产代码 300ms 后把焦点给验证码框，系统键盘弹起。
+/// D10-3641：提现不再开面板，同一镜改由收款账号页【保存】→ 10003 打开（`openSheet` 换宿主），半屏与判据不变。
 /// 进程内截图（drawHierarchy 只画 App 窗口）不含键盘窗口，键盘占的那一块显示成半屏底色——这就是「按钮下方留白」。
 /// - `testBlankBelowSubmitIsKeyboardArea`：把这个结论钉成事实（键盘确实弹起；留白区 = 键盘顶到半屏底，整块是半屏底色）。
 /// - `testSubmitFullyVisibleAboveKeyboardAndTappable`：按结论钉「按钮完整可见可点」——键盘弹起时，【验证并提交】要么本来就完整在键盘之上，
@@ -65,6 +66,7 @@ final class StepUpKeyboardReachTests: StepUpVisualTestCase {
         return (opened.0, image)
     }
 
+    // D10-3641：原 testBlankBelowSubmitIsKeyboardArea 前置由提现挪到改收款（openSheet 换宿主）
     func testBlankBelowSubmitIsKeyboardArea() async throws {
         let (_, image) = try await openKeyboardSheet(width: 320, height: 844)
         XCTAssertEqual(presentedCategory, Self.ax3, "前提：半屏真 200%")
@@ -85,6 +87,7 @@ final class StepUpKeyboardReachTests: StepUpVisualTestCase {
         }
     }
 
+    // D10-3641：原 testSubmitFullyVisibleAboveKeyboardAndTappable 前置由提现挪到改收款（openSheet 换宿主）
     func testSubmitFullyVisibleAboveKeyboardAndTappable() async throws {
         for (width, height) in [(CGFloat(320), CGFloat(844)), (320, 568), (390, 844)] {
             let (host, _) = try await openKeyboardSheet(width: width, height: height)

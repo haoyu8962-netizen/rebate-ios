@@ -94,7 +94,8 @@ final class StepUpVisualFundsGuardTests: XCTestCase {
         XCTAssertFalse(source.contains("138"), "不写号码")
     }
 
-    /// 消费方：iOS 目前只有提现、收款账号两页。**第三个调用点出现即红**：换手机号 / 注销落地时补真点用例再改这里（交回 §6）。
+    // D10-3641：清单去掉 WithdrawScreen.swift 一项（D10-3639 A 甲：提现页不再挂面板），逐字核对只留 PayoutAccountScreen.swift；其余页面清单不动
+    /// 消费方：钱包里只有收款账号页（提现页 D10-3639 起不挂面板）。**新调用点出现即红**：换手机号 / 注销落地时补真点用例再改这里（交回 §6）。
     func testConsumersAreKnown() throws {
         var hits: [String] = []
         let root = WalletVisualData.repo()
@@ -117,18 +118,17 @@ final class StepUpVisualFundsGuardTests: XCTestCase {
                 "AppMe+PhoneChange.swift",
                 "AppWallet+Deletion.swift",
                 "PayoutAccountScreen.swift",
-                "WithdrawScreen.swift",
             ],
             "二次验证半屏的页面清单变了"
         )
-        for page in ["WithdrawScreen.swift", "PayoutAccountScreen.swift"] {
+        for page in ["PayoutAccountScreen.swift"] {
             let text = try normalized(walletFile(page))
             let call = ".walletStepUpSheet(stepUp, texts: texts, smsBlocked: smsGate.blocked, "
                 + "verifyBlocked: verifyGate.blocked,"
             assertOnce(call, in: text, page)
         }
         // 注销页（APP-13a-1）同样核对调用写法：面板在 Features/Wallet，Feature 之间不依赖，由 App 层套上，所以文件在 App/Sources/Wallet；
-        // 第一个参数取宿主当前执行器的面板（整页按新身份 / 作用域重建时换成新面板），三个闸门参数与上面两页同一写法
+        // 第一个参数取宿主当前执行器的面板（整页按新身份 / 作用域重建时换成新面板），三个闸门参数与上面收款账号页同一写法
         let deletion = try normalized(String(
             contentsOf: root.appendingPathComponent("App/Sources/Wallet/AppWallet+Deletion.swift"), encoding: .utf8
         ))

@@ -91,20 +91,24 @@ final class WalletNavigationTests: WalletFlowTestCase {
         XCTAssertEqual(fixture.router.path.last?.id, origin, "被覆盖过的点击不再导航")
     }
 
+    // D10-3641：原 testStepUpPanelIdentityAndSharedSmsDeadline 前置由提现挪到改收款
     /// 二次验证面板沿用打开它的身份（共性第 60 条）：令牌已换后面板上的重新获取、验证零请求；发码倒计时按账号、号码、action 共享，重开面板恢复，
     /// 不重复发码（共性第 6、17 条）。
-    func testStepUpPanelIdentityAndSharedSmsDeadline() async throws {
-        script.fail("POST /v1/withdrawals", 10003)
+    func testStepUpPanelIdentityAndSharedSmsDeadlineOnPayout() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.fail("PUT /v1/me/payout-account", 10003)
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+        let controller = try await payout(fixture)
+        let render = { PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id) }
+        render().logon("zhangsan@example.com")
+        render().payee("测试三")
+        render().save()
         let stepUp = controller.flow.stepUp
         await waitUntil { stepUp.state?.phase == .ready && (stepUp.state?.resendLeftSec ?? 0) > 0 }
         XCTAssertEqual(WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").count, 1)
         let panel = try XCTUnwrap(stepUp.state)
         StepUpActions.make(stepUp, panel).close()
-        actions(controller).submit()
+        render().save()
         await waitUntil { stepUp.state?.phase == .ready }
         XCTAssertEqual(WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").count, 1, "倒计时内重开面板不重复发码")
         XCTAssertGreaterThan(stepUp.state?.resendLeftSec ?? 0, 0, "恢复倒计时")

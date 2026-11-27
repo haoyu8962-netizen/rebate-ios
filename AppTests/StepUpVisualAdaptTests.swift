@@ -36,14 +36,17 @@ final class StepUpVisualAdaptTests: StepUpVisualTestCase {
         XCTAssertLessThanOrEqual(digit.fontSize * 0.62, cells[0].width, "数字放得进格子", file: file, line: line)
     }
 
+    // D10-3641：原 testAX3W390 前置由提现挪到改收款（openSheet 换宿主）
     func testAX3W390() async throws {
         try await assertLarge(390)
     }
 
+    // D10-3641：原 testAX3W320 前置由提现挪到改收款（openSheet 换宿主）
     func testAX3W320() async throws {
         try await assertLarge(320)
     }
 
+    // D10-3641：原 testAX3ErrorAndCountdownBothComplete 前置由提现挪到改收款（openSheet 换宿主）
     /// AX3：倒计时与错误放不下同一行时可换行，但两者都完整、都在格下、都在按钮前，不互相压。
     func testAX3ErrorAndCountdownBothComplete() async throws {
         let (host, _) = try await openSheet(code: "000000", canvas: .init(width: 320, height: 844), large: Self.ax3,
@@ -58,6 +61,7 @@ final class StepUpVisualAdaptTests: StepUpVisualTestCase {
         try XCTAssertGreaterThanOrEqual(rect("stepUp.error.text").minY, rect("stepUp.cells").maxY)
     }
 
+    // D10-3641：原 testShortViewportFallsBackToWholeScroll 前置由提现挪到改收款（openSheet 换宿主）
     /// 短视口（320×568、667）+ 200%：降级整块滚动（共性第 33 条），标题、关闭、【验证并提交】都在同一滚动内容里、都在面板宽内且不重叠。
     func testShortViewportFallsBackToWholeScroll() async throws {
         for height in [CGFloat(568), 667] {
@@ -83,6 +87,7 @@ final class StepUpVisualAdaptTests: StepUpVisualTestCase {
         }
     }
 
+    // D10-3641：原 testShortViewportDefaultSizeNoFallback 前置由提现挪到改收款（openSheet 换宿主）
     /// 默认字号短视口（AdaptShortStepUp 上图 390×667）：三段都在半屏内，不必滚动。
     func testShortViewportDefaultSizeNoFallback() async throws {
         try await openSheet(canvas: .init(height: 667), waitFor: "stepUp.submit")
@@ -90,6 +95,7 @@ final class StepUpVisualAdaptTests: StepUpVisualTestCase {
         try XCTAssertLessThanOrEqual(rect("stepUp.submit").maxY, sheetFrame().maxY, "按钮在半屏内")
     }
 
+    // D10-3641：原 testW840 前置由提现挪到改收款（openSheet 换宿主）
     /// 840 宽：内容限宽 ≤ 600、居中（大屏口径）；6 格仍同宽。
     func testW840() async throws {
         try await openSheet(code: "38", canvas: .init(width: 840, height: 1100), waitFor: "stepUp.cell.5")

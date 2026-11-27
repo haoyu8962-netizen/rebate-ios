@@ -11,20 +11,22 @@ import XCTest
 /// 判据自证（底版应绿）：宿主、面板框、真 200%、测量穿过 `.sheet`、描边量具本身可信；否则版式用例的红 / 绿都不算数。
 @MainActor
 final class StepUpVisualOracleTests: StepUpVisualTestCase {
+    // D10-3641：原 testProductionPathOpensPanel 前置由提现挪到改收款（提交计数换成保存计数，action 换成 payout_account_change）
     /// 生产链路到面板：提交一次（10003）、发码一次、不验证。
-    func testProductionPathOpensPanel() async throws {
-        try await panelOnWithdraw()
-        XCTAssertEqual(submits.count, 1)
+    func testProductionPathOpensPanelOnPayout() async throws {
+        try await panelOnPayout()
+        XCTAssertEqual(saves.count, 1)
         XCTAssertEqual(smsSends.count, 1)
         XCTAssertEqual(smsSends.first?.json["purpose"] as? String, "step_up")
-        XCTAssertEqual(smsSends.first?.json["action"] as? String, "withdraw")
+        XCTAssertEqual(smsSends.first?.json["action"] as? String, "payout_account_change")
         XCTAssertEqual(verifies.count, 0)
         XCTAssertEqual(stepUp?.state?.resendLeftSec, 48, "冻结时钟：倒计时停在 48")
     }
 
+    // D10-3641：原 testSheetIsRealAndDrawn 前置由提现挪到改收款
     /// 半屏真的弹出且在窗口内；进程内截图能看到半屏（面板区是面板底色，不是页面）。
     func testSheetIsRealAndDrawn() async throws {
-        let host = try await panelOnWithdraw()
+        let host = try await panelOnPayout()
         await quietWindow(1.2)
         let frame = try sheetFrame()
         XCTAssertGreaterThan(frame.height, 200)
@@ -34,12 +36,13 @@ final class StepUpVisualOracleTests: StepUpVisualTestCase {
         XCTAssertGreaterThan(share(image, in: frame.insetBy(dx: 30, dy: 30), near: surface, tolerance: 6), 0.5, "看得到半屏")
     }
 
+    // D10-3641：原 testTraitOverrideReallyEnlargesSheet 前置由提现挪到改收款
     /// 环境值 dynamicTypeSize 进不了 `.sheet`（基线事实）；窗口特征才能真放大——本组 200% 用例都走后者。
     func testTraitOverrideReallyEnlargesSheet() async throws {
-        try await panelOnWithdraw(canvas: .init(size: .accessibility3))
+        try await panelOnPayout(canvas: .init(size: .accessibility3))
         await quietWindow(0.8)
         XCTAssertEqual(presentedCategory, .large, "只改环境值时半屏字号不变（若此处变绿以外的值，改 §6 说明）")
-        try await panelOnWithdraw(canvas: .init(size: .accessibility3), large: Self.ax3)
+        try await panelOnPayout(canvas: .init(size: .accessibility3), large: Self.ax3)
         await quietWindow(0.8)
         XCTAssertEqual(presentedCategory, Self.ax3, "窗口特征放大后半屏真 200%")
     }
@@ -84,13 +87,14 @@ final class StepUpVisualOracleTests: StepUpVisualTestCase {
         }
     }
 
+    // D10-3641：原 testSheetScaleRuler 前置由提现挪到改收款
     /// 半屏缩放量具：medium 档屏上窄于布局（390 窗口 374 / 390），large 档为 1；屏上测量 ÷ 缩放 = 布局值。
     func testSheetScaleRuler() async throws {
-        try await panelOnWithdraw()
+        try await panelOnPayout()
         await quietWindow(1.2)
         assertNear(sheetScale, 374.0 / 390.0, 0.002, "medium 档系统缩放")
         assertNear(logical(374), 390, 0.5, "换算")
-        try await panelOnWithdraw(large: Self.ax3)
+        try await panelOnPayout(large: Self.ax3)
         await quietWindow(1.2)
         assertNear(sheetScale, 1, 0.001, "large 档不缩放")
     }
@@ -110,7 +114,7 @@ final class StepUpVisualOracleTests: StepUpVisualTestCase {
         }
     }
 
-    /// 回车探针：对真实 UITextField 发系统回车，带 `.onSubmit` 的 SwiftUI 框确实触发（否则 `testReturnNeverVerifies` 证明不了什么）。
+    /// 回车探针：对真实 UITextField 发系统回车，带 `.onSubmit` 的 SwiftUI 框确实触发（否则 `testReturnNeverVerifiesOnPayout` 证明不了什么）。
     func testReturnProbeFiresOnSubmit() async throws {
         let box = Counter()
         let (window, host) = try mount(TextField("", text: .constant("1")).onSubmit { box.value += 1 })
@@ -124,7 +128,8 @@ final class StepUpVisualOracleTests: StepUpVisualTestCase {
         await waitUntil("回车探针没有触发 onSubmit", timeout: 2) { box.value >= 1 }
     }
 
-    /// 擦除探针：沿无障碍容器发 escape，SwiftUI 的 `.accessibilityAction(.escape)` 确实接住（否则 `testEscapeClosesThroughExit` 证明不了什么）。
+    /// 擦除探针：沿无障碍容器发 escape，SwiftUI 的 `.accessibilityAction(.escape)` 确实接住
+    /// （否则 `testEscapeClosesThroughExitOnPayout` 证明不了什么）。
     func testEscapeProbeReachesSwiftUIAction() async throws {
         try enableAccessibilityTree()
         let box = Counter()

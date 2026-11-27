@@ -50,28 +50,48 @@ final class FollowupIos0712FixRework3Tests: WalletFlowTestCase {
         XCTAssertEqual(posts.count, posted, "恢复后不新增写请求")
     }
 
+    // D10-3641：原 testConfirmStepUpReplaySettlesSharedResultFirst 前置由提现挪到改收款
     /// RV-02：【确认上一笔】得到 10003，只有共享结算那次读取失败（结果留在会话级服务）；页面照常打开二次验证。验证成功后的续发
     /// 之前没有任何外部 checkSession：续发先请 App 核对、补完共享结算再发。
-    func testConfirmStepUpReplaySettlesSharedResultFirst() async throws {
+    func testConfirmStepUpReplaySettlesSharedResultFirstOnPayout() async throws {
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        try await enterPending(controller)
-        script.on("POST /v1/withdrawals", .hold)
+        let controller = try await enterPayoutPending(fixture)
+        script.on("PUT /v1/me/payout-account", .hold)
         flowActions(controller.flow).confirm()
         await waitUntil("确认没有挂住") { WalletStubProtocol.heldIds.count == 1 }
         let held = try XCTUnwrap(WalletStubProtocol.heldIds.first)
-        // 10003 回来后网络层自己先读一次会话（第 1 次），共享结算核对是第 2 次——只让它失败
+        // 10003 回来后网络层自己先读一次会话（第 1 次），共享结算核对是第 2 次——只让它失败（改收款与提现同一条确认管线，次序待锁内实跑核对）
         fixture.store.failRead(nth: 2)
         WalletStubProtocol.release(held, with: .envelope(code: 10003, data: "null", headers: [:]))
         await waitUntil("10003 没有被共享结算保留") { fixture.wallet.deps.settlement.hasHeld }
-        script.on("POST /v1/withdrawals", .envelope(
-            code: 0, data: WalletSamples.withdrawal("W-confirm"), headers: [:]
+        script.on("PUT /v1/me/payout-account", .envelope(
+            code: 0, data: WalletSamples.alipay, headers: [:]
         ))
-        let posted = posts.count
+        let posted = saves.count
         try await passStepUp(controller.flow.stepUp)
-        await waitUntil("续发后没有进提现记录") { fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
+        await waitUntil("续发后没有落地（保存成功、面板收起）") { self.payoutLanded(controller) }
         let kept = fixture.wallet.deps.settlement.hasHeld
         XCTAssertFalse(kept, "续发前先补完共享结算")
-        XCTAssertEqual(posts.count, posted + 1, "续发一次")
+        XCTAssertEqual(saves.count, posted + 1, "续发一次")
+    }
+
+    // MARK: - 改收款辅助（D10-3641）
+
+    /// 改收款落地（对应提现的「进 withdrawRecords」）：保存成功、停在本页的「收款账号已保存」轻提示已出，面板收起。
+    private func payoutLanded(_ controller: PayoutAccountController) -> Bool {
+        controller.state.toast?.key == "payout.saved" && controller.flow.stepUp.state == nil
+    }
+
+    /// 打开收款账号页（未绑定直接是表单），填支付宝并【保存】；PUT 断连进待确认。
+    private func enterPayoutPending(_ fixture: WalletAppFixture) async throws -> PayoutAccountController {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.on("PUT /v1/me/payout-account", .disconnect)
+        let controller = try await payout(fixture)
+        let render = { PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id) }
+        render().logon("zhangsan@example.com")
+        render().payee("测试三")
+        render().save()
+        await waitUntil("没有进入待确认") { controller.flow.state.pending != nil && controller.flow.state.phase == .pending }
+        return controller
     }
 }

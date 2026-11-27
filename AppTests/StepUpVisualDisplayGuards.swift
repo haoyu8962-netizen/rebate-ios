@@ -11,9 +11,10 @@ import XCTest
 /// 各探针自身的有效性在 `StepUpVisualOracleTests`（testGestureDismissJudge、testReturnProbeFiresOnSubmit、
 /// testEscapeProbeReachesSwiftUIAction）。
 extension StepUpVisualMoneyTests {
+    // D10-3641：原 testInputFieldLockedWhileVerifying 前置由提现挪到改收款
     /// F7：验证中输入框真的不可编辑（控制器层会丢弃改码，这条看显示层）；答复回来恢复。先正后反。
-    func testInputFieldLockedWhileVerifying() async throws {
-        let host = try await panelOnWithdraw()
+    func testInputFieldLockedWhileVerifyingOnPayout() async throws {
+        let host = try await panelOnPayout()
         host.server.script.on("POST /v1/auth/step-up", .hold)
         await waitUntil("半屏里没有输入框") { self.sheetField() != nil }
         XCTAssertEqual(sheetField()?.isEnabled, true, "先正：就绪时可输入")
@@ -34,25 +35,22 @@ extension StepUpVisualMoneyTests {
         await waitUntil("noPhone 输入框要锁定") { self.sheetField()?.isEnabled == false }
     }
 
-    /// F2：系统手势收起的闸门是关的（下滑、点遮罩走同一闸门，两宿主）。UI 真手势杀不死 F2：面板一打开就聚焦弹键盘，键盘在时真点遮罩、
+    // D10-3641：原两宿主循环，提现那一轮删去（提现不再开面板），只留改收款那一轮，断言原样
+    /// F2：系统手势收起的闸门是关的（下滑、点遮罩走同一闸门）。UI 真手势杀不死 F2：面板一打开就聚焦弹键盘，键盘在时真点遮罩、
     /// 真拖把手都不收起，而半屏打开期间 UI 测试没有收键盘的办法（交回 v2 §3）。
     func testGestureDismissLockedByUIKit() async throws {
-        for payout in [false, true] {
-            let host: WithdrawVisualHost = if payout {
-                try await panelOnPayout()
-            } else {
-                try await panelOnWithdraw()
-            }
-            await quietWindow(0.8)
-            let presented = try XCTUnwrap(host.window?.rootViewController?.presentedViewController)
-            XCTAssertFalse(gestureDismissAllowed(presented), "payout=\(payout)：系统手势不能收起")
-            XCTAssertNotNil(stepUp?.state, "payout=\(payout)")
-        }
+        let payout = true
+        let host = try await panelOnPayout()
+        await quietWindow(0.8)
+        let presented = try XCTUnwrap(host.window?.rootViewController?.presentedViewController)
+        XCTAssertFalse(gestureDismissAllowed(presented), "payout=\(payout)：系统手势不能收起")
+        XCTAssertNotNil(stepUp?.state, "payout=\(payout)")
     }
 
+    // D10-3641：原 testReturnNeverVerifies 前置由提现挪到改收款
     /// F8：对真实输入框按回车（输满时）零验证、面板不动。
-    func testReturnNeverVerifies() async throws {
-        try await panelOnWithdraw()
+    func testReturnNeverVerifiesOnPayout() async throws {
+        try await panelOnPayout()
         await waitUntil("半屏里没有输入框") { self.sheetField() != nil }
         try enterCode("123456")
         await settle()
@@ -63,10 +61,11 @@ extension StepUpVisualMoneyTests {
         XCTAssertEqual(stepUp?.state?.code, "123456")
     }
 
+    // D10-3641：原 testEscapeClosesThroughExit 前置由提现挪到改收款
     /// F10：读屏焦点在验证码框时做擦除，走关闭出口：面板收起、零验证、零重放。
-    func testEscapeClosesThroughExit() async throws {
+    func testEscapeClosesThroughExitOnPayout() async throws {
         try enableAccessibilityTree()
-        let host = try await panelOnWithdraw()
+        let host = try await panelOnPayout()
         try enterCode("123456")
         await quietWindow(0.8)
         let root = try XCTUnwrap(host.window?.rootViewController?.presentedViewController?.view)
@@ -75,9 +74,10 @@ extension StepUpVisualMoneyTests {
         await waitUntil("擦除没有关闭面板") { self.stepUp?.state == nil }
         await quietWindow(0.4)
         XCTAssertEqual(verifies.count, 0, "擦除零验证")
-        XCTAssertEqual(submits.count, 1, "擦除零重放")
+        XCTAssertEqual(saves.count, 1, "擦除零重放")
     }
 
+    // D10-3641：原 testResendDisabledWhileSmsRateLimited 前置由提现挪到改收款（openSheet 换宿主）
     /// F5：发码限流（42901）期间【重新获取】画成不可用，回调也不发码；限流外同一状态是可用色（先正后反）。
     func testResendDisabledWhileSmsRateLimited() async throws {
         let (_, normal) = try await openSheet(sms: Self.serverDown, waitFor: "stepUp.resend.label")

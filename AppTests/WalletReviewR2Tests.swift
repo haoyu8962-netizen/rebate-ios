@@ -47,9 +47,10 @@ final class WalletReviewR2Tests: WalletFlowTestCase {
 
     // MARK: - R2-03 scenePhase inactive
 
+    // D10-3641：原 testInactiveThenActiveVoidsWaitingNavigationAndOverlays 的 10003 那一轮前置由提现挪到改收款（提现 10003 本就不开面板，原轮空转）
     /// R2-03：经 CouliApp 的 scenePhase 接线（AppWallet.scenePhaseChanged）：实名查询在途时 inactive → active，查询成功也不再打开提现页；
-    /// 提交在途时 inactive → active，迟到的 44001 不弹窗、迟到的 10003 不开二次验证面板（结论只留在页内）。
-    func testInactiveThenActiveVoidsWaitingNavigationAndOverlays() async throws {
+    /// 提现提交在途时 inactive → active，迟到的 44001 不弹窗；改收款保存在途时 inactive → active，迟到的 10003 不开二次验证面板（结论只留在页内）。
+    func testInactiveThenActiveVoidsWaitingNavigationAndOverlaysOnPayout() async throws {
         script.on("GET /v1/me", .hold)
         let fixture = make()
         _ = try XCTUnwrap(fixture.open(WalletRoutes.wallet))
@@ -67,7 +68,7 @@ final class WalletReviewR2Tests: WalletFlowTestCase {
         script.ok("GET /v1/me", WalletSamples.me)
         let controller = try await withdraw(fixture)
         await typeAmount(controller, "10")
-        for code in [44001, 10003] {
+        for code in [44001] {
             script.on("POST /v1/withdrawals", .hold)
             actions(controller).submit()
             await waitUntil("提交没有发出") { WalletStubProtocol.heldIds.count == 1 }
@@ -84,6 +85,34 @@ final class WalletReviewR2Tests: WalletFlowTestCase {
             XCTAssertNil(controller.flow.state.riskDialog, "迟到的 \(code) 不弹风控弹窗")
             XCTAssertNil(controller.flow.stepUp.state, "迟到的 \(code) 不开二次验证面板")
         }
+
+        // 10003 那一轮：提现 10003 本就不开面板（D10-3639 C），挪到仍会开面板的改收款，迟到的 10003 才测得到「不开面板」
+        try await assertLate10003OnPayoutOpensNoPanel(fixture)
+    }
+
+    /// R2-03 的 10003 那一轮（D10-3641 由提现挪到改收款）：保存在途时 inactive → active，迟到的 10003 不开二次验证面板，结论只留在页内。
+    private func assertLate10003OnPayoutOpensNoPanel(_ fixture: WalletAppFixture) async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
+        let payoutPage = try await payout(fixture)
+        let render = { PayoutActions.make(payoutPage, payoutPage.state, risk: payoutPage.flow.state.riskDialog?.id) }
+        render().logon("zhangsan@example.com")
+        render().payee("测试三")
+        let code = 10003
+        script.on("PUT /v1/me/payout-account", .hold)
+        render().save()
+        await waitUntil("保存没有发出") { WalletStubProtocol.heldIds.count == 1 }
+        let before = payoutPage.flow.state.error?.id
+        fixture.wallet.scenePhaseChanged(.inactive)
+        fixture.wallet.scenePhaseChanged(.active)
+        await waitUntil("回到 active 后页面没有变成可见") { payoutPage.flow.visibleNow }
+        let held = try XCTUnwrap(WalletStubProtocol.heldIds.first)
+        WalletStubProtocol.release(held, with: .envelope(code: code, data: "null", headers: [:]))
+        await waitUntil("迟到的 \(code) 没有结算") {
+            payoutPage.flow.state.error != nil && payoutPage.flow.state.error?.id != before
+        }
+        await settle()
+        XCTAssertNil(payoutPage.flow.state.riskDialog, "迟到的 \(code) 不弹风控弹窗")
+        XCTAssertNil(payoutPage.flow.stepUp.state, "迟到的 \(code) 不开二次验证面板")
     }
 
     // MARK: - R2-04 刷新后再次分页插入展开的记录

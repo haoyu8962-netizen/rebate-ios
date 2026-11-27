@@ -29,6 +29,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     // MARK: - W63 把手
 
+    // D10-3641：原 testW63Handle 前置由提现挪到改收款（openSheet 换宿主）
     /// 36×4、水平居中、`border.subtle`、在标题之上，浅深两档。
     func testW63Handle() async throws {
         for dark in [false, true] {
@@ -50,6 +51,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     // MARK: - W64 / W65 标题区
 
+    // D10-3641：原 testW64TitleAndClose 前置由提现挪到改收款（openSheet 换宿主）
     /// 标题 17/600，键仍是 error.10003（G-W19，文案随契约，不写画板新句）；【×】靠右，命中 ≥ 44，与标题同在顶行。
     func testW64TitleAndClose() async throws {
         try await openSheet()
@@ -62,6 +64,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         try assertDisjoint(close, rect("stepUp.title"), "关闭命中区不压标题")
     }
 
+    // D10-3641：原 testW65SentLineInTitleArea 前置由提现挪到改收款（openSheet 换宿主）
     /// 说明挪到标题区（G16）：14 次文字，紧贴标题下（画板 8），左缘同标题，在验证码格之上；不显示号码，不做业务摘要（G-W19）。
     func testW65SentLineInTitleArea() async throws {
         let (_, image) = try await openSheet(waitFor: "stepUp.cells")
@@ -85,6 +88,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     // MARK: - W66 六格
 
+    // D10-3641：原 testW66SixCellsGeometry 前置由提现挪到改收款（openSheet 换宿主）
     /// 6 格同宽、等高 56、间距 8，铺满内容宽；输入的数字进对应格。
     func testW66SixCellsGeometry() async throws {
         try await openSheet(code: "38", waitFor: "stepUp.cell.5")
@@ -108,6 +112,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         try assertInside(cells[0], rect("stepUp.cells"), "格子在行内")
     }
 
+    // D10-3641：原 testW66CurrentCellStroke 前置由提现挪到改收款（openSheet 换宿主）
     /// 当前格 2 描边，其余 1；随输入前移（真量像素）。
     func testW66CurrentCellStroke() async throws {
         let (_, empty) = try await openSheet(waitFor: "stepUp.cell.5")
@@ -124,6 +129,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     // MARK: - W67 格下一行
 
+    // D10-3641：原 testW67CountdownRow 前置由提现挪到改收款（openSheet 换宿主）
     /// 倒计时：措辞「48 秒后可重新获取」、14 次文字、靠右，紧贴格下（在中段，不在底部操作区），在【验证并提交】之上。
     func testW67CountdownRow() async throws {
         let (_, image) = try await openSheet(waitFor: "stepUp.countdown")
@@ -139,6 +145,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         XCTAssertGreaterThan(count(image, in: countdown, near: pixel(CouliColor.textSecondary, dark: false)), 20)
     }
 
+    // D10-3641：原 testW67ErrorAndCountdownSameRow 前置由提现挪到改收款（openSheet 换宿主）
     /// 错误与倒计时同一行：左错误（14 红字 + 图标）、右倒计时。错误出现时格子和按钮不跳（行高预留）。
     func testW67ErrorAndCountdownSameRow() async throws {
         let (host, _) = try await openSheet(code: "000000", waitFor: "stepUp.countdown")
@@ -164,6 +171,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         try assertNear(rect("stepUp.submit").minY, submitBefore.minY, 0.5, "按钮不跳（一行错误不改高度）")
     }
 
+    // D10-3641：原 testW67ResendRowAndHit 前置由提现挪到改收款（openSheet 换宿主）
     /// 发码失败回退：【重新获取】与错误同行；视觉行不被 44 命中区撑高（§9 第 7 条），命中区不压格子和按钮。
     func testW67ResendRowAndHit() async throws {
         _ = try await openSheet(sms: Self.serverDown, waitFor: "stepUp.resend")
@@ -182,13 +190,10 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         try assertDisjoint(hit, rect("stepUp.submit"), "命中区不压按钮")
     }
 
+    // D10-3641：原 testW67SendingInRow 前置由提现挪到改收款（收款【保存】回 10003，发码挂起）
     /// 发码中：行里是「正在发送验证码…」，没有【重新获取】和倒计时。
     func testW67SendingInRow() async throws {
-        let host = try await openWithdraw(amount: "10", estimate: "estimated", needProbes: false).0
-        host.wallet.clock = { Self.frozenMillis }
-        host.server.script.on("POST /v1/withdrawals", Self.need)
-        host.server.script.on("POST /v1/auth/sms-codes", .hold)
-        host.actions?.submit()
+        let host = try await saveOnPayout(sms: .hold)
         await waitUntil { self.stepUp?.state?.phase == .sending }
         _ = await host.stable { $0.probes["stepUp.sending"] != nil }
         XCTAssertEqual(try text("stepUp.sending"), texts.text("step_up.sending"))
@@ -213,6 +218,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
 
     // MARK: - W68 三段布局
 
+    // D10-3641：原 testW68ThreeSections 前置由提现挪到改收款（openSheet 换宿主）
     /// 从上到下：把手 → 标题区 → 格子 → 格下一行 → 【验证并提交】通栏；间距按画板（块间 16、格与行 12）。
     func testW68ThreeSections() async throws {
         try await openSheet(waitFor: "stepUp.submit")
@@ -232,6 +238,7 @@ final class StepUpVisualLayoutTests: StepUpVisualTestCase {
         XCTAssertFalse(has("stepUp.fallback"), "放得下时不是整块滚动")
     }
 
+    // D10-3641：原 testW68DarkTokens 前置由提现挪到改收款（openSheet 换宿主）
     /// 深色：面板底、标题、次文字走令牌（WithdrawStepUpDark）。
     func testW68DarkTokens() async throws {
         let (_, image) = try await openSheet(code: "38", canvas: .init(height: 1119, dark: true),

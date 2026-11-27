@@ -57,40 +57,43 @@ final class WithdrawSubmitTests: WalletFlowTestCase {
         XCTAssertNil(controller.flow.stepUp.state, "不出面板")
     }
 
-    /// 重放预算至多一次（共性第 16 条）：二次验证后仍 10003 → 不再弹面板，提示 error.10003，首次提交的键结束（下次新键）。
-    func testSecondStepUpRequiredStopsAndNextSubmitUsesNewKey() async throws {
-        script.fail("POST /v1/withdrawals", 10003)
+    // D10-3641：原 testSecondStepUpRequiredStopsAndNextSubmitUsesNewKey 前置由提现挪到改收款
+    /// 重放预算至多一次（共性第 16 条）：二次验证后仍 10003 → 不再弹面板，提示 error.10003，首次保存的键结束（下次新键）。
+    /// 提现首个 10003 就结束（不开面板、只发 1 次、下次新键）见 FuIosWithdrawNoStepUpPanelTests.testFirstSubmit10003EndsKeyWithoutPanel。
+    func testSecondStepUpRequiredStopsAndNextSubmitUsesNewKeyOnPayout() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.fail("PUT /v1/me/payout-account", 10003)
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+        let controller = try await payout(fixture)
+        fillAndSavePayout(controller)
         try await passStepUp(controller.flow.stepUp)
-        await waitUntil { posts.count == 2 && controller.flow.state.phase == .editing }
+        await waitUntil { saves.count == 2 && controller.flow.state.phase == .editing }
         XCTAssertNil(controller.flow.stepUp.state, "不再弹面板")
         XCTAssertEqual(controller.flow.state.error?.key, "error.10003")
-        script.ok("POST /v1/withdrawals", WalletSamples.withdrawal("W-2"))
-        actions(controller).submit()
-        await waitUntil { posts.count == 3 }
-        XCTAssertNotEqual(posts[2].header("Idempotency-Key"), posts[0].header("Idempotency-Key"), "下次用新键")
+        script.ok("PUT /v1/me/payout-account", WalletSamples.alipay)
+        payoutActions(controller).save()
+        await waitUntil { saves.count == 3 }
+        XCTAssertNotEqual(saves[2].header("Idempotency-Key"), saves[0].header("Idempotency-Key"), "下次用新键")
     }
 
-    /// 用户关闭面板：回到可编辑，本次键不用了（从未结果未知，下次用新键）；面板关闭后焦点回到【提交】由页面负责。
-    func testClosingStepUpEndsKey() async throws {
+    // D10-3641：原 testClosingStepUpEndsKey 前置由提现挪到改收款
+    /// 用户关闭面板：回到可编辑，本次键不用了（从未结果未知，下次用新键）；面板关闭后焦点回到【保存】由页面负责。
+    func testClosingStepUpEndsKeyOnPayout() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
         script.on(
-            "POST /v1/withdrawals", .envelope(code: 10003, data: "null", headers: [:]),
-            .envelope(code: 0, data: WalletSamples.withdrawal("W-3"), headers: [:])
+            "PUT /v1/me/payout-account", .envelope(code: 10003, data: "null", headers: [:]),
+            .envelope(code: 0, data: WalletSamples.alipay, headers: [:])
         )
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+        let controller = try await payout(fixture)
+        fillAndSavePayout(controller)
         await waitUntil { controller.flow.stepUp.state != nil }
         let panel = try XCTUnwrap(controller.flow.stepUp.state)
         StepUpActions.make(controller.flow.stepUp, panel).close()
         XCTAssertEqual(controller.flow.state.phase, .editing)
-        actions(controller).submit()
-        await waitUntil { posts.count == 2 }
-        XCTAssertNotEqual(posts[0].header("Idempotency-Key"), posts[1].header("Idempotency-Key"))
+        payoutActions(controller).save()
+        await waitUntil { saves.count == 2 }
+        XCTAssertNotEqual(saves[0].header("Idempotency-Key"), saves[1].header("Idempotency-Key"))
     }
 
     /// 10002 → 网络层单飞刷新后沿用原键自动重发（至多 1 次）。
@@ -144,5 +147,18 @@ final class WithdrawSubmitTests: WalletFlowTestCase {
         script.ok("GET /v1/withdrawals/rules", WalletSamples.rules(net: 1100))
         await typeAmount(controller, "11")
         XCTAssertFalse(controller.state.serverBlocked, "阻断之后发出、明确允许的 rules 才解除")
+    }
+
+    // MARK: - 改收款辅助（D10-3641）
+
+    private func payoutActions(_ controller: PayoutAccountController) -> PayoutActions {
+        PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
+    }
+
+    /// 收款账号页（未绑定直接是表单）填支付宝并点【保存】。
+    private func fillAndSavePayout(_ controller: PayoutAccountController) {
+        payoutActions(controller).logon("zhangsan@example.com")
+        payoutActions(controller).payee("测试三")
+        payoutActions(controller).save()
     }
 }

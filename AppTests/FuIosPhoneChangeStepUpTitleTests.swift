@@ -14,7 +14,8 @@ import XCTest
 
 /// FU-IOS-PHONECHANGE-STEPUP-TITLE 写测（任务书 brief.md §1、§4；D10-2281 ②：换号入口 Release 放开的前置之一）：换号流程里提交 / 确认得到 10003
 /// 弹的二次验证半屏（action = phone_change）标题取 `step_up.title.phone_change`、说明行 `stepUp.summary` 显示契约键
-/// `step_up.summary.phone_change`（{phone} = 打开面板那一刻固定的脱敏新号；没有号码不显示说明行）；提现、改收款半屏零变化。
+/// `step_up.summary.phone_change`（{phone} = 打开面板那一刻固定的脱敏新号；没有号码不显示说明行）；改收款半屏零变化；
+/// 提现 10003 不再开半屏（D10-3641 / D10-3639 C）。
 /// 写法照 `App13a2StepUpTapTests`：真实 App 组合（App13a2Fixture）→ 生产的设置页路由视图挂进窗口 → 页面同一份渲染时回调 → 假服务 10003 → 生产代码
 /// 弹半屏；半屏只按探针 `stepUp.title` / `stepUp.summary` 与宿主的 presentedViewController 判定，测试不伪造面板状态。
 /// 注销面板的标题与说明行（零变化）已由 `App13a1DeletionStepUpTapTests.testDelete10003OpensRealSheet…` 覆盖，这里不重复。
@@ -189,8 +190,10 @@ final class FuIosPhoneChangeStepUpTitleTests: App13a2TestCase {
         XCTAssertFalse(sheetTexts.contains(half), "不出现半截句")
     }
 
-    /// §4-6（零变化）：同一组合里提现页提交 10003 → 半屏 action=withdraw、标题仍 `error.10003`、没有 `stepUp.summary`。
-    func testWithdrawSheetTitleAndNoSummaryUnchanged() async throws {
+    // D10-3641：原 testWithdrawSheetTitleAndNoSummaryUnchanged 改断新行为（D10-3639 C：提现 10003 不开半屏；资金安全标题与无说明行由
+    // 收款孪生 testPayoutSheetTitleAndNoSummaryUnchanged 覆盖）
+    /// 同一组合里提现页提交 10003 → 不开半屏（没有面板状态、没有呈现、没有 `stepUp.*` 探针）、不发码；本键结束回编辑态，页内提示 `error.10003`。
+    func testWithdraw10003OpensNoSheet() async throws {
         script.on("POST /v1/withdrawals", Self.code(10003))
         let fixture = fixture()
         fixture.wallet.realnameChanged()
@@ -211,11 +214,16 @@ final class FuIosPhoneChangeStepUpTitleTests: App13a2TestCase {
         WithdrawActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id).submit()
         let stepUp = controller.flow.stepUp
         closeOnTeardown(stepUp)
-        await waitSheet(stepUp, "提现")
-        XCTAssertEqual(stepUp.state?.action, "withdraw", "(零变化) action = withdraw")
-        XCTAssertEqual(probes["stepUp.title"]?.text, WalletDraftTexts().text("error.10003"), "(零变化) 资金安全标题")
+        await waitUntil("提现 10003 没有结算", timeout: 8) { controller.flow.state.error != nil }
         await quietWindow(0.5)
-        XCTAssertNil(probes["stepUp.summary"], "(零变化) 提现半屏没有说明行")
+        XCTAssertNil(stepUp.state, "提现不开面板")
+        XCTAssertNil(window?.rootViewController?.presentedViewController, "没有半屏呈现")
+        XCTAssertNil(probes["stepUp.title"], "没有半屏标题")
+        XCTAssertNil(probes["stepUp.summary"], "没有半屏说明行")
+        XCTAssertEqual(stepSms.count, 0, "不发二次验证码")
+        XCTAssertEqual(sent("POST /v1/withdrawals").count, 1, "提现只发 1 次（不重放）")
+        XCTAssertEqual(controller.flow.state.phase, .editing, "本键结束、回编辑态")
+        XCTAssertEqual(controller.flow.state.error?.key, "error.10003", "页内提示 error.10003")
     }
 
     /// §4-6（零变化）：同一组合里收款账号页（未绑定）填支付宝【保存】得 10003 → 半屏 action=payout_account_change、标题仍 `error.10003`、

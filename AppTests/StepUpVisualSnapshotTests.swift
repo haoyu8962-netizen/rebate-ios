@@ -8,7 +8,9 @@ import Wallet
 @testable import WalletCore
 import XCTest
 
-/// APP-09v-d 半屏基准（brief §2.7；名字与 Android `snapshots/stepup-v/` 对应）。真实半屏进程内截图（无键盘，键盘态在 UI 测试）。默认只比对，缺图失败；
+/// APP-09v-d 半屏基准（brief §2.7）。D10-3641：提现不再开面板，以提现页为宿主的 12 张改到收款账号页宿主、名字改 PayoutStepUp-*
+/// （基准由本线重录）；`testHostPayout` 那张原样。改名后不再与 Android `snapshots/stepup-v/` 同名对应，命名待安卓同名单对齐（D10-3645）。
+/// 真实半屏进程内截图（无键盘，键盘态在 UI 测试）。默认只比对，缺图失败；
 /// `TEST_RUNNER_COULI_RECORD_SNAPSHOTS=1` 只录缺图，基准由实现者录。每张都过 `WithdrawVisualRenderJudge`（全黑 / 单色判红）与就绪条件；200% 走窗口特征。
 /// 面板聚焦后软键盘把半屏抬高（844 窗口里 688，收键盘回 421），截图不含键盘，下方是空白：只比内容，整屏对画板看 compare。
 @MainActor
@@ -23,28 +25,30 @@ final class StepUpVisualSnapshotTests: StepUpVisualTestCase {
             }
     }
 
+    // D10-3641：原 testBoards 前置由提现挪到改收款（openSheet 换宿主），快照名 WithdrawStepUp-* → PayoutStepUp-*
     func testBoards() async throws {
         var shot = try await openSheet(code: "38", waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUp-v2-light")
+        compare(shot.1, "PayoutStepUp-v2-light")
         shot = try await openSheet(code: "38", canvas: .init(height: 1119, dark: true), waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUpDark-dark")
+        compare(shot.1, "PayoutStepUpDark-dark")
     }
 
+    // D10-3641：原 testStates 前置由提现挪到改收款（openSheet 换宿主），快照名 WithdrawStepUp-* → PayoutStepUp-*
     func testStates() async throws {
         for dark in [false, true] {
             let suffix = dark ? "dark" : "light"
             let canvas = WithdrawVisualHost.Canvas(height: dark ? 1119 : 844, dark: dark)
             let empty = try await openSheet(canvas: canvas, waitFor: "stepUp.cell.5")
-            compare(empty.1, "WithdrawStepUp-empty-\(suffix)")
-            try await compare(wrongCodeShot(canvas), "WithdrawStepUp-error-\(suffix)")
+            compare(empty.1, "PayoutStepUp-empty-\(suffix)")
+            try await compare(wrongCodeShot(canvas), "PayoutStepUp-error-\(suffix)")
         }
         let resend = try await openSheet(sms: Self.serverDown, waitFor: "stepUp.resend")
-        compare(resend.1, "WithdrawStepUp-resend-light")
+        compare(resend.1, "PayoutStepUp-resend-light")
         let (host, _) = try await openSheet(code: "123456", waitFor: "stepUp.cell.5")
         host.server.script.on("POST /v1/auth/step-up", .hold)
         try panelActions().verify()
         await waitUntil { self.stepUp?.state?.phase == .verifying }
-        try await compare(settled(host, waitFor: "stepUp.submit", motion: true), "WithdrawStepUp-verifying-light")
+        try await compare(settled(host, waitFor: "stepUp.submit", motion: true), "PayoutStepUp-verifying-light")
     }
 
     private func wrongCodeShot(_ canvas: WithdrawVisualHost.Canvas) async throws -> UIImage {
@@ -55,18 +59,19 @@ final class StepUpVisualSnapshotTests: StepUpVisualTestCase {
         return try await settled(host, waitFor: "stepUp.error.text")
     }
 
+    // D10-3641：原 testAdaptation 前置由提现挪到改收款（openSheet 换宿主），快照名 WithdrawStepUp-* → PayoutStepUp-*
     func testAdaptation() async throws {
         var shot = try await openSheet(code: "38", canvas: .init(width: 390, height: 844), large: Self.ax3,
                                        waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUp-font200-w390-light")
+        compare(shot.1, "PayoutStepUp-font200-w390-light")
         shot = try await openSheet(code: "38", canvas: .init(width: 320, height: 844), large: Self.ax3,
                                    waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUp-font200-w320-light")
+        compare(shot.1, "PayoutStepUp-font200-w320-light")
         shot = try await openSheet(code: "38", canvas: .init(width: 320, height: 568), large: Self.ax3,
                                    waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUp-font200-short-light")
+        compare(shot.1, "PayoutStepUp-font200-short-light")
         shot = try await openSheet(code: "38", canvas: .init(width: 840, height: 1100), waitFor: "stepUp.cell.5")
-        compare(shot.1, "WithdrawStepUp-w840-light")
+        compare(shot.1, "PayoutStepUp-w840-light")
     }
 
     /// 宿主二：收款账号页。换手机号 / 注销无页面（交回 §6），不出宿主图。

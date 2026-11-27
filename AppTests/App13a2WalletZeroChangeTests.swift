@@ -76,14 +76,17 @@ final class App13a2WalletZeroChangeTests: WalletFlowTestCase {
         XCTAssertEqual(saves[1].body, saves[0].body)
     }
 
-    /// (零变化) 提现面板的验证 42901 照写共享 gates.verify，发码 42901 照写 gates.sms（两份分开）。
-    func testWithdrawPanel42901GatesUnchanged() async throws {
-        script.on("POST /v1/withdrawals", .envelope(code: 10003, data: "null", headers: [:]))
+    // D10-3641：原 testWithdrawPanel42901GatesUnchanged 前置由提现挪到改收款
+    /// (零变化) 改收款面板的验证 42901 照写共享 gates.verify，发码 42901 照写 gates.sms（两份分开）。
+    func testPayoutPanel42901GatesUnchanged() async throws {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.on("PUT /v1/me/payout-account", .envelope(code: 10003, data: "null", headers: [:]))
         script.on("POST /v1/auth/step-up", .envelope(code: 42901, data: "null", headers: ["Retry-After": "30"]))
         let fixture = make()
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+        let controller = try await payout(fixture)
+        payoutActions(controller).logon("zhangsan@example.com")
+        payoutActions(controller).payee("测试三")
+        payoutActions(controller).save()
         try await passStepUp(controller.flow.stepUp)
         await waitUntil("(零变化) 验证 42901 没有写入 gates.verify") { fixture.wallet.deps.gates.verify.active }
         XCTAssertFalse(fixture.wallet.deps.gates.sms.active, "(零变化) 发码闸门不受验证 42901 影响")

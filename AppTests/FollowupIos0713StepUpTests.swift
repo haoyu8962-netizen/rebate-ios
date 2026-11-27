@@ -13,7 +13,7 @@ final class StepClock {
 }
 
 /// FU-IOS-0713 必测 1（RW-04）：二次验证面板的发码结果、验证结果、等待其他发码完成三条分支遇身份暂时未知。
-/// 全部经生产入口（提现【提交】→ 10003 → 面板；面板回调取渲染时的 StepUpActions；身份确认走 AppWallet.checkSession）。
+/// 全部经生产入口（改收款【保存】→ 10003 → 面板，D10-3641 由提现【提交】挪来；面板回调取渲染时的 StepUpActions；身份确认走 AppWallet.checkSession）。
 /// 故障按读取位置遍历（「仅第 n 次」「第 n 次起持续」）。统一要求：面板展示不在「发送中 / 验证中」、显示本页【重试】（展示接口
 /// `showsSending / showsVerifying / showsRecheck`，页面接线由 tools/ci/check-identity-wiring.py 守住）；面板不被收起、仍是同一实例；
 /// 等待期间面板入口不调用发码 / 验证入口；确认后同一面板按原结果恢复（倒计时按原截止、token 交原键重放）。
@@ -38,30 +38,32 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
     static let landed = WalletStubProtocol.Reply.envelope(
         code: 0, data: WalletSamples.withdrawal("W-step"), headers: [:]
     )
+    /// D10-3641：本类宿主由提现挪到改收款，重放成功的答复是保存成功（`landed` 留给 FollowupIos0713FinalTests 的提现用例）。
+    static let saved = WalletStubProtocol.Reply.envelope(code: 0, data: WalletSamples.alipay, headers: [:])
 
-    /// 入口与实际发送的计数（同一时刻取值）。
+    /// 入口与实际发送的计数（同一时刻取值）。D10-3641：提现入口 / 发送换成改收款保存入口 / 发送（PUT /v1/me/payout-account）。
     struct Counts: Equatable {
         var smsCalls = 0
         var verifyCalls = 0
-        var withdrawCalls = 0
+        var saveCalls = 0
         var smsSent = 0
         var verifySent = 0
-        var withdrawSent = 0
+        var saveSent = 0
     }
 
     func counts(_ fixture: WalletAppFixture) -> Counts {
         Counts(
             smsCalls: fixture.api.calls(StepUpController.sendOperation),
             verifyCalls: fixture.api.calls(StepUpController.verifyOperation),
-            withdrawCalls: fixture.api.calls(WithdrawController.operation),
+            saveCalls: fixture.api.calls(PayoutAccountController.operation),
             smsSent: WalletStubProtocol.requests("POST", "/v1/auth/sms-codes").count,
             verifySent: WalletStubProtocol.requests("POST", "/v1/auth/step-up").count,
-            withdrawSent: posts.count
+            saveSent: saves.count
         )
     }
 
-    var withdrawKeys: Set<String> {
-        Set(posts.compactMap { $0.header("Idempotency-Key") })
+    var saveKeys: Set<String> {
+        Set(saves.compactMap { $0.header("Idempotency-Key") })
     }
 
     /// 每轮一个全新的组合（独立 UserDefaults、缓存目录、假服务记录）。
@@ -75,7 +77,7 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
     }
 
     /// 面板与敏感流程已发起（含已排队）的异步任务全部结束（生产完成信号；两者互相触发，交替等到都空）。
-    func idle(_ controller: WithdrawController) async {
+    func idle(_ controller: PayoutAccountController) async {
         for _ in 0..<3 {
             await controller.flow.stepUp.whenIdle()
             await controller.flow.whenIdle()
@@ -98,7 +100,7 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
     }
 
     /// 等待期间点面板上的【重新获取】（`verify`：再填码点【验证并提交】）；等面板与流程空闲后，入口与发送计数都不增加。
-    func tapPanelEntries(_ fixture: WalletAppFixture, _ controller: WithdrawController, _ tag: String,
+    func tapPanelEntries(_ fixture: WalletAppFixture, _ controller: PayoutAccountController, _ tag: String,
                          verify: Bool = false) async {
         let stepUp = controller.flow.stepUp
         let before = counts(fixture)
@@ -113,21 +115,33 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
         }
         await idle(controller)
         let after = counts(fixture)
-        XCTAssertEqual(after, before, "\(tag)：等待期间面板入口不调用发码 / 验证 / 提现入口")
+        XCTAssertEqual(after, before, "\(tag)：等待期间面板入口不调用发码 / 验证 / 保存入口")
     }
 
-    /// 打开提现页、输入金额、点【提交】得到 10003，面板打开。
-    func openPanel(_ fixture: WalletAppFixture) async throws -> (WithdrawController, StepUpController) {
-        let controller = try await withdraw(fixture)
-        await typeAmount(controller, "10")
-        actions(controller).submit()
+    /// 收款账号页渲染时的回调（与页面同一份 `PayoutActions.make`）。
+    func payoutActions(_ controller: PayoutAccountController) -> PayoutActions {
+        PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
+    }
+
+    /// 改收款落地（对应提现的「进 withdrawRecords」）：保存成功、停在本页的「收款账号已保存」轻提示已出，面板收起。
+    func payoutLanded(_ controller: PayoutAccountController) -> Bool {
+        controller.state.toast?.key == "payout.saved" && controller.flow.stepUp.state == nil
+    }
+
+    /// 打开收款账号页（未绑定直接是表单）、填支付宝、点【保存】得到 10003，面板打开（D10-3641：由提现【提交】挪来）。
+    func openPanel(_ fixture: WalletAppFixture) async throws -> (PayoutAccountController, StepUpController) {
+        script.ok("GET /v1/me/payout-account", "{}")
+        let controller = try await payout(fixture)
+        payoutActions(controller).logon("zhangsan@example.com")
+        payoutActions(controller).payee("测试三")
+        payoutActions(controller).save()
         let stepUp = controller.flow.stepUp
         await waitUntil("二次验证面板没有打开") { stepUp.state != nil }
         return (controller, stepUp)
     }
 
     /// 确认后同一面板按原截止恢复倒计时（到达后时钟已前进 20 秒：剩余 1…40 秒；从确认时重新计时会是 60），倒计时内点【重新获取】不调用入口。
-    func assertRestoredCountdown(_ fixture: WalletAppFixture, _ controller: WithdrawController, panel: Int,
+    func assertRestoredCountdown(_ fixture: WalletAppFixture, _ controller: PayoutAccountController, panel: Int,
                                  _ tag: String) async throws {
         let stepUp = controller.flow.stepUp
         await waitUntil("\(tag)：确认后没有按原截止恢复倒计时") {
@@ -142,32 +156,33 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
         XCTAssertEqual(now.smsCalls, 1, "\(tag)：倒计时内不调用发码入口")
     }
 
-    /// 验证并提交 → 原键重放 → 进提现记录。结束后：发码、验证入口各 1；提现入口 `withdrawals` 次（每次 10003 + 一次原键重放）。
-    func finishAndAssertLanded(_ fixture: WalletAppFixture, _ controller: WithdrawController, _ tag: String,
-                               withdrawals: Int) async throws {
+    /// 验证并提交 → 原键重放 → 保存成功落地。结束后：发码、验证入口各 1；保存入口 `saves` 次（每次 10003 + 一次原键重放）。
+    func finishAndAssertLanded(_ fixture: WalletAppFixture, _ controller: PayoutAccountController, _ tag: String,
+                               saves expected: Int) async throws {
         try await passStepUp(controller.flow.stepUp)
-        await waitUntil("\(tag)：没有落地") { fixture.router.path.last?.route == WalletRoutes.withdrawRecords }
+        await waitUntil("\(tag)：没有落地") { self.payoutLanded(controller) }
         await idle(controller)
         let final = counts(fixture)
         XCTAssertEqual(final.smsCalls, 1, "\(tag)：发码入口恰好 1 次")
         XCTAssertEqual(final.smsSent, 1, "\(tag)：发码实际发送 1 次")
         XCTAssertEqual(final.verifyCalls, 1, "\(tag)：验证入口恰好 1 次")
-        XCTAssertEqual(final.withdrawCalls, withdrawals, "\(tag)：提现入口次数")
-        XCTAssertEqual(final.withdrawSent, withdrawals, "\(tag)：提现实际发送次数")
-        XCTAssertEqual(posts.last?.header("Idempotency-Key"), posts.dropLast().last?.header("Idempotency-Key"),
+        XCTAssertEqual(final.saveCalls, expected, "\(tag)：保存入口次数")
+        XCTAssertEqual(final.saveSent, expected, "\(tag)：保存实际发送次数")
+        XCTAssertEqual(saves.last?.header("Idempotency-Key"), saves.dropLast().last?.header("Idempotency-Key"),
                        "\(tag)：重放沿用 10003 那一笔的原键")
     }
 
     // MARK: - 发码结果（StepUpController+Send launchSend / onSent）
 
+    // D10-3641：原 testSendResultWhileIdentityUnknownRestoresSamePanelAtOriginalDeadline 前置由提现挪到改收款
     /// 发码成功响应到达时身份暂时未知（按读取位置遍历）：面板不显示发送中、不被收起；等待期间【重新获取】不调用入口；时钟前进 20 秒后
     /// 身份确认 → 同一面板按原截止恢复倒计时（不重新计时、不延长）；之后验证并提交照常落地。
-    func testSendResultWhileIdentityUnknownRestoresSamePanelAtOriginalDeadline() async throws {
+    func testSendResultWhileIdentityUnknownRestoresSamePanelAtOriginalDeadlineOnPayout() async throws {
         try await forEachReadPosition("发码结果") { fault, nth in
             let tag = "发码结果/\(fault.rawValue)#\(nth)"
             let clock = StepClock()
             let fixture = fresh(tag, clock: clock)
-            script.on("POST /v1/withdrawals", Self.need, Self.landed)
+            script.on("PUT /v1/me/payout-account", Self.need, Self.saved)
             script.on("POST /v1/auth/sms-codes", .hold, Self.smsOk)
             let (controller, stepUp) = try await openPanel(fixture)
             await waitUntil("\(tag)：发码没有挂住") { WalletStubProtocol.heldIds.count == 1 }
@@ -185,28 +200,29 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
             try await assertRestoredCountdown(fixture, controller, panel: panel, tag)
             clock.now += 41000
             await waitUntil("\(tag)：原截止之后仍在倒计时（被延长）") { stepUp.state?.resendLeftSec == 0 }
-            try await finishAndAssertLanded(fixture, controller, tag, withdrawals: 2)
+            try await finishAndAssertLanded(fixture, controller, tag, saves: 2)
             return used
         }
     }
 
     // MARK: - 等待其他发码完成（awaitOther / otherSettled）
 
-    /// 第一个面板的发码在途时关闭面板、再点【提交】得到 10003：新面板等那次发码结束（同一槽位）。那次发码的成功结果到达时身份暂时未知
+    // D10-3641：原 testWaitingForOtherSendWhileIdentityUnknownRestoresSharedDeadline 前置由提现挪到改收款
+    /// 第一个面板的发码在途时关闭面板、再点【保存】得到 10003：新面板等那次发码结束（同一槽位）。那次发码的成功结果到达时身份暂时未知
     /// （按读取位置遍历）：新面板不显示发送中；确认后同一面板按共享截止恢复倒计时，不另调用发码入口。
-    func testWaitingForOtherSendWhileIdentityUnknownRestoresSharedDeadline() async throws {
+    func testWaitingForOtherSendWhileIdentityUnknownRestoresSharedDeadlineOnPayout() async throws {
         try await forEachReadPosition("等待其他发码") { fault, nth in
             let tag = "等待其他发码/\(fault.rawValue)#\(nth)"
             let clock = StepClock()
             let fixture = fresh(tag, clock: clock)
-            script.on("POST /v1/withdrawals", Self.need, Self.need, Self.landed)
+            script.on("PUT /v1/me/payout-account", Self.need, Self.need, Self.saved)
             script.on("POST /v1/auth/sms-codes", .hold, Self.smsOk)
             let (controller, stepUp) = try await openPanel(fixture)
             await waitUntil("\(tag)：发码没有挂住") { WalletStubProtocol.heldIds.count == 1 }
             let first = try XCTUnwrap(stepUp.state)
             StepUpActions.make(stepUp, first).close()
             await waitUntil("\(tag)：关闭面板后没有回到编辑态") { controller.flow.state.phase == .editing }
-            actions(controller).submit()
+            payoutActions(controller).save()
             await waitUntil("\(tag)：第二个面板没有在等待") {
                 stepUp.state.map { $0.instance != first.instance && $0.showsSending } ?? false
             }
@@ -223,7 +239,7 @@ final class FollowupIos0713StepUpTests: WalletFlowTestCase {
             let used = window.end()
             fixture.wallet.checkSession()
             try await assertRestoredCountdown(fixture, controller, panel: panel, tag)
-            try await finishAndAssertLanded(fixture, controller, tag, withdrawals: 3)
+            try await finishAndAssertLanded(fixture, controller, tag, saves: 3)
             return used
         }
     }

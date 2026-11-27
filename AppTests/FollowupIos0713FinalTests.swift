@@ -26,6 +26,7 @@ final class FollowupIos0713FinalTests: WalletFlowTestCase {
     static let stepOk = FollowupIos0713StepUpTests.stepOk
     static let need = FollowupIos0713StepUpTests.need
     static let landed = FollowupIos0713StepUpTests.landed
+    static let saved = FollowupIos0713StepUpTests.saved
 
     func fresh(_ tag: String) -> WalletAppFixture {
         WalletStubProtocol.reset()
@@ -38,7 +39,7 @@ final class FollowupIos0713FinalTests: WalletFlowTestCase {
         fixture.router.path.last?.route == route
     }
 
-    func idle(_ controller: WithdrawController) async {
+    func idle(_ controller: PayoutAccountController) async {
         for _ in 0..<3 {
             await controller.flow.stepUp.whenIdle()
             await controller.flow.whenIdle()
@@ -49,21 +50,51 @@ final class FollowupIos0713FinalTests: WalletFlowTestCase {
         fixture.api.calls("confirm:" + WithdrawController.operation)
     }
 
+    /// D10-3641：改收款【确认上一笔】的入口次数。
+    func payoutConfirmCalls(_ fixture: WalletAppFixture) -> Int {
+        fixture.api.calls("confirm:" + PayoutAccountController.operation)
+    }
+
+    /// 收款账号页渲染时的回调（与页面同一份 `PayoutActions.make`）。
+    func payoutActions(_ controller: PayoutAccountController) -> PayoutActions {
+        PayoutActions.make(controller, controller.state, risk: controller.flow.state.riskDialog?.id)
+    }
+
+    /// 打开收款账号页（未绑定直接是表单），填支付宝并点【保存】（`reply` 是这次保存的答复）。
+    func savePayout(_ fixture: WalletAppFixture,
+                    _ reply: WalletStubProtocol.Reply) async throws -> PayoutAccountController {
+        script.ok("GET /v1/me/payout-account", "{}")
+        script.on("PUT /v1/me/payout-account", reply)
+        let controller = try await payout(fixture)
+        payoutActions(controller).logon("zhangsan@example.com")
+        payoutActions(controller).payee("测试三")
+        payoutActions(controller).save()
+        return controller
+    }
+
+    /// 改收款落地（对应提现的「进 withdrawRecords」）：保存成功、停在本页的「收款账号已保存」轻提示已出，面板收起。
+    func payoutLanded(_ controller: PayoutAccountController) -> Bool {
+        controller.state.toast?.key == "payout.saved" && controller.flow.stepUp.state == nil
+    }
+
     // MARK: - M11：确认续发前身份未知
 
+    // D10-3641：原 test_fuios0713_final_confirmReplayHeldWhenIdentityTurnsUnknownBeforeRunConfirm 前置由提现挪到改收款
     /// 待确认的一笔点【确认上一笔】得到 10003 → 二次验证通过 → token 交给确认续发；放行验证响应时按读取位置注入单次 / 持续读取失败
     /// （覆盖「面板核对通过、续发确认前那一次读取失败」）。续发确认请求在假服务挂住：故障窗口在它到达服务端或页面给出结局时结束
     /// （之后的回包与导航不在本条范围，见 F-IOS-17）。撤掉故障后只经会话核对。接受的结局（都不得静默挂住）：
     /// ① 续发确认一次到达服务端 → 放行后落地（确认入口 2：10003 那次 + 续发）；
     /// ② 共享结算仍保留 10003 结果、续发前补不上 → 不续发，待确认保留并提示「稍后再试」（RV-02 既有口径）；
     /// ③ 续发在网络层发送前本地拒绝（F-IOS-16）→ 待确认保留并提示网络错误。验证入口始终 1 次。
-    func test_fuios0713_final_confirmReplayHeldWhenIdentityTurnsUnknownBeforeRunConfirm() async throws {
+    func test_fuios0713_final_confirmReplayHeldWhenIdentityTurnsUnknownBeforeRunConfirmOnPayout() async throws {
         try await forEachReadPosition("确认续发") { fault, nth in
             let tag = "确认续发/\(fault.rawValue)#\(nth)"
             let fixture = fresh(tag)
-            let controller = try await withdraw(fixture)
-            try await enterPending(controller)
-            script.on("POST /v1/withdrawals", Self.need, .hold)
+            let controller = try await savePayout(fixture, .disconnect)
+            await waitUntil("\(tag)：没有进入待确认") {
+                controller.flow.state.pending != nil && controller.flow.state.phase == .pending
+            }
+            script.on("PUT /v1/me/payout-account", Self.need, .hold)
             script.on("POST /v1/auth/step-up", .hold, Self.stepOk)
             flowActions(controller.flow).confirm()
             let stepUp = controller.flow.stepUp
@@ -86,25 +117,25 @@ final class FollowupIos0713FinalTests: WalletFlowTestCase {
     }
 
     /// 验证结果到达后的可观察结局：续发确认已到服务端、或结果 / token 在等身份、或页面给出提示。
-    private func settledConfirm(_ controller: WithdrawController) -> Bool {
+    private func settledConfirm(_ controller: PayoutAccountController) -> Bool {
         let flow = controller.flow.state
         return WalletStubProtocol.heldIds.count == 1 || flow.awaitingIdentity || explicitNotice(controller)
             || controller.flow.stepUp.state?.showsRecheck == true
     }
 
     /// 待确认卡上明确的「没续发」提示：稍后再试（RV-02）或网络错误（F-IOS-16）。
-    private func explicitNotice(_ controller: WithdrawController) -> Bool {
+    private func explicitNotice(_ controller: PayoutAccountController) -> Bool {
         let key = controller.flow.state.pendingNotice?.key
         return key == SensitiveOutcome.retryLaterKey || key == WalletErrors.networkKey
     }
 
-    private func assertConfirmOutcome(_ fixture: WalletAppFixture, _ controller: WithdrawController,
+    private func assertConfirmOutcome(_ fixture: WalletAppFixture, _ controller: PayoutAccountController,
                                       _ tag: String) async throws {
         if WalletStubProtocol.heldIds.count == 1 {
-            WalletStubProtocol.release(try XCTUnwrap(WalletStubProtocol.heldIds.first), with: Self.landed)
+            WalletStubProtocol.release(try XCTUnwrap(WalletStubProtocol.heldIds.first), with: Self.saved)
             await idle(controller)
-            XCTAssertTrue(onTop(fixture, WalletRoutes.withdrawRecords), "\(tag)：续发确认后落地")
-            XCTAssertEqual(confirmCalls(fixture), 2, "\(tag)：确认入口 2 次（10003 那次 + 续发一次）")
+            XCTAssertTrue(payoutLanded(controller), "\(tag)：续发确认后落地")
+            XCTAssertEqual(payoutConfirmCalls(fixture), 2, "\(tag)：确认入口 2 次（10003 那次 + 续发一次）")
         } else {
             await idle(controller)
             let state = controller.flow.state
