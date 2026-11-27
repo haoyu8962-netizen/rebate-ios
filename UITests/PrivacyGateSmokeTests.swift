@@ -76,10 +76,17 @@ final class PrivacyGateSmokeTests: XCTestCase {
         let app = launch(["-CouliPrivacyPreset", "reset"])
         XCTAssertTrue(app.staticTexts["个人信息保护提示"].waitForExistence(timeout: 30))
         app.descendants(matching: .any)["privacy.link.privacy"].tap()
-        let placeholder = app.staticTexts.matching(identifier: "route.placeholder.name")
-            .matching(NSPredicate(format: "label == %@", "Agreement")).firstMatch
-        XCTAssertTrue(placeholder.waitForExistence(timeout: 10))
-        app.navigationBars.buttons.firstMatch.tap()
+        // FU-IOS-AGREEMENT-ROUTE（#24，D10-3556）：协议页登记为 H5 容器，不再是占位页；关闭走容器自带的关闭
+        // （正文加载成功时是导航栏关闭，staging 正文加载失败时是错误页关闭，取先出现者）
+        XCTAssertTrue(app.descendants(matching: .any)["h5.container"].waitForExistence(timeout: 10), "协议页是 H5 容器")
+        let navClose = app.buttons["web.trusted.close"]
+        let errorClose = app.buttons["web.error.close"]
+        let deadline = Date().addingTimeInterval(10)
+        while !navClose.exists, !errorClose.exists, Date() < deadline {
+            _ = navClose.waitForExistence(timeout: 0.5)
+        }
+        XCTAssertTrue(navClose.exists || errorClose.exists, "协议页有关闭入口")
+        (navClose.exists ? navClose : errorClose).tap()
         XCTAssertTrue(app.staticTexts["个人信息保护提示"].waitForExistence(timeout: 10), "返回后弹窗仍在")
     }
 
