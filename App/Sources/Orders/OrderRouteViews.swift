@@ -142,6 +142,7 @@ private struct H5RouteContainer: View {
 
     var body: some View {
         TrustedWebScreen(controller: controller)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("h5.container")
             .task { controller.start() }
     }
