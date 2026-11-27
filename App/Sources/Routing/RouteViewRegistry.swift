@@ -4,7 +4,7 @@ import Router
 import SwiftUI
 
 /// 路由名 → 页面。Router 不 import 任何 Feature（03 §3.1 依赖方向）；由 App 在这里把路由名映射到各 Feature 暴露的入口视图。
-/// 未登记的路由一律显示占位页（协议页 Agreement 等，G21）。
+/// 未登记的路由一律显示占位页（G21）。
 @MainActor
 enum RouteViewRegistry {
     typealias Builder = @MainActor (RouteDestination) -> AnyView
@@ -33,6 +33,8 @@ enum RouteViewRegistry {
             "DeleteAccount": { AnyView(DeleteAccountRouteView(destination: $0)) },
             "Messages": { AnyView(H5RouteView(destination: $0)) },
             "InviteShare": { AnyView(H5RouteView(destination: $0)) },
+            // FU-IOS-AGREEMENT-ROUTE（D10-3555）：协议页是 H5（契约 h5_path /agreement）。
+            "Agreement": { AnyView(H5RouteView(destination: $0)) },
             // APP-06a：搜索（Features/Search）与商品详情（Features/Product）。
             "Search": { AnyView(SearchRouteView(destination: $0)) },
             "ProductDetail": { AnyView(ProductDetailRouteView(destination: $0)) },
