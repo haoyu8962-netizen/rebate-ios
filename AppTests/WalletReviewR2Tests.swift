@@ -47,10 +47,11 @@ final class WalletReviewR2Tests: WalletFlowTestCase {
 
     // MARK: - R2-03 scenePhase inactive
 
-    // D10-3641：原 testInactiveThenActiveVoidsWaitingNavigationAndOverlays 的 10003 那一轮前置由提现挪到改收款（提现 10003 本就不开面板，原轮空转）
+    // D10-3641：原 testInactiveThenActiveVoidsWaitingNavigationAndOverlays 的 10003 那一轮前置由提现挪到改收款（提现 10003 本就不开面板，原轮空转）；
+    // 44001 那一轮仍在提现上，故名字写明两轮宿主：Withdraw44001 + Payout10003
     /// R2-03：经 CouliApp 的 scenePhase 接线（AppWallet.scenePhaseChanged）：实名查询在途时 inactive → active，查询成功也不再打开提现页；
     /// 提现提交在途时 inactive → active，迟到的 44001 不弹窗；改收款保存在途时 inactive → active，迟到的 10003 不开二次验证面板（结论只留在页内）。
-    func testInactiveThenActiveVoidsWaitingNavigationAndOverlaysOnPayout() async throws {
+    func testInactiveThenActiveVoidsWaitingNavigationAndOverlaysWithdraw44001Payout10003() async throws {
         script.on("GET /v1/me", .hold)
         let fixture = make()
         _ = try XCTUnwrap(fixture.open(WalletRoutes.wallet))

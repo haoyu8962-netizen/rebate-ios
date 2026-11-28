@@ -60,7 +60,7 @@ final class FollowupIos0712FixRework3Tests: WalletFlowTestCase {
         flowActions(controller.flow).confirm()
         await waitUntil("确认没有挂住") { WalletStubProtocol.heldIds.count == 1 }
         let held = try XCTUnwrap(WalletStubProtocol.heldIds.first)
-        // 10003 回来后网络层自己先读一次会话（第 1 次），共享结算核对是第 2 次——只让它失败（改收款与提现同一条确认管线，次序待锁内实跑核对）
+        // 10003 回来后网络层自己先读一次会话（第 1 次），共享结算核对是第 2 次——只让它失败
         fixture.store.failRead(nth: 2)
         WalletStubProtocol.release(held, with: .envelope(code: 10003, data: "null", headers: [:]))
         await waitUntil("10003 没有被共享结算保留") { fixture.wallet.deps.settlement.hasHeld }

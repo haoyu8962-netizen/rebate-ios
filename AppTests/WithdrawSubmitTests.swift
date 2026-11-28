@@ -7,8 +7,9 @@ import Wallet
 import WalletCore
 import XCTest
 
-/// 提交（AC-S2-62、G17、G19）：新键与原始请求体、10003 二次验证后沿用原键重放 1 次、10002 刷新后沿用原键自动重发、成功以 WithdrawRecords
-/// {withdrawal_id} 替换提现页并通知钱包刷新、44001 弹窗与客服出口、30306 阻断。
+/// 提交（AC-S2-62、G17、G19）：新键与原始请求体、不走二次验证只发一次（升锁 6c97062、D10-3639；10003 重放与重放预算的用例
+/// 已挪到改收款，D10-3641）、10002 刷新后沿用原键自动重发、成功以 WithdrawRecords {withdrawal_id} 替换提现页并通知钱包刷新、
+/// 44001 弹窗与客服出口、30306 阻断。
 final class WithdrawSubmitTests: WalletFlowTestCase {
     /// 成功 → Router 以 WithdrawRecords {withdrawal_id} 替换本页（返回时回到钱包），钱包摘要被通知刷新；请求带新键与原始请求体。
     func testSubmitSuccessReplacesWithRecordsAndRefreshesWallet() async throws {

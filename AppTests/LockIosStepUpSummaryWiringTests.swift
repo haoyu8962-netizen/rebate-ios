@@ -10,7 +10,7 @@ import XCTest
 /// - 首次保存：stepUp 请求体带 summary，取自保存的请求体——支付宝 {payout_method, alipay_logon_id}、借记卡 {payout_method, card_no}，
 ///   不带收款人姓名、开户行；10003 后沿用原幂等键只重放一次，带上令牌；
 /// - 确认上一笔（同进程 / 冷启动）：摘要由本机未决记录的原请求体推出；
-/// - 提现 stepUp 不带 summary；
+/// - 提现不走二次验证（D10-3639 C）：收到 10003 不开面板、不发任何验证请求，回编辑态提示 error.10003；
 /// - 令牌缓存：改收款摘要相同才复用（不同、不带摘要的旧令牌都不带）；提现不带令牌（升锁 6c97062、D10-2903 ① 甲：带头仍按 stepUp，
 ///   提现 stepUp 为 nil，缓存里残留旧提现令牌也不带）。
 final class LockIosStepUpSummaryWiringTests: WalletFlowTestCase {
