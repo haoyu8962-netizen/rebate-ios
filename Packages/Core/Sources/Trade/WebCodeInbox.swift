@@ -1,7 +1,7 @@
 import Foundation
 
 /// 回跳的进程内一次性收件箱（同安卓甲 `WebCodeInbox`；只在内存，不落盘）：入站方 `deliver`，等待方按 sha256(state)（UTF-8 字节的
-/// 小写十六进制，`webCodeStateSha256`）`claim`。iOS 用途：onOpenURL 兜底与会话并存时的认领、孤儿交接（iOS 乙接入；甲只给接口与行为）。
+/// 小写十六进制，`webCodeStateSha256`）`claim`。设想用途：onOpenURL 兜底与会话并存时的认领、孤儿交接；生产暂未接入（备用路径，暂不做，D10-3709 ④），只有接口与行为。
 /// - 回跳先到、等待后到，或等待先到、回跳后到，都能交付；只交给 state 哈希相同的等待；交付一次后，同一 state 在 `slotTtlMillis`
 ///   内再来的回跳丢弃。
 /// - 单槽：没有等待认领的回跳放进槽位，新的覆盖旧的；state 不符的等待不吞掉它（伪造的回跳也不打断真实等待）。槽位最多保留
@@ -77,7 +77,7 @@ public final class WebCodeInbox: WebCodeCallbackSink {
         }
     }
 
-    /// 退出登录、切换账号、切换环境时清空槽位与已交付记录（iOS 乙接入清理链）。正在等的认领不受影响。
+    /// 清空槽位与已交付记录（设想在退出登录、切换账号、切换环境时调用；清理链暂未接入，D10-3709 ④）。正在等的认领不受影响。
     public func clear() {
         slot = nil
         consumed.removeAll()

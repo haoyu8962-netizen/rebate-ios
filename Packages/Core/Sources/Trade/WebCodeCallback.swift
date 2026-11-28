@@ -34,7 +34,7 @@ extension WebCodeCallback: CustomStringConvertible, CustomDebugStringConvertible
     }
 }
 
-/// 回跳的接收方（生产为进程内的 `WebCodeInbox`；iOS 乙的 onOpenURL 分流器当场交给它）。
+/// 回跳的接收方（实现为进程内的 `WebCodeInbox`；生产暂未接入：onOpenURL 分流是备用路径，暂不做，D10-3709 ④）。
 @MainActor
 public protocol WebCodeCallbackSink: AnyObject {
     func deliver(_ callback: WebCodeCallback)

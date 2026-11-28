@@ -3,10 +3,11 @@ import Foundation
 import Trade
 import UIKit
 
-/// 一次已启动的授权会话（系统实现包着 ASWebAuthenticationSession 并强引用到完成为止；测试用假实现）。
+/// 一次已启动的授权会话（系统实现包着 ASWebAuthenticationSession 并强引用到完成或取消为止；测试用假实现）。
 @MainActor
 protocol WebAuthSessionHandle: AnyObject {
-    /// 取消会话。系统会话被取消后仍会以 canceledLogin 回调一次 completion，授权器只 resume 一次。
+    /// 取消会话。取消之后系统是否还会回调 completion 不作假设：授权器在取消时自己以 `.cancelled` 结束本次调用（只 resume 一次），
+    /// 之后到达的 completion 一律忽略。
     func cancel()
 }
 
@@ -32,7 +33,7 @@ protocol WebAuthSessionLauncher: AnyObject {
 ///    `prefersEphemeralWebBrowserSession = false`）；start 失败（launcher 返回 nil）→ `.failed`，并按哈希删掉这条记录；
 /// ③ completion：回跳地址经 `WebCodeCallbackParser` 解析且 state 哈希与本次一致 → `.code` 给 `.credential(.webCode(code))`、
 ///    `.incomplete`（error=1）给 `.failed`，两者都按哈希删记录；解析不了或哈希不符 → `.failed`；canceledLogin → `.cancelled`，
-///    **记录保留**（留给晚到回跳核对，iOS 乙）；其他错误（如 presentationContextNotProvided）→ `.failed`；
+///    **记录保留**（晚到回跳核对是备用路径，暂不做，D10-3709 ④；记录只在下次发起时覆盖或切环境时清掉）；其他错误（如 presentationContextNotProvided）→ `.failed`；
 /// ④ 一次只开一个会话：新的 `authorize` 或 `abort()`、或调用方任务被取消时，`cancel()` 旧会话，旧调用以 `.cancelled` 结束
 ///    （调用方 TaobaoAuthFlow 之后复核 alive，按 abandoned 处理）；每次调用恰好 resume 一次（之后到达的 completion 忽略）。
 /// `available` 恒为 true。不另设本地计时器；会话期间场景在 inactive / active 之间来回不算取消（取消只认 canceledLogin）。
@@ -81,9 +82,10 @@ final class WebAuthSessionWebCodeAuthorizer: WebCodeAuthorizer {
     /// 按类注释 ①–④ 执行（continuation 收口，仿 ThirdPartyAuth.swift AppleSignInAuthorizer）。
     func authorize(authUrl: String, state: String) async -> AuthStepResult {
         guard Self.isAllowedAuthUrl(authUrl), let url = URL(string: authUrl) else { return .failed }
+        // 已取消的调用不碰别人的会话：先判取消，再收旧会话
+        guard !Task.isCancelled else { return .cancelled }
         // 一次只开一个会话：先收掉上一次（cancel 旧会话，旧调用以 cancelled 结束），再写记录、开新会话
         abort()
-        guard !Task.isCancelled else { return .cancelled }
         nextId += 1
         let id = nextId
         let stateSha256 = webCodeStateSha256(state)
@@ -173,14 +175,18 @@ final class WebAuthSessionWebCodeAuthorizer: WebCodeAuthorizer {
     }
 }
 
-/// 系统会话的句柄：强引用 ASWebAuthenticationSession 与 completion，直到系统回调 completion（或 start 失败）为止；completion 只转发一次。
+/// 系统会话的句柄：强引用 ASWebAuthenticationSession 与 completion，直到系统回调 completion、程序 cancel 或 start 失败为止；
+/// completion 只转发一次。
 @MainActor
 private final class SystemWebAuthSessionHandle: WebAuthSessionHandle {
     var session: ASWebAuthenticationSession?
     var completion: (@MainActor (URL?, (any Error)?) -> Void)?
 
+    /// 取消后立即放掉会话与 completion，断开 会话 → completion 闭包 → 句柄 → 会话 的引用环（不依赖系统取消后再回调）；
+    /// 系统之后若仍回调，`deliver` 只是空转发。
     func cancel() {
         session?.cancel()
+        release()
     }
 
     /// 系统 completion 到达（已回到主线程）：放掉会话与 completion，再转发一次。
