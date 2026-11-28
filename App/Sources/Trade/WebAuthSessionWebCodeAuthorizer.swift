@@ -124,7 +124,8 @@ final class WebAuthSessionWebCodeAuthorizer: WebCodeAuthorizer {
         cancel(id: current.id)
     }
 
-    /// https、主机（不区分大小写）恰为 `authHost`、不带 userinfo、不带端口（含显式 :443 与空端口）；解析不了一律不放行。
+    /// https、主机（不区分大小写）恰为 `authHost`、不带 userinfo、不带端口；解析不了一律不放行。
+    /// 显式端口含空端口一律拒（D10-3728）：按原始授权串的 authority 段判，主机后面出现「:」即拒（URLComponents 对空端口给 nil）。
     /// 主机按百分号编码原样比（`oauth%2Etaobao.com` 之类不放行）。
     nonisolated static func isAllowedAuthUrl(_ authUrl: String) -> Bool {
         guard let components = URLComponents(string: authUrl) else { return false }
@@ -132,8 +133,16 @@ final class WebAuthSessionWebCodeAuthorizer: WebCodeAuthorizer {
             && components.percentEncodedUser == nil
             && components.percentEncodedPassword == nil
             && components.port == nil
-            && components.rangeOfPort == nil
+            && !authorityHasColon(authUrl)
             && components.percentEncodedHost?.lowercased() == authHost
+    }
+
+    /// 原始授权串的 authority 段（`://` 之后、第一个 `/`、`?`、`#` 之前）里有没有「:」；找不到 `://` 按有（不放行）。
+    /// 只看 authority 段，path / query / fragment 里的「:」不算；userinfo 已由上面的检查拒掉，这里出现「:」只可能是端口分隔符。
+    private nonisolated static func authorityHasColon(_ authUrl: String) -> Bool {
+        guard let separator = authUrl.range(of: "://") else { return true }
+        let authority = authUrl[separator.upperBound...].prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        return authority.contains(":")
     }
 
     // MARK: - 收口（每次调用恰好 resume 一次）
