@@ -215,6 +215,10 @@ final class WebAuthSessionWebCodeAuthorizerTests: XCTestCase {
             "https://evil.example#@oauth.taobao.com/", "oauth.taobao.com/authorize", "//oauth.taobao.com/authorize",
             "javascript:alert(1)", "file:///etc/hosts", "couli://auth/taobao?code=C1&state=S1",
             "https://oauth.example.invalid/authorize?state=st_01", "", "not a url",
+            "https://oauth.taobao.com:/x", "https://oauth.taobao.com%40evil.example/", "https://oauth.taobao.com./x",
+            "https://oauth%2Etaobao.com/x", "https://%6Fauth.taobao.com/x", "HTTPS://oauth.taobao.com/x",
+            "https://%6F%61%75%74%68%2E%74%61%6F%62%61%6F%2E%63%6F%6D/x", "https://x\\@oauth.taobao.com/",
+            "https://evil.example\\@oauth.taobao.com/", "https://u%40evil.example@oauth.taobao.com/",
         ]
         for url in rejected {
             XCTAssertFalse(WebAuthSessionWebCodeAuthorizer.isAllowedAuthUrl(url), "不放行：\(url)")
