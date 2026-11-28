@@ -57,7 +57,7 @@ enum WithdrawVisualBaseline {
         "AppTests/FollowupIos0712FixR3dTests.swift": "d24dc316b2fd01030198c0563799c9157b2685edc7ae8393b607c47b14588c8c",
         "AppTests/FollowupIos0712FixRework2Tests.swift": "e07c53a7646be875b50de825ed9878ad1ce41dee55e8be0d2a75db658e1396ff",
         "AppTests/FollowupIos0712FixRework3FaultTests.swift": "e231fb0ab62a3046aaf5c4054cc34d486b323342d576b590d023adafd7e5ee99",
-        "AppTests/FollowupIos0712FixRework3Tests.swift": "895170700cb076a7b462786f35975187cd7628c2bcbf64de3d78184054e9cc58",
+        "AppTests/FollowupIos0712FixRework3Tests.swift": "a1d76327bd7ef1ae46411e853a87be3e4d4bc1fb986c7fcb6ea4981fb9d48275",
         "AppTests/FollowupIos0712FixReworkMoneyTests.swift": "4eb993bfd958b36b9965b949315574c1d310fe61f92a3367110c2b8749296a59",
         "AppTests/FollowupIos0712FixReworkTests.swift": "992eb2b8bcc60c236a4aad9fa81c8098da1f2979594c27391c22c5dff2c99617",
         "AppTests/FollowupIos0712PushTests.swift": "95f90b75171bde5d0786addfaee8962597b0e8f40ca0efb6942ce2b54d971015",
@@ -83,14 +83,14 @@ enum WithdrawVisualBaseline {
         "AppTests/WalletReviewR1PageTests.swift": "2b07511ebcd00548a52daea368f42238fc883a2e54790b9fc6c587d9a7c5ad32",
         "AppTests/WalletReviewR1SettleTests.swift": "5346f056ee6e2f252b9831ea163de67e46bf990374f2fd24defa2b6f789be360",
         "AppTests/WalletReviewR1Tests.swift": "a158a61f0b86f7274c6e92dfa59a8bf10815510c1365aca6840917d13be755f1",
-        "AppTests/WalletReviewR2Tests.swift": "07445db5a051bbe5fe161f7d62aa40014ab180b891939c5874d8f42e10e9ef08",
+        "AppTests/WalletReviewR2Tests.swift": "58b2b1a71180d804813e3073df5b1bb2bc71c7df916c7590215aca20df9a5cbd",
         "AppTests/WalletReviewR3Tests.swift": "dae06b3c3d048e3d1f85bff37ecaa9b58ab222984502acef4fd5d722fb802d10",
         "AppTests/WalletSessionTests.swift": "c3fa1eb03c46664fc5ab6eb5c9093eb9285aa9a80a5e73a64c8827f360e7c406",
         "AppTests/WalletWithdrawGuardTests.swift": "1bc7ab8b9c19532dd63ef3e8128f94ba98832584516dc6e528759ac6fc833649",
         "AppTests/WithdrawEstimateTests.swift": "5151d23604c34b822575cd6e6df5697354a5cb92f37559c2797e54dd580d5dbe",
         "AppTests/WithdrawGuideTests.swift": "ed9b727fc64eca8d4e04bcc519ebac1d30f5204adace951e6beeac6bcd9553ef",
         "AppTests/WithdrawPendingTests.swift": "3457ee9cf84eca1b56ca391e49f8d83dccc44af748ccee77df9ca7887cb5d357",
-        "AppTests/WithdrawSubmitTests.swift": "4f0c3caca609a07a8fcf7bdb5286dc8cccbed84248abeed38ca016a62673d711",
+        "AppTests/WithdrawSubmitTests.swift": "ff9af93ce082e08d0812645ccfc8b909fb6e76ef387d05525399c36be79344d5",
     ]
 
     /// `WithdrawActions`（结构 + make）折叠空白后的 SHA-256。
