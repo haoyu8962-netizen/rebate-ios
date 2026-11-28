@@ -243,7 +243,18 @@ final class StepUpVisualMoneyTests: StepUpVisualTestCase {
         await quietWindow(0.5)
         XCTAssertEqual(writes, before, "payout=\(payout)：换号后零写入")
         let action = "payout_account_change"
-        XCTAssertNil(host.wallet.deps.tokens.take(action: action, account: "user-b", nowMs: Self.frozenMillis),
+        // 收款令牌按业务摘要入缓存：探针带上与本次保存实际请求体同一份摘要（经被测流程同一个摘要函数算），否则恒 nil
+        let summary = try XCTUnwrap(
+            StepUpSummary.key(StepUpSummary.payoutChange(body: saves.first?.body)), "前提：保存请求体推得出业务摘要"
+        )
+        let cache = host.wallet.deps.tokens
+        XCTAssertNil(cache.take(action: action, account: "user-b", nowMs: Self.frozenMillis, summary: summary),
                      "payout=\(payout)：token 不落到新账号")
+        // 正向对照（放在上面断言之后，不改变被测事实）：同一探针对预置的同摘要令牌能命中，且按账号区分
+        cache.put(action: action, account: "user-a", token: "probe-control", expireAtMs: .max, summary: summary)
+        XCTAssertEqual(cache.take(action: action, account: "user-a", nowMs: Self.frozenMillis, summary: summary),
+                       "probe-control", "对照：同摘要探针能取到 user-a 的令牌")
+        XCTAssertNil(cache.take(action: action, account: "user-b", nowMs: Self.frozenMillis, summary: summary),
+                     "对照：user-a 的令牌对 user-b 取不到")
     }
 }
