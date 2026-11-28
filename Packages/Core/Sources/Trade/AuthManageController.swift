@@ -246,7 +246,7 @@ public final class AuthManageController: ObservableObject {
             relaunchAllowed: { [weak self] in self.map { $0.authPermit && $0.foreground } ?? false }
         )
         guard flow.pick(platform: platform, data: data) != nil else {
-            // 本端执行不了下发的任何方式（TODO(N-28)：web_code 回跳未登记、百川不可用）
+            // 本端执行不了下发的任何方式（下发的方式里没有 web_code 或缺 auth_url / state、百川不可用）
             done(Self.authFailedKey)
             return
         }

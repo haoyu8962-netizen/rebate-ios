@@ -10,9 +10,11 @@ public enum WebCodeCallback: Sendable, Equatable {
     case incomplete(state: String)
 
     /// 回跳带的 state（收件箱、授权器按它的 sha256 认领）。
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：返回关联值里的 state。
     public var state: String {
-        ""
+        switch self {
+        case let .code(_, state), let .incomplete(state):
+            state
+        }
     }
 }
 
@@ -56,9 +58,101 @@ public enum WebCodeCallbackParser {
     public static let stateMaxLength = 128
     public static let codeMaxLength = 4096
 
+    private static let codeKey = "code"
+    private static let stateKey = "state"
+    private static let errorKey = "error"
+    /// error 的唯一定值（D10-2717）。
+    private static let errorIncomplete = "1"
+
     /// 解析一条回跳地址（会话 completion 的 `URL.absoluteString`，或 onOpenURL 收到的地址）。
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：按上面的规则逐条判定。
-    public static func parse(_: String) -> WebCodeCallback? {
-        nil
+    /// 长度按 UTF-16 计（与安卓 `String.length` 同口径）；前缀、分段按 UTF-8 字节比（不受字符合并、规范等价影响）。
+    public static func parse(_ raw: String) -> WebCodeCallback? {
+        let bytes = Array(raw.utf8)
+        let head = Array(prefix.utf8)
+        guard raw.utf16.count <= maxLength, bytes.starts(with: head), !bytes.contains(ascii("#")),
+              let fields = queryFields(bytes[head.count...]),
+              let state = fields[stateKey], (1...stateMaxLength).contains(state.utf16.count)
+        else { return nil }
+        if let error = fields[errorKey] {
+            return error == errorIncomplete ? .incomplete(state: state) : nil
+        }
+        guard let code = fields[codeKey], (1...codeMaxLength).contains(code.utf16.count) else { return nil }
+        return .code(code: code, state: state)
+    }
+
+    /// 查询串 → 键值（只留 code / state / error）。空段跳过；任一键（含不认的键）重复、编码非法、认的键取值不在白名单：nil。
+    private static func queryFields(_ query: ArraySlice<UInt8>) -> [String: String]? {
+        var seen: Set<String> = []
+        var kept: [String: String] = [:]
+        for segment in query.split(separator: ascii("&"), omittingEmptySubsequences: true) {
+            let equals = segment.firstIndex(of: ascii("="))
+            guard let key = percentDecoded(segment[segment.startIndex..<(equals ?? segment.endIndex)]),
+                  let value = percentDecoded(equals.map { segment[segment.index(after: $0)...] } ?? []),
+                  seen.insert(key).inserted
+            else { return nil }
+            if key == codeKey || key == stateKey || key == errorKey {
+                guard value.utf8.allSatisfy(isAllowedValueByte) else { return nil }
+                kept[key] = value
+            }
+        }
+        return kept
+    }
+
+    /// 百分号解码（`+` 原样，不当空格）；`%` 后不足两位、不是十六进制、解出的字节不是合法 UTF-8：nil。
+    private static func percentDecoded(_ text: ArraySlice<UInt8>) -> String? {
+        var decoded: [UInt8] = []
+        decoded.reserveCapacity(text.count)
+        var index = text.startIndex
+        while index < text.endIndex {
+            let byte = text[index]
+            guard byte == ascii("%") else {
+                decoded.append(byte)
+                index += 1
+                continue
+            }
+            guard index + 2 < text.endIndex, let high = hexValue(text[index + 1]), let low = hexValue(text[index + 2])
+            else { return nil }
+            decoded.append(high << 4 | low)
+            index += 3
+        }
+        return strictUtf8(decoded)
+    }
+
+    /// 严格 UTF-8 解码：遇到非法或残缺序列返回 nil（不替换成 U+FFFD）。
+    private static func strictUtf8(_ bytes: [UInt8]) -> String? {
+        var scalars = String.UnicodeScalarView()
+        var iterator = bytes.makeIterator()
+        var decoder = UTF8()
+        while true {
+            switch decoder.decode(&iterator) {
+            case let .scalarValue(scalar):
+                scalars.append(scalar)
+            case .emptyInput:
+                return String(scalars)
+            case .error:
+                return nil
+            }
+        }
+    }
+
+    private static func hexValue(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case ascii("0")...ascii("9"): byte - ascii("0")
+        case ascii("a")...ascii("f"): byte - ascii("a") + 10
+        case ascii("A")...ascii("F"): byte - ascii("A") + 10
+        default: nil
+        }
+    }
+
+    /// 取值白名单 `[A-Za-z0-9_-]`（与中转页同一白名单）。
+    private static func isAllowedValueByte(_ byte: UInt8) -> Bool {
+        switch byte {
+        case ascii("A")...ascii("Z"), ascii("a")...ascii("z"), ascii("0")...ascii("9"), ascii("_"), ascii("-"): true
+        default: false
+        }
+    }
+
+    private static func ascii(_ character: Unicode.Scalar) -> UInt8 {
+        UInt8(ascii: character)
     }
 }

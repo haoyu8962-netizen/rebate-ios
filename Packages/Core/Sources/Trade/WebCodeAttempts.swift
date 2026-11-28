@@ -27,7 +27,7 @@ public protocol WebCodeAttemptStore: AnyObject {
 }
 
 /// sha256(`state`)：UTF-8 字节的小写十六进制，64 个字符（尝试记录、收件箱认领共用同一算法；与安卓 `webCodeStateSha256` 一致）。
-/// TODO(FU-IOS-TB-WEBCODE-A 实现)：CryptoKit `SHA256`（先例 ClipboardRules.sha256）。
-public func webCodeStateSha256(_: String) -> String {
-    ""
+/// 写法同 ClipboardRules.sha256（CryptoKit `SHA256`）。
+public func webCodeStateSha256(_ state: String) -> String {
+    SHA256.hash(data: Data(state.utf8)).map { String(format: "%02x", $0) }.joined()
 }

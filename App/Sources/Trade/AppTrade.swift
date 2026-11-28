@@ -138,13 +138,16 @@ final class AppTrade {
         }.store(in: &subscriptions)
     }
 
+    /// 淘宝 web_code 授权器：Release 只用真实实现（ASWebAuthenticationSession，FU-IOS-TB-WEBCODE-A）；DEBUG 开着假服务时用假授权器。
     private static func makeWebCode() -> WebCodeAuthorizer {
         #if DEBUG
         if let fake = DebugFakeTrade.webCodeAuthorizer() {
             return fake
         }
         #endif
-        return UnavailableWebCodeAuthorizer()
+        return WebAuthSessionWebCodeAuthorizer(
+            launcher: SystemWebAuthSessionLauncher(), attempts: UserDefaultsWebCodeAttempts()
+        )
     }
 
     // MARK: - 页面

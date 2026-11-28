@@ -18,17 +18,34 @@ final class UserDefaultsWebCodeAttempts: WebCodeAttemptStore {
         self.defaults = defaults
     }
 
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：先删旧记录，再写 `webCodeStateSha256(state)` 与 `nowMillis`。
-    func record(state _: String, nowMillis _: Int64) {}
-
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：两个键都在、哈希是 64 位小写十六进制才返回记录，否则 nil。
-    func current() -> WebCodeAttempt? {
-        nil
+    /// 先删旧记录，再写 `webCodeStateSha256(state)` 与 `nowMillis`（`state` 原文不落盘）。
+    func record(state: String, nowMillis: Int64) {
+        clear()
+        defaults.set(webCodeStateSha256(state), forKey: Self.stateSha256Key)
+        defaults.set(NSNumber(value: nowMillis), forKey: Self.startedAtKey)
     }
 
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：删两个键。
-    func clear() {}
+    /// 两个键都在、哈希是 64 位小写十六进制字符串、时间是数值才返回记录，否则 nil。
+    func current() -> WebCodeAttempt? {
+        guard let hash = defaults.object(forKey: Self.stateSha256Key) as? String, Self.isWellFormedHash(hash),
+              let started = defaults.object(forKey: Self.startedAtKey) as? NSNumber
+        else { return nil }
+        return WebCodeAttempt(stateSha256: hash, startedAtMillis: started.int64Value)
+    }
 
-    /// TODO(FU-IOS-TB-WEBCODE-A 实现)：`current()?.stateSha256 == stateSha256` 时才 `clear()`。
-    func clearIfCurrent(stateSha256 _: String) {}
+    /// 删两个键。
+    func clear() {
+        defaults.removeObject(forKey: Self.stateSha256Key)
+        defaults.removeObject(forKey: Self.startedAtKey)
+    }
+
+    /// 当前记录的哈希等于 `stateSha256` 时才删（两次尝试并存时，先结束的那次不删后一次的记录）。
+    func clearIfCurrent(stateSha256: String) {
+        guard current()?.stateSha256 == stateSha256 else { return }
+        clear()
+    }
+
+    private static func isWellFormedHash(_ text: String) -> Bool {
+        text.utf8.count == 64 && text.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+    }
 }

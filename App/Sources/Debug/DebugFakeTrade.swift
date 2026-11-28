@@ -70,11 +70,13 @@ enum DebugFakeTrade {
         return ports
     }
 
-    /// 假服务打开时用假 web_code 授权（不打开任何授权页，返回演示用的假授权码）；Release 不编译（TODO(N-28) A02 同口径）。
+    /// 假服务打开时用假 web_code 授权（不打开任何授权页，返回演示用的假授权码）；Release 不编译。返回 nil 时 AppTrade 用真实授权器
+    /// `WebAuthSessionWebCodeAuthorizer`（FU-IOS-TB-WEBCODE-A）。
     @MainActor
     static func webCodeAuthorizer() -> WebCodeAuthorizer? {
         let arguments = ProcessInfo.processInfo.arguments
-        // `-CouliFakeWebCodeUnavailable`：按生产包（web_code 不可执行）走授权失败（截 ProductAuthFailed 用）
+        // `-CouliFakeWebCodeUnavailable`：不用假授权器，走真实授权器；假服务下发的 auth_url（oauth.example.invalid）不在白名单，
+        // 不启动会话、按授权失败（截 ProductAuthFailed 用）
         guard arguments.contains(DebugFakeLoginServer.launchArgument),
               !arguments.contains("-CouliFakeWebCodeUnavailable")
         else { return nil }

@@ -120,7 +120,7 @@ extension OpenPurchaseController {
     func runTaobaoAuth(_ context: AuthContext, _ gen: Int) {
         let flow = taobaoFlow(context, gen)
         guard flow.pick(platform: context.platform, data: context.data) != nil else {
-            // 本端执行不了下发的任何授权方式（web_code 回跳未登记、百川不可用，TODO(N-28)）：按授权失败（BR-ID-17、BR-ID-18）
+            // 本端执行不了下发的任何授权方式（下发的方式里没有 web_code 或缺 auth_url / state、百川不可用）：按授权失败（BR-ID-17、BR-ID-18）
             authFailed(context)
             return
         }

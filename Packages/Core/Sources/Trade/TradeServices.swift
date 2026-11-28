@@ -225,15 +225,16 @@ public enum AuthStepResult: Sendable {
     case failed
 }
 
-/// 淘宝 web_code 授权的本端能力（App 给）：用系统浏览器打开 auth_url，等本 App 自己的回跳 scheme 带回授权码。
-/// 回跳 scheme 在 apps.json inbound 登记前（为空，TODO(N-28)）生产实现 `available` = false。
+/// 淘宝 web_code 授权的本端能力（App 给）：用系统授权会话打开 auth_url，等本 App 的回跳 `couli://auth/taobao` 带回授权码
+/// （D10-2717）。生产实现是 App 的 `WebAuthSessionWebCodeAuthorizer`（ASWebAuthenticationSession，`available` 恒为 true；
+/// FU-IOS-TB-WEBCODE-A）。
 @MainActor
 public protocol WebCodeAuthorizer: AnyObject {
     var available: Bool { get }
     func authorize(authUrl: String, state: String) async -> AuthStepResult
 }
 
-/// 生产：回跳 scheme 未登记，web_code 不可执行（TODO(N-28)：apps.json inbound 补上后接系统浏览器 + 回跳）。
+/// web_code 不可执行的实现（`available` = false）：只留给测试；App 已改用真实授权器（FU-IOS-TB-WEBCODE-A）。
 @MainActor
 public final class UnavailableWebCodeAuthorizer: WebCodeAuthorizer {
     public init() {}
